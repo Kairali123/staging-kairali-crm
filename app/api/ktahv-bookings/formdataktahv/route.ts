@@ -447,17 +447,18 @@ async function getDataById_NewXXXX(currentTextId: any, formType: any, pool: any)
                 LEFT JOIN response_of_group_bookings_part2 p2 ON p1.unique_key = p2.unique_key
                 WHERE p1.Res_code =? 
             `, [currentTextId]);
-        var maxEditTime = 0;
-        let rowdata = [];
+        // Collect the latest row per guest (keyed by patient ID) so all guests are returned
+        // even if different guests were saved at different edit_time_values.
+        var latestPerGuest: Record<string, any> = {};
         for (let i = 0; i < groupbookingdata.length; i++) {
             let r = groupbookingdata[i];
-            if (r.edit_time_value > maxEditTime) {
-                maxEditTime = r.edit_time_value;
-                rowdata = [r];
-            } else if (r.edit_time_value == maxEditTime) {
-                rowdata.push(r);
+            var guestKey = String(r.txt_patient_ID1 || i);
+            var existing = latestPerGuest[guestKey];
+            if (!existing || (r.edit_time_value > existing.edit_time_value)) {
+                latestPerGuest[guestKey] = r;
             }
         }
+        let rowdata = Object.values(latestPerGuest);
         var secondaryGuests = {};
         var grpName = "", grpPhone = "", grpEmail = "", grpPax = "", notes = "", grpedID = "", grpPatientId = "", grpUniqueId = "", grpCountry = "";
         var guestIndex = 1;

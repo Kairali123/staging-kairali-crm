@@ -124,7 +124,11 @@ function validateStep(step: number, state: any, bookingType: string): Record<str
       if (!g.name.trim()) errs.name = "Required";
       else if (containsUnsafeInput(g.name)) errs.name = "Group/Contact Name contains invalid characters";
       else if (g.name.trim().length > 100) errs.name = "Group/Contact Name must be under 100 characters";
-      if (!g.phone.trim()) errs.phone = "Required";
+      if (!g.country) errs.country = "Required";
+      const phoneDigits = (g.phone || "").replace(/\D/g, "");
+      if (!g.phone.trim()) errs.phone = "Mobile Number is required";
+      else if (phoneDigits.length < 7) errs.phone = "Enter a valid mobile number (at least 7 digits)";
+      else if (phoneDigits.length > 15) errs.phone = "Mobile number must not exceed 15 digits";
       if (!g.email.trim()) errs.email = "Required";
       else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(g.email)) errs.email = "Invalid email";
     }
@@ -283,14 +287,15 @@ function StepGroupInfo({ info, onChange, errors, apiData }: { info: GroupInfo; o
         <div className="kbf-row1">
           <div className="kbf-group">
             <label className="kbf-label required">Country</label>
-            <select className="kbf-select" value={info.country} onChange={e => set("country", e.target.value)}>
+            <select className={`kbf-select${errors.country ? " error" : ""}`} value={info.country} onChange={e => set("country", e.target.value)}>
               <option value="">Select country</option>
               {Object.keys(apiData?.countryStateMap || DEFAULT_COUNTRY_STATE_MAP).map((c: string) => <option key={c}>{c}</option>)}
             </select>
+            {errors.country && <span className="kbf-error-text">{errors.country}</span>}
           </div>
           <div className="kbf-group">
             <label className="kbf-label required">Mobile Number</label>
-            <input className={`kbf-input${errors.phone ? " error" : ""}`} type="number" value={info.phone} onChange={e => set("phone", e.target.value)} />
+            <input className={`kbf-input${errors.phone ? " error" : ""}`} type="tel" inputMode="numeric" pattern="[0-9 +\-()]*" value={info.phone} onChange={e => set("phone", e.target.value)} placeholder="e.g. 9876543210" />
             {errors.phone && <span className="kbf-error-text">{errors.phone}</span>}
           </div>
           <div className="kbf-group">
