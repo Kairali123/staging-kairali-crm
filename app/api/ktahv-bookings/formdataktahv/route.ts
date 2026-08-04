@@ -4,6 +4,46 @@ import { getPool } from "@/lib/db";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+function toDateOnly(value: unknown): string {
+    if (!value) return '';
+
+    const pad = (part: string | number) => String(part).padStart(2, '0');
+
+    if (typeof value === 'string') {
+        const s = value.trim();
+        if (!s) return '';
+
+        const isoDate = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (isoDate) return `${isoDate[1]}-${isoDate[2]}-${isoDate[3]}`;
+
+        const slashDate = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (slashDate) {
+            const first = Number(slashDate[1]);
+            const second = Number(slashDate[2]);
+            const year = slashDate[3];
+            const month = first > 12 ? second : first;
+            const day = first > 12 ? first : second;
+            return `${year}-${pad(month)}-${pad(day)}`;
+        }
+    }
+
+    const date = value instanceof Date ? value : new Date(String(value));
+    if (isNaN(date.getTime())) return '';
+
+    const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).formatToParts(date);
+    const getPart = (type: string) => parts.find(part => part.type === type)?.value || '';
+    const year = getPart('year');
+    const month = getPart('month');
+    const day = getPart('day');
+
+    return year && month && day ? `${year}-${month}-${day}` : '';
+}
+
 export async function GET(req: NextRequest) {
     const pool = await getPool();
     const { searchParams } = new URL(req.url)
@@ -161,8 +201,8 @@ async function getDataById_NewXXXX(currentTextId: any, formType: any, pool: any)
                     [`g1-province_1`]: r.ddl_States2 || '',
                     [`g1-zip_1`]: r.txt_Postal_Code1 || '',
                     [`g1-address_1`]: r.txt_Home_Address1 || '',
-                    [`g1-arrival-date_1`]: r.txt_Arrival2 || '',
-                    [`g1-departure-date_1`]: r.txt_Departure2 || '',
+                    [`g1-arrival-date_1`]: toDateOnly(r.txt_Arrival2),
+                    [`g1-departure-date_1`]: toDateOnly(r.txt_Departure2),
                     [`g1-nights_1`]: r.txt_nights2 || '',
                     [`g1-repeat-guest_1`]: r.repeat_client || '',
                     [`g1-programme_1`]: r.ddl_Packages2 || '',
@@ -188,8 +228,8 @@ async function getDataById_NewXXXX(currentTextId: any, formType: any, pool: any)
                     [`g1-province_1`]: r.ddl_States2 || '',
                     [`g1-zip_1`]: r.txt_Postal_Code1 || '',
                     [`g1-address_1`]: r.txt_Home_Address1 || '',
-                    [`g1-arrival-date_1`]: r.txt_Arrival2 || '',
-                    [`g1-departure-date_1`]: r.txt_Departure2 || '',
+                    [`g1-arrival-date_1`]: toDateOnly(r.txt_Arrival2),
+                    [`g1-departure-date_1`]: toDateOnly(r.txt_Departure2),
                     [`g1-nights_1`]: r.txt_nights2 || '',
                     [`g1-repeat-guest_1`]: r.repeat_client || '',
                     [`g1-programme_1`]: r.ddl_Packages2 || '',
@@ -212,8 +252,8 @@ async function getDataById_NewXXXX(currentTextId: any, formType: any, pool: any)
                     [`g2-province_2`]: r.ddl_States3 || '',
                     [`g2-zip_2`]: r.txt_Postal_Code2 || '',
                     [`g2-address_2`]: r.txt_Home_Address2 || '',
-                    [`g2-arrival-date_2`]: r.txt_Arrival3 || '',
-                    [`g2-departure-date_2`]: r.txt_Departure3 || '',
+                    [`g2-arrival-date_2`]: toDateOnly(r.txt_Arrival3),
+                    [`g2-departure-date_2`]: toDateOnly(r.txt_Departure3),
                     [`g2-nights_2`]: r.txt_nights3 || '',
                     [`g2-repeat-guest_2`]: r.repeat_client || '',
                     [`g2-programme_2`]: r.ddl_Packages3 || '',
@@ -240,8 +280,8 @@ async function getDataById_NewXXXX(currentTextId: any, formType: any, pool: any)
                     [`g1-province_1`]: r.ddl_States2 || '',
                     [`g1-zip_1`]: r.txt_Postal_Code1 || '',
                     [`g1-address_1`]: r.txt_Home_Address1 || '',
-                    [`g1-arrival-date_1`]: r.txt_Arrival2 || '',
-                    [`g1-departure-date_1`]: r.txt_Departure2 || '',
+                    [`g1-arrival-date_1`]: toDateOnly(r.txt_Arrival2),
+                    [`g1-departure-date_1`]: toDateOnly(r.txt_Departure2),
                     [`g1-nights_1`]: r.txt_nights2 || '',
                     [`g1-repeat-guest_1`]: r.repeat_client || '',
                     [`g1-programme_1`]: r.ddl_Packages2 || '',
@@ -264,8 +304,8 @@ async function getDataById_NewXXXX(currentTextId: any, formType: any, pool: any)
                     [`g2-province_2`]: r.ddl_States3 || '',
                     [`g2-zip_2`]: r.txt_Postal_Code2 || '',
                     [`g2-address_2`]: r.txt_Home_Address2 || '',
-                    [`g2-arrival-date_2`]: r.txt_Arrival3 || '',
-                    [`g2-departure-date_2`]: r.txt_Departure3 || '',
+                    [`g2-arrival-date_2`]: toDateOnly(r.txt_Arrival3),
+                    [`g2-departure-date_2`]: toDateOnly(r.txt_Departure3),
                     [`g2-nights_2`]: r.txt_nights3 || '',
                     [`g2-repeat-guest_2`]: r.repeat_client || '',
                     [`g2-programme_2`]: r.ddl_Packages3 || '',
@@ -288,8 +328,8 @@ async function getDataById_NewXXXX(currentTextId: any, formType: any, pool: any)
                     [`g3-province_3`]: r.ddl_States4 || '',
                     [`g3-zip_3`]: r.txt_Postal_Code3 || '',
                     [`g3-address_3`]: r.txt_Home_Address3 || '',
-                    [`g3-arrival-date_3`]: r.txt_Arrival4 || '',
-                    [`g3-departure-date_3`]: r.txt_Departure4 || '',
+                    [`g3-arrival-date_3`]: toDateOnly(r.txt_Arrival4),
+                    [`g3-departure-date_3`]: toDateOnly(r.txt_Departure4),
                     [`g3-nights_3`]: r.txt_nights4 || '',
                     [`g3-repeat-guest_3`]: r.repeat_client || '',
                     [`g3-programme_3`]: r.ddl_Packages4 || '',
@@ -319,8 +359,8 @@ async function getDataById_NewXXXX(currentTextId: any, formType: any, pool: any)
                 },
 
                 primaryBooking: {
-                    'g1-arrival-date': r.arrival_date ? new Date(r.arrival_date).toLocaleDateString("en-US", { timeZone: "Asia/Kolkata" }) : '',
-                    'g1-departure-date': r.departure_date ? new Date(r.departure_date).toLocaleDateString("en-US", { timeZone: "Asia/Kolkata" }) : '',
+                    'g1-arrival-date': toDateOnly(r.arrival_date),
+                    'g1-departure-date': toDateOnly(r.departure_date),
                     'g1-nights': r.days_of_stay || '',
                     'g1-repeat-guest': r.repeat_client || '',
                     'g1-package-type': r.package_type || '',
@@ -494,8 +534,8 @@ async function getDataById_NewXXXX(currentTextId: any, formType: any, pool: any)
                 [`grp-province_${guestIndex}`]: r.state || '',
                 [`grp-zip_${guestIndex}`]: r.zip || '',
                 [`grp-address_${guestIndex}`]: r.address || '',
-                [`grp-arrival-date_${guestIndex}`]: r.txt_Arrival1 ? new Date(r.txt_Arrival1).toLocaleDateString("en-US", { timeZone: "Asia/Kolkata" }) : '',
-                [`grp-departure-date_${guestIndex}`]: r.txt_Departure1 ? new Date(r.txt_Departure1).toLocaleDateString("en-US", { timeZone: "Asia/Kolkata" }) : '',
+                [`grp-arrival-date_${guestIndex}`]: toDateOnly(r.txt_Arrival1),
+                [`grp-departure-date_${guestIndex}`]: toDateOnly(r.txt_Departure1),
                 [`grp-nights_${guestIndex}`]: r.txt_nights1 || '',
                 [`grp-repeat-guest_${guestIndex}`]: r.repeat_guest || '',
                 [`grp-programme_${guestIndex}`]: r.ddl_Packages1 || '',

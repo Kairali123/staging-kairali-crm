@@ -4052,7 +4052,7 @@ export default function SalesAccountsTeamPage() {
             setPaymentData({
               amount: (paymentBooking.originalAmount || paymentBooking.amount || 0).toString(),
               receivedAmount: "",
-              currency: String(paymentBooking.currency || "INR").toUpperCase(),
+              currency: "INR",
               paymentMode: "",
               receivedDate: "",
               receiptNumber: "",
@@ -4453,6 +4453,22 @@ export default function SalesAccountsTeamPage() {
             },
           }),
         })
+        console.log(JSON.stringify({
+          paymentData: {
+            bookingId: selectedBookingForPayment?.bookingId,
+            amount: paymentData.amount,
+            receivedAmount: paymentData.receivedAmount,
+            currency: paymentData.currency,
+            paymentMode: paymentData.paymentMode,
+            receivedDate: paymentData.receivedDate,
+            receiptNumber: paymentData.receiptNumber,
+            screenshot: screenshotData,
+            paymentLocation: paymentData.paymentLocation,
+            paymentCollectedBy: paymentData.paymentCollectedBy,
+            pendingPaymentAmount: paymentData.pendingPaymentAmount,
+          },
+        }))
+        debugger
         const data = await validateResponse(response)
         await refetchBookings()
       },
@@ -5182,12 +5198,10 @@ export default function SalesAccountsTeamPage() {
     const newInputAmt = (parseFloat(String(paymentData.receivedAmount)) || 0);
     const newInputInBookingCurrency = (newInputAmt * inputRate) / bookingRate;
 
-    // All math stays in booking's native currency — no false INR conversion
-    // Negative value = overpayment / excess paid by guest
-    const alreadyReceived = receivedAmt; // already in booking currency
-    const pendingInBookingCurrency = originalAmt - alreadyReceived - newInputInBookingCurrency;
+    // Remaining in booking's native currency (can be negative if overpaid)
+    const remainingInBookingCurrency = originalAmt - receivedAmt - newInputInBookingCurrency;
 
-    const pendingVal = pendingInBookingCurrency.toLocaleString(undefined, {
+    const pendingVal = remainingInBookingCurrency.toLocaleString(undefined, {
       minimumFractionDigits: 0,
       maximumFractionDigits: 2,
     });
@@ -7959,11 +7973,11 @@ export default function SalesAccountsTeamPage() {
                           <div className="space-y-1 text-sm">
                             <div className="flex items-center gap-2">
                               <span className="text-emerald-600 font-medium">In:</span>
-                              <span className="text-slate-700">{booking.checkIn}</span>
+                              <span className="text-slate-700">{new Date(booking.checkIn).toLocaleDateString()}</span>
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-red-600 font-medium">Out:</span>
-                              <span className="text-slate-700">{booking.checkOut}</span>
+                              <span className="text-slate-700">{new Date(booking.checkOut).toLocaleDateString()}</span>
                             </div>
                           </div>
                         </TableCell>
@@ -8842,11 +8856,11 @@ export default function SalesAccountsTeamPage() {
                           <div className="space-y-1 text-sm">
                             <div className="flex items-center gap-2">
                               <span className="text-emerald-600 font-medium">In:</span>
-                              <span className="text-slate-700">{booking.checkIn}</span>
+                              <span className="text-slate-700">{new Date(booking.checkIn).toLocaleDateString()}</span>
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-red-600 font-medium">Out:</span>
-                              <span className="text-slate-700">{booking.checkOut}</span>
+                              <span className="text-slate-700">{new Date(booking.checkOut).toLocaleDateString()}</span>
                             </div>
                           </div>
                         </TableCell>
@@ -9488,11 +9502,11 @@ export default function SalesAccountsTeamPage() {
                           <div className="space-y-1 text-sm">
                             <div className="flex items-center gap-2">
                               <span className="text-emerald-600 font-medium">In:</span>
-                              <span className="text-slate-700">{booking.checkIn}</span>
+                              <span className="text-slate-700">{new Date(booking.checkIn).toLocaleDateString()}</span>
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-red-600 font-medium">Out:</span>
-                              <span className="text-slate-700">{booking.checkOut}</span>
+                              <span className="text-slate-700">{new Date(booking.checkOut).toLocaleDateString()}</span>
                             </div>
                           </div>
                         </TableCell>
@@ -10442,11 +10456,11 @@ export default function SalesAccountsTeamPage() {
                       <TableCell>{booking.guestName}</TableCell>
 
                       <TableCell>
-                        {booking.checkIn}
+                        {new Date(booking.checkIn).toLocaleDateString()}
                       </TableCell>
 
                       <TableCell>
-                        {booking.checkOut}
+                        {new Date(booking.checkOut).toLocaleDateString()}
                       </TableCell>
 
                       <TableCell className="text-slate-700 space-y-1">
@@ -11240,21 +11254,15 @@ export default function SalesAccountsTeamPage() {
                     </div> */}
 
                     {/* PENDING AMOUNT */}
-                    {(() => {
-                      const pendingNum = parseFloat(String(paymentData.pendingPaymentAmount).replace(/,/g, "")) || 0;
-                      const isOverpaid = pendingNum < 0;
-                      const symbol = getCurrencySymbol(String(selectedBookingForPayment.currency).slice(0, 3));
-                      return (
-                        <div className={`p-4 rounded-lg border ${isOverpaid ? "bg-green-50 border-green-300" : "bg-blue-50 border-blue-200"}`}>
-                          <Label className={`text-xs uppercase tracking-wide font-semibold ${isOverpaid ? "text-green-700" : "text-slate-600"}`}>
-                            {isOverpaid ? "⚠️ Excess Paid (Overpayment)" : "Pending Amount"}
-                          </Label>
-                          <p className={`text-lg font-semibold mt-1 ${isOverpaid ? "text-green-700" : "text-red-700"}`}>
-                            {symbol} {paymentData.pendingPaymentAmount || "0"}
-                          </p>
-                        </div>
-                      );
-                    })()}
+                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                      <Label className="text-slate-600 text-xs uppercase tracking-wide">
+                        Pending Amount
+                      </Label>
+                      <p className="text-lg font-semibold text-red-700">
+                        {getCurrencySymbol(String(selectedBookingForPayment.currency).slice(0, 3))}{" "}
+                        {paymentData.pendingPaymentAmount || "0"}
+                      </p>
+                    </div>
                   </div>
 
                 </>
@@ -11273,7 +11281,7 @@ export default function SalesAccountsTeamPage() {
                   setPaymentData({
                     amount: selectedBookingForPayment?.amount.toString() || "",
                     receivedAmount: "",
-                    currency: String(selectedBookingForPayment?.currency || "INR").toUpperCase(),
+                    currency: "INR",
                     paymentMode: "",
                     receivedDate: "",
                     receiptNumber: "",

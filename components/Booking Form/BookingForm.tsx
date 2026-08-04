@@ -21,6 +21,8 @@ import {
 } from "./BookingFormBase";
 import { Step0PrimaryGuest, Step1SecondaryGuests, Step2Children } from "./BookingFormSteps1";
 import { StepAdditionalInfo, StepTravelAgent, StepPaymentBreakdown, StepAdvancePayment, StepApproval, convertCurrency } from "./BookingFormSteps2";
+import {useAuth} from '@/hooks/use-auth'
+
 
 // Current date/time formatted for the "Last Updated" header badge
 function now(): string {
@@ -28,6 +30,32 @@ function now(): string {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
   });
+}
+
+function toDateInputValue(value: unknown): string {
+  if (!value) return '';
+
+  const pad = (part: string | number) => String(part).padStart(2, '0');
+  const s = String(value).trim();
+  if (!s) return '';
+
+  const isoDate = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoDate) return `${isoDate[1]}-${isoDate[2]}-${isoDate[3]}`;
+
+  const slashDate = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slashDate) {
+    const first = Number(slashDate[1]);
+    const second = Number(slashDate[2]);
+    const year = slashDate[3];
+    const month = first > 12 ? second : first;
+    const day = first > 12 ? first : second;
+    return `${year}-${pad(month)}-${pad(day)}`;
+  }
+
+  const d = value instanceof Date ? value : new Date(s);
+  if (isNaN(d.getTime())) return '';
+
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 function validateStep(step: number, state: any, bookingType: string): Record<string, string> {
@@ -810,6 +838,8 @@ export default function BookingForm({ bookingId, formType = "individual", onSucc
   const [apiData, setApiData] = useState<any>(null);
   const [lastUpd] = useState(now());
 
+  const { user, hasActionPermission } = useAuth()
+
   // Individual form state
   const [primaryGuest, setPrimaryGuest] = useState<GuestData>(emptyGuest(1));
   const [primaryBookingDetails, setPrimaryBookingDetails] = useState<BookingDetails>({ arrivalDate: "", departureDate: "", nights: 0, repeatGuest: "", packageType: "rack", programme: "", roomType: "", roomNumber: "", occupancy: "Single" });
@@ -887,7 +917,7 @@ export default function BookingForm({ bookingId, formType = "individual", onSucc
     if (hasLoadedData.current) return;
     hasLoadedData.current = true;
 
-    const userInfo = typeof window !== "undefined" ? JSON.parse(sessionStorage.getItem("kairali_user") || "null") : null;
+    const userInfo = typeof window !== "undefined" ? user : null;//typeof window !== "undefined" ? JSON.parse(sessionStorage.getItem("kairali_user") || "null") : null;
     const authToken = typeof window !== "undefined" ? sessionStorage.getItem("authToken") : null;
 
     async function loadData() {
@@ -941,11 +971,7 @@ export default function BookingForm({ bookingId, formType = "individual", onSucc
         // <input type="date"> only accepts yyyy-mm-dd. TouchQ returns full date
         // strings, so DOB/Anniversary must be normalized or the input shows empty.
         const toDateInput = (v: any): string => {
-          if (!v) return '';
-          const s = String(v).trim();
-          if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-          const d = new Date(s);
-          return isNaN(d.getTime()) ? '' : d.toISOString().split('T')[0];
+          return toDateInputValue(v);
         };
         // Country code select options are "+91" style. TouchQ may send "91",
         // "0091" or "+91 " — normalize so the <select> value actually matches.
@@ -1001,14 +1027,8 @@ export default function BookingForm({ bookingId, formType = "individual", onSucc
         // ── 2. Primary Booking Details ────────────────────────────────────────
         if (bd.primaryBooking) {
           const pb = bd.primaryBooking;
-          const fmt = (v: string) => {
-            if (!v) return '';
-            const d = new Date(v);
-            if (isNaN(d.getTime())) return v;
-            return d.toISOString().split('T')[0];
-          };
-          const arrival = fmt(pb['g1-arrival-date']);
-          const departure = fmt(pb['g1-departure-date']);
+          const arrival = toDateInputValue(pb['g1-arrival-date']);
+          const departure = toDateInputValue(pb['g1-departure-date']);
           const nights = pb['g1-nights'] ? Number(pb['g1-nights']) : 0;
           setPrimaryBookingDetails(prev => ({
             ...prev,
@@ -1026,12 +1046,6 @@ export default function BookingForm({ bookingId, formType = "individual", onSucc
 
         // ── 3. Secondary Guests (individual only; group uses the same key below) ─
         if (formType !== 'group' && bd.secondaryGuestPattern) {
-          const fmt = (v: string) => {
-            if (!v) return '';
-            const d = new Date(v);
-            if (isNaN(d.getTime())) return v;
-            return d.toISOString().split('T')[0];
-          };
           const sgKeys = Object.keys(bd.secondaryGuestPattern)
             .filter(k => k.startsWith('secondaryguest'))
             .sort((a, b) => {
@@ -1051,8 +1065,8 @@ export default function BookingForm({ bookingId, formType = "individual", onSucc
             const pfx = `g1`;
             const sfx = `_${idx + 1}`;
             const bdSg = {
-              arrivalDate: fmt(sg[`${pfx}-arrival-date${sfx}`]) || '',
-              departureDate: fmt(sg[`${pfx}-departure-date${sfx}`]) || '',
+              arrivalDate: toDateInputValue(sg[`${pfx}-arrival-date${sfx}`]) || '',
+              departureDate: toDateInputValue(sg[`${pfx}-departure-date${sfx}`]) || '',
               nights: Number(sg[`${pfx}-nights${sfx}`]) || 0,
               repeatGuest: (sg[`${pfx}-repeat-guest${sfx}`] as any) || '',
               packageType: (sg[`${pfx}-package-type${sfx}`] as any) || 'rack',
@@ -1213,11 +1227,6 @@ export default function BookingForm({ bookingId, formType = "individual", onSucc
           setResId(bd['res_id'] || bd['resId'] || bookingId || '');
 
           if (bd.secondaryGuestPattern) {
-            const fmtDate = (v: string) => {
-              if (!v) return '';
-              const d = new Date(v);
-              return isNaN(d.getTime()) ? v : d.toISOString().split('T')[0];
-            };
             const paxCount = parseInt(bd['group-pax']) || 0;
             const guests: GroupGuestData[] = [];
             for (let i = 1; i <= paxCount; i++) {
@@ -1243,8 +1252,8 @@ export default function BookingForm({ bookingId, formType = "individual", onSucc
                 state: toNormalizedState(sg[`grp-country${s}`], sg[`grp-province${s}`]) || '',
                 zip: sg[`grp-zip${s}`] || '',
                 address: sg[`grp-address${s}`] || '',
-                arrivalDate: fmtDate(sg[`grp-arrival-date${s}`]),
-                departureDate: fmtDate(sg[`grp-departure-date${s}`]),
+                arrivalDate: toDateInputValue(sg[`grp-arrival-date${s}`]),
+                departureDate: toDateInputValue(sg[`grp-departure-date${s}`]),
                 nights: Number(sg[`grp-nights${s}`]) || 0,
                 repeatGuest: (sg[`grp-repeat-guest${s}`] as any) || '',
                 packageType: sg[`grp-package-type${s}`] || 'rack',
@@ -1347,7 +1356,7 @@ export default function BookingForm({ bookingId, formType = "individual", onSucc
       return;
     }
     setSubmitting(true);
-    const userInfo = typeof window !== "undefined" ? JSON.parse(sessionStorage.getItem("kairali_user") || "null") : null;
+    const userInfo = typeof window !== "undefined" ? user : null;//typeof window !== "undefined" ? JSON.parse(sessionStorage.getItem("kairali_user") || "null") : null;
 
     const todayStr = new Date().toISOString().split("T")[0];
 
@@ -1464,14 +1473,16 @@ export default function BookingForm({ bookingId, formType = "individual", onSucc
       advancePayment: advancePaymentPayload,
       approval: approvalPayload,
     };
-    // debugger
+    
     try {
       const payloadStr = JSON.stringify(payload);
+      console.log(payloadStr);
+      debugger
       const isSmallPayload = payloadStr.length < 60000;
       let res: Response | null = null;
       let timedOut = false;
-      console.log(payloadStr);
-      debugger;
+      // console.log(payloadStr);
+      // debugger;
       if (isSmallPayload) {
         // Use keepalive so the request finishes in the background even if the page redirects
         const fetchPromise = fetch(SUBMIT_API, {

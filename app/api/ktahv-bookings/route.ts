@@ -182,7 +182,6 @@ export async function GET(req: NextRequest) {
         const bookings = newBookingData.flatMap((r: any, i: number) => {
             const resId: string = r.reservation_id;
             if (!resId) return [];
-
             const accountsData = accountsMap[resId] ?? EMPTY_ACCOUNTS;
             const deleteData = deleteMap[resId] ?? EMPTY_DELETE;
             const finalData = finaltrtfMap[resId] ?? EMPTY_ACCOUNTS;
@@ -247,8 +246,8 @@ export async function GET(req: NextRequest) {
                     roomCategory: r.room_category,
                 },
                 programeName: r.prog_pkg_name,
-                arrivalDate: r.arrival_date ? new Date(r.arrival_date).toLocaleDateString("en-IN", { timeZone: "UTC", day: "2-digit", month: "long", year: "numeric" }) : "-",
-                departureDate: r.departure_date ? new Date(r.departure_date).toLocaleDateString("en-IN", { timeZone: "UTC", day: "2-digit", month: "long", year: "numeric" }) : "-",
+                arrivalDate: r.arrival_date ? new Date(r.arrival_date).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "long", year: "numeric" }) : "-",
+                departureDate: r.departure_date ? new Date(r.departure_date).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "long", year: "numeric" }) : "-",
                 paymentDetails: {
                     amount: convertedAmt ? Math.round(convertedAmt) : convertedAmt,
                     amountOriginal: invoiceAmtRaw ? Math.round(invoiceAmtRaw) : invoiceAmtRaw,
@@ -387,7 +386,7 @@ export async function GET(req: NextRequest) {
                         departure_counts_st1: guestrow?.departure_counts_st1 ?? ""
                     }
                 },
-                checkinidexsist:checkinidexsist,
+                checkinidexsist: checkinidexsist,
                 amountConversionRatio: CONVERSION_RATES,
                 isEditedOneTime: r.nb_bvs_pi_gen_status === "Edited",
             }];
