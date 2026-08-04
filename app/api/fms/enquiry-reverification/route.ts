@@ -139,29 +139,29 @@ export async function GET(req: NextRequest) {
         uid,
         company_belongs_to,
         appsheet_call_recording_url,
-        planned_executive_verifier,
-        actual_executive_verifier,
-        time_delay_executive_verifier,
-        doer_executive_verifier,
-        verify_action_status_executive_verifier,
-        valid_reason_executive_verifier,
-        what_went_wrong_by_sales_team_executive_verifier,
-        overall_rating_out_of_10_executive_verifier,
-        suggested_solution_for_improvement_executive_verifier,
-        remarks_executive_verifier,
+        planned_executive_verifier AS planned,
+        actual_executive_verifier AS actual,
+        time_delay_executive_verifier AS timedelay,
+        doer_executive_verifier AS CH,
+        verify_action_status_executive_verifier AS CI,
+        valid_reason_executive_verifier AS CJ,
+        what_went_wrong_by_sales_team_executive_verifier AS CK,
+        overall_rating_out_of_10_executive_verifier AS CL,
+        suggested_solution_for_improvement_executive_verifier AS CM,
+        remarks_executive_verifier AS CN,
         ht_created_to_executive_verifier_if_delay_status,
         doer_executive_verifier_email_id,
-        hs_status_if_escalate_to_abhilash_sir_by_executive,
-        planned_senior_verifier,
-        actual_senior_verifier,
-        time_delay_senior_verifier,
-        doer_senior_verifier,
-        verify_action_status_senior_verifier,
-        valid_reason_senior_verifier,
-        what_went_wrong_by_sales_team_senior_verifier,
-        overall_rating_out_of_10_senior_verifier,
-        suggested_solution_for_improvement_senior_verifier,
-        remarks_senior_verifier,
+        hs_status_if_escalate_to_abhilash_sir_by_executive AS CQ,
+        planned_senior_verifier AS senior_planned,
+        actual_senior_verifier AS senior_actual,
+        time_delay_senior_verifier AS senior_timedelay,
+        doer_senior_verifier AS CW,
+        verify_action_status_senior_verifier AS CX,
+        valid_reason_senior_verifier AS CY,
+        what_went_wrong_by_sales_team_senior_verifier AS CZ,
+        overall_rating_out_of_10_senior_verifier AS DA,
+        suggested_solution_for_improvement_senior_verifier AS DB,
+        remarks_senior_verifier AS DC,
         ht_created_to_senior_verifier_if_delay_status,
         whatsapp_alert_to_sales_person_if_reopen,
         email_alert_to_sales_person_if_reopen,
@@ -227,16 +227,16 @@ export async function POST(req: NextRequest) {
     if (body.isExecutiveVerify) {
       const {
         id,
-        doer_executive_verifier,
-        verify_action_status_executive_verifier,
-        valid_reason_executive_verifier,
-        what_went_wrong_by_sales_team_executive_verifier,
-        overall_rating_out_of_10_executive_verifier,
-        suggested_solution_for_improvement_executive_verifier,
-        remarks_executive_verifier,
+        CH,
+        CI,
+        CJ,
+        CK,
+        CL,
+        CM,
+        CN,
         ht_created_to_executive_verifier_if_delay_status,
         doer_executive_verifier_email_id,
-        hs_status_if_escalate_to_abhilash_sir_by_executive,
+        CQ,
       } = body
 
       if (!id) {
@@ -246,12 +246,12 @@ export async function POST(req: NextRequest) {
       const query = `
         UPDATE fms_enquiry_cold_reverification_v2
         SET 
-          actual_executive_verifier = NOW(),
+          actual_executive_verifier = CONVERT_TZ(NOW(), @@session.time_zone, '+05:30'),
           time_delay_executive_verifier = CASE 
             WHEN planned_executive_verifier IS NOT NULL THEN 
               CONCAT(
-                FLOOR(HOUR(TIMEDIFF(NOW(), planned_executive_verifier))), 'h ',
-                MINUTE(TIMEDIFF(NOW(), planned_executive_verifier)), 'm'
+                FLOOR(HOUR(TIMEDIFF(CONVERT_TZ(NOW(), @@session.time_zone, '+05:30'), planned_executive_verifier))), 'h ',
+                ABS(MINUTE(TIMEDIFF(CONVERT_TZ(NOW(), @@session.time_zone, '+05:30'), planned_executive_verifier))), 'm'
               )
             ELSE '0h 0m'
           END,
@@ -268,16 +268,16 @@ export async function POST(req: NextRequest) {
         WHERE id = ?
       `
       const [result] = await connection.execute(query, [
-        doer_executive_verifier || "",
-        verify_action_status_executive_verifier || "",
-        valid_reason_executive_verifier || "",
-        what_went_wrong_by_sales_team_executive_verifier || "",
-        overall_rating_out_of_10_executive_verifier || null,
-        suggested_solution_for_improvement_executive_verifier || "",
-        remarks_executive_verifier || "",
+        CH || "",
+        CI || "",
+        CJ || "",
+        CK || "",
+        CL || null,
+        CM || "",
+        CN || "",
         ht_created_to_executive_verifier_if_delay_status || "",
         doer_executive_verifier_email_id || "",
-        hs_status_if_escalate_to_abhilash_sir_by_executive || "",
+        CQ || "",
         id
       ])
 
@@ -291,13 +291,13 @@ export async function POST(req: NextRequest) {
     if (body.isSeniorVerify) {
       const {
         id,
-        doer_senior_verifier,
-        verify_action_status_senior_verifier,
-        valid_reason_senior_verifier,
-        what_went_wrong_by_sales_team_senior_verifier,
-        overall_rating_out_of_10_senior_verifier,
-        suggested_solution_for_improvement_senior_verifier,
-        remarks_senior_verifier,
+        CW,
+        CX,
+        CY,
+        CZ,
+        DA,
+        DB,
+        DC,
         ht_created_to_senior_verifier_if_delay_status,
         whatsapp_alert_to_sales_person_if_reopen,
         email_alert_to_sales_person_if_reopen,
@@ -313,12 +313,12 @@ export async function POST(req: NextRequest) {
       const query = `
         UPDATE fms_enquiry_cold_reverification_v2
         SET 
-          actual_senior_verifier = NOW(),
+          actual_senior_verifier = CONVERT_TZ(NOW(), @@session.time_zone, '+05:30'),
           time_delay_senior_verifier = CASE 
             WHEN planned_senior_verifier IS NOT NULL THEN 
               CONCAT(
-                FLOOR(HOUR(TIMEDIFF(NOW(), planned_senior_verifier))), 'h ',
-                MINUTE(TIMEDIFF(NOW(), planned_senior_verifier)), 'm'
+                FLOOR(HOUR(TIMEDIFF(CONVERT_TZ(NOW(), @@session.time_zone, '+05:30'), planned_senior_verifier))), 'h ',
+                ABS(MINUTE(TIMEDIFF(CONVERT_TZ(NOW(), @@session.time_zone, '+05:30'), planned_senior_verifier))), 'm'
               )
             ELSE '0h 0m'
           END,
@@ -338,13 +338,13 @@ export async function POST(req: NextRequest) {
         WHERE id = ?
       `
       const [result] = await connection.execute(query, [
-        doer_senior_verifier || "",
-        verify_action_status_senior_verifier || "",
-        valid_reason_senior_verifier || "",
-        what_went_wrong_by_sales_team_senior_verifier || "",
-        overall_rating_out_of_10_senior_verifier || null,
-        suggested_solution_for_improvement_senior_verifier || "",
-        remarks_senior_verifier || "",
+        CW || "",
+        CX || "",
+        CY || "",
+        CZ || "",
+        DA || null,
+        DB || "",
+        DC || "",
         ht_created_to_senior_verifier_if_delay_status || "",
         whatsapp_alert_to_sales_person_if_reopen || "",
         email_alert_to_sales_person_if_reopen || "",

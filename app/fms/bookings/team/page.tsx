@@ -869,6 +869,11 @@ export default function SalesAccountsTeamPage() {
   // "checkin" | "checkout" | "inhouse" | null — drives the Today's Stay Activity popup
   const [todayStayModal, setTodayStayModal] = useState<"checkin" | "checkout" | "inhouse" | null>(null)
 
+  const [table1Scrolled, setTable1Scrolled] = useState(false)
+  const [table2Scrolled, setTable2Scrolled] = useState(false)
+  const [table3Scrolled, setTable3Scrolled] = useState(false)
+  const [table4Scrolled, setTable4Scrolled] = useState(false)
+
   // Fix: "modal hangs — must click outside once before close/scroll works"
   // Force body back to interactive whenever a portaled modal is the active top-most layer
   useEffect(() => {
@@ -3787,9 +3792,9 @@ export default function SalesAccountsTeamPage() {
   const displayedAutoReleaseBookings = autoReleaseBookings.slice(autoReleaseStartIndex, autoReleaseStartIndex + autoReleaseItemsPerPage)
 
   const BOOKING_STICKY_COLUMN_WIDTHS = {
-    bookingDate: 140,
-    bookingId: 180,
-    guestName: 400,
+    bookingDate: 100,
+    bookingId: 120,
+    guestName: 120,
   } as const
 
   const bookingStickyTableStyle: React.CSSProperties = {
@@ -3799,43 +3804,104 @@ export default function SalesAccountsTeamPage() {
   }
 
   const getStickyHeaderCellStyle = (
-    left: number,
-    width: number,
+    isScrolled: boolean,
+    colType: "bookingDate" | "bookingId" | "guestName",
     isLastSticky = false,
     zIndex = 30
-  ): React.CSSProperties => ({
-    position: "sticky",
-    left,
-    top: 0,
-    zIndex,
-    minWidth: width,
-    width,
-    boxSizing: "border-box",
-    overflow: "hidden",
-    background: "#1F3A5F",
-    backgroundClip: "padding-box",
-    isolation: "isolate",
-    borderRight: isLastSticky ? "2px solid rgba(255,255,255,0.2)" : "1px solid rgba(255,255,255,0.15)",
-  })
+  ): React.CSSProperties => {
+    const widths = isScrolled 
+      ? { bookingDate: 100, bookingId: 120, guestName: 120 }
+      : { bookingDate: 140, bookingId: 180, guestName: 300 };
+
+    const lefts = isScrolled
+      ? { bookingDate: 0, bookingId: 100, guestName: 220 }
+      : { bookingDate: 0, bookingId: 140, guestName: 320 };
+
+    const width = widths[colType];
+    const left = lefts[colType];
+
+    return {
+      position: "sticky",
+      left,
+      top: 0,
+      zIndex,
+      minWidth: width,
+      width,
+      boxSizing: "border-box",
+      overflow: "hidden",
+      background: "#1F3A5F",
+      backgroundClip: "padding-box",
+      isolation: "isolate",
+      borderRight: isLastSticky ? "2px solid rgba(255,255,255,0.2)" : "1px solid rgba(255,255,255,0.15)",
+      paddingLeft: isScrolled ? "6px" : "12px",
+      paddingRight: isScrolled ? "6px" : "12px",
+      transition: "width 200ms ease-in-out, left 200ms ease-in-out, padding 200ms ease-in-out",
+    };
+  }
 
   const getStickyBodyCellStyle = (
-    left: number,
-    width: number,
+    isScrolled: boolean,
+    colType: "bookingDate" | "bookingId" | "guestName",
     background: string,
     isLastSticky = false,
     zIndex = 20
-  ): React.CSSProperties => ({
-    position: "sticky",
-    left,
-    zIndex,
-    minWidth: width,
-    width,
-    boxSizing: "border-box",
-    overflow: "hidden",
-    background,
-    backgroundClip: "padding-box",
-    borderRight: isLastSticky ? "2px solid #e2e8f0" : "1px solid #e5e7eb",
-  })
+  ): React.CSSProperties => {
+    const widths = isScrolled 
+      ? { bookingDate: 100, bookingId: 120, guestName: 120 }
+      : { bookingDate: 140, bookingId: 180, guestName: 300 };
+
+    const lefts = isScrolled
+      ? { bookingDate: 0, bookingId: 100, guestName: 220 }
+      : { bookingDate: 0, bookingId: 140, guestName: 320 };
+
+    const width = widths[colType];
+    const left = lefts[colType];
+
+    return {
+      position: "sticky",
+      left,
+      zIndex,
+      minWidth: width,
+      width,
+      boxSizing: "border-box",
+      overflow: "hidden",
+      background,
+      backgroundClip: "padding-box",
+      borderRight: isLastSticky ? "2px solid #e2e8f0" : "1px solid #e5e7eb",
+      paddingLeft: isScrolled ? "6px" : "12px",
+      paddingRight: isScrolled ? "6px" : "12px",
+      transition: "width 200ms ease-in-out, left 200ms ease-in-out, padding 200ms ease-in-out, background-color 200ms ease-in-out",
+    };
+  }
+
+  const formatGuestName = (name: string, isScrolled: boolean) => {
+    if (!name) return "—";
+    const words = name.trim().split(/\s+/);
+    return (
+      <div className="relative w-full overflow-hidden min-h-[48px] flex flex-col justify-center">
+        {/* Single-line version */}
+        <div 
+          className={`truncate text-left whitespace-nowrap w-full transition-all duration-200 absolute top-1/2 left-0 -translate-y-1/2 ${
+            isScrolled ? "opacity-0 invisible pointer-events-none scale-95" : "opacity-100 visible scale-100"
+          }`}
+        >
+          {name}
+        </div>
+        {/* Stacked multi-line version */}
+        <div 
+          className={`flex flex-col items-center justify-center text-center leading-tight py-1 w-full transition-all duration-200 ${
+            isScrolled ? "opacity-100 visible scale-100" : "opacity-0 invisible pointer-events-none scale-95 absolute"
+          }`}
+        >
+          {words.map((word, idx) => (
+            <span key={idx} className="block uppercase text-[10px] sm:text-[11px] font-semibold tracking-normal truncate max-w-full">
+              {word}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
 
   // -----------------------------------------------
@@ -7550,7 +7616,7 @@ export default function SalesAccountsTeamPage() {
             </CardHeader>
 
             <CardContent className="p-0 bg-[#FFD4A3]">
-              <div className="overflow-x-auto bg-[#FFE2C2]">
+              <div className="overflow-x-auto bg-[#FFE2C2]" onScroll={(e) => setTable1Scrolled(e.currentTarget.scrollLeft > 0)}>
                 <Table className="bg-transparent" style={bookingStickyTableStyle}>
                   <TableHeader
                     className="
@@ -7594,7 +7660,7 @@ export default function SalesAccountsTeamPage() {
                       {/* Booking Date */}
                       <TableHead
                         onClick={() => handleSort("createdDate")}
-                        style={getStickyHeaderCellStyle(0, BOOKING_STICKY_COLUMN_WIDTHS.bookingDate, false, 32)}
+                        style={getStickyHeaderCellStyle(table1Scrolled, "bookingDate", false, 32)}
                       >
                         <div
                           className="
@@ -7613,7 +7679,7 @@ export default function SalesAccountsTeamPage() {
                       {/* Booking ID */}
                       <TableHead
                         onClick={() => handleSort("bookingId")}
-                        style={getStickyHeaderCellStyle(140, BOOKING_STICKY_COLUMN_WIDTHS.bookingId, false, 31)}
+                        style={getStickyHeaderCellStyle(table1Scrolled, "bookingId", false, 31)}
                       >
                         <div
                           className="
@@ -7632,7 +7698,7 @@ export default function SalesAccountsTeamPage() {
                       {/* Guest Name */}
                       <TableHead
                         onClick={() => handleSort("guestName")}
-                        style={getStickyHeaderCellStyle(320, BOOKING_STICKY_COLUMN_WIDTHS.guestName, true, 30)}
+                        style={getStickyHeaderCellStyle(table1Scrolled, "guestName", true, 30)}
                       >
                         <div
                           className="
@@ -7818,21 +7884,21 @@ export default function SalesAccountsTeamPage() {
                       >
                         <TableCell
                           className="text-sm text-slate-700"
-                          style={getStickyBodyCellStyle(0, BOOKING_STICKY_COLUMN_WIDTHS.bookingDate, "#FFE2C2", false, 22)}
+                          style={getStickyBodyCellStyle(table1Scrolled, "bookingDate", "#FFE2C2", false, 22)}
                         >
                           {new Date(booking.createdDate || booking.lastUpdated).toLocaleDateString()}
                         </TableCell>
                         <TableCell
                           className="font-semibold text-primary"
-                          style={getStickyBodyCellStyle(140, BOOKING_STICKY_COLUMN_WIDTHS.bookingId, "#FFE2C2", false, 21)}
+                          style={getStickyBodyCellStyle(table1Scrolled, "bookingId", "#FFE2C2", false, 21)}
                         >
                           {booking.bookingId}
                         </TableCell>
                         <TableCell
                           className="font-medium text-slate-900"
-                          style={getStickyBodyCellStyle(320, BOOKING_STICKY_COLUMN_WIDTHS.guestName, "#FFE2C2", true, 20)}
+                          style={getStickyBodyCellStyle(table1Scrolled, "guestName", "#FFE2C2", true, 20)}
                         >
-                          {booking.guestName}
+                          {formatGuestName(booking.guestName, table1Scrolled)}
                         </TableCell>
                         <TableCell className="text-slate-700 space-y-1">
                           {/* MOBILE */}
@@ -8475,7 +8541,7 @@ export default function SalesAccountsTeamPage() {
                       {/* Booking Date */}
                       <TableHead
                         onClick={() => handleSort("createdDate")}
-                        style={getStickyHeaderCellStyle(0, BOOKING_STICKY_COLUMN_WIDTHS.bookingDate, false, 32)}
+                        style={getStickyHeaderCellStyle(table2Scrolled, "bookingDate", false, 32)}
                       >
                         <div
                           className="
@@ -8494,7 +8560,7 @@ export default function SalesAccountsTeamPage() {
                       {/* Booking ID */}
                       <TableHead
                         onClick={() => handleSort("bookingId")}
-                        style={getStickyHeaderCellStyle(140, BOOKING_STICKY_COLUMN_WIDTHS.bookingId, false, 31)}
+                        style={getStickyHeaderCellStyle(table2Scrolled, "bookingId", false, 31)}
                       >
                         <div
                           className="
@@ -8513,7 +8579,7 @@ export default function SalesAccountsTeamPage() {
                       {/* Guest Name */}
                       <TableHead
                         onClick={() => handleSort("guestName")}
-                        style={getStickyHeaderCellStyle(320, BOOKING_STICKY_COLUMN_WIDTHS.guestName, true, 30)}
+                        style={getStickyHeaderCellStyle(table2Scrolled, "guestName", true, 30)}
                       >
                         <div
                           className="
@@ -8701,21 +8767,21 @@ export default function SalesAccountsTeamPage() {
                       >
                         <TableCell
                           className="text-sm text-slate-700"
-                          style={getStickyBodyCellStyle(0, BOOKING_STICKY_COLUMN_WIDTHS.bookingDate, "#DCFCE5", false, 22)}
+                          style={getStickyBodyCellStyle(table2Scrolled, "bookingDate", "#DCFCE5", false, 22)}
                         >
                           {new Date(booking.createdDate || booking.lastUpdated).toLocaleDateString()}
                         </TableCell>
                         <TableCell
                           className="font-semibold text-primary"
-                          style={getStickyBodyCellStyle(140, BOOKING_STICKY_COLUMN_WIDTHS.bookingId, "#DCFCE5", false, 21)}
+                          style={getStickyBodyCellStyle(table2Scrolled, "bookingId", "#DCFCE5", false, 21)}
                         >
                           {booking.bookingId}
                         </TableCell>
                         <TableCell
                           className="font-medium text-slate-900"
-                          style={getStickyBodyCellStyle(320, BOOKING_STICKY_COLUMN_WIDTHS.guestName, "#DCFCE5", true, 20)}
+                          style={getStickyBodyCellStyle(table2Scrolled, "guestName", "#DCFCE5", true, 20)}
                         >
-                          {booking.guestName}
+                          {formatGuestName(booking.guestName, table2Scrolled)}
                         </TableCell>
                         <TableCell className="text-slate-700 space-y-1">
                           {/* MOBILE */}
@@ -9317,7 +9383,7 @@ export default function SalesAccountsTeamPage() {
             </CardHeader>
             {/* //[#B95152] */}
             <CardContent className="p-0 ">
-              <div className="overflow-x-auto bg-[#FDD5D5] text-black">
+              <div className="overflow-x-auto bg-[#FDD5D5] text-black" onScroll={(e) => setTable3Scrolled(e.currentTarget.scrollLeft > 0)}>
                 <Table className="bg-transparent [&_td]:text-black [&_th]:text-white" style={bookingStickyTableStyle}>
                   <TableHeader
                     className="
@@ -9347,9 +9413,9 @@ export default function SalesAccountsTeamPage() {
 
 
                     <TableRow>
-                      <TableHead style={getStickyHeaderCellStyle(0, BOOKING_STICKY_COLUMN_WIDTHS.bookingDate, false, 32)}>Booking Date</TableHead>
-                      <TableHead style={getStickyHeaderCellStyle(140, BOOKING_STICKY_COLUMN_WIDTHS.bookingId, false, 31)}>Booking ID</TableHead>
-                      <TableHead style={getStickyHeaderCellStyle(320, BOOKING_STICKY_COLUMN_WIDTHS.guestName, true, 30)}>Guest Name</TableHead>
+                      <TableHead style={getStickyHeaderCellStyle(table3Scrolled, "bookingDate", false, 32)}>Booking Date</TableHead>
+                      <TableHead style={getStickyHeaderCellStyle(table3Scrolled, "bookingId", false, 31)}>Booking ID</TableHead>
+                      <TableHead style={getStickyHeaderCellStyle(table3Scrolled, "guestName", true, 30)}>Guest Name</TableHead>
                       <TableHead>Room Details</TableHead>
                       <TableHead onClick={() => handleSort("checkIn")}>
                         <div
@@ -9395,7 +9461,7 @@ export default function SalesAccountsTeamPage() {
                         {/* Booking Date */}
                         <TableCell
                           className="text-sm text-gray-700"
-                          style={getStickyBodyCellStyle(0, BOOKING_STICKY_COLUMN_WIDTHS.bookingDate, "#FDD5D5", false, 22)}
+                          style={getStickyBodyCellStyle(table3Scrolled, "bookingDate", "#FDD5D5", false, 22)}
                         >
                           {booking.createdDate
                             ? new Date(booking.createdDate).toLocaleDateString()
@@ -9405,16 +9471,16 @@ export default function SalesAccountsTeamPage() {
                         {/* Booking ID */}
                         <TableCell
                           className="font-medium"
-                          style={getStickyBodyCellStyle(140, BOOKING_STICKY_COLUMN_WIDTHS.bookingId, "#FDD5D5", false, 21)}
+                          style={getStickyBodyCellStyle(table3Scrolled, "bookingId", "#FDD5D5", false, 21)}
                         >
                           {booking.bookingId}
                         </TableCell>
 
                         {/* Guest Name */}
                         <TableCell
-                          style={getStickyBodyCellStyle(320, BOOKING_STICKY_COLUMN_WIDTHS.guestName, "#FDD5D5", true, 20)}
+                          style={getStickyBodyCellStyle(table3Scrolled, "guestName", "#FDD5D5", true, 20)}
                         >
-                          {booking.guestName}
+                          {formatGuestName(booking.guestName, table3Scrolled)}
                         </TableCell>
 
                         {/* Room Number */}
@@ -9858,7 +9924,7 @@ export default function SalesAccountsTeamPage() {
           </CardHeader>
 
           <CardContent className="p-0 ">
-            <div className="overflow-x-auto bg-[#e1f3fd]">
+            <div className="overflow-x-auto bg-[#e1f3fd]" onScroll={(e) => setTable4Scrolled(e.currentTarget.scrollLeft > 0)}>
               <Table className="bg-transparent" style={bookingStickyTableStyle}>
                 <TableHeader
                   className="
@@ -9886,9 +9952,9 @@ export default function SalesAccountsTeamPage() {
   "
                 >
                   <TableRow className="border-b border-red-300">
-                    <TableHead style={getStickyHeaderCellStyle(0, BOOKING_STICKY_COLUMN_WIDTHS.bookingDate, false, 32)}>Booking Date</TableHead>
-                    <TableHead style={getStickyHeaderCellStyle(140, BOOKING_STICKY_COLUMN_WIDTHS.bookingId, false, 31)}>Booking ID</TableHead>
-                    <TableHead style={getStickyHeaderCellStyle(320, BOOKING_STICKY_COLUMN_WIDTHS.guestName, true, 30)}>Guest Name</TableHead>
+                    <TableHead style={getStickyHeaderCellStyle(table4Scrolled, "bookingDate", false, 32)}>Booking Date</TableHead>
+                    <TableHead style={getStickyHeaderCellStyle(table4Scrolled, "bookingId", false, 31)}>Booking ID</TableHead>
+                    <TableHead style={getStickyHeaderCellStyle(table4Scrolled, "guestName", true, 30)}>Guest Name</TableHead>
                     <TableHead>Room Details</TableHead>
                     <TableHead>Programme</TableHead>
                     <TableHead>Amount</TableHead>
@@ -9918,7 +9984,7 @@ export default function SalesAccountsTeamPage() {
                       {/* Booking Date */}
                       <TableCell
                         className="text-sm text-gray-700"
-                        style={getStickyBodyCellStyle(0, BOOKING_STICKY_COLUMN_WIDTHS.bookingDate, "#E1F3FD", false, 22)}
+                        style={getStickyBodyCellStyle(table4Scrolled, "bookingDate", "#E1F3FD", false, 22)}
                       >
                         {new Date(booking.createdDate).toLocaleDateString()}
                       </TableCell>
@@ -9926,16 +9992,16 @@ export default function SalesAccountsTeamPage() {
                       {/* Booking ID */}
                       <TableCell
                         className="font-medium text-sky-700"
-                        style={getStickyBodyCellStyle(140, BOOKING_STICKY_COLUMN_WIDTHS.bookingId, "#E1F3FD", false, 21)}
+                        style={getStickyBodyCellStyle(table4Scrolled, "bookingId", "#E1F3FD", false, 21)}
                       >
                         {booking.bookingId}
                       </TableCell>
 
                       {/* Guest Name */}
                       <TableCell
-                        style={getStickyBodyCellStyle(320, BOOKING_STICKY_COLUMN_WIDTHS.guestName, "#E1F3FD", true, 20)}
+                        style={getStickyBodyCellStyle(table4Scrolled, "guestName", "#E1F3FD", true, 20)}
                       >
-                        {booking.guestName}
+                        {formatGuestName(booking.guestName, table4Scrolled)}
                       </TableCell>
 
                       {/* Room Number */}

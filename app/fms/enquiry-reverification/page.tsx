@@ -202,16 +202,16 @@ export default function EnquiryReverificationPage() {
                 body: JSON.stringify({
                     id: selectedExecutiveRecord.id,
                     isExecutiveVerify: true,
-                    doer_executive_verifier: values.doer,
-                    verify_action_status_executive_verifier: values.verifyActionStatus,
-                    valid_reason_executive_verifier: values.validReason,
-                    what_went_wrong_by_sales_team_executive_verifier: values.whatWentWrong,
-                    overall_rating_out_of_10_executive_verifier: Number(values.overallRating),
-                    suggested_solution_for_improvement_executive_verifier: values.suggestedSolution,
-                    remarks_executive_verifier: values.remarks,
+                    CH: values.doer,
+                    CI: values.verifyActionStatus,
+                    CJ: values.validReason,
+                    CK: values.whatWentWrong,
+                    CL: Number(values.overallRating),
+                    CM: values.suggestedSolution,
+                    CN: values.remarks,
                     ht_created_to_executive_verifier_if_delay_status: values.htCreatedStatus,
                     doer_executive_verifier_email_id: values.doerEmail,
-                    hs_status_if_escalate_to_abhilash_sir_by_executive: values.hsStatus,
+                    CQ: values.hsStatus,
                 })
             })
             const json = await res.json()
@@ -239,13 +239,13 @@ export default function EnquiryReverificationPage() {
                 body: JSON.stringify({
                     id: selectedSeniorRecord.id,
                     isSeniorVerify: true,
-                    doer_senior_verifier: values.doer,
-                    verify_action_status_senior_verifier: values.verifyActionStatus,
-                    valid_reason_senior_verifier: values.validReason,
-                    what_went_wrong_by_sales_team_senior_verifier: values.whatWentWrong,
-                    overall_rating_out_of_10_senior_verifier: Number(values.overallRating),
-                    suggested_solution_for_improvement_senior_verifier: values.suggestedSolution,
-                    remarks_senior_verifier: values.remarks,
+                    CW: values.doer,
+                    CX: values.verifyActionStatus,
+                    CY: values.validReason,
+                    CZ: values.whatWentWrong,
+                    DA: Number(values.overallRating),
+                    DB: values.suggestedSolution,
+                    DC: values.remarks,
                     ht_created_to_senior_verifier_if_delay_status: values.htCreatedStatus,
                     whatsapp_alert_to_sales_person_if_reopen: values.whatsappAlert,
                     email_alert_to_sales_person_if_reopen: values.emailAlert,
@@ -932,19 +932,24 @@ export default function EnquiryReverificationPage() {
                                                     onClick={() => {
                                                         setSelectedExecutiveRecord({
                                                             id: String(enq.id),
-                                                            planned: enq.planned_executive_verifier ? formatDateStr(enq.planned_executive_verifier) : formatDateStr(enq.generate_date_time),
-                                                            actual: enq.actual_executive_verifier ? formatDateStr(enq.actual_executive_verifier) : "—",
-                                                            timeDelay: enq.time_delay_executive_verifier || "—",
-                                                            savedDoer: enq.doer_executive_verifier,
-                                                            savedVerifyActionStatus: enq.verify_action_status_executive_verifier,
-                                                            savedValidReason: enq.valid_reason_executive_verifier,
-                                                            savedWhatWentWrong: enq.what_went_wrong_by_sales_team_executive_verifier,
-                                                            savedOverallRating: enq.overall_rating_out_of_10_executive_verifier,
-                                                            savedSuggestedSolution: enq.suggested_solution_for_improvement_executive_verifier,
-                                                            savedRemarks: enq.remarks_executive_verifier,
+                                                            leadId: enq.lead_id || "",
+                                                            name: enq.name_of_client || "",
+                                                            mobile: enq.mobile || "",
+                                                            planned: enq.planned ? formatDateStr(enq.planned) : formatDateStr(enq.generate_date_time),
+                                                            actual: enq.actual ? formatDateStr(enq.actual) : "—",
+                                                            timeDelay: enq.timedelay || "—",
+                                                            savedColdBy: enq.cold_by_employee_name || "",
+                                                            savedColdRemarks: enq.cold_remarks_by_sales_team || "",
+                                                            savedDoer: enq.CH,
+                                                            savedVerifyActionStatus: enq.CI,
+                                                            savedValidReason: enq.CJ,
+                                                            savedWhatWentWrong: enq.CK,
+                                                            savedOverallRating: enq.CL,
+                                                            savedSuggestedSolution: enq.CM,
+                                                            savedRemarks: enq.CN,
                                                             savedHtCreatedStatus: enq.ht_created_to_executive_verifier_if_delay_status,
                                                             savedDoerEmail: enq.doer_executive_verifier_email_id,
-                                                            savedHsStatus: enq.hs_status_if_escalate_to_abhilash_sir_by_executive
+                                                            savedHsStatus: enq.CQ
                                                         });
                                                         setIsExecutiveModalOpen(true);
                                                     }}
@@ -955,24 +960,29 @@ export default function EnquiryReverificationPage() {
                                                 <button
                                                     onClick={() => {
                                                         setSelectedSeniorRecord({
-                                                            id: String(enq.id),
-                                                            planned: enq.planned_senior_verifier ? formatDateStr(enq.planned_senior_verifier) : formatDateStr(enq.generate_date_time),
-                                                            actual: enq.actual_senior_verifier ? formatDateStr(enq.actual_senior_verifier) : "—",
-                                                            timeDelay: enq.time_delay_senior_verifier || "—",
-                                                            savedDoer: enq.doer_senior_verifier,
-                                                            savedDoerEmail: enq.doer_senior_verifier_email_id,
-                                                            savedVerifyActionStatus: enq.verify_action_status_senior_verifier,
-                                                            savedValidReason: enq.valid_reason_senior_verifier,
-                                                            savedOverallRating: enq.overall_rating_out_of_10_senior_verifier,
-                                                            savedHtCreatedStatus: enq.ht_created_to_senior_verifier_if_delay_status,
-                                                            savedWhatsappAlert: enq.whatsapp_alert_to_sales_person_if_reopen,
-                                                            savedEmailAlert: enq.email_alert_to_sales_person_if_reopen,
-                                                            savedHsStatus: enq.hs_status_if_escalate_to_abhilash_sir_by_senior,
-                                                            savedTransferToUserFms: enq.transfer_to_user_fms_if_reopen,
-                                                            savedWhatWentWrong: enq.what_went_wrong_by_sales_team_senior_verifier,
-                                                            savedSuggestedSolution: enq.suggested_solution_for_improvement_senior_verifier,
-                                                            savedRemarks: enq.remarks_senior_verifier
-                                                        });
+                                                             id: String(enq.id),
+                                                             leadId: enq.lead_id || "",
+                                                             name: enq.name_of_client || "",
+                                                             mobile: enq.mobile || "",
+                                                             planned: enq.senior_planned ? formatDateStr(enq.senior_planned) : formatDateStr(enq.generate_date_time),
+                                                             actual: enq.senior_actual ? formatDateStr(enq.senior_actual) : "—",
+                                                             timeDelay: enq.senior_timedelay || "—",
+                                                             savedColdBy: enq.cold_by_employee_name || "",
+                                                             savedColdRemarks: enq.cold_remarks_by_sales_team || "",
+                                                             savedDoer: enq.CW,
+                                                             savedDoerEmail: enq.doer_senior_verifier_email_id,
+                                                             savedVerifyActionStatus: enq.CX,
+                                                             savedValidReason: enq.CY,
+                                                             savedOverallRating: enq.DA,
+                                                             savedHtCreatedStatus: enq.ht_created_to_senior_verifier_if_delay_status,
+                                                             savedWhatsappAlert: enq.whatsapp_alert_to_sales_person_if_reopen,
+                                                             savedEmailAlert: enq.email_alert_to_sales_person_if_reopen,
+                                                             savedHsStatus: enq.hs_status_if_escalate_to_abhilash_sir_by_senior,
+                                                             savedTransferToUserFms: enq.transfer_to_user_fms_if_reopen,
+                                                             savedWhatWentWrong: enq.CZ,
+                                                             savedSuggestedSolution: enq.DB,
+                                                             savedRemarks: enq.DC
+                                                         });
                                                         setIsSeniorModalOpen(true);
                                                     }}
                                                     className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 text-violet-600 font-bold bg-white hover:bg-violet-50 px-3.5 py-1.5 text-xs shadow-sm transition"

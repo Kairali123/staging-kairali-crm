@@ -8,6 +8,9 @@ import React, { useMemo, useState, useEffect } from "react";
 
 export interface ExecutiveVerifierRecord {
     id: string;
+    leadId?: string;
+    name?: string;
+    mobile?: string;
     planned: string; // read-only, comes from data. Empty/null => modal cannot open
     actual: string; // read-only, comes from data
     timeDelay: string; // read-only, comes from data
@@ -21,6 +24,8 @@ export interface ExecutiveVerifierRecord {
     savedHtCreatedStatus?: string;
     savedDoerEmail?: string;
     savedHsStatus?: string;
+    savedColdBy?: string;
+    savedColdRemarks?: string;
 }
 
 export interface ExecutiveVerifierFormValues {
@@ -34,6 +39,8 @@ export interface ExecutiveVerifierFormValues {
     htCreatedStatus: "" | "Yes" | "No";
     doerEmail: string;
     hsStatus: "" | "Yes" | "No";
+    coldBy: string;
+    coldRemarksBySalesTeam: string;
 }
 
 interface ExecutiveVerifierModalProps {
@@ -100,6 +107,8 @@ const VALID_REASON_OPTIONS = [
 
 const YES_NO_OPTIONS: Array<"Yes" | "No"> = ["Yes", "No"];
 
+const OVERALL_RATING_OPTIONS = Array.from({ length: 10 }, (_, i) => String(i + 1));
+
 const EMPTY_FORM: ExecutiveVerifierFormValues = {
     doer: "",
     verifyActionStatus: "",
@@ -111,6 +120,8 @@ const EMPTY_FORM: ExecutiveVerifierFormValues = {
     htCreatedStatus: "",
     doerEmail: "",
     hsStatus: "",
+    coldBy: "",
+    coldRemarksBySalesTeam: "",
 };
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -132,7 +143,7 @@ export default function ExecutiveVerifierModal({
     const [submitted, setSubmitted] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const isAlreadySubmitted = Boolean(record?.actual && record.actual !== "—" && record.actual !== "");
+    const isAlreadySubmitted = Boolean(record?.savedVerifyActionStatus);
 
     React.useEffect(() => {
         if (open) {
@@ -148,12 +159,16 @@ export default function ExecutiveVerifierModal({
                     remarks: record.savedRemarks || "",
                     htCreatedStatus: (record.savedHtCreatedStatus as any) || "",
                     hsStatus: (record.savedHsStatus as any) || "",
+                    coldBy: record.savedColdBy || "",
+                    coldRemarksBySalesTeam: record.savedColdRemarks || "",
                 });
             } else {
                 setForm({
                     ...EMPTY_FORM,
-                    doer: defaultDoerName || "",
-                    doerEmail: defaultDoerEmail || "",
+                    doer: record.savedDoer || defaultDoerName || "",
+                    doerEmail: record.savedDoerEmail || defaultDoerEmail || "",
+                    coldBy: record.savedColdBy || "",
+                    coldRemarksBySalesTeam: record.savedColdRemarks || "",
                 });
             }
             setError(null);
@@ -177,10 +192,12 @@ export default function ExecutiveVerifierModal({
             rating <= 10 &&
             form.suggestedSolution.trim() !== "" &&
             form.remarks.trim() !== "" &&
-            form.htCreatedStatus !== "" &&
+            // form.htCreatedStatus !== "" && // commented out with HT Created Status field
             form.doerEmail.trim() !== "" &&
             EMAIL_REGEX.test(form.doerEmail.trim()) &&
-            form.hsStatus !== ""
+            form.hsStatus !== "" &&
+            form.coldBy.trim() !== "" &&
+            form.coldRemarksBySalesTeam.trim() !== ""
         );
     }, [form]);
 
@@ -229,6 +246,20 @@ export default function ExecutiveVerifierModal({
                             <p className="text-xs text-indigo-100">
                                 Complete all fields to proceed
                             </p>
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <span className="inline-flex items-center gap-1.5 rounded-md bg-white/10 px-2.5 py-1 text-xs text-indigo-50 ring-1 ring-inset ring-white/20">
+                                    <span className="font-semibold text-white">Lead ID</span>
+                                    <span className="text-indigo-100">{record?.leadId || "—"}</span>
+                                </span>
+                                <span className="inline-flex items-center gap-1.5 rounded-md bg-white/10 px-2.5 py-1 text-xs text-indigo-50 ring-1 ring-inset ring-white/20">
+                                    <span className="font-semibold text-white">Name</span>
+                                    <span className="text-indigo-100">{record?.name || "—"}</span>
+                                </span>
+                                <span className="inline-flex items-center gap-1.5 rounded-md bg-white/10 px-2.5 py-1 text-xs text-indigo-50 ring-1 ring-inset ring-white/20">
+                                    <span className="font-semibold text-white">Mobile</span>
+                                    <span className="text-indigo-100">{record?.mobile || "—"}</span>
+                                </span>
+                            </div>
                         </div>
                     </div>
                     <button
@@ -259,6 +290,18 @@ export default function ExecutiveVerifierModal({
                                 className="sm:col-span-1"
                             />
 
+                            {/* Cold By — always read-only from DB */}
+                            <div className="sm:col-span-1">
+                                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500">
+                                    Cold By <span className="text-red-500">*</span>
+                                </label>
+                                <div className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 min-h-[38px]">
+                                    {/* <span className="inline-block h-2 w-2 rounded-full bg-indigo-400 flex-shrink-0" /> */}
+                                    <span className="font-medium truncate">{form.coldBy || <span className="text-gray-400 italic">Not set</span>}</span>
+                                </div>
+                            </div>
+
+                            {/* Doer Email ID - hidden per request, commented out
                             <TextField
                                 label="Doer Email ID"
                                 required
@@ -268,17 +311,7 @@ export default function ExecutiveVerifierModal({
                                 disabled
                                 className="sm:col-span-2"
                             />
-
-                            <NumberField
-                                label="Overall Rating (Out of 10)"
-                                required
-                                min={1}
-                                max={10}
-                                value={form.overallRating}
-                                onChange={(v) => update("overallRating", v)}
-                                className="sm:col-span-1"
-                                disabled={isAlreadySubmitted}
-                            />
+                            */}
 
                             <SelectField
                                 label="Verify Action Status"
@@ -300,6 +333,7 @@ export default function ExecutiveVerifierModal({
                                 disabled={isAlreadySubmitted}
                             />
 
+                            {/* HT Created Status (If delay) - commented out per request
                             <SelectField
                                 label="HT Created Status (If delay)"
                                 required
@@ -311,6 +345,7 @@ export default function ExecutiveVerifierModal({
                                 className="sm:col-span-1"
                                 disabled={isAlreadySubmitted}
                             />
+                            */}
 
                             <SelectField
                                 label="HS Status (If escalate to Abhilash Sir)"
@@ -321,6 +356,29 @@ export default function ExecutiveVerifierModal({
                                 className="sm:col-span-1"
                                 disabled={isAlreadySubmitted}
                             />
+
+                            <SelectField
+                                label="Overall Rating (Out of 10)"
+                                required
+                                value={form.overallRating}
+                                options={OVERALL_RATING_OPTIONS}
+                                onChange={(v) => update("overallRating", v)}
+                                className="sm:col-span-1"
+                                disabled={isAlreadySubmitted}
+                            />
+
+                            {/* Cold Remarks — always read-only from DB */}
+                            <div className="sm:col-span-2">
+                                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500">
+                                    Cold Remarks by Sales Team <span className="text-red-500">*</span>
+                                </label>
+                                <div
+                                    className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 leading-relaxed break-words whitespace-pre-wrap"
+                                    style={{ minHeight: '72px', maxHeight: '96px', overflowY: 'auto', wordBreak: 'break-word', scrollbarWidth: 'thin', scrollbarColor: '#c7d2fe #f1f5f9' }}
+                                >
+                                    {form.coldRemarksBySalesTeam || <span className="text-gray-400 italic">No remarks available</span>}
+                                </div>
+                            </div>
 
                             <TextAreaField
                                 label="What Went Wrong by Sales Team?"
