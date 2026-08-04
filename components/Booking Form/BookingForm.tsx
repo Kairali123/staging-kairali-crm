@@ -135,9 +135,14 @@ function validateStep(step: number, state: any, bookingType: string): Record<str
     if (step === 1) {
       // Validate each guest in each room
       const rooms: RoomData[] = state.groupRooms || [];
+      const expectedRoomCount: number = state.apiRoomCount || 0;
       if (rooms.length === 0) {
         errs.rooms = "No rooms assigned. Please go back and set Group Pax.";
       } else {
+        // If we loaded from the API, the room count must match exactly
+        if (expectedRoomCount > 0 && rooms.length !== expectedRoomCount) {
+          errs.rooms = `Room count mismatch: the booking has ${expectedRoomCount} room${expectedRoomCount > 1 ? 's' : ''} on record, but ${rooms.length} room${rooms.length > 1 ? 's' : ''} ${rooms.length > expectedRoomCount ? 'were added' : 'remain'}. Please match the original room count.`;
+        }
         for (let ri = 0; ri < rooms.length; ri++) {
           const room = rooms[ri];
           for (let gi = 0; gi < room.guests.length; gi++) {
@@ -259,11 +264,23 @@ function validateStep(step: number, state: any, bookingType: string): Record<str
 }
 
 // ─── Group Info Step ──────────────────────────────────────────────────────────
-function StepGroupInfo({ info, onChange, errors, apiData }: { info: GroupInfo; onChange: (g: GroupInfo) => void; errors: Record<string, string>; apiData: any; }) {
+function StepGroupInfo({ info, onChange, errors, apiData, apiRoomCount = 0 }: { info: GroupInfo; onChange: (g: GroupInfo) => void; errors: Record<string, string>; apiData: any; apiRoomCount?: number; }) {
   const set = (k: keyof GroupInfo, v: string) => onChange({ ...info, [k]: v });
   return (
     <div className="kbf-card">
-      <div className="kbf-card-header"><div className="kbf-card-step-no">1</div><i className="fas fa-users" /><h2>Group Booking — Group Details</h2></div>
+      <div className="kbf-card-header"><div className="kbf-card-step-no">1</div><i className="fas fa-users" /><h2>Group Booking — Group Details</h2>
+        {apiRoomCount > 0 && (
+          <div style={{
+            marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6,
+            background: 'linear-gradient(135deg,#0f4c81,#1a6daf)', color: '#fff',
+            borderRadius: 20, padding: '4px 14px', fontSize: 13, fontWeight: 600,
+            boxShadow: '0 2px 8px rgba(15,76,129,0.25)', whiteSpace: 'nowrap',
+          }}>
+            <i className="fas fa-door-open" style={{ fontSize: 12 }} />
+            {apiRoomCount} Room{apiRoomCount > 1 ? 's' : ''} on Record
+          </div>
+        )}
+      </div>
       <div className="kbf-card-body">
         <div className="kbf-row1">
           <div className="kbf-group">
@@ -830,6 +847,7 @@ export default function BookingForm({ bookingId, formType = "individual", onSucc
   const hasLoadedData = useRef(false);
   const hasLoadedBooking = useRef(false);
   const groupPrefillDone = useRef(false);
+  const apiRoomCount = useRef<number>(0); // rooms count as loaded from API (edit mode only)
 
   // Alphabetical ascending order for the Treatment/Programme/Package dropdown
   const programmes = apiData?.AllRackPackages
@@ -1246,6 +1264,7 @@ export default function BookingForm({ bookingId, formType = "individual", onSucc
             });
             const rooms = Array.from(roomMap.values());
             groupPrefillDone.current = true; // prevent pax-sync effect from clobbering
+            apiRoomCount.current = rooms.length; // remember how many rooms came from the API
             setGroupRooms(rooms);
             setGroupGuests(rooms.flatMap(r => r.guests));
           }
@@ -1300,6 +1319,7 @@ export default function BookingForm({ bookingId, formType = "individual", onSucc
       children,
       groupInfo,
       groupRooms,
+      apiRoomCount: apiRoomCount.current,
       additionalInfo,
       travelAgent,
       advancePayment,
@@ -1559,7 +1579,7 @@ export default function BookingForm({ bookingId, formType = "individual", onSucc
       }
     } else {
       switch (step) {
-        case 0: return <StepGroupInfo info={groupInfo} onChange={setGroupInfo} errors={errors} apiData={apiData} />;
+        case 0: return <StepGroupInfo info={groupInfo} onChange={setGroupInfo} errors={errors} apiData={apiData} apiRoomCount={bookingId ? apiRoomCount.current : 0} />;
         case 1: return <StepGroupGuests rooms={groupRooms} onChange={setGroupRooms} programmes={programmes} apiData={apiData} errors={errors} roomMaxPaxMap={ROOM_MAX_PAX} />;
         case 2: return <StepAdditionalInfo data={additionalInfo} onChange={setAdditionalInfo} apiData={apiData} prefix="grp" errors={errors} />;
         case 3: return <StepTravelAgent data={travelAgent} onChange={setTravelAgent} apiData={apiData} prefix="grp" errors={errors} />;

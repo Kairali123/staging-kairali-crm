@@ -260,7 +260,8 @@ const InvoiceHistoryPopup: React.FC<InvoiceHistoryPopupProps> = ({
     ];
 
     const theadCols = [
-        "Booking ID", "Row #", "Invoice No.", "Invoice URL",
+        // "Booking ID", "Row #",
+        "Invoice No.", "Invoice URL",
         "Generated", "PI Date", "Edit by PMS", "Edit by Form", "Edited By", "Amount",
     ];
 
@@ -320,6 +321,41 @@ const InvoiceHistoryPopup: React.FC<InvoiceHistoryPopupProps> = ({
                         background: "rgba(255,255,255,0.05)",
                         pointerEvents: "none",
                     }} />
+
+                    {/* left accent bar — reinforces this is a billing/PI document */}
+                    <div style={{
+                        position: "absolute",
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: 5,
+                        background: "#fde68a",
+                    }} />
+
+                    {/* PI / Invoice identity label */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                        <span style={{
+                            width: 24,
+                            height: 24,
+                            borderRadius: 6,
+                            background: "rgba(253,230,138,0.2)",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 13,
+                        }}>
+                            🧾
+                        </span>
+                        <span style={{
+                            color: "#fde68a",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            letterSpacing: "0.06em",
+                            textTransform: "uppercase",
+                        }}>
+                            Proforma Invoice (PI) History
+                        </span>
+                    </div>
 
                     {/* breadcrumb */}
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
@@ -421,6 +457,14 @@ const InvoiceHistoryPopup: React.FC<InvoiceHistoryPopupProps> = ({
                     </button>
                 </div>
 
+                {/* ── Perforated divider (receipt motif) ── */}
+                <div style={{
+                    padding: "6px 22px",
+                    background: `repeating-linear-gradient(90deg, ${C.stripBg} 0 6px, transparent 6px 12px)`,
+                    borderBottom: `0.5px dashed ${C.rowBor}`,
+                    flexShrink: 0,
+                }} />
+
                 {/* ── Table ── */}
                 <div style={{ overflowX: "auto", overflowY: "auto" }}>
                     {loading && (
@@ -486,8 +530,8 @@ const InvoiceHistoryPopup: React.FC<InvoiceHistoryPopupProps> = ({
                                         onMouseEnter={e => (e.currentTarget.style.background = C.rowHover)}
                                         onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? C.bodyBg : C.rowAlt)}
                                     >
-                                        <Td>{row.bookingId}</Td>
-                                        <Td mono>{row.rowNumber}</Td>
+                                        {/* <Td>{row.bookingId}</Td> */}
+                                        {/* <Td mono>{row.rowNumber}</Td> */}
 
                                         {/* Invoice number badge */}
                                         <Td>
@@ -584,7 +628,7 @@ const InvoiceHistoryPopup: React.FC<InvoiceHistoryPopupProps> = ({
                     flexShrink: 0,
                 }}>
                     <span style={{ fontSize: 12, color: C.ftrText }}>
-                        Showing{" "}
+                        🧾 PI / Invoice Ledger — Showing{" "}
                         <strong style={{ color: C.ftrStrong, fontWeight: 600 }}>1–{rows.length}</strong>
                         {" "}of{" "}
                         <strong style={{ color: C.ftrStrong, fontWeight: 600 }}>{rows.length}</strong>

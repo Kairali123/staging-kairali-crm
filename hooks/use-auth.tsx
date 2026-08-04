@@ -692,7 +692,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ email, password, company }),
       })
 
-      const data = await response.json()
+      const contentType = response.headers.get("content-type") || ""
+      const data = contentType.includes("application/json")
+        ? await response.json()
+        : null
+
+      if (!response.ok) {
+        throw new Error(data?.message || "Login service unavailable")
+      }
 
       if (data.success && data.user) {
         // Login returns the same permission set it signs into the session.
