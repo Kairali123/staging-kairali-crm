@@ -3809,7 +3809,7 @@ export default function SalesAccountsTeamPage() {
     isLastSticky = false,
     zIndex = 30
   ): React.CSSProperties => {
-    const widths = isScrolled 
+    const widths = isScrolled
       ? { bookingDate: 100, bookingId: 120, guestName: 120 }
       : { bookingDate: 140, bookingId: 180, guestName: 300 };
 
@@ -3846,7 +3846,7 @@ export default function SalesAccountsTeamPage() {
     isLastSticky = false,
     zIndex = 20
   ): React.CSSProperties => {
-    const widths = isScrolled 
+    const widths = isScrolled
       ? { bookingDate: 100, bookingId: 120, guestName: 120 }
       : { bookingDate: 140, bookingId: 180, guestName: 300 };
 
@@ -3880,18 +3880,16 @@ export default function SalesAccountsTeamPage() {
     return (
       <div className="relative w-full overflow-hidden min-h-[48px] flex flex-col justify-center">
         {/* Single-line version */}
-        <div 
-          className={`truncate text-left whitespace-nowrap w-full transition-all duration-200 absolute top-1/2 left-0 -translate-y-1/2 ${
-            isScrolled ? "opacity-0 invisible pointer-events-none scale-95" : "opacity-100 visible scale-100"
-          }`}
+        <div
+          className={`truncate text-left whitespace-nowrap w-full transition-all duration-200 absolute top-1/2 left-0 -translate-y-1/2 ${isScrolled ? "opacity-0 invisible pointer-events-none scale-95" : "opacity-100 visible scale-100"
+            }`}
         >
           {name}
         </div>
         {/* Stacked multi-line version */}
-        <div 
-          className={`flex flex-col items-center justify-center text-center leading-tight py-1 w-full transition-all duration-200 ${
-            isScrolled ? "opacity-100 visible scale-100" : "opacity-0 invisible pointer-events-none scale-95 absolute"
-          }`}
+        <div
+          className={`flex flex-col items-center justify-center text-center leading-tight py-1 w-full transition-all duration-200 ${isScrolled ? "opacity-100 visible scale-100" : "opacity-0 invisible pointer-events-none scale-95 absolute"
+            }`}
         >
           {words.map((word, idx) => (
             <span key={idx} className="block uppercase text-[10px] sm:text-[11px] font-semibold tracking-normal truncate max-w-full">
@@ -4054,7 +4052,7 @@ export default function SalesAccountsTeamPage() {
             setPaymentData({
               amount: (paymentBooking.originalAmount || paymentBooking.amount || 0).toString(),
               receivedAmount: "",
-              currency: "INR",
+              currency: String(paymentBooking.currency || "INR").toUpperCase(),
               paymentMode: "",
               receivedDate: "",
               receiptNumber: "",
@@ -4455,22 +4453,6 @@ export default function SalesAccountsTeamPage() {
             },
           }),
         })
-        console.log(JSON.stringify({
-          paymentData: {
-            bookingId: selectedBookingForPayment?.bookingId,
-            amount: paymentData.amount,
-            receivedAmount: paymentData.receivedAmount,
-            currency: paymentData.currency,
-            paymentMode: paymentData.paymentMode,
-            receivedDate: paymentData.receivedDate,
-            receiptNumber: paymentData.receiptNumber,
-            screenshot: screenshotData,
-            paymentLocation: paymentData.paymentLocation,
-            paymentCollectedBy: paymentData.paymentCollectedBy,
-            pendingPaymentAmount: paymentData.pendingPaymentAmount,
-          },
-        }))
-        debugger
         const data = await validateResponse(response)
         await refetchBookings()
       },
@@ -5184,25 +5166,27 @@ export default function SalesAccountsTeamPage() {
       return;
     }
 
+    // originalAmt and receivedAmt are already in the booking's native currency (e.g. USD, EUR, INR)
     const originalAmt = Number(selectedBookingForPayment.originalAmount || selectedBookingForPayment.amount || 0);
     const receivedAmt = getTotalReceivedRaw(selectedBookingForPayment);
 
-    // Current input currency and rate
-    const cur = String(paymentData.currency || "INR").toUpperCase();
-    const inputRate = cur === "USD" ? 85.74 : (cur === "EURO" || cur === "EUR" ? 89.26 : 1);
-
-    // Booking original currency and rate
+    // Booking original currency and its exchange rate relative to INR
     const bookingCur = String(selectedBookingForPayment.currency || "INR").toUpperCase();
     const bookingRate = bookingCur === "USD" ? 85.74 : (bookingCur === "EURO" || bookingCur === "EUR" ? 89.26 : 1);
 
-    // Calculate remaining pending in INR
-    const pendingInINR = originalAmt - receivedAmt;
-    const inputtedInINR = (parseFloat(String(paymentData.receivedAmount)) || 0) * inputRate;
-    const remainingInINR = Math.max(0, pendingInINR - inputtedInINR);
+    // Input currency and its exchange rate relative to INR
+    const cur = String(paymentData.currency || "INR").toUpperCase();
+    const inputRate = cur === "USD" ? 85.74 : (cur === "EURO" || cur === "EUR" ? 89.26 : 1);
 
-    // Display in booking's original currency
-    const remainingInBookingCurrency = remainingInINR / bookingRate;
-    const pendingVal = remainingInBookingCurrency.toLocaleString(undefined, {
+    // Convert new input amount to booking's native currency
+    const newInputAmt = (parseFloat(String(paymentData.receivedAmount)) || 0);
+    const newInputInBookingCurrency = (newInputAmt * inputRate) / bookingRate;
+
+    // All math stays in booking's native currency — no false INR conversion
+    const alreadyReceived = receivedAmt; // already in booking currency
+    const pendingInBookingCurrency = Math.max(0, originalAmt - alreadyReceived - newInputInBookingCurrency);
+
+    const pendingVal = pendingInBookingCurrency.toLocaleString(undefined, {
       minimumFractionDigits: 0,
       maximumFractionDigits: 2,
     });
@@ -7974,11 +7958,11 @@ export default function SalesAccountsTeamPage() {
                           <div className="space-y-1 text-sm">
                             <div className="flex items-center gap-2">
                               <span className="text-emerald-600 font-medium">In:</span>
-                              <span className="text-slate-700">{new Date(booking.checkIn).toLocaleDateString()}</span>
+                              <span className="text-slate-700">{booking.checkIn}</span>
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-red-600 font-medium">Out:</span>
-                              <span className="text-slate-700">{new Date(booking.checkOut).toLocaleDateString()}</span>
+                              <span className="text-slate-700">{booking.checkOut}</span>
                             </div>
                           </div>
                         </TableCell>
@@ -8857,11 +8841,11 @@ export default function SalesAccountsTeamPage() {
                           <div className="space-y-1 text-sm">
                             <div className="flex items-center gap-2">
                               <span className="text-emerald-600 font-medium">In:</span>
-                              <span className="text-slate-700">{new Date(booking.checkIn).toLocaleDateString()}</span>
+                              <span className="text-slate-700">{booking.checkIn}</span>
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-red-600 font-medium">Out:</span>
-                              <span className="text-slate-700">{new Date(booking.checkOut).toLocaleDateString()}</span>
+                              <span className="text-slate-700">{booking.checkOut}</span>
                             </div>
                           </div>
                         </TableCell>
@@ -9503,11 +9487,11 @@ export default function SalesAccountsTeamPage() {
                           <div className="space-y-1 text-sm">
                             <div className="flex items-center gap-2">
                               <span className="text-emerald-600 font-medium">In:</span>
-                              <span className="text-slate-700">{new Date(booking.checkIn).toLocaleDateString()}</span>
+                              <span className="text-slate-700">{booking.checkIn}</span>
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-red-600 font-medium">Out:</span>
-                              <span className="text-slate-700">{new Date(booking.checkOut).toLocaleDateString()}</span>
+                              <span className="text-slate-700">{booking.checkOut}</span>
                             </div>
                           </div>
                         </TableCell>
@@ -10457,11 +10441,11 @@ export default function SalesAccountsTeamPage() {
                       <TableCell>{booking.guestName}</TableCell>
 
                       <TableCell>
-                        {new Date(booking.checkIn).toLocaleDateString()}
+                        {booking.checkIn}
                       </TableCell>
 
                       <TableCell>
-                        {new Date(booking.checkOut).toLocaleDateString()}
+                        {booking.checkOut}
                       </TableCell>
 
                       <TableCell className="text-slate-700 space-y-1">
@@ -11282,7 +11266,7 @@ export default function SalesAccountsTeamPage() {
                   setPaymentData({
                     amount: selectedBookingForPayment?.amount.toString() || "",
                     receivedAmount: "",
-                    currency: "INR",
+                    currency: String(selectedBookingForPayment?.currency || "INR").toUpperCase(),
                     paymentMode: "",
                     receivedDate: "",
                     receiptNumber: "",
