@@ -44,6 +44,12 @@ export interface GroupGuestData extends GuestData {
   occupancy: string;
 }
 
+export interface RoomData {
+  roomNumber: string;
+  roomType: string;
+  guests: GroupGuestData[];
+}
+
 export interface ChildData {
   childNumber: number;
   name: string;

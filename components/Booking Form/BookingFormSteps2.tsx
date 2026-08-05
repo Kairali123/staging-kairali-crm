@@ -64,7 +64,7 @@ export function StepAdditionalInfo({
     if (mapped && (!data.clientType || data.clientType === "")) {
       onChange({ ...data, clientType: mapped });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data.clientCategory]);
 
   return (
@@ -1082,6 +1082,17 @@ export function StepAdvancePayment({
 }) {
   const set = (k: keyof AdvancePayment, v: any) => onChange({ ...data, [k]: v });
 
+  const blurTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const isTypingRef = React.useRef(false);
+
+  React.useEffect(() => {
+    return () => {
+      if (blurTimeoutRef.current) {
+        clearTimeout(blurTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Logged-in user — "Payment Collection By" is fixed to this (point 10)
   const collectedByName = React.useMemo(() => {
     if (typeof window === "undefined") return "";
@@ -1144,11 +1155,30 @@ export function StepAdvancePayment({
               type="datetime-local"
               value={data.paymentReceivedDate || ""}
               max={getNowLocalDateTime()}
+              onKeyDown={() => {
+                isTypingRef.current = true;
+                if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+              }}
+              onBlur={() => {
+                isTypingRef.current = false;
+                if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+              }}
               onChange={e => {
                 const val = e.target.value;
                 const nowLocal = getNowLocalDateTime();
                 // Prevent selecting/typing a future date-time; clamp to now instead.
-                set("paymentReceivedDate", val > nowLocal ? nowLocal : val);
+                const finalVal = val > nowLocal ? nowLocal : val;
+                set("paymentReceivedDate", finalVal);
+
+                if (finalVal && finalVal.length === 16 && !isTypingRef.current) {
+                  if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+                  const target = e.target;
+                  blurTimeoutRef.current = setTimeout(() => {
+                    if (document.activeElement === target) {
+                      target.blur();
+                    }
+                  }, 600);
+                }
               }}
               disabled={isLocked}
               error={!isLocked && !!errors.paymentReceivedDate}

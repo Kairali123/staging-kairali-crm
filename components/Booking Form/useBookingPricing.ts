@@ -3,6 +3,7 @@ import {
   BookingDetails,
   GuestData,
   GroupGuestData,
+  RoomData,
   ChildData,
   GroupInfo,
   PaymentBreakdown,
@@ -58,6 +59,7 @@ interface PricingProps {
   children: ChildData[];
   groupInfo: GroupInfo;
   groupGuests: GroupGuestData[];
+  groupRooms?: RoomData[];
   apiData: any; // Raw API payload containing price maps
 
   // Discounts & Fees
@@ -106,6 +108,7 @@ export function useBookingPricing(props: PricingProps) {
       children,
       groupInfo,
       groupGuests,
+      groupRooms = [],
       apiData,
       roomDiscountType,
       roomDiscount,
@@ -314,67 +317,144 @@ export function useBookingPricing(props: PricingProps) {
       }
     } else {
       // Group Booking
-      const groupPaxCount = parseInt(groupInfo.pax) || 0;
-      for (let i = 1; i <= groupPaxCount; i++) {
-        const guest = groupGuests[i - 1];
-        if (!guest) continue;
+      let guestCounter = 1;
+      if (groupRooms && groupRooms.length > 0) {
+        groupRooms.forEach((room) => {
+          if (!room.guests || room.guests.length === 0) return;
 
-        const gNights = calculateNights(guest.arrivalDate, guest.departureDate);
-        const gPackageName = guest.programme;
-        const gRoomType = guest.roomType;
-        const gSingleDouble = guest.occupancy || 'Single';
+          // 1. Calculate Room Price (once per room, using the first guest's details)
+          const firstGuest = room.guests[0];
+          const rNights = calculateNights(firstGuest.arrivalDate, firstGuest.departureDate);
+          const rRoomType = room.roomType || firstGuest.roomType;
+          const rSingleDouble = firstGuest.occupancy || 'Single';
 
-        let gPackagePrice = 0;
-        let gRoomPrice = 0;
-        let gMealPrice = 0;
-
-        if (gNights > 0) {
-          if (isRackRate) {
-            if (priceData.packages && gPackageName in priceData.packages) {
-              const packageArray = priceData.packages[gPackageName];
-              if (Array.isArray(packageArray) && packageArray[amountIndex] !== undefined) {
-                gPackagePrice = packageArray[amountIndex] * gNights;
-              }
-            }
-            const roomKey = `${gRoomType}-${gSingleDouble}`;
+          let rRoomPrice = 0;
+          if (rNights > 0 && isRackRate) {
+            const roomKey = `${rRoomType}-${rSingleDouble}`;
             if (priceData.rooms && roomKey in priceData.rooms) {
               const roomArray = priceData.rooms[roomKey];
               if (Array.isArray(roomArray) && roomArray[amountIndex] !== undefined) {
-                gRoomPrice = roomArray[amountIndex] * gNights;
-              }
-            }
-            if (priceData.meals && gSingleDouble in priceData.meals) {
-              const mealArray = priceData.meals['Single'];
-              if (Array.isArray(mealArray) && mealArray[amountIndex] !== undefined) {
-                gMealPrice = mealArray[amountIndex] * gNights;
-              }
-            }
-          } else if (taName) {
-            if (
-              priceData.packages &&
-              gPackageName in priceData.packages &&
-              taName in priceData.packages[gPackageName] &&
-              gRoomType in priceData.packages[gPackageName][taName] &&
-              gSingleDouble in priceData.packages[gPackageName][taName][gRoomType]
-            ) {
-              const netPriceArray = priceData.packages[gPackageName][taName][gRoomType][gSingleDouble];
-              if (Array.isArray(netPriceArray) && netPriceArray[amountIndex] !== undefined) {
-                gPackagePrice = netPriceArray[amountIndex] * gNights;
+                rRoomPrice = roomArray[amountIndex] * rNights;
               }
             }
           }
-        }
+          totalRoomPrice += rRoomPrice;
 
-        totalPackagePrice += gPackagePrice;
-        totalRoomPrice += gRoomPrice;
-        totalMealPrice += gMealPrice;
+          // 2. Calculate Meal and Treatment price per guest in this room
+          room.guests.forEach((guest, gIdx) => {
+            const gNights = calculateNights(guest.arrivalDate, guest.departureDate);
+            const gPackageName = guest.programme;
+            const gSingleDouble = guest.occupancy || 'Single';
 
-        paxAmounts.push({
-          paxNumber: i,
-          roomAmount: gRoomPrice,
-          treatmentAmount: gPackagePrice,
-          totalPerPax: gRoomPrice + gPackagePrice,
+            let gPackagePrice = 0;
+            let gMealPrice = 0;
+
+            if (gNights > 0) {
+              if (isRackRate) {
+                if (priceData.packages && gPackageName in priceData.packages) {
+                  const packageArray = priceData.packages[gPackageName];
+                  if (Array.isArray(packageArray) && packageArray[amountIndex] !== undefined) {
+                    gPackagePrice = packageArray[amountIndex] * gNights;
+                  }
+                }
+                if (priceData.meals) {
+                  const mealArray = priceData.meals['Single'];
+                  if (Array.isArray(mealArray) && mealArray[amountIndex] !== undefined) {
+                    gMealPrice = mealArray[amountIndex] * gNights;
+                  }
+                }
+              } else if (taName) {
+                if (
+                  priceData.packages &&
+                  gPackageName in priceData.packages &&
+                  taName in priceData.packages[gPackageName] &&
+                  (room.roomType || guest.roomType) in priceData.packages[gPackageName][taName] &&
+                  gSingleDouble in priceData.packages[gPackageName][taName][room.roomType || guest.roomType]
+                ) {
+                  const netPriceArray = priceData.packages[gPackageName][taName][room.roomType || guest.roomType][gSingleDouble];
+                  if (Array.isArray(netPriceArray) && netPriceArray[amountIndex] !== undefined) {
+                    gPackagePrice = netPriceArray[amountIndex] * gNights;
+                  }
+                }
+              }
+            }
+
+            totalPackagePrice += gPackagePrice;
+            totalMealPrice += gMealPrice;
+
+            // For paxAmounts breakdown, we assign roomAmount ONLY to the first guest of the room,
+            // so the sum of roomAmount in paxAmounts matches totalRoomPrice.
+            paxAmounts.push({
+              paxNumber: guestCounter++,
+              roomAmount: gIdx === 0 ? rRoomPrice : 0,
+              treatmentAmount: gPackagePrice,
+              totalPerPax: (gIdx === 0 ? rRoomPrice : 0) + gPackagePrice,
+            });
+          });
         });
+      } else {
+        const groupPaxCount = parseInt(groupInfo.pax) || 0;
+        for (let i = 1; i <= groupPaxCount; i++) {
+          const guest = groupGuests[i - 1];
+          if (!guest) continue;
+
+          const gNights = calculateNights(guest.arrivalDate, guest.departureDate);
+          const gPackageName = guest.programme;
+          const gRoomType = guest.roomType;
+          const gSingleDouble = guest.occupancy || 'Single';
+
+          let gPackagePrice = 0;
+          let gRoomPrice = 0;
+          let gMealPrice = 0;
+
+          if (gNights > 0) {
+            if (isRackRate) {
+              if (priceData.packages && gPackageName in priceData.packages) {
+                const packageArray = priceData.packages[gPackageName];
+                if (Array.isArray(packageArray) && packageArray[amountIndex] !== undefined) {
+                  gPackagePrice = packageArray[amountIndex] * gNights;
+                }
+              }
+              const roomKey = `${gRoomType}-${gSingleDouble}`;
+              if (priceData.rooms && roomKey in priceData.rooms) {
+                const roomArray = priceData.rooms[roomKey];
+                if (Array.isArray(roomArray) && roomArray[amountIndex] !== undefined) {
+                  gRoomPrice = roomArray[amountIndex] * gNights;
+                }
+              }
+              if (priceData.meals && gSingleDouble in priceData.meals) {
+                const mealArray = priceData.meals['Single'];
+                if (Array.isArray(mealArray) && mealArray[amountIndex] !== undefined) {
+                  gMealPrice = mealArray[amountIndex] * gNights;
+                }
+              }
+            } else if (taName) {
+              if (
+                priceData.packages &&
+                gPackageName in priceData.packages &&
+                taName in priceData.packages[gPackageName] &&
+                gRoomType in priceData.packages[gPackageName][taName] &&
+                gSingleDouble in priceData.packages[gPackageName][taName][gRoomType]
+              ) {
+                const netPriceArray = priceData.packages[gPackageName][taName][gRoomType][gSingleDouble];
+                if (Array.isArray(netPriceArray) && netPriceArray[amountIndex] !== undefined) {
+                  gPackagePrice = netPriceArray[amountIndex] * gNights;
+                }
+              }
+            }
+          }
+
+          totalPackagePrice += gPackagePrice;
+          totalRoomPrice += gRoomPrice;
+          totalMealPrice += gMealPrice;
+
+          paxAmounts.push({
+            paxNumber: i,
+            roomAmount: gRoomPrice,
+            treatmentAmount: gPackagePrice,
+            totalPerPax: gRoomPrice + gPackagePrice,
+          });
+        }
       }
     }
 

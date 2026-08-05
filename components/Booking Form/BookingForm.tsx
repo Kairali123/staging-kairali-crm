@@ -7,7 +7,7 @@ import { BackButton } from "@/components/back-button";
 import { CalendarPlus } from "lucide-react";
 import { ClipboardPen } from "lucide-react";
 import { useBookingPricing } from "./useBookingPricing";
-import type { GuestData, GroupGuestData, ChildData, GroupInfo, TravelAgentInfo, AdvancePayment, ApprovalInfo, BookingDetails, ServiceCharge } from "./types";
+import type { GuestData, GroupGuestData, RoomData, ChildData, GroupInfo, TravelAgentInfo, AdvancePayment, ApprovalInfo, BookingDetails, ServiceCharge } from "./types";
 import {
   DATA_API, SUBMIT_API, emptyGuest, emptyGroupGuest, emptyTravelAgent, emptyAdvancePayment, emptyApproval,
   IND_STEPS, GRP_STEPS, ROOM_MAX_PAX, DEFAULT_COUNTRY_STATE_MAP, COUNTRY_CODES, validatePhoneForCountry,
@@ -354,13 +354,6 @@ function StepGroupInfo({ info, onChange, errors, apiData, apiRoomCount = 0 }: { 
   );
 }
 
-// ─── Room-based Group Guests Step ────────────────────────────────────────────
-interface RoomData {
-  roomNumber: string;
-  roomType: string;
-  guests: GroupGuestData[];
-}
-
 // Bridge the single "Other" charge row (stored in `discounts.otherAmount*`)
 // into the ServiceCharge[] shape the pricing hook + payload expect.
 function buildOtherCharges(d: any): ServiceCharge[] {
@@ -616,10 +609,73 @@ function StepGroupGuests({
   rooms: RoomData[]; onChange: (rooms: RoomData[]) => void;
   programmes: string[]; apiData: any; errors?: Record<string, string>; roomMaxPaxMap?: Record<string, number>;
 }) {
+  const [copyFromFirstRoomFlags, setCopyFromFirstRoomFlags] = useState<Record<number, boolean>>({});
+  const snapshotsRef = useRef<Record<number, GroupGuestData>>({});
+
   const updateRoom = (ri: number, r: RoomData) => { const arr = [...rooms]; arr[ri] = r; onChange(arr); };
+
+  const handleCopyFromFirstRoomChange = (ri: number, checked: boolean) => {
+    const room = rooms[ri];
+    if (!room || !room.guests || room.guests.length === 0) return;
+
+    if (checked) {
+      const source = rooms[0]?.guests[0];
+      if (!source) return;
+
+      const target = room.guests[0];
+      snapshotsRef.current[ri] = { ...target };
+
+      const updatedGuests = [...room.guests];
+      updatedGuests[0] = {
+        ...source,
+        guestNumber: target.guestNumber,
+        roomNumber: target.roomNumber,
+        roomType: target.roomType,
+        patientId: target.patientId,
+        editId: target.editId,
+      };
+
+      updateRoom(ri, { ...room, guests: updatedGuests });
+      setCopyFromFirstRoomFlags(prev => ({ ...prev, [ri]: true }));
+    } else {
+      const snapshot = snapshotsRef.current[ri];
+      const target = room.guests[0];
+      if (snapshot) {
+        const updatedGuests = [...room.guests];
+        updatedGuests[0] = {
+          ...snapshot,
+          guestNumber: target.guestNumber,
+          roomNumber: target.roomNumber,
+          roomType: target.roomType,
+          patientId: target.patientId,
+          editId: target.editId,
+        };
+        updateRoom(ri, { ...room, guests: updatedGuests });
+      }
+      setCopyFromFirstRoomFlags(prev => ({ ...prev, [ri]: false }));
+      delete snapshotsRef.current[ri];
+    }
+  };
   const addGuest = (ri: number) => {
     const room = rooms[ri];
-    const newGuest = emptyGroupGuestForRoom(room.guests.length + 1, room.roomNumber, room.roomType);
+    const newGuestNum = room.guests.length + 1;
+    const newGuest = emptyGroupGuestForRoom(newGuestNum, room.roomNumber, room.roomType);
+
+    // Auto-generate unique Patient ID and Edit ID for secondary guests based on destination room's primary guest
+    const primaryGuest = room.guests[0];
+    if (primaryGuest) {
+      const counter = newGuestNum - 1; // secondary guest counter (1, 2, 3...)
+      const basePatientId = primaryGuest.patientId || primaryGuest.editId || "";
+      const baseEditId = primaryGuest.editId || primaryGuest.patientId || "";
+
+      if (basePatientId) {
+        newGuest.patientId = `S${counter}${basePatientId}`;
+      }
+      if (baseEditId) {
+        newGuest.editId = `S${counter}${baseEditId}`;
+      }
+    }
+
     updateRoom(ri, { ...room, guests: [...room.guests, newGuest] });
   };
   const removeGuest = (ri: number, gi: number) => {
@@ -632,12 +688,15 @@ function StepGroupGuests({
     const room = rooms[ri];
     const source = room.guests[0];
     if (!source) return;
+    const target = room.guests[gi];
     const updated = [...room.guests];
     updated[gi] = {
       ...source,
-      guestNumber: updated[gi].guestNumber, // keep own guest number
-      roomNumber: updated[gi].roomNumber,   // keep own room assignment
-      roomType: updated[gi].roomType,
+      guestNumber: target.guestNumber, // keep own guest number
+      roomNumber: target.roomNumber,   // keep own room assignment
+      roomType: target.roomType,       // keep own room type
+      patientId: target.patientId,     // keep own patient ID
+      editId: target.editId,           // keep own edit ID
     };
     updateRoom(ri, { ...room, guests: updated });
   };
@@ -673,6 +732,19 @@ function StepGroupGuests({
             </span>
           </div>
           <div className="kbf-card-body">
+            {ri > 0 && (
+              <div style={{ marginBottom: 16, paddingBottom: 12, borderBottom: "1px dashed #e0e0e0" }}>
+                <label className="kbf-radio-label" style={{ fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={!!copyFromFirstRoomFlags[ri]}
+                    onChange={e => handleCopyFromFirstRoomChange(ri, e.target.checked)}
+                    style={{ accentColor: "#254D3A", width: 15, height: 15 }}
+                  />
+                  Copy details from Room 1 Guest 1
+                </label>
+              </div>
+            )}
             {/* Guests inside this room */}
             {room.guests.map((guest, gi) => (
               <div key={gi}>
@@ -889,7 +961,7 @@ export default function BookingForm({ bookingId, formType = "individual", onSucc
   const pricing = useBookingPricing({
     bookingType, currency, packageType: primaryBookingDetails.packageType,
     taName: travelAgent.name, bookingDetails: primaryBookingDetails,
-    secondaryGuests, children, groupInfo, groupGuests, apiData,
+    secondaryGuests, children, groupInfo, groupGuests, groupRooms, apiData,
     ...discounts, otherCharges: buildOtherCharges(discounts),
     isComplementary: advancePayment.isComplementary,
     isVoucher: advancePayment.isVoucher,
@@ -1297,6 +1369,14 @@ export default function BookingForm({ bookingId, formType = "individual", onSucc
     const n = parseInt(groupInfo.pax) || 0;
     if (n === 0) { setGroupRooms([]); return; }
     if (groupPrefillDone.current) { groupPrefillDone.current = false; return; }
+
+    // If the new pax count matches the current total number of guests in groupRooms,
+    // do not rebuild/restructure the rooms as this was an internal guest add/remove update.
+    const currentTotalGuests = groupRooms.reduce((sum, r) => sum + (r.guests ? r.guests.length : 0), 0);
+    if (n === currentTotalGuests) {
+      return;
+    }
+
     // Build rooms from API RoomData or generate placeholders
     const apiRooms: { roomNumber: string; roomType: string }[] = apiData?.RoomData
       ? Object.entries(apiData.RoomData as Record<string, string>)
@@ -1315,9 +1395,17 @@ export default function BookingForm({ bookingId, formType = "individual", onSucc
     setGroupGuests(groupRooms.flatMap(r => r.guests));
   }, [groupInfo.pax, apiData]);
 
-  // Keep groupGuests in sync with groupRooms for pricing hook
+  // Keep groupGuests in sync with groupRooms for pricing hook and update groupInfo.pax
   useEffect(() => {
     setGroupGuests(groupRooms.flatMap(r => r.guests));
+    // Auto-update pax = total guest count across all rooms
+    const totalPax = groupRooms.reduce((sum, r) => sum + (r.guests ? r.guests.length : 0), 0);
+    if (totalPax > 0) {
+      setGroupInfo(prev => {
+        if (prev.pax === String(totalPax)) return prev;
+        return { ...prev, pax: String(totalPax) };
+      });
+    }
   }, [groupRooms]);
 
   const handleNext = useCallback(() => {
@@ -1404,9 +1492,13 @@ export default function BookingForm({ bookingId, formType = "individual", onSucc
     };
 
     // Format groupGuests to guarantee 1-based guestNumbers matching paxAmounts, uppercase gender ("MALE"/"FEMALE"), valid patientId, valid dates, and numeric age
+    // Format groupGuests to guarantee 1-based guestNumbers matching paxAmounts, uppercase gender ("MALE"/"FEMALE"), valid patientId, valid dates, and numeric age
     const currentGroupGuests = groupRooms.length > 0 ? groupRooms.flatMap(r => r.guests) : groupGuests;
     const defaultArrival = primaryBookingDetails.arrivalDate || todayStr;
     const defaultDeparture = primaryBookingDetails.departureDate || todayStr;
+
+    const roomPrimaryMap = new Map<string, { patientId: string, editId: string }>();
+    const roomGuestCounter = new Map<string, number>();
 
     const formattedGroupGuests = currentGroupGuests.map((g, idx) => {
       let ageNum = "";
@@ -1426,10 +1518,36 @@ export default function BookingForm({ bookingId, formType = "individual", onSucc
       const arrDate = g.arrivalDate && !isNaN(new Date(g.arrivalDate).getTime()) ? g.arrivalDate : defaultArrival;
       const depDate = g.departureDate && !isNaN(new Date(g.departureDate).getTime()) ? g.departureDate : defaultDeparture;
 
+      const roomKey = g.roomNumber || `R${g.guestNumber}`;
+      let pId = g.patientId || g.editId || bookingId || `GUEST-${idx + 1}`;
+      let eId = g.editId || g.patientId || `${bookingId}|1` || `GUEST-${idx + 1}|1`;
+
+      if (!roomPrimaryMap.has(roomKey)) {
+        // Save primary guest's resolved IDs
+        roomPrimaryMap.set(roomKey, { patientId: pId, editId: eId });
+        roomGuestCounter.set(roomKey, 1);
+      } else {
+        // Resolve secondary guest's IDs uniquely if they are duplicates or null
+        const primary = roomPrimaryMap.get(roomKey)!;
+        const count = roomGuestCounter.get(roomKey)!;
+        roomGuestCounter.set(roomKey, count + 1);
+
+        const primaryPatientId = primary.patientId;
+        const primaryEditId = primary.editId;
+
+        if (!g.patientId || g.patientId === primaryPatientId || g.patientId === bookingId) {
+          pId = `S${count}${primaryPatientId}`;
+        }
+        if (!g.editId || g.editId === primaryEditId || g.editId === `${bookingId}|1` || g.editId === `${primaryPatientId}|1`) {
+          eId = `S${count}${primaryEditId}`;
+        }
+      }
+
       return {
         ...g,
         guestNumber: idx + 1,
-        patientId: g.patientId || g.editId || bookingId || `GUEST-${idx + 1}`,
+        patientId: pId,
+        editId: eId,
         gender: (g.gender || "").trim().toUpperCase(),
         arrivalDate: arrDate,
         departureDate: depDate,
@@ -1476,13 +1594,13 @@ export default function BookingForm({ bookingId, formType = "individual", onSucc
     
     try {
       const payloadStr = JSON.stringify(payload);
-      console.log(payloadStr);
-      debugger
+      // console.log(payloadStr);
+      // debugger
       const isSmallPayload = payloadStr.length < 60000;
       let res: Response | null = null;
       let timedOut = false;
-      // console.log(payloadStr);
-      // debugger;
+      console.log(payloadStr);
+      debugger;
       if (isSmallPayload) {
         // Use keepalive so the request finishes in the background even if the page redirects
         const fetchPromise = fetch(SUBMIT_API, {

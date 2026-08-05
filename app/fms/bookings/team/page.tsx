@@ -353,6 +353,18 @@ function isAllowedRowsPerPage(value: unknown): boolean {
 export default function SalesAccountsTeamPage() {
   const [bookings, _setBookings] = useState<Booking[]>([])
 
+  const teamPaymentBlurTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const teamPaymentIsTypingRef = useRef(false);
+  const teamApprovalBlurTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const teamApprovalIsTypingRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      if (teamPaymentBlurTimeoutRef.current) clearTimeout(teamPaymentBlurTimeoutRef.current);
+      if (teamApprovalBlurTimeoutRef.current) clearTimeout(teamApprovalBlurTimeoutRef.current);
+    };
+  }, []);
+
   type CollectionHistoryEntry = {
     timestamp?: string
     bookingId?: string
@@ -5294,12 +5306,9 @@ export default function SalesAccountsTeamPage() {
 
   // Expand revenue data to include cancelled amount for the analytic bar chart
   const revenueSummary = [
-    // { name: "Total", amount: totalAmount, color: "#6d28d9" },
-    { name: "Received", amount: activeCollectionsINR + cancelledCollectionsINR, color: "#10b981" },
-    { name: "Active Collections", amount: activeCollectionsINR, color: "#22c55e" },
-    { name: "Cancelled Collections", amount: cancelledCollectionsINR, color: "#14b8a6" },
+    { name: "Received", amount: totalReceived, color: "#10b981" },
     { name: "Pending", amount: activeOutstandingValue, color: "#f59e0b" },
-    { name: "Cancelled", amount: cancelledGrossValue, color: "#ef4444" },
+    { name: "Cancelled", amount: cancelledGrossValue + autoReleaseAmount, color: "#ef4444" },
   ]
 
   // Currency formatter used by KPI cards/charts
@@ -11106,6 +11115,14 @@ export default function SalesAccountsTeamPage() {
                           type="datetime-local"
                           max={new Date(new Date().getTime() + 60000).toISOString().slice(0, 16)} // allow current minute
                           value={paymentData.receivedDate ? (paymentData.receivedDate.includes("T") ? paymentData.receivedDate.slice(0, 16) : new Date(paymentData.receivedDate).toISOString().slice(0, 16)) : ""}
+                          onKeyDown={() => {
+                            teamPaymentIsTypingRef.current = true;
+                            if (teamPaymentBlurTimeoutRef.current) clearTimeout(teamPaymentBlurTimeoutRef.current);
+                          }}
+                          onBlur={() => {
+                            teamPaymentIsTypingRef.current = false;
+                            if (teamPaymentBlurTimeoutRef.current) clearTimeout(teamPaymentBlurTimeoutRef.current);
+                          }}
                           onChange={(e) => {
                             const picked = e.target.value;
                             if (!picked) {
@@ -11119,6 +11136,16 @@ export default function SalesAccountsTeamPage() {
                               return;
                             }
                             setPaymentData({ ...paymentData, receivedDate: processed });
+
+                            if (picked && picked.length === 16 && !teamPaymentIsTypingRef.current) {
+                              if (teamPaymentBlurTimeoutRef.current) clearTimeout(teamPaymentBlurTimeoutRef.current);
+                              const target = e.target;
+                              teamPaymentBlurTimeoutRef.current = setTimeout(() => {
+                                if (document.activeElement === target) {
+                                  target.blur();
+                                }
+                              }, 600);
+                            }
                           }}
                           className="
           border-blue-300
@@ -12874,6 +12901,14 @@ export default function SalesAccountsTeamPage() {
                       max={new Date(new Date().getTime() + 60000).toISOString().slice(0, 16)} // allow current minute
                       className="rounded-md border border-green-300 bg-white shadow-sm hover:border-green-400 focus:ring-2 focus:ring-green-400 transition-all"
                       value={paymentData.receivedDate ? (paymentData.receivedDate.includes("T") ? paymentData.receivedDate.slice(0, 16) : new Date(paymentData.receivedDate).toISOString().slice(0, 16)) : ""}
+                      onKeyDown={() => {
+                        teamPaymentIsTypingRef.current = true;
+                        if (teamPaymentBlurTimeoutRef.current) clearTimeout(teamPaymentBlurTimeoutRef.current);
+                      }}
+                      onBlur={() => {
+                        teamPaymentIsTypingRef.current = false;
+                        if (teamPaymentBlurTimeoutRef.current) clearTimeout(teamPaymentBlurTimeoutRef.current);
+                      }}
                       onChange={(e) => {
                         const picked = e.target.value;
                         if (!picked) {
@@ -12887,6 +12922,16 @@ export default function SalesAccountsTeamPage() {
                           return;
                         }
                         setPaymentData({ ...paymentData, receivedDate: processed });
+
+                        if (picked && picked.length === 16 && !teamPaymentIsTypingRef.current) {
+                          if (teamPaymentBlurTimeoutRef.current) clearTimeout(teamPaymentBlurTimeoutRef.current);
+                          const target = e.target;
+                          teamPaymentBlurTimeoutRef.current = setTimeout(() => {
+                            if (document.activeElement === target) {
+                              target.blur();
+                            }
+                          }, 600);
+                        }
                       }}
                     />
                   </div>
@@ -13268,6 +13313,14 @@ export default function SalesAccountsTeamPage() {
                           disabled={isSubmitting}
                           value={approvalData.approveTillDate ? (approvalData.approveTillDate.includes("T") ? approvalData.approveTillDate.slice(0, 16) : new Date(approvalData.approveTillDate).toISOString().slice(0, 16)) : ""}
                           min={new Date().toISOString().slice(0, 16)}
+                          onKeyDown={() => {
+                            teamApprovalIsTypingRef.current = true;
+                            if (teamApprovalBlurTimeoutRef.current) clearTimeout(teamApprovalBlurTimeoutRef.current);
+                          }}
+                          onBlur={() => {
+                            teamApprovalIsTypingRef.current = false;
+                            if (teamApprovalBlurTimeoutRef.current) clearTimeout(teamApprovalBlurTimeoutRef.current);
+                          }}
                           onChange={(e) => {
                             const picked = e.target.value;
                             if (!picked) {
@@ -13278,6 +13331,16 @@ export default function SalesAccountsTeamPage() {
                               ...approvalData,
                               approveTillDate: processDateTime(picked),
                             });
+
+                            if (picked && picked.length === 16 && !teamApprovalIsTypingRef.current) {
+                              if (teamApprovalBlurTimeoutRef.current) clearTimeout(teamApprovalBlurTimeoutRef.current);
+                              const target = e.target;
+                              teamApprovalBlurTimeoutRef.current = setTimeout(() => {
+                                if (document.activeElement === target) {
+                                  target.blur();
+                                }
+                              }, 600);
+                            }
                           }}
                           className={`border-indigo-300 focus:ring-2 focus:ring-indigo-300 ${isSubmitting ? "opacity-70 cursor-not-allowed bg-slate-100" : ""
                             }`}
