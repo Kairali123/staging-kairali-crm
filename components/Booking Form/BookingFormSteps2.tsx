@@ -999,7 +999,7 @@ export function StepPaymentBreakdown({
                 </td>
                 {/* Rate = pre grand-discount total (subtotal + transport + other) */}
                 <td style={pb2Styles.td}>
-                  <input type="number" style={{ ...pb2Styles.inputReadonly, minWidth: 100 }} value={grandPreDiscount} readOnly />
+                  <input type="number" style={{ ...pb2Styles.inputReadonly, minWidth: 100 }} value={pb?.grandTotalBeforeDiscount ?? "0.00"} readOnly />
                 </td>
                 {/* Discount % — DISABLED/read-only (only auto-100% on complimentary/voucher) */}
                 <td style={pb2Styles.td}>
@@ -1014,7 +1014,7 @@ export function StepPaymentBreakdown({
                     <input
                       type="number" min="0" step="any"
                       style={{ ...pb2Styles.inputReadonly, minWidth: 70, background: "#f0f0f0" }}
-                      value={locked ? "100" : (discounts.grandTotalDiscount || "")}
+                      value={locked ? "100" : (pb?.grandTotalDiscount || "")}
                       readOnly
                       disabled
                       placeholder="0.00"

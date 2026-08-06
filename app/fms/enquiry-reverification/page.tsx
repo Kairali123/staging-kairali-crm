@@ -11,24 +11,17 @@ import { Badge } from "@/components/ui/badge"
 import ViewModal, { LeadRow } from "@/components/viewcallhistorymodel"
 import ExecutiveVerifierModal, { ExecutiveVerifierRecord, ExecutiveVerifierFormValues } from "@/components/ExecutiveverifyModel"
 import SeniorVerifierModal, { SeniorVerifierRecord, SeniorVerifierFormValues } from "@/components/SeniorVerifyModel"
-import { Textarea } from "@/components/ui/textarea"
 import {
     Dialog,
     DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
 } from "@/components/ui/dialog"
 import {
-    Users,
     Search,
     ArrowUpDown,
     ArrowUp,
     ArrowDown,
-    Calendar,
     CheckCircle,
     TableIcon,
-    Filter,
     RefreshCw,
     FileText,
     AlertCircle,
@@ -44,8 +37,9 @@ import {
     ChevronsRight
 } from "lucide-react"
 
+
 export default function EnquiryReverificationPage() {
-    const { user, isLoading } = useAuth()
+    const { user, isLoading, hasPermission } = useAuth()
     const router = useRouter()
 
     // State variables matching the leads/assign style
@@ -88,12 +82,26 @@ export default function EnquiryReverificationPage() {
     const [pageSize, setPageSize] = useState(5)
     const [totalPages, setTotalPages] = useState(1)
 
+    const hasExecutiveCompleted = (enq: any) =>
+        Boolean(
+            String(enq?.CI ?? "").trim() ||
+            String(enq?.actual ?? "").trim()
+        )
+
+    const hasSeniorCompleted = (enq: any) =>
+        Boolean(
+            String(enq?.CX ?? "").trim() ||
+            String(enq?.senior_actual ?? "").trim()
+        )
+
     // Fetch enquiries from MySQL DB
     const fetchEnquiries = async () => {
         setLoadError(null)
+        setIsFilterFetching(true)
         try {
             const skipFilters = websitesOptions.length > 0 && agentsOptions.length > 0
-            let url = `/api/fms/enquiry-reverification?page=${currentPage}&limit=${pageSize}&skipFilters=${skipFilters}&`
+            let url = `/api/fms/enquiry-reverification?page=${currentPage}&limit=${pageSize}&skipFilters=${skipFilters}&sortField=${encodeURIComponent(sortField)}&sortDirection=${encodeURIComponent(sortDirection)}&`
+
             if (searchInput) url += `search=${encodeURIComponent(searchInput)}&`
             if (selectedCompany !== "ALL") url += `company=${encodeURIComponent(selectedCompany)}&`
             if (sourceFilter !== "all") url += `source=${encodeURIComponent(sourceFilter)}&`
@@ -172,9 +180,9 @@ export default function EnquiryReverificationPage() {
                 throw new Error(json?.error || "Server returned an unsuccessful response")
             }
 
-            setEnquiries(json.data)
-            setTotalEnquiries(json.pagination.total)
-            setTotalPages(json.pagination.totalPages)
+            setEnquiries(Array.isArray(json?.data) ? json.data : [])
+            setTotalEnquiries(json.pagination?.total || 0)
+            setTotalPages(json.pagination?.totalPages || 1)
             if (json.kpi) {
                 setKpi(json.kpi)
             }
@@ -188,10 +196,9 @@ export default function EnquiryReverificationPage() {
             setLoadError(error?.message || "Failed to load enquiries.")
         } finally {
             setIsInitialLoading(false)
+            setIsFilterFetching(false)
         }
     }
-
-
 
     const handleSaveExecutiveVerification = async (values: ExecutiveVerifierFormValues) => {
         if (!selectedExecutiveRecord) return
@@ -275,12 +282,12 @@ export default function EnquiryReverificationPage() {
         setCurrentPage(1)
     }, [searchInput, dateFilter, selectedCompany, sourceFilter, websiteFilter, coldByFilter, customDateRange])
 
-    // Fetch when filters or page changes
+    // Fetch when filters, page, or sorting changes
     useEffect(() => {
-        if (!isLoading && user) {
+        if (!isLoading && user && hasPermission("cold_enquiry_reverification.view")) {
             fetchEnquiries()
         }
-    }, [currentPage, pageSize, searchInput, dateFilter, selectedCompany, sourceFilter, websiteFilter, coldByFilter, customDateRange, user, isLoading])
+    }, [currentPage, pageSize, searchInput, dateFilter, selectedCompany, sourceFilter, websiteFilter, coldByFilter, customDateRange, sortField, sortDirection, user, isLoading, hasPermission])
 
     const handleSort = (field: string) => {
         if (sortField === field) {
@@ -302,14 +309,18 @@ export default function EnquiryReverificationPage() {
         setIsDetailDialogOpen(true)
     }
 
-    // Redirect if not authenticated
+    // Redirect if not authenticated or lacks permission
     useEffect(() => {
-        if (!isLoading && !user) {
-            router.push("/dashboard")
+        if (!isLoading) {
+            if (!user) {
+                router.push("/dashboard")
+            } else if (!hasPermission("cold_enquiry_reverification.view")) {
+                router.push("/access-denied")
+            }
         }
-    }, [user, isLoading, router])
+    }, [user, isLoading, router, hasPermission])
 
-    if (isLoading || !user) {
+    if (isLoading || !user || !hasPermission("cold_enquiry_reverification.view")) {
         return <Loader isLoading={true} contentOnly />
     }
 
@@ -325,17 +336,8 @@ export default function EnquiryReverificationPage() {
         }
     }
 
-    // Sort logic for display
-    const sortedEnquiries = [...enquiries].sort((a, b) => {
-        let aVal = a[sortField] || ""
-        let bVal = b[sortField] || ""
-        if (typeof aVal === "string") aVal = aVal.toLowerCase()
-        if (typeof bVal === "string") bVal = bVal.toLowerCase()
-
-        if (aVal < bVal) return sortDirection === "asc" ? -1 : 1
-        if (aVal > bVal) return sortDirection === "asc" ? 1 : -1
-        return 0
-    })
+    // Server-side sorted enquiries mapped directly
+    const sortedEnquiries = enquiries
 
     // Pagination range details calculation
     const startItem = totalEnquiries === 0 ? 0 : (currentPage - 1) * pageSize + 1
@@ -693,8 +695,11 @@ export default function EnquiryReverificationPage() {
                                 <TableIcon className="w-4 h-4 sm:w-5 sm:h-5 text-blue-700" />
                             </div>
                             <div>
-                                <h3 className="text-sm sm:text-base font-semibold text-slate-900 leading-tight">
+                                <h3 className="text-sm sm:text-base font-semibold text-slate-900 leading-tight flex items-center gap-2">
                                     Enquiries List
+                                    {isFilterFetching && (
+                                        <RefreshCw className="h-4.5 w-4.5 animate-spin text-blue-600" />
+                                    )}
                                 </h3>
                                 <p className="text-xs text-slate-500">
                                     Manage and verify the details of incoming customer enquiries
@@ -723,7 +728,12 @@ export default function EnquiryReverificationPage() {
                         </div>
                     )}
 
-                    <div className="overflow-x-auto w-full">
+                    <div className="relative overflow-x-auto w-full">
+                        {isFilterFetching && (
+                            <div className="absolute top-0 left-0 right-0 h-0.5 bg-blue-600/30 overflow-hidden z-25">
+                                <div className="w-full h-full bg-blue-600 origin-left animate-[pulse_1.5s_infinite]" />
+                            </div>
+                        )}
                         <table className="min-w-full divide-y divide-slate-200 text-xs border-collapse">
                             <thead style={{ backgroundColor: '#1e3a5f' }} className="sticky top-0 z-20">
                                 <tr>
@@ -928,67 +938,71 @@ export default function EnquiryReverificationPage() {
                                                 >
                                                     <Eye className="h-4 w-4" /> View
                                                 </button>
-                                                <button
-                                                    onClick={() => {
-                                                        setSelectedExecutiveRecord({
-                                                            id: String(enq.id),
-                                                            leadId: enq.lead_id || "",
-                                                            name: enq.name_of_client || "",
-                                                            mobile: enq.mobile || "",
-                                                            planned: enq.planned ? formatDateStr(enq.planned) : formatDateStr(enq.generate_date_time),
-                                                            actual: enq.actual ? formatDateStr(enq.actual) : "—",
-                                                            timeDelay: enq.timedelay || "—",
-                                                            savedColdBy: enq.cold_by_employee_name || "",
-                                                            savedColdRemarks: enq.cold_remarks_by_sales_team || "",
-                                                            savedDoer: enq.CH,
-                                                            savedVerifyActionStatus: enq.CI,
-                                                            savedValidReason: enq.CJ,
-                                                            savedWhatWentWrong: enq.CK,
-                                                            savedOverallRating: enq.CL,
-                                                            savedSuggestedSolution: enq.CM,
-                                                            savedRemarks: enq.CN,
-                                                            savedHtCreatedStatus: enq.ht_created_to_executive_verifier_if_delay_status,
-                                                            savedDoerEmail: enq.doer_executive_verifier_email_id,
-                                                            savedHsStatus: enq.CQ
-                                                        });
-                                                        setIsExecutiveModalOpen(true);
-                                                    }}
-                                                    className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 text-indigo-600 font-bold bg-white hover:bg-indigo-50 px-3.5 py-1.5 text-xs shadow-sm transition"
-                                                >
-                                                    Executive Verify
-                                                </button>
-                                                <button
-                                                    onClick={() => {
-                                                        setSelectedSeniorRecord({
-                                                             id: String(enq.id),
-                                                             leadId: enq.lead_id || "",
-                                                             name: enq.name_of_client || "",
-                                                             mobile: enq.mobile || "",
-                                                             planned: enq.senior_planned ? formatDateStr(enq.senior_planned) : formatDateStr(enq.generate_date_time),
-                                                             actual: enq.senior_actual ? formatDateStr(enq.senior_actual) : "—",
-                                                             timeDelay: enq.senior_timedelay || "—",
-                                                             savedColdBy: enq.cold_by_employee_name || "",
-                                                             savedColdRemarks: enq.cold_remarks_by_sales_team || "",
-                                                             savedDoer: enq.CW,
-                                                             savedDoerEmail: enq.doer_senior_verifier_email_id,
-                                                             savedVerifyActionStatus: enq.CX,
-                                                             savedValidReason: enq.CY,
-                                                             savedOverallRating: enq.DA,
-                                                             savedHtCreatedStatus: enq.ht_created_to_senior_verifier_if_delay_status,
-                                                             savedWhatsappAlert: enq.whatsapp_alert_to_sales_person_if_reopen,
-                                                             savedEmailAlert: enq.email_alert_to_sales_person_if_reopen,
-                                                             savedHsStatus: enq.hs_status_if_escalate_to_abhilash_sir_by_senior,
-                                                             savedTransferToUserFms: enq.transfer_to_user_fms_if_reopen,
-                                                             savedWhatWentWrong: enq.CZ,
-                                                             savedSuggestedSolution: enq.DB,
-                                                             savedRemarks: enq.DC
-                                                         });
-                                                        setIsSeniorModalOpen(true);
-                                                    }}
-                                                    className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 text-violet-600 font-bold bg-white hover:bg-violet-50 px-3.5 py-1.5 text-xs shadow-sm transition"
-                                                >
-                                                    Senior Verify
-                                                </button>
+                                                {!hasExecutiveCompleted(enq) && (
+                                                    <button
+                                                        onClick={() => {
+                                                            setSelectedExecutiveRecord({
+                                                                id: String(enq.id),
+                                                                leadId: enq.lead_id || "",
+                                                                name: enq.name_of_client || "",
+                                                                mobile: enq.mobile || "",
+                                                                planned: enq.planned ? formatDateStr(enq.planned) : formatDateStr(enq.generate_date_time),
+                                                                actual: enq.actual ? formatDateStr(enq.actual) : "—",
+                                                                timeDelay: enq.timedelay || "—",
+                                                                savedColdBy: enq.cold_by_employee_name || "",
+                                                                savedColdRemarks: enq.cold_remarks_by_sales_team || "",
+                                                                savedDoer: enq.CH,
+                                                                savedVerifyActionStatus: enq.CI,
+                                                                savedValidReason: enq.CJ,
+                                                                savedWhatWentWrong: enq.CK,
+                                                                savedOverallRating: enq.CL,
+                                                                savedSuggestedSolution: enq.CM,
+                                                                savedRemarks: enq.CN,
+                                                                savedHtCreatedStatus: enq.ht_created_to_executive_verifier_if_delay_status,
+                                                                savedDoerEmail: enq.doer_executive_verifier_email_id,
+                                                                savedHsStatus: enq.CQ
+                                                            });
+                                                            setIsExecutiveModalOpen(true);
+                                                        }}
+                                                        className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 text-indigo-600 font-bold bg-white hover:bg-indigo-50 px-3.5 py-1.5 text-xs shadow-sm transition"
+                                                    >
+                                                        Executive Verify
+                                                    </button>
+                                                )}
+                                                {!hasSeniorCompleted(enq) && (
+                                                    <button
+                                                        onClick={() => {
+                                                            setSelectedSeniorRecord({
+                                                                 id: String(enq.id),
+                                                                 leadId: enq.lead_id || "",
+                                                                 name: enq.name_of_client || "",
+                                                                 mobile: enq.mobile || "",
+                                                                 planned: enq.senior_planned ? formatDateStr(enq.senior_planned) : formatDateStr(enq.generate_date_time),
+                                                                 actual: enq.senior_actual ? formatDateStr(enq.senior_actual) : "—",
+                                                                 timeDelay: enq.senior_timedelay || "—",
+                                                                 savedColdBy: enq.cold_by_employee_name || "",
+                                                                 savedColdRemarks: enq.cold_remarks_by_sales_team || "",
+                                                                 savedDoer: enq.CW,
+                                                                 savedDoerEmail: enq.doer_senior_verifier_email_id,
+                                                                 savedVerifyActionStatus: enq.CX,
+                                                                 savedValidReason: enq.CY,
+                                                                 savedOverallRating: enq.DA,
+                                                                 savedHtCreatedStatus: enq.ht_created_to_senior_verifier_if_delay_status,
+                                                                 savedWhatsappAlert: enq.whatsapp_alert_to_sales_person_if_reopen,
+                                                                 savedEmailAlert: enq.email_alert_to_sales_person_if_reopen,
+                                                                 savedHsStatus: enq.hs_status_if_escalate_to_abhilash_sir_by_senior,
+                                                                 savedTransferToUserFms: enq.transfer_to_user_fms_if_reopen,
+                                                                 savedWhatWentWrong: enq.CZ,
+                                                                 savedSuggestedSolution: enq.DB,
+                                                                 savedRemarks: enq.DC
+                                                             });
+                                                            setIsSeniorModalOpen(true);
+                                                        }}
+                                                        className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 text-violet-600 font-bold bg-white hover:bg-violet-50 px-3.5 py-1.5 text-xs shadow-sm transition"
+                                                    >
+                                                        Senior Verify
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>

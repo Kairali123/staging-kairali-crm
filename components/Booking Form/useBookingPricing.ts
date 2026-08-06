@@ -577,7 +577,7 @@ export function useBookingPricing(props: PricingProps) {
       subtotal: subtotal.toFixed(2),
       grandTotalBeforeDiscount: grandTotalBeforeDiscount.toFixed(2),
       grandTotalDiscountType,
-      grandTotalDiscount: grandTotalDiscountVal.toFixed(2),
+      grandTotalDiscount: discountPercentage.toFixed(2),
       finalTotal: grandTotal.toFixed(2),
       grandTotal: grandTotal.toFixed(2),
       discountPercentage: discountPercentage.toFixed(2),

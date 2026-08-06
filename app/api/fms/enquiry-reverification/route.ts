@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server"
 import { getPool } from "@/lib/db"
 
 let cachedFilters: { websites: string[], agents: string[], timestamp: number } | null = null;
-let indexChecked = false;
 const CACHE_DURATION = 1000 * 60 * 60; // 1 hour
 
 // Fetch all enquiries with search and filter parameters (optimized)
@@ -19,6 +18,22 @@ export async function GET(req: NextRequest) {
     const coldBy = searchParams.get("coldBy")
     const skipFilters = searchParams.get("skipFilters") === "true"
 
+    const sortField = searchParams.get("sortField") || "generate_date_time"
+    const sortDirection = searchParams.get("sortDirection") || "desc"
+
+    // Whitelist allowed sort columns to prevent SQL Injection
+    const allowedSortFields = [
+      "generate_date_time",
+      "enquiry_created_datetime",
+      "lead_id",
+      "data_source",
+      "call_count_before_cold",
+      "company_belongs_to",
+      "website_name"
+    ]
+    const finalSortField = allowedSortFields.includes(sortField) ? sortField : "generate_date_time"
+    const finalSortDirection = sortDirection.toLowerCase() === "asc" ? "ASC" : "DESC"
+
     const limit = parseInt(searchParams.get("limit") || "25", 10)
     const page = parseInt(searchParams.get("page") || "1", 10)
     const offset = (page - 1) * limit
@@ -27,23 +42,6 @@ export async function GET(req: NextRequest) {
     connection = await pool.getConnection()
 
     await connection.execute("SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
-
-    // Optimize: Create database indexes once if they are missing
-    if (!indexChecked) {
-      try {
-        await connection.execute("CREATE INDEX idx_generate_date_time ON fms_enquiry_cold_reverification_v2 (generate_date_time)")
-      } catch (e) { }
-      try {
-        await connection.execute("CREATE INDEX idx_company_belongs_to ON fms_enquiry_cold_reverification_v2 (company_belongs_to)")
-      } catch (e) { }
-      try {
-        await connection.execute("CREATE INDEX idx_website_name ON fms_enquiry_cold_reverification_v2 (website_name)")
-      } catch (e) { }
-      try {
-        await connection.execute("CREATE INDEX idx_cold_by_employee_name ON fms_enquiry_cold_reverification_v2 (cold_by_employee_name)")
-      } catch (e) { }
-      indexChecked = true
-    }
 
     let websites: string[] = []
     let agents: string[] = []
@@ -69,9 +67,9 @@ export async function GET(req: NextRequest) {
     const params: any[] = []
 
     if (search) {
-      conditions.push("(lead_id LIKE ? OR name_of_client LIKE ? OR mobile LIKE ? OR email_id LIKE ? OR uid LIKE ?)")
-      const searchWildcard = `%${search}%`
-      params.push(searchWildcard, searchWildcard, searchWildcard, searchWildcard, searchWildcard)
+      const cleanSearch = search.trim()
+      conditions.push("(lead_id = ? OR name_of_client = ? OR mobile = ? OR email_id = ? OR uid = ?)")
+      params.push(cleanSearch, cleanSearch, cleanSearch, cleanSearch, cleanSearch)
     }
 
     if (from) {
@@ -102,6 +100,11 @@ export async function GET(req: NextRequest) {
       conditions.push("cold_by_employee_name = ?")
       params.push(coldBy)
     }
+
+    const executiveDoneClause = "COALESCE(TRIM(verify_action_status_executive_verifier), '') <> ''"
+    const seniorDoneClause = "COALESCE(TRIM(verify_action_status_senior_verifier), '') <> ''"
+    // Keep the queue visible until both verifiers are complete.
+    conditions.push(`NOT (${executiveDoneClause} AND ${seniorDoneClause})`)
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
 
@@ -170,7 +173,7 @@ export async function GET(req: NextRequest) {
         transfer_to_user_fms_if_reopen
       FROM fms_enquiry_cold_reverification_v2
       ${whereClause}
-      ORDER BY generate_date_time DESC
+      ORDER BY ${finalSortField} ${finalSortDirection}
       LIMIT ? OFFSET ?
     `
 
@@ -207,8 +210,8 @@ export async function GET(req: NextRequest) {
       }
     })
 
-  } catch {
-    console.error("[enquiry-reverification API GET] request failed")
+  } catch (error) {
+    console.error("[enquiry-reverification API GET] request failed:", error)
     return NextResponse.json({ success: false, error: "Failed to fetch enquiry reverification data" }, { status: 500 })
   } finally {
     if (connection) connection.release()
