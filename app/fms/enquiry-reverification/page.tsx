@@ -390,7 +390,7 @@ export default function EnquiryReverificationPage() {
                                         Total Enquiries
                                     </p>
                                     <p className="text-3xl sm:text-4xl font-bold text-white tabular-nums">
-                                        {totalEnquiries}
+                                        {kpi.total}
                                     </p>
                                 </div>
                             </div>
@@ -628,7 +628,7 @@ export default function EnquiryReverificationPage() {
                                         <FileText className="h-4 w-4 text-blue-600" />
                                     </div>
                                     <p className="text-2xl font-bold text-slate-900 leading-none mb-2">
-                                        {totalEnquiries}
+                                        {kpi.total}
                                     </p>
                                     <p className="text-[10px] text-slate-500 font-medium">
                                         Fetched from database

@@ -101,6 +101,8 @@ export async function GET(req: NextRequest) {
       params.push(coldBy)
     }
 
+    const countWhereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
+
     const executiveDoneClause = "COALESCE(TRIM(verify_action_status_executive_verifier), '') <> ''"
     const seniorDoneClause = "COALESCE(TRIM(verify_action_status_senior_verifier), '') <> ''"
     // Keep the queue visible until both verifiers are complete.
@@ -112,11 +114,13 @@ export async function GET(req: NextRequest) {
     const countQuery = `
       SELECT 
         COUNT(*) as total,
-        SUM(CASE WHEN cold_remarks_by_sales_team IS NULL OR TRIM(cold_remarks_by_sales_team) = '' THEN 1 ELSE 0 END) as pending,
-        SUM(CASE WHEN cold_remarks_by_sales_team IS NOT NULL AND TRIM(cold_remarks_by_sales_team) != '' THEN 1 ELSE 0 END) as completed,
-        SUM(CASE WHEN LOWER(cold_done_in_calling_appsheet_or_in_dailer) = 'yes' THEN 1 ELSE 0 END) as appsheet
+        SUM(CASE WHEN NOT (${executiveDoneClause} AND ${seniorDoneClause}) THEN 1 ELSE 0 END) as pending,
+        SUM(CASE WHEN ${executiveDoneClause} AND ${seniorDoneClause} THEN 1 ELSE 0 END) as completed,
+        SUM(CASE WHEN LOWER(cold_done_in_calling_appsheet_or_in_dailer) = 'yes' 
+                      OR verify_action_status_executive_verifier = 'Reopen and Escalate To Abhilash Sir' 
+                      OR verify_action_status_senior_verifier = 'Reopen and Escalate To Abhilash Sir' THEN 1 ELSE 0 END) as appsheet
       FROM fms_enquiry_cold_reverification_v2
-      ${whereClause}
+      ${countWhereClause}
     `
 
     const query = `
@@ -193,10 +197,10 @@ export async function GET(req: NextRequest) {
       success: true,
       data: rows,
       pagination: {
-        total,
+        total: pending,
         page,
         limit,
-        totalPages: Math.ceil(total / limit)
+        totalPages: Math.ceil(pending / limit)
       },
       kpi: {
         total,
