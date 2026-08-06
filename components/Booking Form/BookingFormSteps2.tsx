@@ -593,8 +593,16 @@ export function StepPaymentBreakdown({
   // Grand total is the SINGLE source of truth from the pricing hook (incl. child price,
   // other charges, subtotal discount; tax excluded). Advance Payment & Review use the same value.
   const grandTotalFinal = pb?.grandTotal ?? "0.00";
+  const grandTotalInInr = currency !== "INR"
+    ? convertCurrency(parseFloat(String(grandTotalFinal)) || 0, currency, "INR")
+    : 0;
   // Pre grand-discount figure shown in the Grand Total "Rate" cell
   const grandPreDiscount = (parseFloat(pb?.subtotal ?? "0") + transAfter + otherAfter).toFixed(2);
+  const displayedGrandTotalBeforeDiscount = parseFloat(String(pb?.grandTotalBeforeDiscount ?? grandPreDiscount)) || 0;
+  const displayedGrandTotalAfterDiscount = parseFloat(String(grandTotalFinal)) || 0;
+  const autoGrandTotalDiscount = displayedGrandTotalBeforeDiscount > 0
+    ? Math.min(100, Math.max(0, ((displayedGrandTotalBeforeDiscount - displayedGrandTotalAfterDiscount) / displayedGrandTotalBeforeDiscount) * 100)).toFixed(2)
+    : "0.00";
 
   const thStyle: React.CSSProperties = {
     padding: "10px 8px",
@@ -638,6 +646,17 @@ export function StepPaymentBreakdown({
               <option value="EURO">Euro (EURO)</option>
             </select>
           </div>
+          {currency !== "INR" && (
+            <div>
+              <div style={{ fontSize: 12, color: "#555", marginBottom: 4 }}>Grand Total in INR</div>
+              <input
+                type="text"
+                style={{ ...pb2Styles.inputReadonly, minWidth: 180 }}
+                value={grandTotalInInr.toFixed(2)}
+                readOnly
+              />
+            </div>
+          )}
           <div>
             <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: 13, color: "#555", marginBottom: 4, cursor: "pointer" }}>
               <input
@@ -999,7 +1018,7 @@ export function StepPaymentBreakdown({
                 </td>
                 {/* Rate = pre grand-discount total (subtotal + transport + other) */}
                 <td style={pb2Styles.td}>
-                  <input type="number" style={{ ...pb2Styles.inputReadonly, minWidth: 100 }} value={pb?.grandTotalBeforeDiscount ?? "0.00"} readOnly />
+                  <input type="number" style={{ ...pb2Styles.inputReadonly, minWidth: 100 }} value={displayedGrandTotalBeforeDiscount.toFixed(2)} readOnly />
                 </td>
                 {/* Discount % — DISABLED/read-only (only auto-100% on complimentary/voucher) */}
                 <td style={pb2Styles.td}>
@@ -1014,7 +1033,7 @@ export function StepPaymentBreakdown({
                     <input
                       type="number" min="0" step="any"
                       style={{ ...pb2Styles.inputReadonly, minWidth: 70, background: "#f0f0f0" }}
-                      value={locked ? "100" : (pb?.grandTotalDiscount || "")}
+                      value={locked ? "100.00" : autoGrandTotalDiscount}
                       readOnly
                       disabled
                       placeholder="0.00"
@@ -1127,17 +1146,25 @@ export function StepAdvancePayment({
 
   const grandTotal = parseFloat(pricing?.paymentBreakdown?.grandTotal) || 0;
   const receivedAmount = parseFloat(data.amount) || 0;
+  const historicalReceivedAmount = parseFloat(data.totalReceived || "0") || 0;
+  const displayedReceivedAmount = data.isAdvancePayment ? receivedAmount : historicalReceivedAmount;
+  const savedTotal = parseFloat(data.totalAmount || "0") || 0;
 
   // Convert grand total (in booking currency) to the selected advance payment currency
   const grandTotalInAdvCurrency = convertCurrency(grandTotal, bookingCurrency, advCurrency);
+  const effectiveGrandTotal = grandTotalInAdvCurrency > 0 ? grandTotalInAdvCurrency : savedTotal;
 
-  const percentReceived = grandTotalInAdvCurrency > 0 ? ((receivedAmount / grandTotalInAdvCurrency) * 100).toFixed(2) : "0.00";
-  const pendingAmount = Math.max(0, grandTotalInAdvCurrency - receivedAmount).toFixed(2);
+  const percentReceived = effectiveGrandTotal > 0
+    ? ((displayedReceivedAmount / effectiveGrandTotal) * 100).toFixed(2)
+    : (data.percentage || "0.00");
+  const pendingAmount = effectiveGrandTotal > 0
+    ? Math.max(0, effectiveGrandTotal - displayedReceivedAmount).toFixed(2)
+    : (data.pending || "0.00");
 
   const currencyLabelMap: Record<string, string> = {
     INR: "Indian Rupee (INR)",
     USD: "US Dollar (USD)",
-    EUR: "Euro (EUR)"
+    EURO: "Euro (EURO)"
   };
 
   return (
@@ -1233,7 +1260,7 @@ export function StepAdvancePayment({
 
         <div className="kbf-row" style={{ gridTemplateColumns: "1fr 1fr 1fr", gap: "16px", marginTop: "24px" }}>
           <Field label="Total Received Amount" required={!isLocked}>
-            <KInput value={receivedAmount} disabled style={{ backgroundColor: "#f0f0f0" }} />
+            <KInput value={displayedReceivedAmount} disabled style={{ backgroundColor: "#f0f0f0" }} />
           </Field>
           <Field label="Ref Received Amount %" required={!isLocked}>
             <KInput value={percentReceived} disabled style={{ backgroundColor: "#f0f0f0" }} />

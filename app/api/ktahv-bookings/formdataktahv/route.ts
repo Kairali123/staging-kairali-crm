@@ -4,6 +4,14 @@ import { getPool } from "@/lib/db";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+const CONVERSION_RATES: Record<string, number> = { INR: 1, USD: 85.74, EURO: 89.26, EUR: 89.26 };
+
+function convertCurrency(amount: number, from: string, to: string): number {
+    const fromRate = CONVERSION_RATES[(from || "INR").toUpperCase()] ?? 1;
+    const toRate = CONVERSION_RATES[(to || "INR").toUpperCase()] ?? 1;
+    return (amount * fromRate) / toRate;
+}
+
 function toDateOnly(value: unknown): string {
     if (!value) return '';
 
@@ -91,7 +99,7 @@ async function getAllData(pool: any) {
 async function getDataById_NewXXXX(currentTextId: any, formType: any, pool: any) {
     if (formType === "individual") {
         var bookingId = (currentTextId.toString().split("|")[0]).replace("EF", "PMS");
-        var collectionAmountMap = await getCollectionById(bookingId, pool)
+        var collectionAmountMap: Record<string, any> = await getCollectionById(bookingId, pool)
 
         let [rows]: any[] = await pool.execute(
             `Select 
@@ -416,7 +424,9 @@ async function getDataById_NewXXXX(currentTextId: any, formType: any, pool: any)
                     'payment-location': '',
                     'payment-by': '',
                     'payment-screenshot': '',
-                    'total-amount': collectionAmountMap[bookingId]?.collection?.lblFinalAmountToCollect || 0,
+                    'currency': collectionAmountMap[bookingId]?.collection?.currencyType || '',
+                    'total-received-amount': collectionAmountMap[bookingId]?.collection?.lblFinalAmountToCollect || 0,
+                    'total-amount': collectionAmountMap[bookingId]?.collection?.lblBookingAmount || 0,
                     'percentage-amount': collectionAmountMap[bookingId]?.collection?.lblBookingAmount ? (collectionAmountMap[bookingId].collection.lblFinalAmountToCollect / collectionAmountMap[bookingId].collection.lblBookingAmount) * 100 : 0,
                     'pending-amount': collectionAmountMap[bookingId]?.collection?.lblBookingAmount ? collectionAmountMap[bookingId].collection.lblBookingAmount - collectionAmountMap[bookingId].collection.lblFinalAmountToCollect : 0
                 },
@@ -452,7 +462,7 @@ async function getDataById_NewXXXX(currentTextId: any, formType: any, pool: any)
                 dataSource = r.data_source_auto || "";
             }
         }
-        var collectionAmountMap = await getCollectionById(resId, pool);
+        var collectionAmountMap: Record<string, any> = await getCollectionById(resId, pool);
         let [groupbookingdata]: any[] = await pool.execute(`
             SELECT 
                 p1.ddl_choose_Pax,
@@ -581,7 +591,9 @@ async function getDataById_NewXXXX(currentTextId: any, formType: any, pool: any)
                 "advancePayment": {
                     "payment-datetime": "", "received-amount": "", "payment-mode": "",
                     "transaction-no": "", "payment-location": "", "payment-by": "",
-                    "payment-screenshot": "", 'total-amount': collectionAmountMap[resId]?.collection?.lblFinalAmountToCollect || 0,
+                    "payment-screenshot": "", 'total-received-amount': collectionAmountMap[resId]?.collection?.lblFinalAmountToCollect || 0,
+                    'total-amount': collectionAmountMap[resId]?.collection?.lblBookingAmount || 0,
+                    'currency': collectionAmountMap[resId]?.collection?.currencyType || '',
                     'percentage-amount': collectionAmountMap[resId]?.collection?.lblBookingAmount ? (collectionAmountMap[resId].collection.lblFinalAmountToCollect / collectionAmountMap[resId].collection.lblBookingAmount) * 100 : 0,
                     'pending-amount': collectionAmountMap[resId]?.collection?.lblBookingAmount ? collectionAmountMap[resId].collection.lblBookingAmount - collectionAmountMap[resId].collection.lblFinalAmountToCollect : 0
                 },
@@ -606,6 +618,7 @@ async function getCollectionById(bookingId: string, pool: any) {
             booking_id,
             payment_received_date,
             received_amount,
+            currency,
             update_status
         FROM payment_collection 
         WHERE booking_id=?
@@ -613,14 +626,6 @@ async function getCollectionById(bookingId: string, pool: any) {
         [bookingId]
     );
 
-    var collected = {};
-    for (let i = 0; i < paymentdata.length; i++) {
-        let r = paymentdata[i];
-        if (r.timestamp && r.payment_received_date && r.update_status) {
-            collected[r.booking_id] = (collected[r.booking_id] || 0) + parseFloat(r.received_amount)
-        }
-    }
-    var collectAmt = collected[bookingId] || 0;
     let [ktahvdata]: any[] = await pool.execute(`
         SELECT
         timestamp,
@@ -637,16 +642,22 @@ async function getCollectionById(bookingId: string, pool: any) {
         FROM ktahv_bookings_fms_v3_part1
         WHERE reservation_id =?
         `, [bookingId]);
-    var result = {};
+    var result: Record<string, any> = {};
     for (let j = 0; j < ktahvdata.length; j++) {
         let r = ktahvdata[j];
+        const bookingCurrency = r.currency ? String(r.currency) : "INR";
+        const collectAmt = paymentdata.reduce((total: number, payment: any) => {
+            if (!payment.timestamp || !payment.payment_received_date || !payment.update_status) return total;
+            const amount = parseFloat(payment.received_amount) || 0;
+            return total + convertCurrency(amount, String(payment.currency || bookingCurrency), bookingCurrency);
+        }, 0);
         result[r.reservation_id] = {
             collection: {
                 lblBookingAmount: r.invoice_amount ? parseFloat(r.invoice_amount) : 0,
                 lblFinalAmountToCollect: collectAmt,
                 clientName1: r.client_name ? String(r.client_name) : "",
                 clientMob1: r.mobile ? String(r.mobile) : "",
-                currencyType: r.currency ? String(r.currency) : ""
+                currencyType: bookingCurrency
             },
             approval: {
                 ApprovalGivenDate: r.nb_aphs_approval_given_date ? new Date(r.nb_aphs_approval_given_date) : '',

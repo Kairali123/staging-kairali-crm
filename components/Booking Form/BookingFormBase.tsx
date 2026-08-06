@@ -47,7 +47,7 @@ function emptyAdvancePayment(): AdvancePayment {
   return {
     isAdvancePayment: false, isComplementary: false, isVoucher: false,
     paymentMode: "", transactionNo: "", screenshotName: "", screenshotBase64: "",
-    screenshotType: "", amount: "", remarks: "",
+    screenshotType: "", amount: "", totalReceived: "", totalAmount: "", percentage: "", pending: "", remarks: "",
     paymentReceivedDate: "", paymentLocation: "", paymentCollectionBy: "Admin",
   };
 }

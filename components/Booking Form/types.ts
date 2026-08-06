@@ -163,12 +163,17 @@ export interface AdvancePayment {
   isAdvancePayment: boolean;
   isComplementary: boolean;
   isVoucher: boolean;
+  currency?: string;
   paymentMode: string;
   transactionNo: string;
   screenshotName: string;
   screenshotBase64: string;
   screenshotType: string;
   amount: string;
+  totalReceived?: string;
+  totalAmount?: string;
+  percentage?: string;
+  pending?: string;
   remarks: string;
   paymentReceivedDate?: string;
   paymentLocation?: string;

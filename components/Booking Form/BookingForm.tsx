@@ -58,6 +58,12 @@ function toDateInputValue(value: unknown): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+function normalizeCurrencyCode(value: unknown): string {
+  const code = String(value ?? '').trim().toUpperCase();
+  if (!code) return '';
+  return code === 'EUR' ? 'EURO' : code;
+}
+
 function validateStep(step: number, state: any, bookingType: string): Record<string, string> {
   //return true
   const errs: Record<string, string> = {};
@@ -815,7 +821,9 @@ function StepReview({ bookingType, primaryGuest, primaryBookingDetails, groupInf
   const advCurrency = advancePayment?.currency || bookingCurrency;
 
   const grandTotalNum = parseFloat(pb?.grandTotal || "0");
-  const receivedNum = advancePayment?.isAdvancePayment ? (parseFloat(advancePayment?.amount || "0") || 0) : 0;
+  const receivedNum = advancePayment?.isAdvancePayment
+    ? (parseFloat(advancePayment?.amount || "0") || 0)
+    : (parseFloat(advancePayment?.totalReceived || "0") || 0);
   
   // Convert received amount from advance currency to booking currency for subtraction
   const receivedNumInBookingCurrency = convertCurrency(receivedNum, advCurrency, bookingCurrency);
@@ -1254,12 +1262,23 @@ export default function BookingForm({ bookingId, formType = "individual", onSucc
         // ── 7. Advance Payment ────────────────────────────────────────────────
         if (bd.advancePayment) {
           const ap = bd.advancePayment;
+          const savedCurrency = normalizeCurrencyCode(ap['currency'] || ap['currencyType'] || ap['currency-type']);
+          const savedTotalReceived = ap['total-received-amount'] ?? ap['totalReceived'] ?? '';
+          const savedTotal = ap['total-amount'] ?? ap['totalAmount'] ?? '';
+          const savedPercentage = ap['percentage-amount'] ?? ap['percentage'] ?? '';
+          const savedPending = ap['pending-amount'] ?? ap['pending'] ?? '';
           const hasAdvance = !!(ap['received-amount'] && ap['received-amount'] !== '');
+          if (savedCurrency) setCurrency(savedCurrency);
           setAdvancePayment(prev => ({
             ...prev,
             isAdvancePayment: hasAdvance,
+            currency: savedCurrency || prev.currency || currency,
             paymentReceivedDate: ap['payment-datetime'] || prev.paymentReceivedDate || '',
             amount: ap['received-amount'] || prev.amount,
+            totalReceived: savedTotalReceived !== '' ? String(savedTotalReceived) : prev.totalReceived,
+            totalAmount: savedTotal !== '' ? String(savedTotal) : prev.totalAmount,
+            percentage: savedPercentage !== '' ? String(savedPercentage) : prev.percentage,
+            pending: savedPending !== '' ? String(savedPending) : prev.pending,
             paymentMode: ap['payment-mode'] || prev.paymentMode,
             transactionNo: ap['transaction-no'] || prev.transactionNo,
             paymentLocation: ap['payment-location'] || prev.paymentLocation || '',
@@ -1449,7 +1468,7 @@ export default function BookingForm({ bookingId, formType = "individual", onSucc
     const todayStr = new Date().toISOString().split("T")[0];
 
     // ── Map advance payment to original backend contract ──
-    const advGrandTotal = parseFloat(pricing?.paymentBreakdown?.grandTotal) || 0;
+    const advGrandTotal = parseFloat(String(pricing?.paymentBreakdown?.grandTotal ?? "0")) || 0;
     const advReceived = parseFloat(advancePayment.amount) || 0;
     const adv = advancePayment.isAdvancePayment;
     const bookingCurrency = currency || "INR";
