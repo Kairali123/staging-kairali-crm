@@ -195,7 +195,7 @@ export default function ExecutiveVerifierModal({
             // form.htCreatedStatus !== "" && // commented out with HT Created Status field
             form.doerEmail.trim() !== "" &&
             EMAIL_REGEX.test(form.doerEmail.trim()) &&
-            form.hsStatus !== "" &&
+            // form.hsStatus !== "" && // commented out with HS Status field
             form.coldBy.trim() !== "" &&
             form.coldRemarksBySalesTeam.trim() !== ""
         );
@@ -280,130 +280,98 @@ export default function ExecutiveVerifierModal({
                             locked until a Planned date/time is set.
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-                            <TextField
-                                label="Doer"
-                                required
-                                value={form.doer}
-                                onChange={(v) => update("doer", v)}
-                                disabled
-                                className="sm:col-span-1"
-                            />
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
+                                <TextField
+                                    label="Doer"
+                                    required
+                                    value={form.doer}
+                                    onChange={(v) => update("doer", v)}
+                                    disabled
+                                    className="sm:col-span-1"
+                                />
 
-                            {/* Cold By — always read-only from DB */}
-                            <div className="sm:col-span-1">
-                                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500">
-                                    Cold By <span className="text-red-500">*</span>
-                                </label>
-                                <div className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 min-h-[38px]">
-                                    {/* <span className="inline-block h-2 w-2 rounded-full bg-indigo-400 flex-shrink-0" /> */}
-                                    <span className="font-medium truncate">{form.coldBy || <span className="text-gray-400 italic">Not set</span>}</span>
+                                {/* Cold By — always read-only from DB */}
+                                <div className="sm:col-span-1">
+                                    <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500">
+                                        Cold By <span className="text-red-500">*</span>
+                                    </label>
+                                    <div className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 min-h-[38px]">
+                                        {/* <span className="inline-block h-2 w-2 rounded-full bg-indigo-400 flex-shrink-0" /> */}
+                                        <span className="font-medium truncate">{form.coldBy || <span className="text-gray-400 italic">Not set</span>}</span>
+                                    </div>
                                 </div>
+
+                                <SelectField
+                                    label="Verify Action Status"
+                                    required
+                                    value={form.verifyActionStatus}
+                                    options={VERIFY_ACTION_STATUS_OPTIONS}
+                                    onChange={(v) => update("verifyActionStatus", v)}
+                                    className="sm:col-span-1"
+                                    disabled={isAlreadySubmitted}
+                                />
+
+                                <SelectField
+                                    label="Valid Reason"
+                                    required
+                                    value={form.validReason}
+                                    options={VALID_REASON_OPTIONS}
+                                    onChange={(v) => update("validReason", v)}
+                                    className="sm:col-span-1"
+                                    disabled={isAlreadySubmitted}
+                                />
+
+                                <SelectField
+                                    label="Overall Rating (Out of 10)"
+                                    required
+                                    value={form.overallRating}
+                                    options={OVERALL_RATING_OPTIONS}
+                                    onChange={(v) => update("overallRating", v)}
+                                    className="sm:col-span-1"
+                                    disabled={isAlreadySubmitted}
+                                />
                             </div>
 
-                            {/* Doer Email ID - hidden per request, commented out
-                            <TextField
-                                label="Doer Email ID"
-                                required
-                                type="email"
-                                value={form.doerEmail}
-                                onChange={(v) => update("doerEmail", v)}
-                                disabled
-                                className="sm:col-span-2"
-                            />
-                            */}
-
-                            <SelectField
-                                label="Verify Action Status"
-                                required
-                                value={form.verifyActionStatus}
-                                options={VERIFY_ACTION_STATUS_OPTIONS}
-                                onChange={(v) => update("verifyActionStatus", v)}
-                                className="sm:col-span-1"
-                                disabled={isAlreadySubmitted}
-                            />
-
-                            <SelectField
-                                label="Valid Reason"
-                                required
-                                value={form.validReason}
-                                options={VALID_REASON_OPTIONS}
-                                onChange={(v) => update("validReason", v)}
-                                className="sm:col-span-1"
-                                disabled={isAlreadySubmitted}
-                            />
-
-                            {/* HT Created Status (If delay) - commented out per request
-                            <SelectField
-                                label="HT Created Status (If delay)"
-                                required
-                                value={form.htCreatedStatus}
-                                options={YES_NO_OPTIONS}
-                                onChange={(v) =>
-                                    update("htCreatedStatus", v as "" | "Yes" | "No")
-                                }
-                                className="sm:col-span-1"
-                                disabled={isAlreadySubmitted}
-                            />
-                            */}
-
-                            <SelectField
-                                label="HS Status (If escalate to Abhilash Sir)"
-                                required
-                                value={form.hsStatus}
-                                options={YES_NO_OPTIONS}
-                                onChange={(v) => update("hsStatus", v as "" | "Yes" | "No")}
-                                className="sm:col-span-1"
-                                disabled={isAlreadySubmitted}
-                            />
-
-                            <SelectField
-                                label="Overall Rating (Out of 10)"
-                                required
-                                value={form.overallRating}
-                                options={OVERALL_RATING_OPTIONS}
-                                onChange={(v) => update("overallRating", v)}
-                                className="sm:col-span-1"
-                                disabled={isAlreadySubmitted}
-                            />
-
                             {/* Cold Remarks — always read-only from DB */}
-                            <div className="sm:col-span-2">
+                            <div className="w-full">
                                 <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500">
                                     Cold Remarks by Sales Team <span className="text-red-500">*</span>
                                 </label>
                                 <div
                                     className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 leading-relaxed break-words whitespace-pre-wrap"
-                                    style={{ minHeight: '72px', maxHeight: '96px', overflowY: 'auto', wordBreak: 'break-word', scrollbarWidth: 'thin', scrollbarColor: '#c7d2fe #f1f5f9' }}
+                                    style={{ minHeight: '72px', wordBreak: 'break-word' }}
                                 >
                                     {form.coldRemarksBySalesTeam || <span className="text-gray-400 italic">No remarks available</span>}
                                 </div>
                             </div>
 
-                            <TextAreaField
-                                label="What Went Wrong by Sales Team?"
-                                required
-                                value={form.whatWentWrong}
-                                onChange={(v) => update("whatWentWrong", v)}
-                                className="sm:col-span-2"
-                                disabled={isAlreadySubmitted}
-                            />
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <TextAreaField
+                                    label="What Went Wrong by Sales Team?"
+                                    required
+                                    value={form.whatWentWrong}
+                                    onChange={(v) => update("whatWentWrong", v)}
+                                    className="w-full"
+                                    disabled={isAlreadySubmitted}
+                                />
 
-                            <TextAreaField
-                                label="Suggested Solution for Improvement"
-                                required
-                                value={form.suggestedSolution}
-                                onChange={(v) => update("suggestedSolution", v)}
-                                className="sm:col-span-2"
-                                disabled={isAlreadySubmitted}
-                            />
+                                <TextAreaField
+                                    label="Suggested Solution for Improvement"
+                                    required
+                                    value={form.suggestedSolution}
+                                    onChange={(v) => update("suggestedSolution", v)}
+                                    className="w-full"
+                                    disabled={isAlreadySubmitted}
+                                />
+                            </div>
 
                             <TextAreaField
                                 label="Remarks"
                                 required
                                 value={form.remarks}
                                 onChange={(v) => update("remarks", v)}
-                                className="sm:col-span-4"
+                                className="w-full"
                                 disabled={isAlreadySubmitted}
                             />
                         </div>
