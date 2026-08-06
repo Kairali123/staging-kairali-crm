@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
     const {
       mode = 'followup',
       regenerate = false,
-      name,
+      name = '',
       stage,
       package_interested,
       quote_amount,
@@ -128,9 +128,9 @@ export async function POST(req: NextRequest) {
       representative_name,
     } = body
 
-    if (!name || !stage) {
+    if (!stage) {
       return NextResponse.json(
-        { success: false, error: 'Missing required fields: name, stage' },
+        { success: false, error: 'Missing required fields: stage' },
         { status: 400 }
       )
     }
