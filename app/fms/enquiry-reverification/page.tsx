@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import ViewModal, { LeadRow } from "@/components/viewcallhistorymodel"
 import ExecutiveVerifierModal, { ExecutiveVerifierRecord, ExecutiveVerifierFormValues } from "@/components/ExecutiveverifyModel"
 import SeniorVerifierModal, { SeniorVerifierRecord, SeniorVerifierFormValues } from "@/components/SeniorVerifyModel"
+import { cleanColdRemarks } from "@/lib/utils"
 import {
     Dialog,
     DialogContent,
@@ -875,8 +876,8 @@ export default function EnquiryReverificationPage() {
                                         </td>
                                         <td className="py-3 px-4 font-semibold text-slate-800">{enq.cold_by_employee_name || "—"}</td>
                                         <td className="py-3 px-4 font-medium text-slate-600">{formatDateStr(enq.cold_done_datetime)}</td>
-                                        <td className="py-3 px-4 max-w-[150px] truncate text-slate-600" title={enq.cold_remarks_by_sales_team}>
-                                            {enq.cold_remarks_by_sales_team || "—"}
+                                        <td className="py-3 px-4 max-w-[150px] truncate text-slate-600" title={cleanColdRemarks(enq.cold_remarks_by_sales_team)}>
+                                            {cleanColdRemarks(enq.cold_remarks_by_sales_team) || "—"}
                                         </td>
                                         <td className="py-3 px-4 text-center font-bold text-slate-700">{enq.call_count_before_cold !== null ? enq.call_count_before_cold : "—"}</td>
                                         <td className="py-3 px-4 text-center">
@@ -896,7 +897,7 @@ export default function EnquiryReverificationPage() {
                                                         websiteName: enq.website_name || "",
                                                         dataSource: enq.data_source || "",
                                                         assignToMR: enq.cold_by_employee_name || "",
-                                                        remarksHistory: enq.cold_remarks_by_sales_team || "",
+                                                        remarksHistory: cleanColdRemarks(enq.cold_remarks_by_sales_team),
                                                         status: enq.status || "open",
                                                         doerName: enq.cold_by_employee_name || "",
                                                     })}
@@ -950,7 +951,7 @@ export default function EnquiryReverificationPage() {
                                                                 actual: enq.actual ? formatDateStr(enq.actual) : "—",
                                                                 timeDelay: enq.timedelay || "—",
                                                                 savedColdBy: enq.cold_by_employee_name || "",
-                                                                savedColdRemarks: enq.cold_remarks_by_sales_team || "",
+                                                                savedColdRemarks: cleanColdRemarks(enq.cold_remarks_by_sales_team),
                                                                 savedDoer: enq.CH,
                                                                 savedVerifyActionStatus: enq.CI,
                                                                 savedValidReason: enq.CJ,
@@ -981,7 +982,7 @@ export default function EnquiryReverificationPage() {
                                                                  actual: enq.senior_actual ? formatDateStr(enq.senior_actual) : "—",
                                                                  timeDelay: enq.senior_timedelay || "—",
                                                                  savedColdBy: enq.cold_by_employee_name || "",
-                                                                 savedColdRemarks: enq.cold_remarks_by_sales_team || "",
+                                                                 savedColdRemarks: cleanColdRemarks(enq.cold_remarks_by_sales_team),
                                                                  savedDoer: enq.CW,
                                                                  savedDoerEmail: enq.doer_senior_verifier_email_id,
                                                                  savedVerifyActionStatus: enq.CX,
@@ -1273,7 +1274,7 @@ export default function EnquiryReverificationPage() {
                                                             <div className="border border-[#e2e8f0] rounded-xl bg-white p-[10px_14px] sm:col-span-3">
                                                                 <div className="text-[10px] font-bold tracking-[0.7px] uppercase text-[#94a3b8] mb-1">Cold Remarks</div>
                                                                 <div className="text-[12.5px] font-medium leading-relaxed text-[#1e293b] whitespace-pre-wrap break-words min-h-[40px] max-h-[120px] overflow-y-auto bg-[#f8fafc] border border-[#e2e8f0] rounded-lg p-2.5">
-                                                                    {selectedEnquiry.cold_remarks_by_sales_team || "—"}
+                                                                    {cleanColdRemarks(selectedEnquiry.cold_remarks_by_sales_team) || "—"}
                                                                 </div>
                                                             </div>
                                                             <div className="border border-[#e2e8f0] rounded-xl bg-white p-[10px_14px] sm:col-span-3">

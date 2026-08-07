@@ -30,3 +30,10 @@ export function normalizeUserName(name: string | null | undefined): string {
     .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join(" ");
 }
+
+export function cleanColdRemarks(remarks: string | null | undefined): string {
+  if (!remarks) return "";
+  // Strip patterns like "Call Recording : https://..." or "Call Recording : http://..."
+  // Handles optional leading newlines/carriage returns, spaces, and is case insensitive.
+  return remarks.replace(/(?:^|\r?\n|\r)*Call\s*Recording\s*:\s*https?:\/\/\S+/gi, "").trim();
+}
