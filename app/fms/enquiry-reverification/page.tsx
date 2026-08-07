@@ -43,6 +43,9 @@ export default function EnquiryReverificationPage() {
     const { user, isLoading, hasPermission } = useAuth()
     const router = useRouter()
 
+    const isSenior = user?.permissions?.includes("cold_enquiry_reverification.Senior")
+    const isAdmin = user?.role === "admin" || user?.role === "super_admin" || user?.permissions?.includes("all")
+
     // State variables matching the leads/assign style
     const [searchInput, setSearchInput] = useState("")
     const [dateFilter, setDateFilter] = useState<
@@ -939,7 +942,7 @@ export default function EnquiryReverificationPage() {
                                                 >
                                                     <Eye className="h-4 w-4" /> View
                                                 </button>
-                                                {!hasExecutiveCompleted(enq) && (
+                                                {!hasExecutiveCompleted(enq) && (!isSenior || isAdmin) && (
                                                     <button
                                                         onClick={() => {
                                                             setSelectedExecutiveRecord({
@@ -970,7 +973,7 @@ export default function EnquiryReverificationPage() {
                                                         Executive Verify
                                                     </button>
                                                 )}
-                                                {!hasSeniorCompleted(enq) && (
+                                                {!hasSeniorCompleted(enq) && (isSenior || isAdmin) && (
                                                     <button
                                                         onClick={() => {
                                                             setSelectedSeniorRecord({

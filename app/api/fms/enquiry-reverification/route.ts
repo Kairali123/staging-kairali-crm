@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getPool } from "@/lib/db"
+import { getSessionUserResult, hasAdminRole } from "@/lib/authz"
 
 let cachedFilters: { websites: string[], agents: string[], timestamp: number } | null = null;
 const CACHE_DURATION = 1000 * 60 * 60; // 1 hour
@@ -8,6 +9,33 @@ const CACHE_DURATION = 1000 * 60 * 60; // 1 hour
 export async function GET(req: NextRequest) {
   let connection
   try {
+    const session = getSessionUserResult(req)
+    if (session.state === "missing") {
+      return NextResponse.json(
+        { success: false, error: "Access denied: Not logged in" },
+        { status: 401 }
+      )
+    }
+
+    if (session.state === "invalid") {
+      return NextResponse.json(
+        { success: false, error: "Access denied: Invalid session" },
+        { status: 401 }
+      )
+    }
+
+    const user = session.user
+    const isSenior = user?.permissions?.includes("cold_enquiry_reverification.Senior") || false
+    const isAdmin = hasAdminRole(user, "lower") || user?.permissions?.includes("all") || false
+    const hasViewPermission = user?.permissions?.includes("cold_enquiry_reverification.view") || isSenior || isAdmin
+
+    if (!hasViewPermission) {
+      return NextResponse.json(
+        { success: false, error: "Access denied: Insufficient permissions" },
+        { status: 403 }
+      )
+    }
+
     const { searchParams } = new URL(req.url)
     const search = searchParams.get("search")
     const from = searchParams.get("from")
@@ -65,6 +93,17 @@ export async function GET(req: NextRequest) {
 
     const conditions: string[] = []
     const params: any[] = []
+
+    if (!isAdmin) {
+      const emailPrefix = user.email.split('@')[0]
+      if (isSenior) {
+        conditions.push("SUBSTRING_INDEX(doer_senior_verifier_email_id, '@', 1) = ?")
+        params.push(emailPrefix)
+      } else {
+        conditions.push("SUBSTRING_INDEX(doer_executive_verifier_email_id, '@', 1) = ?")
+        params.push(emailPrefix)
+      }
+    }
 
     if (search) {
       const cleanSearch = search.trim()

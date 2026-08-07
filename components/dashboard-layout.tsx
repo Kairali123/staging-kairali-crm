@@ -79,7 +79,7 @@ interface Notification {
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
-  const { user, logout: authLogout, hasPermission } = useAuth()
+  const { user, logout: authLogout, hasPermission, refreshPermissions } = useAuth()
   const { clearLeadsCache, refreshLeads } = useLeads()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -148,6 +148,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     try {
       await clearLeadsCache()
       await refreshLeads({ force: true, silent: true })
+      if (refreshPermissions) {
+        await refreshPermissions()
+      }
     } catch (error) {
       console.error("Clear Cache failed:", error)
     } finally {
