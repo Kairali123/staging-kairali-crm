@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
+import { ensureAccountTrackerManagementColumns } from './db-init'
 
 // ─── Date formatter → "DD/MM/YYYY" ───────────────────────────────────────────
 function fmtDate(val: any): string | null {
@@ -72,6 +73,10 @@ function mapRow(row: any, index: number) {
         totalReceivedBank: num(row.stage2_total_received_amount_bank_date),
         differenceAmt: num(row.stage2_difference_amt),
         differencePercent: num(row.stage2_difference_percent),
+        managementVerify: row.management_verify === null ? null : Boolean(Number(row.management_verify)),
+        managementRemarks: str(row.management_remarks),
+        managementVerifiedBy: str(row.management_verified_by),
+        managementVerifiedAt: fmtDateTime(row.management_verified_at),
         // Stage 3
         helpSlipCreatedStatus: pass(row.stage3_help_slip_created_status),
         helpSlipId: str(row.stage3_help_slip_id),
@@ -82,6 +87,7 @@ function mapRow(row: any, index: number) {
 
 export async function GET(req: NextRequest) {
     try {
+        await ensureAccountTrackerManagementColumns()
         const pool = await getPool()
 
         const [result] = await pool.execute(`
@@ -102,6 +108,7 @@ export async function GET(req: NextRequest) {
                 stage1_corrected_client_name, stage1_remarks,
                 stage2_invoice_amount_as_per_tally, stage2_total_received_amount_bank_date,
                 stage2_difference_amt, stage2_difference_percent,
+                management_verify, management_remarks, management_verified_by, management_verified_at,
                 stage3_help_slip_created_status, stage3_help_slip_id, stage3_help_slip_remarks
             FROM ktahv_account_tracker
             ORDER BY booking_date_time DESC

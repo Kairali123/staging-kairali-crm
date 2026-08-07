@@ -140,7 +140,10 @@ export default function PartnerDetailPage() {
                         if (formKey) mapped[formKey] = value ?? '';
                     });
                     setFormData(mapped);
-                    setRowIndex(raw._rowIndex ? parseInt(raw._rowIndex) : null);
+                    const parsedRowIndex = raw._rowIndex === undefined || raw._rowIndex === null || raw._rowIndex === ""
+                        ? null
+                        : Number(raw._rowIndex);
+                    setRowIndex(Number.isFinite(parsedRowIndex) ? parsedRowIndex : null);
                 } else {
                     setError(json.message || 'Could not load contact');
                 }
@@ -161,7 +164,7 @@ export default function PartnerDetailPage() {
 
     // ── Submit update ──────────────────────────────────────────────
     const handleSave = async () => {
-        if (!rowIndex) return;
+        if (rowIndex === null || rowIndex === undefined) return;
         setSaving(true);
         setSaveStatus('idle');
         try {

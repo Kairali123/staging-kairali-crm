@@ -332,6 +332,7 @@ export default function PartnersPage() {
     const [loadingRejected, setLoadingRejected] = useState(true)
     const [errorLeads, setErrorLeads] = useState("")
     const [errorTA, setErrorTA] = useState("")
+    const [errorRejected, setErrorRejected] = useState("")
 
     const [search, setSearch] = useState("")
     const [searchInput, setSearchInput] = useState("")
@@ -535,11 +536,17 @@ export default function PartnersPage() {
 
     const fetchRejected = useCallback(async () => {
         setLoadingRejected(true)
+        setErrorRejected("")
         try {
             const res = await fetch("/api/rejected-partners", { cache: "no-store" })
             const j = await res.json()
-            if (j.status === "success") setRejectedPartners(j.data)
+            if (j.status === "success") {
+                setRejectedPartners(j.data)
+            } else {
+                setErrorRejected(j.message || "Failed to load rejected partners")
+            }
         } catch {
+            setErrorRejected("Network error")
         } finally {
             setLoadingRejected(false)
         }
@@ -2100,7 +2107,20 @@ export default function PartnersPage() {
                         </div>
 
                         <div className="mt-3">
-                            {!loadingRejected && (
+                            {errorRejected && (
+                                <div className="flex flex-col items-center justify-center py-16 gap-3 text-rose-600">
+                                    <AlertCircle className="h-10 w-10" />
+                                    <p className="text-sm font-medium">{errorRejected}</p>
+                                    <Button size="sm" variant="outline" className="cursor-pointer" onClick={fetchRejected}>Retry</Button>
+                                </div>
+                            )}
+                            {loadingRejected && !errorRejected && (
+                                <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-500">
+                                    <RefreshCw className="h-10 w-10 animate-spin text-rose-600" />
+                                    <p className="text-sm font-medium">Loading rejected partners...</p>
+                                </div>
+                            )}
+                            {!loadingRejected && !errorRejected && (
                                 <div className="overflow-x-auto">
                                     <Table>
                                         <TableHeader className="sticky top-0 z-20 shadow-md
@@ -2179,7 +2199,7 @@ export default function PartnersPage() {
                                     </Table>
                                 </div>
                             )}
-                            {!loadingRejected && (
+                            {!loadingRejected && !errorRejected && (
                                 <PaginationBar cur={page3} tot={totPages3} count={filtered3.length}
                                     pp={perPage3} setPP={setPerPage3} setP={setPage3}
                                     goTo={goTo3} setGoTo={setGoTo3} />

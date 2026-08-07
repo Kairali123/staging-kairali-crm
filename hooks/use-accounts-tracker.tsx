@@ -44,6 +44,10 @@ export interface PaymentVerifyStage {
     actualRaw?: string | null;
     amountReceivedRaw?: number | null;
     proofLinkRaw?: string | null;
+    managementVerify?: boolean | null;
+    managementRemarks?: string | null;
+    managementVerifiedBy?: string | null;
+    managementVerifiedAt?: string | null;
 }
 
 export interface Booking {
@@ -210,6 +214,10 @@ export function useAccountsTracker() {
                             actualRaw: item.actualRaw ? String(item.actualRaw) : null,
                             amountReceivedRaw: item.amountReceivedTotal ?? null,
                             proofLinkRaw: cleanUrl(item.amountProofLink) || null,      // ✅ fixed: consistent with proofLink
+                            managementVerify: item.managementVerify,
+                            managementRemarks: item.managementRemarks,
+                            managementVerifiedBy: item.managementVerifiedBy,
+                            managementVerifiedAt: item.managementVerifiedAt,
                         } satisfies PaymentVerifyStage,
                     };
                 });

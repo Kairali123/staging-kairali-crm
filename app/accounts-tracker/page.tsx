@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { useAccountsTracker, type Booking, type SalesVerifyStage, type PaymentVerifyStage } from '@/hooks/use-accounts-tracker';
+import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +39,7 @@ import {
     LineChart as LineChartIcon,
     Table as TableIcon
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
     AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
     XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
@@ -417,6 +419,8 @@ function AnalyticsDashboardInline({
     accountDataLoading,
     accountDataError,
     loadAccountData,
+    canManageManagementVerify,
+    openManagementModal,
 }: {
     filtered: Booking[];
     allBookings: Booking[];
@@ -427,7 +431,10 @@ function AnalyticsDashboardInline({
     accountDataLoading: boolean;
     accountDataError: string | null;
     loadAccountData: () => Promise<void>;
+    canManageManagementVerify: boolean;
+    openManagementModal: (booking: Booking) => void;
 }) {
+    const rowsPerPage = 10;
     // ── EDIT FORM UPDATE API ─────────────────────────────────────────────────
     // Returns: { status: "SUCCESS", data: { "KTAHV-PMS-6907": { clientname, salesagent, bookingdate, checkoutdate, piamount }, ... } }
     const EDIT_FORM_UPDATE_API = 'https://script.google.com/macros/s/AKfycbzs_oaQ9z-ZV2ldo2hJX1MQWAK4glgR6LJfAxr1KFmXJeBpsReU8nVff56sx8dFw7VPvw/exec';
@@ -777,6 +784,9 @@ function AnalyticsDashboardInline({
         return list;
     }, [filtered, reconSortConfig]);
     const reconDetailed = reconDetailedFull.slice(0, 10);
+    const [reconModalPage, setReconModalPage] = useState(1);
+    const reconModalTotalPages = Math.max(1, Math.ceil(reconDetailedFull.length / rowsPerPage));
+    const reconModalPaginated = reconDetailedFull.slice((reconModalPage - 1) * rowsPerPage, reconModalPage * rowsPerPage);
 
     // Alert detail lists matching kpis.alerts counting logic
     const bankEntryPendingFull = useMemo(() => {
@@ -2358,7 +2368,7 @@ function AnalyticsDashboardInline({
 
                                     <tbody className="divide-y divide-slate-100">
                                         {reconDetailedFull.length > 0 ? (
-                                            reconDetailedFull.map((b, i) => {
+                                            reconModalPaginated.map((b, i) => {
                                                 const piTot = Number(b.paymentVerify.piAmountSales) || 0;
                                                 const invTot = Number(b.paymentVerify.tallyInvoiceAmount) || 0;
                                                 const rcvd = Number(b.paymentVerify.totalReceivedBank) || 0;
@@ -2474,6 +2484,8 @@ function AnalyticsDashboardInline({
                                     <th className="p-2 font-bold uppercase text-center cursor-pointer select-none hover:text-blue-200 group whitespace-nowrap">Verify Status</th>
                                     <th className="p-2 font-bold uppercase cursor-pointer select-none hover:text-blue-200 group whitespace-nowrap">Difference Reason</th>
                                     <th className="p-2 font-bold uppercase cursor-pointer select-none hover:text-blue-200 group whitespace-nowrap">Remarks</th>
+                                    <th className="p-2 font-bold uppercase text-center whitespace-nowrap">Management Verify</th>
+                                    <th className="p-2 font-bold uppercase whitespace-nowrap">Management Remarks</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-200">
@@ -2507,9 +2519,24 @@ function AnalyticsDashboardInline({
                                             </td>
                                             <td className="p-2 text-slate-600 max-w-[220px] whitespace-normal break-words leading-snug" title={b.paymentVerify.amtDiffReason || ''}>{b.paymentVerify.amtDiffReason ? b.paymentVerify.amtDiffReason.length > 40 ? b.paymentVerify.amtDiffReason.slice(0, 40) + '…' : b.paymentVerify.amtDiffReason : '—'}</td>
                                             <td className="p-2 text-slate-600 max-w-[220px] whitespace-normal break-words leading-snug" title={b.paymentVerify.remarks || ''}>{b.paymentVerify.remarks ? b.paymentVerify.remarks.length > 40 ? b.paymentVerify.remarks.slice(0, 40) + '…' : b.paymentVerify.remarks : '—'}</td>
+                                            <td className="p-2 text-center">
+                                                <Checkbox
+                                                    checked={!!b.paymentVerify.managementVerify}
+                                                    onCheckedChange={(checked) => {
+                                                        if (checked) {
+                                                            openManagementModal(b);
+                                                        }
+                                                    }}
+                                                    disabled={!canManageManagementVerify || !!b.paymentVerify.managementVerify}
+                                                    aria-label={`Management verify for ${b.id}`}
+                                                />
+                                            </td>
+                                            <td className="p-2 text-slate-600 max-w-[220px] whitespace-normal break-words leading-snug" title={b.paymentVerify.managementRemarks || ''}>
+                                                {b.paymentVerify.managementVerify ? (b.paymentVerify.managementRemarks || '') : ''}
+                                            </td>
                                         </tr>
                                     )
-                                }) : <tr><td colSpan={11} className="p-4 text-center text-slate-400 italic">No detailed records found</td></tr>}
+                                }) : <tr><td colSpan={13} className="p-4 text-center text-slate-400 italic">No detailed records found</td></tr>}
                             </tbody>
                         </table>
                     </div>
@@ -2555,6 +2582,8 @@ function AnalyticsDashboardInline({
                                             <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-white text-center whitespace-nowrap">Verify Status</th>
                                             <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-white whitespace-nowrap">Difference Reason</th>
                                             <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-white whitespace-nowrap">Remarks</th>
+                                            <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-white text-center whitespace-nowrap">Management Verify</th>
+                                            <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-white whitespace-nowrap">Management Remarks</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-200">
@@ -2606,12 +2635,27 @@ function AnalyticsDashboardInline({
                                                         </td>
                                                         <td className="px-4 py-2.5 text-[12px] text-slate-600 max-w-[240px] whitespace-normal break-words leading-snug">{b.paymentVerify.amtDiffReason || '—'}</td>
                                                         <td className="px-4 py-2.5 text-[12px] text-slate-500 max-w-[220px] whitespace-normal break-words leading-snug">{b.paymentVerify.remarks || '—'}</td>
+                                                        <td className="px-4 py-2.5 text-center">
+                                                            <Checkbox
+                                                                checked={!!b.paymentVerify.managementVerify}
+                                                                onCheckedChange={(checked) => {
+                                                                    if (checked) {
+                                                                        openManagementModal(b);
+                                                                    }
+                                                                }}
+                                                                disabled={!canManageManagementVerify || !!b.paymentVerify.managementVerify}
+                                                                aria-label={`Management verify for ${b.id}`}
+                                                            />
+                                                        </td>
+                                                        <td className="px-4 py-2.5 text-[12px] text-slate-500 max-w-[220px] whitespace-normal break-words leading-snug">
+                                                            {b.paymentVerify.managementVerify ? (b.paymentVerify.managementRemarks || '') : ''}
+                                                        </td>
                                                     </tr>
                                                 );
                                             })
                                         ) : (
                                             <tr>
-                                                <td colSpan={12} className="px-4 py-12 text-center text-slate-400 text-[13px] italic">
+                                                <td colSpan={14} className="px-4 py-12 text-center text-slate-400 text-[13px] italic">
                                                     No detailed records found
                                                 </td>
                                             </tr>
@@ -2625,7 +2669,7 @@ function AnalyticsDashboardInline({
                                 <span className="text-[11px] text-slate-400 font-medium">
                                     {reconDetailedFull.length} total records
                                 </span>
-                                <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-4 flex-wrap justify-end">
                                     {/* <span className="text-[11px] text-slate-400">
                                         Matched:{" "}
                                         <span className="font-bold text-emerald-600">
@@ -2648,6 +2692,29 @@ function AnalyticsDashboardInline({
                                             {formatINR(reconDetailedFull.reduce((a, b) => a + Number(b.paymentVerify.piAmountSales || 0), 0))}
                                         </span>
                                     </span>
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            disabled={reconModalPage <= 1}
+                                            onClick={() => setReconModalPage((p) => Math.max(1, p - 1))}
+                                            className="h-8 px-3 text-[10px] font-bold uppercase tracking-wide"
+                                        >
+                                            Prev
+                                        </Button>
+                                        <span className="text-[11px] text-slate-500 font-semibold">
+                                            Page {reconModalPage} of {reconModalTotalPages}
+                                        </span>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            disabled={reconModalPage >= reconModalTotalPages}
+                                            onClick={() => setReconModalPage((p) => Math.min(reconModalTotalPages, p + 1))}
+                                            className="h-8 px-3 text-[10px] font-bold uppercase tracking-wide"
+                                        >
+                                            Next
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
 
@@ -4071,7 +4138,10 @@ const SortIconLight = ({ config, field }: { config: { key: string; direction: 'a
 
 export default function AccountsTrackerPage() {
     const { bookings: apiBookings, loading, refresh } = useAccountsTracker();
+    const { hasPermission, user } = useAuth();
     const role: UserRole = 'admin';
+    const isSuperAdmin = hasPermission('all') || user?.permissions?.includes('all') || user?.role === 'super_admin' || user?.role === 'admin';
+    const canManageManagementVerify = isSuperAdmin || hasPermission('management.authority');
     const [viewMode, setViewMode] = useState<'table' | 'analytics'>('analytics');
     const [isMobile, setIsMobile] = useState(false);
     useEffect(() => {
@@ -4092,6 +4162,10 @@ export default function AccountsTrackerPage() {
     const [paymentTab, setPaymentTab] = useState<'summary' | 'reconciliation' | 'verification' | 'docs'>('summary');
     const [paymentAction, setPaymentAction] = useState<'idle' | 'confirming' | 'reporting' | 'processing' | 'success'>('idle');
     const [discrepancyNote, setDiscrepancyNote] = useState('');
+    const [managementModal, setManagementModal] = useState<Booking | null>(null);
+    const [managementRemarks, setManagementRemarks] = useState('');
+    const [managementSaving, setManagementSaving] = useState(false);
+    const [managementError, setManagementError] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const rowsPerPage = 10;
     // (No local uiLoading state needed anymore as per requirements)
@@ -4099,6 +4173,55 @@ export default function AccountsTrackerPage() {
     // ── Pending-actions API (Shoukat/FO + Suresh/Accounts) — owned here so both
     //    this page's KPI cards and AnalyticsDashboardInline can use the same data ──
     const [paApiData, setPaApiData] = useState<PendingActionsApiData | null>(null);
+
+    const openManagementModal = (booking: Booking) => {
+        if (!canManageManagementVerify) return;
+        setManagementModal(booking);
+        setManagementRemarks('');
+        setManagementError('');
+    };
+
+    const closeManagementModal = () => {
+        if (managementSaving) return;
+        setManagementModal(null);
+        setManagementRemarks('');
+        setManagementError('');
+    };
+
+
+    const handleManagementSave = async () => {
+        if (!managementModal || managementSaving) return;
+        if (!managementRemarks.trim()) {
+            setManagementError('Remarks are required.');
+            return;
+        }
+
+        setManagementSaving(true);
+        setManagementError('');
+        try {
+            const response = await fetch('/api/account-tracker/management-verification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    reservationId: managementModal.paymentVerify.reservationId,
+                    remarks: managementRemarks.trim(),
+                }),
+            });
+
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || !result?.success) {
+                throw new Error(result?.error || 'Failed to save management verification');
+            }
+
+            await refresh();
+            setManagementModal(null);
+            setManagementRemarks('');
+        } catch (error: any) {
+            setManagementError(error?.message || 'Failed to save management verification');
+        } finally {
+            setManagementSaving(false);
+        }
+    };
 
     useEffect(() => {
         fetch(PENDING_ACTIONS_API, { redirect: 'follow' })
@@ -4974,6 +5097,8 @@ export default function AccountsTrackerPage() {
                                     accountDataLoading={accountDataLoading}
                                     accountDataError={accountDataError}
                                     loadAccountData={loadAccountData}
+                                    canManageManagementVerify={canManageManagementVerify}
+                                    openManagementModal={openManagementModal}
                                 />
                             </div>
                         </div>
@@ -5189,6 +5314,8 @@ export default function AccountsTrackerPage() {
                                                 <SortIcon config={sortConfig} field="remarks" />
                                             </div>
                                         </th>
+                                        <th className="text-center text-xs font-bold text-white uppercase tracking-wider py-3 px-3 whitespace-nowrap" style={{ backgroundColor: '#1e3a5f', minWidth: '120px' }}>Management Verify</th>
+                                        <th className="text-xs font-bold text-white uppercase tracking-wider py-3 px-3 whitespace-nowrap" style={{ backgroundColor: '#1e3a5f', minWidth: '160px' }}>Management Remarks</th>
 
                                         <th className="text-center text-xs font-bold text-white uppercase tracking-wider py-3 px-3 whitespace-nowrap" style={{ backgroundColor: '#1e3a5f', minWidth: '80px' }}>Action</th>
                                     </tr>
@@ -5417,6 +5544,42 @@ export default function AccountsTrackerPage() {
                     </div>
                 </div>
             </div>
+
+            <Dialog open={!!managementModal} onOpenChange={(open) => { if (!open) closeManagementModal(); }}>
+                <DialogContent className="sm:max-w-lg rounded-2xl">
+                    <DialogHeader>
+                        <DialogTitle>Management Verification</DialogTitle>
+                        <DialogDescription>
+                            Add a required remark before confirming management verification.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 pt-2">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-slate-700">Remarks</label>
+                            <textarea
+                                value={managementRemarks}
+                                onChange={(e) => {
+                                    setManagementRemarks(e.target.value);
+                                    if (managementError) setManagementError('');
+                                }}
+                                rows={4}
+                                disabled={managementSaving}
+                                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
+                                placeholder="Enter management remarks..."
+                            />
+                            {managementError ? <p className="text-sm text-red-600">{managementError}</p> : null}
+                        </div>
+                    </div>
+                    <div className="flex items-center justify-end gap-2 pt-2">
+                        <Button type="button" variant="outline" onClick={closeManagementModal} disabled={managementSaving}>
+                            Cancel
+                        </Button>
+                        <Button type="button" onClick={handleManagementSave} disabled={managementSaving || !managementRemarks.trim()}>
+                            {managementSaving ? 'Saving...' : 'Save'}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             {/* Sales Verification Modal - HIDDEN BY REQUEST */}
             {/* 
