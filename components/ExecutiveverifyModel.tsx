@@ -259,6 +259,14 @@ export default function ExecutiveVerifierModal({
                                     <span className="font-semibold text-white">Mobile</span>
                                     <span className="text-indigo-100">{record?.mobile || "—"}</span>
                                 </span>
+                                <span className="inline-flex items-center gap-1.5 rounded-md bg-white/10 px-2.5 py-1 text-xs text-indigo-50 ring-1 ring-inset ring-white/20">
+                                    <span className="font-semibold text-white">Cold By</span>
+                                    <span className="text-indigo-100">{record?.savedColdBy || "—"}</span>
+                                </span>
+                                <span className="inline-flex items-center gap-1.5 rounded-md bg-white/10 px-2.5 py-1 text-xs text-indigo-50 ring-1 ring-inset ring-white/20 max-w-[420px]">
+                                    <span className="font-semibold text-white shrink-0">Cold Remarks</span>
+                                    <span className="text-indigo-100 truncate" title={record?.savedColdRemarks || ""}>{record?.savedColdRemarks || "—"}</span>
+                                </span>
                             </div>
                         </div>
                     </div>
@@ -281,7 +289,7 @@ export default function ExecutiveVerifierModal({
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
                                 <TextField
                                     label="Doer"
                                     required
@@ -290,17 +298,6 @@ export default function ExecutiveVerifierModal({
                                     disabled
                                     className="sm:col-span-1"
                                 />
-
-                                {/* Cold By — always read-only from DB */}
-                                <div className="sm:col-span-1">
-                                    <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500">
-                                        Cold By <span className="text-red-500">*</span>
-                                    </label>
-                                    <div className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 min-h-[38px]">
-                                        {/* <span className="inline-block h-2 w-2 rounded-full bg-indigo-400 flex-shrink-0" /> */}
-                                        <span className="font-medium truncate">{form.coldBy || <span className="text-gray-400 italic">Not set</span>}</span>
-                                    </div>
-                                </div>
 
                                 <SelectField
                                     label="Verify Action Status"
@@ -331,19 +328,6 @@ export default function ExecutiveVerifierModal({
                                     className="sm:col-span-1"
                                     disabled={isAlreadySubmitted}
                                 />
-                            </div>
-
-                            {/* Cold Remarks — always read-only from DB */}
-                            <div className="w-full">
-                                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500">
-                                    Cold Remarks by Sales Team <span className="text-red-500">*</span>
-                                </label>
-                                <div
-                                    className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 leading-relaxed break-words whitespace-pre-wrap"
-                                    style={{ minHeight: '72px', wordBreak: 'break-word' }}
-                                >
-                                    {form.coldRemarksBySalesTeam || <span className="text-gray-400 italic">No remarks available</span>}
-                                </div>
                             </div>
 
                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

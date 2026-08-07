@@ -83,7 +83,7 @@ export default function EnquiryReverificationPage() {
 
     // Pagination states
     const [currentPage, setCurrentPage] = useState(1)
-    const [pageSize, setPageSize] = useState(5)
+    const [pageSize, setPageSize] = useState(10)
     const [totalPages, setTotalPages] = useState(1)
 
     const hasExecutiveCompleted = (enq: any) =>
@@ -97,6 +97,14 @@ export default function EnquiryReverificationPage() {
             String(enq?.CX ?? "").trim() ||
             String(enq?.senior_actual ?? "").trim()
         )
+
+    const getCompanyColorClass = (company: string) => {
+        const c = String(company || "").trim().toUpperCase()
+        if (c.includes("KAPPL")) return "text-pink-600"
+        if (c.includes("KTAHV")) return "text-teal-600"
+        if (c.includes("VILLA") && c.includes("RAAG") || c.includes("VILLARAAG")) return "text-orange-500"
+        return "text-slate-800"
+    }
 
     // Fetch enquiries from MySQL DB
     const fetchEnquiries = async () => {
@@ -768,45 +776,45 @@ export default function EnquiryReverificationPage() {
                                             ID {renderSortIcon("lead_id")}
                                         </div>
                                     </th>
-                                    <th className="sticky left-[400px] z-30 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[220px] w-[220px] border-r-2 border-white/20" style={{ backgroundColor: '#1e3a5f' }}>Client Details</th>
+                                    <th className="sticky left-[400px] z-30 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[220px] w-[220px] border-r-2 border-white/20 shadow-[inset_-8px_0_12px_-6px_rgba(0,0,0,0.35)]" style={{ backgroundColor: '#1e3a5f' }}>Client Details</th>
 
-                                    <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">Subject</th>
-                                    <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">Notes</th>
-                                    <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">IVR URL</th>
-                                    <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">Website Name</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">Subject</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">Notes</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">IVR URL</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-normal leading-tight max-w-[110px] border-r border-white/15">Website Name</th>
 
                                     <th
-                                        className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-white/10 select-none"
+                                        className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-white/10 select-none border-r border-white/15"
                                         onClick={() => handleSort("data_source")}
                                     >
                                         <div className="flex items-center gap-1.5">
                                             Data Source {renderSortIcon("data_source")}
                                         </div>
                                     </th>
-                                    <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">Cold By (Employee Name)</th>
-                                    <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">Cold done (Date & Time)</th>
-                                    <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">Cold remarks</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-normal leading-tight max-w-[120px] border-r border-white/15">Cold By (Employee Name)</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-normal leading-tight max-w-[110px] border-r border-white/15">Cold done (Date & Time)</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">Cold remarks</th>
                                     <th
-                                        className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-white/10 select-none"
+                                        className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-normal leading-tight max-w-[90px] cursor-pointer hover:bg-white/10 select-none border-r border-white/15"
                                         onClick={() => handleSort("call_count_before_cold")}
                                     >
                                         <div className="flex items-center justify-center gap-1.5">
                                             Call Count Before Cold {renderSortIcon("call_count_before_cold")}
                                         </div>
                                     </th>
-                                    <th className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">Call History Link</th>
-                                    <th className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">Call Done in calling appsheet</th>
-                                    <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">UID</th>
+                                    <th className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">Call History Link</th>
+                                    <th className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-normal leading-tight max-w-[90px] border-r border-white/15">Call Done in calling appsheet</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">UID</th>
 
                                     <th
-                                        className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-white/10 select-none"
+                                        className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-normal leading-tight max-w-[110px] cursor-pointer hover:bg-white/10 select-none border-r border-white/15"
                                         onClick={() => handleSort("company_belongs_to")}
                                     >
                                         <div className="flex items-center gap-1.5">
                                             Company belongs to {renderSortIcon("company_belongs_to")}
                                         </div>
                                     </th>
-                                    <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">appsheet call recording url</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-normal leading-tight max-w-[110px] border-r border-white/15">appsheet call recording url</th>
                                     <th className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap font-bold" style={{ backgroundColor: '#1e3a5f' }}>Actions</th>
                                 </tr>
                             </thead>
@@ -833,17 +841,17 @@ export default function EnquiryReverificationPage() {
                                 )}
 
                                 {sortedEnquiries.map((enq) => (
-                                    <tr key={enq.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition group">
-                                        <td className="sticky left-0 z-10 py-3 px-4 font-medium text-slate-600 min-w-[150px] w-[150px] bg-white group-hover:bg-slate-50 transition-colors border-r border-slate-100">
+                                    <tr key={enq.id} className="border-b border-slate-100 hover:bg-blue-50 transition group">
+                                        <td className="sticky left-0 z-10 py-3 px-4 font-medium text-slate-600 min-w-[150px] w-[150px] bg-white group-hover:bg-blue-50 transition-colors border-r border-slate-100">
                                             {formatDateStr(enq.generate_date_time)}
                                         </td>
-                                        <td className="sticky left-[150px] z-10 py-3 px-4 font-medium text-slate-600 min-w-[120px] w-[120px] bg-white group-hover:bg-slate-50 transition-colors border-r border-slate-100">
+                                        <td className="sticky left-[150px] z-10 py-3 px-4 font-medium text-slate-600 min-w-[120px] w-[120px] bg-white group-hover:bg-blue-50 transition-colors border-r border-slate-100">
                                             {formatDateStr(enq.enquiry_created_datetime)}
                                         </td>
-                                        <td className="sticky left-[270px] z-10 py-3 px-4 font-bold text-blue-700 min-w-[130px] w-[130px] bg-white group-hover:bg-slate-50 transition-colors border-r border-slate-100">
+                                        <td className="sticky left-[270px] z-10 py-3 px-4 font-bold text-blue-700 min-w-[130px] w-[130px] bg-white group-hover:bg-blue-50 transition-colors border-r border-slate-100">
                                             {enq.lead_id}
                                         </td>
-                                        <td className="sticky left-[400px] z-10 py-3 px-4 min-w-[220px] w-[220px] bg-white group-hover:bg-slate-50 transition-colors border-r-2 border-slate-200">
+                                        <td className="sticky left-[400px] z-10 py-3 px-4 min-w-[220px] w-[220px] bg-white group-hover:bg-blue-50 transition-colors border-r-2 border-slate-200 shadow-[inset_-8px_0_12px_-6px_rgba(15,23,42,0.15)]">
                                             <div className="space-y-0.5">
                                                 <p className="font-bold text-slate-900">{enq.name_of_client || "—"}</p>
                                                 <p className="text-slate-500 font-medium">{enq.mobile || "—"}</p>
@@ -851,13 +859,13 @@ export default function EnquiryReverificationPage() {
                                             </div>
                                         </td>
 
-                                        <td className="py-3 px-4 max-w-[200px] truncate font-medium text-slate-700" title={enq.subjects}>
+                                        <td className="py-3 px-4 max-w-[200px] truncate font-medium text-slate-700 border-r border-slate-100" title={enq.subjects}>
                                             {enq.subjects || "—"}
                                         </td>
-                                        <td className="py-3 px-4 max-w-[200px] truncate text-slate-600" title={enq.notes}>
+                                        <td className="py-3 px-4 max-w-[200px] truncate text-slate-600 border-r border-slate-100" title={enq.notes}>
                                             {enq.notes || "—"}
                                         </td>
-                                        <td className="py-3 px-4">
+                                        <td className="py-3 px-4 border-r border-slate-100">
                                             {enq.ivr_url ? (
                                                 <a href={enq.ivr_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-blue-600 hover:text-blue-800 hover:underline">
                                                     Play Recording <ExternalLink className="h-3 w-3" />
@@ -866,8 +874,8 @@ export default function EnquiryReverificationPage() {
                                                 <span className="text-slate-400">—</span>
                                             )}
                                         </td>
-                                        <td className="py-3 px-4 font-medium text-slate-600">{enq.website_name || "—"}</td>
-                                        <td className="py-3 px-4">
+                                        <td className="py-3 px-4 font-medium text-slate-600 border-r border-slate-100 max-w-[110px] truncate" title={enq.website_name || ""}>{enq.website_name || "—"}</td>
+                                        <td className="py-3 px-4 border-r border-slate-100">
                                             {enq.data_source ? (
                                                 <Badge variant="outline" className={`font-semibold px-2 py-0.5 rounded-full ${enq.data_source.toLowerCase().includes("google") ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-purple-50 text-purple-700 border-purple-200"
                                                     }`}>
@@ -877,13 +885,13 @@ export default function EnquiryReverificationPage() {
                                                 <span className="text-slate-400">—</span>
                                             )}
                                         </td>
-                                        <td className="py-3 px-4 font-semibold text-slate-800">{enq.cold_by_employee_name || "—"}</td>
-                                        <td className="py-3 px-4 font-medium text-slate-600">{formatDateStr(enq.cold_done_datetime)}</td>
-                                        <td className="py-3 px-4 max-w-[150px] truncate text-slate-600" title={cleanColdRemarks(enq.cold_remarks_by_sales_team)}>
+                                        <td className="py-3 px-4 font-semibold text-slate-800 border-r border-slate-100 max-w-[120px] truncate" title={enq.cold_by_employee_name || ""}>{enq.cold_by_employee_name || "—"}</td>
+                                        <td className="py-3 px-4 font-medium text-slate-600 border-r border-slate-100">{formatDateStr(enq.cold_done_datetime)}</td>
+                                        <td className="py-3 px-4 max-w-[150px] truncate text-red-600 font-semibold border-r border-slate-100" title={cleanColdRemarks(enq.cold_remarks_by_sales_team)}>
                                             {cleanColdRemarks(enq.cold_remarks_by_sales_team) || "—"}
                                         </td>
-                                        <td className="py-3 px-4 text-center font-bold text-slate-700">{enq.call_count_before_cold !== null ? enq.call_count_before_cold : "—"}</td>
-                                        <td className="py-3 px-4 text-center">
+                                        <td className="py-3 px-4 text-center font-bold text-slate-700 border-r border-slate-100">{enq.call_count_before_cold !== null ? enq.call_count_before_cold : "—"}</td>
+                                        <td className="py-3 px-4 text-center border-r border-slate-100">
                                             {enq.call_history_link ? (
                                                 <button
                                                     type="button"
@@ -912,7 +920,7 @@ export default function EnquiryReverificationPage() {
                                                 <span className="text-slate-400">—</span>
                                             )}
                                         </td>
-                                        <td className="py-3 px-4 text-center">
+                                        <td className="py-3 px-4 text-center border-r border-slate-100">
                                             {enq.cold_done_in_calling_appsheet_or_in_dailer ? (
                                                 <Badge className="bg-emerald-500 text-white font-bold px-2 py-0.5 rounded-full">
                                                     {enq.cold_done_in_calling_appsheet_or_in_dailer}
@@ -921,9 +929,9 @@ export default function EnquiryReverificationPage() {
                                                 <span className="text-slate-400">—</span>
                                             )}
                                         </td>
-                                        <td className="py-3 px-4 font-mono font-medium text-slate-500">{enq.uid}</td>
-                                        <td className="py-3 px-4 font-bold text-slate-800">{enq.company_belongs_to || "—"}</td>
-                                        <td className="py-3 px-4">
+                                        <td className="py-3 px-4 font-mono font-medium text-slate-500 border-r border-slate-100">{enq.uid}</td>
+                                        <td className={`py-3 px-4 font-bold border-r border-slate-100 max-w-[110px] truncate ${getCompanyColorClass(enq.company_belongs_to)}`} title={enq.company_belongs_to || ""}>{enq.company_belongs_to || "—"}</td>
+                                        <td className="py-3 px-4 border-r border-slate-100">
                                             {enq.appsheet_call_recording_url ? (
                                                 <a href={enq.appsheet_call_recording_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-indigo-600 hover:text-indigo-800 hover:underline">
                                                     Appsheet Rec <ExternalLink className="h-3 w-3" />
@@ -977,29 +985,29 @@ export default function EnquiryReverificationPage() {
                                                     <button
                                                         onClick={() => {
                                                             setSelectedSeniorRecord({
-                                                                 id: String(enq.id),
-                                                                 leadId: enq.lead_id || "",
-                                                                 name: enq.name_of_client || "",
-                                                                 mobile: enq.mobile || "",
-                                                                 planned: enq.senior_planned ? formatDateStr(enq.senior_planned) : formatDateStr(enq.generate_date_time),
-                                                                 actual: enq.senior_actual ? formatDateStr(enq.senior_actual) : "—",
-                                                                 timeDelay: enq.senior_timedelay || "—",
-                                                                 savedColdBy: enq.cold_by_employee_name || "",
-                                                                 savedColdRemarks: cleanColdRemarks(enq.cold_remarks_by_sales_team),
-                                                                 savedDoer: enq.CW,
-                                                                 savedDoerEmail: enq.doer_senior_verifier_email_id,
-                                                                 savedVerifyActionStatus: enq.CX,
-                                                                 savedValidReason: enq.CY,
-                                                                 savedOverallRating: enq.DA,
-                                                                 savedHtCreatedStatus: enq.ht_created_to_senior_verifier_if_delay_status,
-                                                                 savedWhatsappAlert: enq.whatsapp_alert_to_sales_person_if_reopen,
-                                                                 savedEmailAlert: enq.email_alert_to_sales_person_if_reopen,
-                                                                 savedHsStatus: enq.hs_status_if_escalate_to_abhilash_sir_by_senior,
-                                                                 savedTransferToUserFms: enq.transfer_to_user_fms_if_reopen,
-                                                                 savedWhatWentWrong: enq.CZ,
-                                                                 savedSuggestedSolution: enq.DB,
-                                                                 savedRemarks: enq.DC
-                                                             });
+                                                                id: String(enq.id),
+                                                                leadId: enq.lead_id || "",
+                                                                name: enq.name_of_client || "",
+                                                                mobile: enq.mobile || "",
+                                                                planned: enq.senior_planned ? formatDateStr(enq.senior_planned) : formatDateStr(enq.generate_date_time),
+                                                                actual: enq.senior_actual ? formatDateStr(enq.senior_actual) : "—",
+                                                                timeDelay: enq.senior_timedelay || "—",
+                                                                savedColdBy: enq.cold_by_employee_name || "",
+                                                                savedColdRemarks: cleanColdRemarks(enq.cold_remarks_by_sales_team),
+                                                                savedDoer: enq.CW,
+                                                                savedDoerEmail: enq.doer_senior_verifier_email_id,
+                                                                savedVerifyActionStatus: enq.CX,
+                                                                savedValidReason: enq.CY,
+                                                                savedOverallRating: enq.DA,
+                                                                savedHtCreatedStatus: enq.ht_created_to_senior_verifier_if_delay_status,
+                                                                savedWhatsappAlert: enq.whatsapp_alert_to_sales_person_if_reopen,
+                                                                savedEmailAlert: enq.email_alert_to_sales_person_if_reopen,
+                                                                savedHsStatus: enq.hs_status_if_escalate_to_abhilash_sir_by_senior,
+                                                                savedTransferToUserFms: enq.transfer_to_user_fms_if_reopen,
+                                                                savedWhatWentWrong: enq.CZ,
+                                                                savedSuggestedSolution: enq.DB,
+                                                                savedRemarks: enq.DC
+                                                            });
                                                             setIsSeniorModalOpen(true);
                                                         }}
                                                         className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 text-violet-600 font-bold bg-white hover:bg-violet-50 px-3.5 py-1.5 text-xs shadow-sm transition"
@@ -1276,7 +1284,7 @@ export default function EnquiryReverificationPage() {
                                                             </div>
                                                             <div className="border border-[#e2e8f0] rounded-xl bg-white p-[10px_14px] sm:col-span-3">
                                                                 <div className="text-[10px] font-bold tracking-[0.7px] uppercase text-[#94a3b8] mb-1">Cold Remarks</div>
-                                                                <div className="text-[12.5px] font-medium leading-relaxed text-[#1e293b] whitespace-pre-wrap break-words min-h-[40px] max-h-[120px] overflow-y-auto bg-[#f8fafc] border border-[#e2e8f0] rounded-lg p-2.5">
+                                                                <div className="text-[12.5px] font-medium leading-relaxed text-red-600 whitespace-pre-wrap break-words min-h-[40px] max-h-[120px] overflow-y-auto bg-[#f8fafc] border border-[#e2e8f0] rounded-lg p-2.5">
                                                                     {cleanColdRemarks(selectedEnquiry.cold_remarks_by_sales_team) || "—"}
                                                                 </div>
                                                             </div>
@@ -1354,6 +1362,75 @@ export default function EnquiryReverificationPage() {
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-2.5">
+                                        {!hasExecutiveCompleted(selectedEnquiry) && (!isSenior || isAdmin) && (
+                                            <button
+                                                onClick={() => {
+                                                    const enq = selectedEnquiry;
+                                                    setSelectedExecutiveRecord({
+                                                        id: String(enq.id),
+                                                        leadId: enq.lead_id || "",
+                                                        name: enq.name_of_client || "",
+                                                        mobile: enq.mobile || "",
+                                                        planned: enq.planned ? formatDateStr(enq.planned) : formatDateStr(enq.generate_date_time),
+                                                        actual: enq.actual ? formatDateStr(enq.actual) : "—",
+                                                        timeDelay: enq.timedelay || "—",
+                                                        savedColdBy: enq.cold_by_employee_name || "",
+                                                        savedColdRemarks: cleanColdRemarks(enq.cold_remarks_by_sales_team),
+                                                        savedDoer: enq.CH,
+                                                        savedVerifyActionStatus: enq.CI,
+                                                        savedValidReason: enq.CJ,
+                                                        savedWhatWentWrong: enq.CK,
+                                                        savedOverallRating: enq.CL,
+                                                        savedSuggestedSolution: enq.CM,
+                                                        savedRemarks: enq.CN,
+                                                        savedHtCreatedStatus: enq.ht_created_to_executive_verifier_if_delay_status,
+                                                        savedDoerEmail: enq.doer_executive_verifier_email_id,
+                                                        savedHsStatus: enq.CQ
+                                                    });
+                                                    setIsDetailDialogOpen(false);
+                                                    setIsExecutiveModalOpen(true);
+                                                }}
+                                                className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 text-indigo-600 font-bold bg-white hover:bg-indigo-50 px-4 py-2 text-xs shadow-sm transition"
+                                            >
+                                                Executive Verify
+                                            </button>
+                                        )}
+                                        {!hasSeniorCompleted(selectedEnquiry) && (isSenior || isAdmin) && (
+                                            <button
+                                                onClick={() => {
+                                                    const enq = selectedEnquiry;
+                                                    setSelectedSeniorRecord({
+                                                        id: String(enq.id),
+                                                        leadId: enq.lead_id || "",
+                                                        name: enq.name_of_client || "",
+                                                        mobile: enq.mobile || "",
+                                                        planned: enq.senior_planned ? formatDateStr(enq.senior_planned) : formatDateStr(enq.generate_date_time),
+                                                        actual: enq.senior_actual ? formatDateStr(enq.senior_actual) : "—",
+                                                        timeDelay: enq.senior_timedelay || "—",
+                                                        savedColdBy: enq.cold_by_employee_name || "",
+                                                        savedColdRemarks: cleanColdRemarks(enq.cold_remarks_by_sales_team),
+                                                        savedDoer: enq.CW,
+                                                        savedDoerEmail: enq.doer_senior_verifier_email_id,
+                                                        savedVerifyActionStatus: enq.CX,
+                                                        savedValidReason: enq.CY,
+                                                        savedOverallRating: enq.DA,
+                                                        savedHtCreatedStatus: enq.ht_created_to_senior_verifier_if_delay_status,
+                                                        savedWhatsappAlert: enq.whatsapp_alert_to_sales_person_if_reopen,
+                                                        savedEmailAlert: enq.email_alert_to_sales_person_if_reopen,
+                                                        savedHsStatus: enq.hs_status_if_escalate_to_abhilash_sir_by_senior,
+                                                        savedTransferToUserFms: enq.transfer_to_user_fms_if_reopen,
+                                                        savedWhatWentWrong: enq.CZ,
+                                                        savedSuggestedSolution: enq.DB,
+                                                        savedRemarks: enq.DC
+                                                    });
+                                                    setIsDetailDialogOpen(false);
+                                                    setIsSeniorModalOpen(true);
+                                                }}
+                                                className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 text-violet-600 font-bold bg-white hover:bg-violet-50 px-4 py-2 text-xs shadow-sm transition"
+                                            >
+                                                Senior Verify
+                                            </button>
+                                        )}
                                         <button
                                             onClick={() => setIsDetailDialogOpen(false)}
                                             className="border border-[#cbd5e1] bg-white hover:bg-[#f8fafc] text-[#334155] px-5 py-2 text-xs font-bold rounded-lg shadow-sm transition"
