@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
   }
 
-  const canManage = hasPermission(session, MANAGEMENT_PERMISSION) || hasAdminRole(session, "trimmed-lower");
+  const canManage = hasAdminRole(session, "trimmed-lower");
   if (!canManage) {
     return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
   }

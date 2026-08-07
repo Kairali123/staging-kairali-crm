@@ -2529,6 +2529,7 @@ function AnalyticsDashboardInline({
                                                     }}
                                                     disabled={!canManageManagementVerify || !!b.paymentVerify.managementVerify}
                                                     aria-label={`Management verify for ${b.id}`}
+                                                    className="border-blue-500 border-2 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 disabled:data-[state=checked]:opacity-100"
                                                 />
                                             </td>
                                             <td className="p-2 text-slate-600 max-w-[220px] whitespace-normal break-words leading-snug" title={b.paymentVerify.managementRemarks || ''}>
@@ -2645,6 +2646,7 @@ function AnalyticsDashboardInline({
                                                                 }}
                                                                 disabled={!canManageManagementVerify || !!b.paymentVerify.managementVerify}
                                                                 aria-label={`Management verify for ${b.id}`}
+                                                                className="border-blue-500 border-2 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 disabled:data-[state=checked]:opacity-100"
                                                             />
                                                         </td>
                                                         <td className="px-4 py-2.5 text-[12px] text-slate-500 max-w-[220px] whitespace-normal break-words leading-snug">
@@ -4406,6 +4408,34 @@ export default function AccountsTrackerPage() {
         return statsBase.filter((b) => filterPaymentStatus === 'All' || b.paymentVerify.verifyStatus === filterPaymentStatus);
     }, [statsBase, filterPaymentStatus]);
 
+    const filteredWithPI = useMemo(() => {
+        return filtered.filter(b => (b.paymentVerify.piAmountSales || 0) > 0);
+    }, [filtered]);
+
+    const reconDetailedFull = useMemo(() => {
+        return filteredWithPI.filter(b => {
+            const isVerifiedOrDiscrepancy = b.paymentVerify.verifyStatus === 'Verified Done' || b.paymentVerify.verifyStatus === 'Discrepancy';
+            const pi = Number(b.paymentVerify.piAmountSales) || 0;
+            const inv = Number(b.paymentVerify.tallyInvoiceAmount) || 0;
+            const rcv = Number(b.paymentVerify.amountReceived) || 0;
+            const differenceAmount = Number(b.paymentVerify.differenceAmount) || 0;
+            return isVerifiedOrDiscrepancy && !(pi === 0 && inv === 0 && rcv === 0) && differenceAmount < 0;
+        });
+    }, [filteredWithPI]);
+
+    const varianceStats = useMemo(() => {
+        const totalVariance = reconDetailedFull.reduce((sum, b) => sum + (Number(b.paymentVerify.differenceAmount) || 0), 0);
+        const sumPct = reconDetailedFull.reduce((sum, b) => sum + (Number(b.paymentVerify.differencePercentage) || 0), 0);
+        const avgVariancePct = reconDetailedFull.length > 0 ? (sumPct / reconDetailedFull.length) : 0;
+        const totalActualReceived = reconDetailedFull.reduce((sum, b) => sum + (Number(b.paymentVerify.totalReceivedBank) || 0), 0);
+        return {
+            totalVariance,
+            avgVariancePct,
+            count: reconDetailedFull.length,
+            totalActualReceived
+        };
+    }, [reconDetailedFull]);
+
     const paginated = filtered.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
 
     const sortedTable2 = useMemo(() => {
@@ -4525,8 +4555,6 @@ export default function AccountsTrackerPage() {
     }, 0);
 
     // PI=0 wale charts mein nahi dikhane — sirf KPI/account-head section ke liye
-    const filteredWithPI = useMemo(() => filtered.filter(b => (b.paymentVerify.piAmountSales || 0) > 0), [filtered]);
-
     // Account Head Verification Pending — bookings missing actualRaw
     const accountHeadVerificationList = useMemo(() => {
         return filteredWithPI.filter(b => isBlankField(b.paymentVerify.actualRaw));
@@ -4748,6 +4776,97 @@ export default function AccountsTrackerPage() {
                                 </div>
                             </div>
                         )}
+                    </div>
+                </div>
+
+                {/* Variance Analytics Section */}
+                <div className="relative mb-6">
+                    <div className="bg-white border-2 border-slate-200 rounded-xl shadow-xl">
+                        {/* Header */}
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-5 py-3 bg-gradient-to-r from-slate-100 via-white to-blue-100 border-b border-slate-200 rounded-t-xl">
+                            <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-amber-500 via-orange-500 to-red-600 flex items-center justify-center shadow-md border border-orange-500/40 flex-shrink-0">
+                                    <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+                                </div>
+                                <div className="min-w-0">
+                                    <h3 className="text-sm sm:text-base font-semibold text-slate-900 leading-tight">
+                                        Variance Analytics
+                                    </h3>
+                                    <p className="text-[11px] text-slate-500">
+                                        Real-time summary from "PI vs Bank Received - Variance (Negative Differences Only)"
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* KPI Cards */}
+                        <div className="p-3 sm:p-4 bg-slate-50/30">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+                                {/* Actual Received */}
+                                <div className="bg-emerald-50/70 border-2 border-emerald-300 rounded-lg p-2.5 sm:p-3 shadow-sm hover:shadow-md transition">
+                                    <div className="flex items-start justify-between gap-1.5 mb-2">
+                                        <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700 leading-tight">
+                                            Actual Received
+                                        </p>
+                                        <IndianRupee className="w-3.5 h-3.5 text-emerald-700 flex-shrink-0 mt-px" />
+                                    </div>
+                                    <p className="text-xl sm:text-2xl font-bold text-slate-900 leading-none mb-2">
+                                        {formatINR(varianceStats.totalActualReceived)}
+                                    </p>
+                                    <span className="inline-block text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                                        Bank Received
+                                    </span>
+                                </div>
+
+                                {/* Total Variance */}
+                                <div className="bg-red-50/70 border-2 border-red-300 rounded-lg p-2.5 sm:p-3 shadow-sm hover:shadow-md transition">
+                                    <div className="flex items-start justify-between gap-1.5 mb-2">
+                                        <p className="text-[10px] font-semibold uppercase tracking-wide text-red-700 leading-tight">
+                                            Total Variance
+                                        </p>
+                                        <IndianRupee className="w-3.5 h-3.5 text-red-700 flex-shrink-0 mt-px" />
+                                    </div>
+                                    <p className="text-xl sm:text-2xl font-bold text-slate-900 leading-none mb-2">
+                                        {formatINR(varianceStats.totalVariance)}
+                                    </p>
+                                    <span className="inline-block text-[10px] font-bold bg-red-100 text-red-800 px-2 py-0.5 rounded-full">
+                                        Negative Sum
+                                    </span>
+                                </div>
+
+                                {/* Average Variance % */}
+                                <div className="bg-amber-50/70 border-2 border-amber-300 rounded-lg p-2.5 sm:p-3 shadow-sm hover:shadow-md transition">
+                                    <div className="flex items-start justify-between gap-1.5 mb-2">
+                                        <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 leading-tight">
+                                            Average Variance %
+                                        </p>
+                                        <TrendingDown className="w-3.5 h-3.5 text-amber-700 flex-shrink-0 mt-px" />
+                                    </div>
+                                    <p className="text-xl sm:text-2xl font-bold text-slate-900 leading-none mb-2">
+                                        {varianceStats.avgVariancePct.toFixed(2)}%
+                                    </p>
+                                    <span className="inline-block text-[10px] font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
+                                        Arithmetic Avg
+                                    </span>
+                                </div>
+
+                                {/* Variance Count */}
+                                <div className="bg-slate-50/70 border-2 border-slate-300 rounded-lg p-2.5 sm:p-3 shadow-sm hover:shadow-md transition">
+                                    <div className="flex items-start justify-between gap-1.5 mb-2">
+                                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-600 leading-tight">
+                                            Variance Count
+                                        </p>
+                                        <Users className="w-3.5 h-3.5 text-slate-600 flex-shrink-0 mt-px" />
+                                    </div>
+                                    <p className="text-xl sm:text-2xl font-bold text-slate-900 leading-none mb-2">
+                                        {varianceStats.count}
+                                    </p>
+                                    <span className="inline-block text-[10px] font-bold bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full">
+                                        Displayed Rows
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
