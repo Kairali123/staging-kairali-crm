@@ -197,10 +197,8 @@ export default function SeniorVerifierModal({
             form.doer.trim() !== "" &&
             form.doerEmail.trim() !== "" &&
             EMAIL_REGEX.test(form.doerEmail.trim()) &&
-            form.coldBy.trim() !== "" &&
             form.verifyActionStatus !== "" &&
             form.validReason !== "" &&
-            form.coldRemarksBySalesTeam.trim() !== "" &&
             form.whatWentWrong.trim() !== "" &&
             form.overallRating.trim() !== "" &&
             !Number.isNaN(rating) &&

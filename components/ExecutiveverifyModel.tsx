@@ -194,10 +194,8 @@ export default function ExecutiveVerifierModal({
             form.remarks.trim() !== "" &&
             // form.htCreatedStatus !== "" && // commented out with HT Created Status field
             form.doerEmail.trim() !== "" &&
-            EMAIL_REGEX.test(form.doerEmail.trim()) &&
+            EMAIL_REGEX.test(form.doerEmail.trim())
             // form.hsStatus !== "" && // commented out with HS Status field
-            form.coldBy.trim() !== "" &&
-            form.coldRemarksBySalesTeam.trim() !== ""
         );
     }, [form]);
 
