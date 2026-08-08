@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Loader2 } from "lucide-react";
+import { Search } from "lucide-react";
 import Image from "next/image";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -86,11 +86,21 @@ function SortableTh({ children, colKey, sortKey, sortDir, onSort }: {
     children: React.ReactNode; colKey: string; sortKey: string; sortDir: "asc" | "desc"; onSort: (k: string) => void;
 }) {
     const active = sortKey === colKey;
+    const ariaSort: React.AriaAttributes["aria-sort"] = active ? (sortDir === "asc" ? "ascending" : "descending") : "none";
     return (
-        <th onClick={() => onSort(colKey)} style={{ padding: "9px 11px", fontSize: 10, fontWeight: 700, color: active ? "#fff" : "rgba(255,255,255,.78)", textTransform: "uppercase" as const, letterSpacing: ".6px", whiteSpace: "nowrap", textAlign: "left" as const, borderRight: "1px solid rgba(255,255,255,.06)", cursor: "pointer", userSelect: "none", background: active ? "rgba(255,255,255,.12)" : undefined }}>
+        <th
+            role="columnheader"
+            aria-sort={ariaSort}
+            tabIndex={0}
+            onClick={() => onSort(colKey)}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSort(colKey); } }}
+            style={{ padding: "9px 11px", fontSize: 10, fontWeight: 700, color: active ? "#fff" : "rgba(255,255,255,.78)", textTransform: "uppercase" as const, letterSpacing: ".6px", whiteSpace: "nowrap", textAlign: "left" as const, borderRight: "1px solid rgba(255,255,255,.06)", cursor: "pointer", userSelect: "none", background: active ? "rgba(255,255,255,.12)" : undefined, outline: "none" }}
+            onFocus={e => { e.currentTarget.style.boxShadow = "inset 0 0 0 2px rgba(255,255,255,.5)"; }}
+            onBlur={e => { e.currentTarget.style.boxShadow = ""; }}
+        >
             <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                 {children}
-                <span style={{ display: "inline-flex", flexDirection: "column", gap: 1, opacity: active ? 1 : 0.4 }}>
+                <span aria-hidden="true" style={{ display: "inline-flex", flexDirection: "column", gap: 1, opacity: active ? 1 : 0.4 }}>
                     <span style={{ fontSize: 7, lineHeight: 1, color: active && sortDir === "asc" ? "#fff" : "rgba(255,255,255,.5)" }}>▲</span>
                     <span style={{ fontSize: 7, lineHeight: 1, color: active && sortDir === "desc" ? "#fff" : "rgba(255,255,255,.5)" }}>▼</span>
                 </span>
@@ -394,7 +404,13 @@ function SentTableInnerNoHeader({ data }: { data: SentRow[] }) {
                                     <NotesTd>{row.notes}</NotesTd>
                                     <td style={{ padding: "8px 11px", fontSize: 11.5, borderRight: "1px solid #f1f5f9", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                         {row.ivrUrl && row.ivrUrl !== "—" && row.ivrUrl !== "-" ? (
-                                            <span title="Download" onClick={() => window.open(row.ivrUrl, "_blank")} style={{ color: "#4f46e5", cursor: "pointer", textDecoration: "underline" }}>Download</span>
+                                            <a
+                                                href={row.ivrUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                aria-label="Download IVR recording"
+                                                style={{ color: "#4f46e5", cursor: "pointer", textDecoration: "underline" }}
+                                            >Download</a>
                                         ) : (
                                             <span style={{ color: "#94a3b8" }}>-</span>
                                         )}
@@ -493,7 +509,20 @@ function SentDataPageInner() {
     }, [search, dateFilter, company, dataSource, status]);
 
     const dateWindow = useMemo(() => {
-        if (dateFilter === "custom") return { from: customDate.start ? new Date(customDate.start) : null, to: customDate.end ? new Date(customDate.end + "T23:59:59") : null };
+        if (dateFilter === "custom") {
+            const parseLocalDate = (str: string, isEnd = false) => {
+                if (!str) return null;
+                const parts = str.split("-");
+                if (parts.length === 3) {
+                    const year = parseInt(parts[0], 10);
+                    const month = parseInt(parts[1], 10) - 1;
+                    const day = parseInt(parts[2], 10);
+                    return isEnd ? new Date(year, month, day, 23, 59, 59, 999) : new Date(year, month, day, 0, 0, 0, 0);
+                }
+                return new Date(str);
+            };
+            return { from: parseLocalDate(customDate.start), to: parseLocalDate(customDate.end, true) };
+        }
         return getDateRange(dateFilter);
     }, [dateFilter, customDate]);
 
@@ -503,7 +532,7 @@ function SentDataPageInner() {
 
     // ── Transform ─────────────────────────────────────────────────────────────
     const transformedSent: SentRow[] = useMemo(() => {
-        if (!sentApiData?.length) return sentLoading ? SENT_DATA : [];
+        if (!sentApiData?.length) return [];
         return sentApiData.map(r => {
             let rawWebsiteName = String(r.company || "").toLowerCase();
             let finalCompany = "KAC"; // Default for remaining
@@ -560,7 +589,7 @@ function SentDataPageInner() {
                 updatedAt: r.updatedAt || "—",
             };
         });
-    }, [sentApiData, sentLoading]);
+    }, [sentApiData]);
 
     // ── Filter Options ────────────────────────────────────────────────────────
     const companyOptions = useMemo(() => Array.from(new Set(transformedSent.map(r => r.company))).filter(v => v && v !== "—").sort(), [transformedSent]);
@@ -622,19 +651,22 @@ function SentDataPageInner() {
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                    {/* {hookRefreshing && !isRefreshing && (
-                        <div className="hidden md:flex items-center gap-2 text-white/60 text-[11px] font-medium animate-pulse">
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                            Background Syncing...
+                    {isRefreshingAny && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, color: "rgba(255,255,255,.7)", fontSize: 11, fontWeight: 500 }}>
+                            <div style={{ width: 10, height: 10, border: "2px solid rgba(255,255,255,.4)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                            Syncing...
                         </div>
                     )}
-                    <button onClick={handleRefresh} disabled={isRefreshingAny}
-                            style={{ background: "rgba(255,255,255,.15)", border: "1px solid rgba(255,255,255,.2)", borderRadius: 8, height: 42, padding: "0 16px", color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: isRefreshingAny ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 8, transition: "all .2s" }}
-                            onMouseEnter={e => !isRefreshingAny && (e.currentTarget.style.background = "rgba(255,255,255,.25)")}
-                            onMouseLeave={e => !isRefreshingAny && (e.currentTarget.style.background = "rgba(255,255,255,.15)")}>
-                        <div style={{ width: 14, height: 14, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", borderRadius: "50%", animation: isRefreshingAny ? "spin 0.8s linear infinite" : "none" }} />
+                    <button
+                        onClick={handleRefresh}
+                        disabled={isRefreshingAny}
+                        aria-label={isRefreshingAny ? "Refreshing data" : "Sync data"}
+                        style={{ background: "rgba(255,255,255,.15)", border: "1px solid rgba(255,255,255,.2)", borderRadius: 8, height: 38, padding: "0 14px", color: "#fff", fontSize: 12, fontWeight: 700, cursor: isRefreshingAny ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 7, transition: "all .2s" }}
+                        onMouseEnter={e => !isRefreshingAny && (e.currentTarget.style.background = "rgba(255,255,255,.25)")}
+                        onMouseLeave={e => !isRefreshingAny && (e.currentTarget.style.background = "rgba(255,255,255,.15)")}>
+                        <div style={{ width: 13, height: 13, border: "2px solid rgba(255,255,255,0.4)", borderTopColor: "#fff", borderRadius: "50%", animation: isRefreshingAny ? "spin 0.8s linear infinite" : "none" }} />
                         {isRefreshingAny ? "Refreshing..." : "Sync Data"}
-                    </button> */}
+                    </button>
                     <div style={{ textAlign: "right", background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.18)", borderRadius: 8, padding: "6px 14px", flexShrink: 0, zIndex: 1 }}>
                         <div style={{ fontSize: 9.5, color: "rgba(255,255,255,.55)", textTransform: "uppercase", letterSpacing: ".8px", fontWeight: 600 }}>Total Records</div>
                         <div style={{ fontSize: 28, fontWeight: 800, color: "#fff", lineHeight: 1.1, marginTop: 2 }}>{filteredSent.length}</div>

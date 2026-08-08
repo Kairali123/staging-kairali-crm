@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getPool } from "@/lib/db";
+import { verifySessionCookieValue } from "@/lib/session";
 import fs from "fs";
 import path from "path";
 import os from "os";
@@ -106,8 +107,26 @@ function mapRow(row: any): object {
 
 // ─── GET Handler ──────────────────────────────────────────────────────────────
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
     try {
+        // Authenticate session
+        let session: any = null;
+        try {
+            const userCookie = request.cookies.get("kairali_user")?.value;
+            session = userCookie ? verifySessionCookieValue(userCookie) : null;
+        } catch {
+            session = null;
+        }
+        if (!session) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: noStoreHeaders });
+        }
+
+        // Authorize RBAC permission
+        const permissions = session.permissions || [];
+        if (!permissions.includes("ai_voice_sent.view") && !permissions.includes("all")) {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403, headers: noStoreHeaders });
+        }
+
         const { searchParams } = new URL(request.url);
         const force = searchParams.get("force") === "1";
         const now = Date.now();
