@@ -133,6 +133,8 @@ async function getDataById_NewXXXX(currentTextId: any, formType: any, pool: any)
                 p1.repeat_client,
                 p1.txt_Postal_Code,
                 p2.txt_Nationality,
+                p1.str_arrival_pickup,
+                p1.str_departure_pickup,
                 p2.ddl_tpt,
                 p2.txt_DateOfBirth,
                 p2.txt_tpt_note,
@@ -398,23 +400,18 @@ async function getDataById_NewXXXX(currentTextId: any, formType: any, pool: any)
                     'client-category': r.client_category || '',
                     'client-type': r.client_type || '',
                     'payment-terms': r.payment_terms || '',
-                    'data-source': r.data_source || '',
-                    'transportation-details': r.ddl_tpt || '',
+                    'data-source': r.data_source || collectionAmountMap[bookingId]?.dataSource || '',
+                    'transportation-details': (r.ddl_tpt && r.ddl_tpt !== 'Amount Chargeable') ? r.ddl_tpt : (
+                        String(r.str_arrival_pickup || collectionAmountMap[bookingId]?.arrivalPickup || '').trim().toLowerCase() === 'yes' ? (
+                            String(r.str_departure_pickup || collectionAmountMap[bookingId]?.deptPickup || '').trim().toLowerCase() === 'yes' ? 'Airport Roundtrip' : 'Airport Pickup'
+                        ) : 'No Transportation Needed'
+                    ),
                     'referred-by': '',
                     'health-information': '',
                     'uploadTestReport': ''
                 },
 
-                travelAgent: {
-                    'no-agent': '',
-                    'agent-name': '',
-                    'agent-country-code': '',
-                    'agent-mobile': '',
-                    'agent-email': '',
-                    'agent-category': '',
-                    'agent-commission': '',
-                    'agent-remarks': ''
-                },
+                travelAgent: await getTravelAgentDetailsByName(collectionAmountMap[bookingId]?.travelAgentName || '', pool),
 
                 advancePayment: {
                     'payment-datetime': '',
@@ -487,12 +484,14 @@ async function getDataById_NewXXXX(currentTextId: any, formType: any, pool: any)
                 p1.txt_Arrival1,
                 p1.txt_Departure1,
                 p1.txt_nights1,
+                p1.travel_AgentName1,
                 p2.booking_taken_by,
                 p2.edit_time_value,
                 p2.state,
                 p2.zip,
                 p2.address,
-                p2.repeat_guest
+                p2.repeat_guest,
+                p2.ddl_tpt
                 FROM response_of_group_bookings_part1 p1 
                 LEFT JOIN response_of_group_bookings_part2 p2 ON p1.unique_key = p2.unique_key
                 WHERE p1.Res_code =? 
@@ -510,7 +509,7 @@ async function getDataById_NewXXXX(currentTextId: any, formType: any, pool: any)
         }
         let rowdata = Object.values(latestPerGuest);
         var secondaryGuests = {};
-        var grpName = "", grpPhone = "", grpEmail = "", grpPax = "", notes = "", grpedID = "", grpPatientId = "", grpUniqueId = "", grpCountry = "";
+        var grpName = "", grpPhone = "", grpEmail = "", grpPax = "", notes = "", grpedID = "", grpPatientId = "", grpUniqueId = "", grpCountry = "", grpTransportation = "", grpAgentName = "";
         var guestIndex = 1;
         for (var i = 0; i < rowdata.length; i++) {
             let r = rowdata[i];
@@ -521,6 +520,8 @@ async function getDataById_NewXXXX(currentTextId: any, formType: any, pool: any)
                 grpEmail = r.txt_ref_email || '';
                 grpCountry = r.ddl_country1 || '';
                 grpUniqueId = `KTAHV-PMS-${r.txt_patient_ID1 || ''}`
+                grpTransportation = r.ddl_tpt || '';
+                grpAgentName = r.travel_AgentName1 || '';
             }
             notes = r.booking_taken_by;
             grpedID = r.edit_ID || '';
@@ -580,14 +581,10 @@ async function getDataById_NewXXXX(currentTextId: any, formType: any, pool: any)
                 },
                 "additionalInfo": {
                     "client-category": clientCategory, "client-type": clientType, "payment-terms": paymentTerms,
-                    "data-source": dataSource, "transportation-details": "", "referred-by": "",
+                    "data-source": dataSource, "transportation-details": grpTransportation, "referred-by": "",
                     "health-information": "", "uploadTestReport": ""
                 },
-                "travelAgent": {
-                    "no-agent": "", "agent-name": "", "agent-country-code": "",
-                    "agent-mobile": "", "agent-email": "", "agent-category": "",
-                    "agent-commission": "", "agent-remarks": ""
-                },
+                "travelAgent": await getTravelAgentDetailsByName(grpAgentName, pool),
                 "advancePayment": {
                     "payment-datetime": "", "received-amount": "", "payment-mode": "",
                     "transaction-no": "", "payment-location": "", "payment-by": "",
@@ -638,7 +635,12 @@ async function getCollectionById(bookingId: string, pool: any) {
         nb_aphs_approved_till_date,
         nb_aphs_approved_by,
         nb_aphs_approval_screenshot,
-        nb_aphs_remarks
+        nb_aphs_remarks,
+        nb_pgns_travel_agent_name,
+        data_source,
+        data_source_auto,
+        arrival_pickup,
+        dept_pickup
         FROM ktahv_bookings_fms_v3_part1
         WHERE reservation_id =?
         `, [bookingId]);
@@ -665,7 +667,11 @@ async function getCollectionById(bookingId: string, pool: any) {
                 'Approved By': r.nb_aphs_approved_by ? String(r.nb_aphs_approved_by) : '',
                 ApprovalScreenshot: r.nb_aphs_approval_screenshot ? String(r.nb_aphs_approval_screenshot) : '',
                 Remarks: r.nb_aphs_remarks ? String(r.nb_aphs_remarks) : ''
-            }
+            },
+            travelAgentName: r.nb_pgns_travel_agent_name ? String(r.nb_pgns_travel_agent_name) : "",
+            dataSource: r.data_source || r.data_source_auto || "",
+            arrivalPickup: r.arrival_pickup || "",
+            deptPickup: r.dept_pickup || ""
         };
     }
     return result;
@@ -894,4 +900,60 @@ async function getTravelAgentData(pool: any) {
 
     }
     return ["ActiveTravelAgents", codesMap];
+}
+
+async function getTravelAgentDetailsByName(agentName: string, pool: any) {
+    if (!agentName) {
+        return {
+            'no-agent': 'TRUE',
+            'agent-name': '',
+            'agent-country-code': '',
+            'agent-mobile': '',
+            'agent-email': '',
+            'agent-category': '',
+            'agent-commission': '',
+            'agent-remarks': ''
+        };
+    }
+    let [rows]: any[] = await pool.execute(
+        `SELECT 
+            travel_agent_agency_name,
+            category,
+            contact_person_mobile_number,
+            email_id,
+            country_code,
+            stage2_commission_percent
+        FROM ktahv_travel_agent_registered_contact_database_fms
+        WHERE travel_agent_agency_name = ?
+        `,
+        [agentName]
+    );
+    if (rows.length > 0) {
+        let r = rows[0];
+        let countryCodeStr = "";
+        if (r.country_code) {
+            let match = String(r.country_code).match(/[+-]?\d+/);
+            countryCodeStr = match ? match[0] : "";
+        }
+        return {
+            'no-agent': 'FALSE',
+            'agent-name': r.travel_agent_agency_name || '',
+            'agent-country-code': countryCodeStr,
+            'agent-mobile': r.contact_person_mobile_number || '',
+            'agent-email': r.email_id || '',
+            'agent-category': r.category || '',
+            'agent-commission': r.stage2_commission_percent || '',
+            'agent-remarks': ''
+        };
+    }
+    return {
+        'no-agent': 'FALSE',
+        'agent-name': agentName,
+        'agent-country-code': '',
+        'agent-mobile': '',
+        'agent-email': '',
+        'agent-category': '',
+        'agent-commission': '',
+        'agent-remarks': ''
+    };
 }

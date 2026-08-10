@@ -112,6 +112,7 @@ export function StepAdditionalInfo({
           <Field label="Transportation" required error={errors.transportationDetails}>
             <KSelect value={data.transportationDetails || ""} error={!!errors.transportationDetails} onChange={e => set("transportationDetails", e.target.value)}>
               <option value="">Select</option>
+              {["No Transportation Needed", "Airport Pickup", "Airport Roundtrip", "Custom Transportation"].includes(data.transportationDetails) ? null : data.transportationDetails ? <option value={data.transportationDetails}>{data.transportationDetails}</option> : null}
               {["No Transportation Needed", "Airport Pickup", "Airport Roundtrip", "Custom Transportation"].map(t => <option key={t}>{t}</option>)}
             </KSelect>
           </Field>
@@ -221,6 +222,7 @@ export function StepTravelAgent({
           <Field label="Agent Name" required={!isLocked} error={!isLocked ? errors.name : undefined}>
             <KSelect value={data.name} onChange={e => handleAgentSelect(e.target.value)} error={!isLocked && !!errors.name} disabled={isLocked}>
               <option value="">-- Select Agent --</option>
+              {data.name && !agents.some((a: any) => a.name === data.name) ? <option value={data.name}>{data.name}</option> : null}
               {agents.map((a: any) => <option key={a.name} value={a.name}>{a.name}</option>)}
             </KSelect>
           </Field>
