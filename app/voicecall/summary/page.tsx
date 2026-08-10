@@ -762,9 +762,7 @@ function CompanyBreakdownTable({
                                         {/* Source sub-rows — cells ARE clickable */}
                                         {expanded && dg.sources.map(s => {
                                             const buildClick = (statusParam: ModalStatusType) => (intent: string) => {
-                                                const companyParam = (s.company?.split(",").length ?? 1) > 1
-                                                    ? "ALL"
-                                                    : s.company?.toUpperCase() || "ALL";
+                                                const companyParam = s.company?.toUpperCase() || "ALL";
                                                 onCellInteract({
                                                     date: dg.date,
                                                     company: companyParam,
@@ -1053,7 +1051,8 @@ export default function AIVoiceSummaryReportPage() {
 
             if (matchedDay) {
                 const matchedSources = matchedDay.sources.filter(s => {
-                    const cMatch = params.company === "ALL" || s.company.toUpperCase() === params.company;
+                    const cMatch = params.company === "ALL"
+                        || params.company.split(",").map(c => c.trim().toUpperCase()).includes(s.company.toUpperCase());
                     const sMatch = params.src === "ALL" || s.source.toUpperCase() === params.src;
                     return cMatch && sMatch;
                 });
@@ -1082,6 +1081,7 @@ export default function AIVoiceSummaryReportPage() {
                     if (params.statusParam === "QUALIFIED" && qStatus !== "qualified") return false;
                     if (params.statusParam === "DEAD" && qStatus !== "non-qualified") return false;
                     if (params.statusParam === "PENDING" && qStatus !== "pending" && qStatus !== "pending/rescheduled") return false;
+                    if (params.statusParam === "RECEIVED" && qStatus !== "qualified" && qStatus !== "non-qualified") return false;
 
                     if (params.intent === "HIGH" && !cIntent.includes("high")) return false;
                     if (params.intent === "MEDIUM" && !cIntent.includes("medium")) return false;
@@ -1208,7 +1208,7 @@ export default function AIVoiceSummaryReportPage() {
         const companyAgg = Object.values(companyMap).sort((a: any, b: any) => (b.sent ?? 0) - (a.sent ?? 0));
         const sourceAgg = Object.values(sourceMap).sort((a: any, b: any) => b.sent - a.sent).slice(0, 8);
 
-        const last14 = [...rawDateGroups].slice(0, 14).reverse();
+        const last14 = [...dateFilteredGroups].slice(0, 14).reverse();
         const trendData = {
             labels: last14.map(d => d.displayDate),
             datasets: [
@@ -1551,49 +1551,55 @@ export default function AIVoiceSummaryReportPage() {
                                 />
                     )}
 
-                    {view === "charts" && !loading && (
-                        <div className="p-4 space-y-3">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <ChartCard title="Company-wise Lead Performance" subtitle="Sent vs Qualified vs Non-Qualified vs Pending per company" iconBg="#eef2ff" iconColor="#4f46e5" icon={icons.dashboard()} legend={[{ color: "#6366f1", label: "Sent" }, { color: "#10b981", label: "Qualified" }, { color: "#f87171", label: "Non-Qualified" }, { color: "#c084fc", label: "Pending" }]}>
-                                    <div style={{ position: "relative", height: 220 }}><Bar data={barCompanyData} options={{ ...commonBarOpts, plugins: { ...commonBarOpts.plugins, tooltip: { ...commonBarOpts.plugins.tooltip, ...performanceTooltip } } }} /></div>
-                                </ChartCard>
-                                <ChartCard title="Source-wise Lead Performance" subtitle="Sent vs Qualified vs Non-Qualified vs Pending per source" iconBg="#fef3c7" iconColor="#d97706" icon={<svg width={12} height={12} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>} legend={[{ color: "#6366f1", label: "Sent" }, { color: "#10b981", label: "Qualified" }, { color: "#f87171", label: "Non-Qualified" }, { color: "#c084fc", label: "Pending" }]}>
-                                    <div style={{ position: "relative", height: 220 }}><Bar data={barSourceData} options={{ ...commonBarOpts, plugins: { ...commonBarOpts.plugins, tooltip: { ...commonBarOpts.plugins.tooltip, ...performanceTooltip } } }} /></div>
-                                </ChartCard>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                <ChartCard title="Priority Distribution" subtitle="All leads by priority level" iconBg="#fee2e2" iconColor="#dc2626" icon={<svg width={12} height={12} fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="10" strokeWidth="2" /><path d="M12 8v4l3 3" strokeWidth="2" strokeLinecap="round" /></svg>}>
-                                    <div style={{ height: 180, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                        <div style={{ maxWidth: 160, width: "100%" }}>
-                                            <Doughnut data={doughnutPriority} options={{ responsive: true, maintainAspectRatio: true, cutout: "68%", plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx: any) => { const total = ctx.dataset.data.reduce((a: number, b: number) => a + b, 0); const pct = total > 0 ? ((ctx.parsed / total) * 100).toFixed(1) : "0.0"; return `${ctx.label}: ${ctx.parsed} leads (${pct}%)`; } } } } }} />
+                    {view === "charts" && (
+                        loading
+                            ? <TableSkeleton />
+                            : error
+                                ? <TableError message={error} onRetry={fetchData} />
+                                : (
+                                    <div className="p-4 space-y-3">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <ChartCard title="Company-wise Lead Performance" subtitle="Sent vs Qualified vs Non-Qualified vs Pending per company" iconBg="#eef2ff" iconColor="#4f46e5" icon={icons.dashboard()} legend={[{ color: "#6366f1", label: "Sent" }, { color: "#10b981", label: "Qualified" }, { color: "#f87171", label: "Non-Qualified" }, { color: "#c084fc", label: "Pending" }]}>
+                                                <div style={{ position: "relative", height: 220 }}><Bar data={barCompanyData} options={{ ...commonBarOpts, plugins: { ...commonBarOpts.plugins, tooltip: { ...commonBarOpts.plugins.tooltip, ...performanceTooltip } } }} /></div>
+                                            </ChartCard>
+                                            <ChartCard title="Source-wise Lead Performance" subtitle="Sent vs Qualified vs Non-Qualified vs Pending per source" iconBg="#fef3c7" iconColor="#d97706" icon={<svg width={12} height={12} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>} legend={[{ color: "#6366f1", label: "Sent" }, { color: "#10b981", label: "Qualified" }, { color: "#f87171", label: "Non-Qualified" }, { color: "#c084fc", label: "Pending" }]}>
+                                                <div style={{ position: "relative", height: 220 }}><Bar data={barSourceData} options={{ ...commonBarOpts, plugins: { ...commonBarOpts.plugins, tooltip: { ...commonBarOpts.plugins.tooltip, ...performanceTooltip } } }} /></div>
+                                            </ChartCard>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                            <ChartCard title="Priority Distribution" subtitle="All leads by priority level" iconBg="#fee2e2" iconColor="#dc2626" icon={<svg width={12} height={12} fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="10" strokeWidth="2" /><path d="M12 8v4l3 3" strokeWidth="2" strokeLinecap="round" /></svg>}>
+                                                <div style={{ height: 180, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                                    <div style={{ maxWidth: 160, width: "100%" }}>
+                                                        <Doughnut data={doughnutPriority} options={{ responsive: true, maintainAspectRatio: true, cutout: "68%", plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx: any) => { const total = ctx.dataset.data.reduce((a: number, b: number) => a + b, 0); const pct = total > 0 ? ((ctx.parsed / total) * 100).toFixed(1) : "0.0"; return `${ctx.label}: ${ctx.parsed} leads (${pct}%)`; } } } } }} />
+                                                    </div>
+                                                </div>
+                                                <ChartLegend items={[{ color: "#f87171", label: `High (${fmtPct(kpi.sentHigh, kpi.sent)}%)`, round: true }, { color: "#fbbf24", label: `Medium (${fmtPct(kpi.sentMedium, kpi.sent)}%)`, round: true }, { color: "#34d399", label: `Low (${fmtPct(kpi.sentLow, kpi.sent)}%)`, round: true }]} />
+                                            </ChartCard>
+                                            <ChartCard title="Qualification % by Company" subtitle="Qualified & Non-Qualified (% of Responses) vs Pending (% of Sent)" iconBg="#d1fae5" iconColor="#059669" icon={icons.check()} legend={[{ color: "#10b981", label: "Qualified %" }, { color: "#f87171", label: "Non-Qualified %" }, { color: "#c084fc", label: "Pending %" }]}>
+                                                <div style={{ position: "relative", height: 220 }}><Bar data={barQualPct} options={{ ...commonBarOpts, indexAxis: "y" as const, scales: { x: { stacked: true, max: 100, ticks: { callback: (v: any) => v + "%", font: chartFont, color: "#64748b" }, grid: { color: "#f1f5f9" }, border: { display: false } }, y: { stacked: true, ticks: { font: chartFont, color: "#1e293b" }, grid: { display: false }, border: { display: false } } }, barPercentage: 0.6, categoryPercentage: 0.7 }} /></div>
+                                            </ChartCard>
+                                            <ChartCard title="Daily Qualification Trend" subtitle="Leads sent & qualified over time" iconBg="#ede9fe" iconColor="#7c3aed" icon={icons.trend()} legend={[{ color: "#6366f1", label: "Sent", round: true }, { color: "#10b981", label: "Qualified", round: true }]}>
+                                                <div style={{ position: "relative", height: 220 }}><Line data={trendData} options={commonBarOpts} /></div>
+                                            </ChartCard>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <ChartCard title="Qualification % by Source (Stacked)" subtitle="Qualified & Non-Qualified split across sources" iconBg="#dbeafe" iconColor="#2563eb" icon={<svg width={12} height={12} fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2" strokeWidth="2" /><path d="M3 9h18M9 21V9" strokeWidth="2" strokeLinecap="round" /></svg>} legend={[{ color: "#10b981", label: "Qualified" }, { color: "#f87171", label: "Non-Qualified" }, { color: "#c084fc", label: "Pending" }]}>
+                                                <div style={{ position: "relative", height: 260 }}><Bar data={barSourceStacked} options={{ ...commonBarOpts, plugins: { ...commonBarOpts.plugins, tooltip: { ...commonBarOpts.plugins.tooltip, ...stackedTooltip } }, scales: { x: { stacked: true, ticks: { font: chartFont, color: "#64748b" }, grid: { display: false }, border: { display: false } }, y: { stacked: true, ticks: { font: chartFont, color: "#64748b" }, grid: { color: "#f1f5f9" }, border: { display: false } } }, barPercentage: 0.6, categoryPercentage: 0.7 }} /></div>
+                                            </ChartCard>
+                                            <ChartCard title="Overall Lead Status Split" subtitle={`${kpi.responses} total finalized responses — qualification outcome`} iconBg="#fce7f3" iconColor="#be185d" icon={<svg width={12} height={12} fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="10" strokeWidth="2" /><path d="M12 8v4l3 3" strokeWidth="2" strokeLinecap="round" /></svg>}>
+                                                <div style={{ height: 190, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                                    <div style={{ maxWidth: 180, width: "100%" }}>
+                                                        <Doughnut data={{ labels: ["Qualified", "Non-Qualified"], datasets: [{ data: [kpi.qualified, kpi.dead], backgroundColor: ["#10b981", "#f87171"], borderWidth: 2, borderColor: "#fff", hoverOffset: 6 }] }} options={{ responsive: true, maintainAspectRatio: true, cutout: "65%", plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx: any) => { const total = ctx.dataset.data.reduce((a: number, b: number) => a + b, 0); const pct = total > 0 ? ((ctx.parsed / total) * 100).toFixed(1) : "0.0"; return `${ctx.label}: ${ctx.parsed} (${pct}%)`; } } } } }} />
+                                                    </div>
+                                                </div>
+                                                <ChartLegend items={[
+                                                    { color: "#10b981", label: `Qualified — ${kpi.qualified} (${fmtPct(kpi.qualified, kpi.responses)}%)`, round: true },
+                                                    { color: "#f87171", label: `Non-Qualified — ${kpi.dead} (${fmtPct(kpi.dead, kpi.responses)}%)`, round: true },
+                                                ]} />
+                                            </ChartCard>
                                         </div>
                                     </div>
-                                    <ChartLegend items={[{ color: "#f87171", label: `High (${fmtPct(kpi.sentHigh, kpi.sent)}%)`, round: true }, { color: "#fbbf24", label: `Medium (${fmtPct(kpi.sentMedium, kpi.sent)}%)`, round: true }, { color: "#34d399", label: `Low (${fmtPct(kpi.sentLow, kpi.sent)}%)`, round: true }]} />
-                                </ChartCard>
-                                <ChartCard title="Qualification % by Company" subtitle="Qualified & Non-Qualified (% of Responses) vs Pending (% of Sent)" iconBg="#d1fae5" iconColor="#059669" icon={icons.check()} legend={[{ color: "#10b981", label: "Qualified %" }, { color: "#f87171", label: "Non-Qualified %" }, { color: "#c084fc", label: "Pending %" }]}>
-                                    <div style={{ position: "relative", height: 220 }}><Bar data={barQualPct} options={{ ...commonBarOpts, indexAxis: "y" as const, scales: { x: { stacked: true, max: 100, ticks: { callback: (v: any) => v + "%", font: chartFont, color: "#64748b" }, grid: { color: "#f1f5f9" }, border: { display: false } }, y: { stacked: true, ticks: { font: chartFont, color: "#1e293b" }, grid: { display: false }, border: { display: false } } }, barPercentage: 0.6, categoryPercentage: 0.7 }} /></div>
-                                </ChartCard>
-                                <ChartCard title="Daily Qualification Trend" subtitle="Leads sent & qualified over time" iconBg="#ede9fe" iconColor="#7c3aed" icon={icons.trend()} legend={[{ color: "#6366f1", label: "Sent", round: true }, { color: "#10b981", label: "Qualified", round: true }]}>
-                                    <div style={{ position: "relative", height: 220 }}><Line data={trendData} options={commonBarOpts} /></div>
-                                </ChartCard>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <ChartCard title="Qualification % by Source (Stacked)" subtitle="Qualified & Non-Qualified split across sources" iconBg="#dbeafe" iconColor="#2563eb" icon={<svg width={12} height={12} fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2" strokeWidth="2" /><path d="M3 9h18M9 21V9" strokeWidth="2" strokeLinecap="round" /></svg>} legend={[{ color: "#10b981", label: "Qualified" }, { color: "#f87171", label: "Non-Qualified" }, { color: "#c084fc", label: "Pending" }]}>
-                                    <div style={{ position: "relative", height: 260 }}><Bar data={barSourceStacked} options={{ ...commonBarOpts, plugins: { ...commonBarOpts.plugins, tooltip: { ...commonBarOpts.plugins.tooltip, ...stackedTooltip } }, scales: { x: { stacked: true, ticks: { font: chartFont, color: "#64748b" }, grid: { display: false }, border: { display: false } }, y: { stacked: true, ticks: { font: chartFont, color: "#64748b" }, grid: { color: "#f1f5f9" }, border: { display: false } } }, barPercentage: 0.6, categoryPercentage: 0.7 }} /></div>
-                                </ChartCard>
-                                <ChartCard title="Overall Lead Status Split" subtitle={`${kpi.responses} total finalized responses — qualification outcome`} iconBg="#fce7f3" iconColor="#be185d" icon={<svg width={12} height={12} fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="10" strokeWidth="2" /><path d="M12 8v4l3 3" strokeWidth="2" strokeLinecap="round" /></svg>}>
-                                    <div style={{ height: 190, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                        <div style={{ maxWidth: 180, width: "100%" }}>
-                                            <Doughnut data={{ labels: ["Qualified", "Non-Qualified"], datasets: [{ data: [kpi.qualified, kpi.dead], backgroundColor: ["#10b981", "#f87171"], borderWidth: 2, borderColor: "#fff", hoverOffset: 6 }] }} options={{ responsive: true, maintainAspectRatio: true, cutout: "65%", plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx: any) => { const total = ctx.dataset.data.reduce((a: number, b: number) => a + b, 0); const pct = total > 0 ? ((ctx.parsed / total) * 100).toFixed(1) : "0.0"; return `${ctx.label}: ${ctx.parsed} (${pct}%)`; } } } } }} />
-                                        </div>
-                                    </div>
-                                    <ChartLegend items={[
-                                        { color: "#10b981", label: `Qualified — ${kpi.qualified} (${fmtPct(kpi.qualified, kpi.responses)}%)`, round: true },
-                                        { color: "#f87171", label: `Non-Qualified — ${kpi.dead} (${fmtPct(kpi.dead, kpi.responses)}%)`, round: true },
-                                    ]} />
-                                </ChartCard>
-                            </div>
-                        </div>
+                                )
                     )}
                 </div>
             </div>
