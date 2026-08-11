@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { useActiveVillaBookings } from "@/hooks/use-active-bookings";
+import CollectionModal from "@/components/villa-collection-model";
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -406,7 +406,233 @@ function formatLengthOfStay(booking: any): string {
 
 export default function VillaRaagBookingPage() {
   const tableRef = useRef<HTMLDivElement | null>(null)
-  const { bookings, loading, error, setBookings } = useActiveVillaBookings();
+  const [bookings, setBookings] = useState<Booking[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<any>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Local helper functions for data normalization
+  function getNumeric(item: any, ...keys: string[]) {
+    for (const k of keys) {
+      if (!item || !(k in item)) continue;
+      const raw = item[k];
+      if (raw === null || raw === undefined || raw === "") continue;
+      if (typeof raw === "number") {
+        if (!Number.isNaN(raw)) return raw;
+        continue;
+      }
+      const cleaned = String(raw).replace(/[^0-9.-]/g, "");
+      if (cleaned === "") continue;
+      const n = Number(cleaned);
+      if (!Number.isNaN(n)) return n;
+    }
+    return undefined;
+  }
+
+  function getString(item: any, ...keys: string[]) {
+    for (const k of keys) {
+      if (!item || !(k in item)) continue;
+      const v = item[k];
+      if (v === null || v === undefined) continue;
+      const s = String(v).trim();
+      if (s !== "" && s.toUpperCase() !== "NULL") return s;
+    }
+    return undefined;
+  }
+
+  const fetchBookings = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const pageSize = 100
+      let page = 1
+      let totalCount = Number.POSITIVE_INFINITY
+      const data: any[] = []
+
+      while (data.length < totalCount) {
+        const res = await fetch(`/api/villa-bookings?page=${page}&limit=${pageSize}`)
+        if (!res.ok) throw new Error("Failed to fetch villa bookings")
+        const result = await res.json()
+        const pageRows = Array.isArray(result.bookings) ? result.bookings : []
+        data.push(...pageRows)
+        totalCount = Number.isFinite(Number(result.totalCount)) ? Number(result.totalCount) : data.length
+        if (pageRows.length < pageSize) break
+        page += 1
+      }
+
+      const formatted = data.map((item: any, index: number) => {
+        const invoiceAmount = getNumeric(item, "invoice_amount") ?? 0
+        const receivedAmount = getNumeric(item, "total_received_amount") ?? 0
+
+        const statusRaw = (getString(item, "booking_status") || "").toLowerCase()
+        let status: any
+        if (statusRaw.includes("cancel")) status = "cancelled"
+        else if (statusRaw.includes("no show")) status = "no show"
+        else if (statusRaw.includes("hold")) status = "hold"
+        else if (statusRaw.includes("confirm")) status = "confirmed"
+        else status = "pending"
+
+        const percentReceived = getNumeric(item, "percent_received_amount") ??
+          (invoiceAmount === 0
+            ? (receivedAmount > 0 ? 100 : 0)
+            : Math.round((receivedAmount / invoiceAmount) * 100))
+
+        const paymentStatus =
+          percentReceived >= 100 ? "paid" : percentReceived > 0 ? "partial" : "pending"
+
+        const sourceRaw = (getString(item, "booking_source") || "").toUpperCase()
+        let source: string
+        if (sourceRaw === "DIRECT" || sourceRaw === "OFFLINE_AGENT") {
+          source = "Direct Booking"
+        } else if (sourceRaw === "BOOKING_ENGINE") {
+          source = "Online Booking Engine"
+        } else if (sourceRaw === "OTA") {
+          source = "OTA"
+        } else {
+          source = getString(item, "booking_source") || "API Import"
+        }
+
+        const sourceType = getString(item, "source_type") || ""
+
+        const payAtHotelRaw = (getString(item, "pay_at_hotel") || "").toLowerCase()
+        const payAtHotel =
+          payAtHotelRaw === "yes" || payAtHotelRaw === "true" || payAtHotelRaw === "1"
+            ? true
+            : payAtHotelRaw === "no" || payAtHotelRaw === "false" || payAtHotelRaw === "0"
+              ? false
+              : undefined
+
+        const compRaw = (getString(item, "complimentary_status") || "").toLowerCase()
+        const complimentary =
+          compRaw === "" ? null
+            : ["yes", "true", "1"].includes(compRaw) ? true
+              : ["no", "false", "0"].includes(compRaw) ? false
+                : getString(item, "complimentary_status")
+
+        const receivedAmountSingle = getNumeric(item, "received_amount")
+        const paymentRecords = receivedAmountSingle
+          ? [{
+            amount: receivedAmountSingle,
+            method: getString(item, "payment_mode") || "Unknown",
+            date: item["payment_received_datetime"] || item["booking_date_time"] || "",
+            receiptNumber: getString(item, "receipt_transaction_number"),
+            collectedBy: getString(item, "payment_collection_by"),
+          }]
+          : []
+
+        const id = String(
+          (getString(item, "unique_id") ||
+            getString(item, "booking_id") ||
+            getString(item, "reservation_number") ||
+            "") + "-" + index
+        )
+
+        return {
+          id,
+          bookingId: getString(item, "booking_id") || "",
+          reservationNo: getString(item, "reservation_number") || "",
+          bookingDateTime: item["booking_date_time"] || "",
+
+          guestName: getString(item, "name_of_client") || "",
+          bookerName: getString(item, "name_of_the_booker") || "",
+          mobile: getString(item, "mobile") || "",
+          email: getString(item, "guest_email") || "",
+          country: getString(item, "country") || "",
+
+          checkIn: item["arrival_date"] || "",
+          checkInTime: item["check_in_time"] || "",
+          checkOut: item["departure_date"] || "",
+          checkOutTime: item["check_out_time"] || "",
+          lengthOfStay: getNumeric(item, "length_of_stay", "total_room_nights"),
+
+          mealPlan: getString(item, "meal_plan_type", "meal_plans") || "",
+          plan: getString(item, "meal_plan_type", "meal_plans") || "",
+
+          villaType: "Villa Raag",
+          villaNumber: getString(item, "room_no") || "N/A",
+          roomName: getString(item, "room_category") || "N/A",
+          roomCategory: getString(item, "room_category") || "",
+          noOfRooms: getNumeric(item, "no_of_rooms"),
+          totalPax: getNumeric(item, "total_pax", "number_of_adults") ?? 0,
+
+          amount: invoiceAmount,
+          receivedAmount,
+          totalRoomCost: getNumeric(item, "room_price"),
+          addonsTotal: getNumeric(item, "add_ons_price"),
+          outletRevenue: getNumeric(item, "outlet_price"),
+          discountTotal: Math.abs(getNumeric(item, "discount_amount") ?? 0),
+          taxesAmount: getNumeric(item, "taxes"),
+          subTotalAmount: getNumeric(item, "subtotal"),
+          netPayable: getNumeric(item, "net_payable_a") ?? invoiceAmount,
+          finalTotalAmount: invoiceAmount,
+          paymentsAmount: receivedAmount,
+          netPaymentsByGuest: getNumeric(item, "net_payable_by_guest"),
+          netPayableAtHotel: getNumeric(item, "net_payable_a"),
+
+          invoiceNumber: getString(item, "invoice_number") || "",
+          invoiceUrl: getString(item, "invoice_url") || "",
+          InvoiceHistoryLink: getString(item, "invoice_history_url") || "",
+          PaymentCollectionHistoryLink: getString(item, "payment_collection_history_link") || "",
+          cancellationRemarks: getString(item, "cancellation_remarks") || "",
+
+          approvedTillDate: "",
+          status,
+          assignedTo: getString(item, "booking_taken_by") || "",
+          salesperson: getString(item, "booking_taken_by") || "",
+          contactNumber: getString(item, "mobile") || "",
+          team: "sales",
+          createdDate: item["booking_date_time"] || "",
+          lastUpdated: item["last_edit_date"] || "",
+          lastModifiedOn: item["last_edit_date"] || "",
+          lastModifiedBy: getString(item, "last_modified_by") || "",
+
+          source,
+          sourceType,
+          bookingSubSource: sourceType,
+          bookingType: getString(item, "booking_type") || "",
+
+          paymentStatus,
+          receivedPercentage: percentReceived,
+          payAtHotel,
+          complimentary,
+          complimentaryStatus: getString(item, "complimentary_status") || "",
+
+          salesTeamStatus:
+            status === "cancelled" ? "completed"
+              : status === "hold" ? "on_hold"
+                : status === "confirmed" ? "completed"
+                  : "pending",
+          accountsVerifyStatus:
+            status === "cancelled" ? "booking_cancelled"
+              : paymentStatus === "paid" ? "payment_verified"
+                : "pending",
+          frontOfficeStatus:
+            status === "cancelled" ? "booking_cancelled"
+              : status === "confirmed" ? "pms_verified_done"
+                : "pending",
+          paymentSettlementStatus:
+            status === "cancelled" ? "booking_cancelled"
+              : paymentStatus === "paid" ? "full_payment_received"
+                : paymentStatus === "partial" ? "partial_payment"
+                  : "pending",
+
+          totalAmount: String(invoiceAmount || 0),
+          paidAmount: String(receivedAmount || 0),
+          paymentRecords,
+        }
+      })
+      setBookings(formatted)
+    } catch (err: any) {
+      setError(err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchBookings()
+  }, [])
+
   const [tempSearch, setTempSearch] = useState("");
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all")
@@ -444,9 +670,13 @@ export default function VillaRaagBookingPage() {
 
   const [showDetailsModal, setShowDetailsModal] = useState(false)
   const [selectedBookingForDetails, setSelectedBookingForDetails] = useState<Booking | null>(null)
-  const [showPaymentDetailsModal, setShowPaymentDetailsModal] = useState(false)
   const [showBillCollectionModal, setShowBillCollectionModal] = useState(false)
   const [selectedBookingForBillCollection, setSelectedBookingForBillCollection] = useState<Booking | null>(null)
+  const [showCollectionPopup, setShowCollectionPopup] = useState(false)
+  const [selectedBookingForCollection, setSelectedBookingForCollection] = useState<Booking | null>(null)
+  const [collectionReceipts, setCollectionReceipts] = useState<any[]>([])
+  const [gasDetails, setGasDetails] = useState<{ folio?: string; mobile?: string; checkInLabel?: string } | null>(null)
+  const [loadingCollection, setLoadingCollection] = useState(false)
 
   const ADDON_API_URL = "https://script.google.com/macros/s/AKfycbzXpMajQyAnBMYWCTm8jzG5_HUPtIuUa_Wz7Nz40O92JsCiv8JSXclD70EJYU1_WTGmlw/exec"
   const OUTLET_API_URL = "https://script.google.com/macros/s/AKfycbxdLHJ-2btHbpgZiQ3970BX-ZA7kZCvS94DbRzXLESxVhe_F49I_5NBXGVtcCtwRKl6/exec"
@@ -893,29 +1123,41 @@ export default function VillaRaagBookingPage() {
     switch (action) {
       case "cancel":
         setSelectedBookingId(bookingId)
-        setShowCancelModal(true)
+        setTimeout(() => setShowCancelModal(true), 100)
         break
       case "payment_upload":
         setSelectedBookingForPayment(booking)
-        setShowPaymentModal(true)
+        setTimeout(() => setShowPaymentModal(true), 100)
         break
       case "payment_details":
-        if (!booking) return
+        setSelectedBookingForCollection(booking)
+        setCollectionReceipts([])
+        setGasDetails(null)
+        setLoadingCollection(true)
+        setTimeout(() => setShowCollectionPopup(true), 100)
 
-        const bookingId = booking.bookingId || booking.id
-
-        const url = `https://script.google.com/macros/s/AKfycbyn6C8yZOGdPm2FZJzHfco9i6NUxsTAC7jmAlsewlrMe_VJg5RjzI4XuzjdVtDcR8-N/exec?bookingId=${bookingId}`
-
-        window.open(url, "_blank")
-
+        fetch(`/api/villa-bookings?action=collection&bookingId=${booking.bookingId || booking.id}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data && Array.isArray(data)) {
+              setCollectionReceipts(data)
+              if (data.length > 0) {
+                const first = data[0]
+                setGasDetails({
+                  folio: first.folio_number || null,
+                  mobile: first.mobile_no || null,
+                  checkInLabel: null
+                })
+              }
+            }
+          })
+          .catch(err => {
+            console.error("Failed to fetch collection data from MySQL:", err)
+          })
+          .finally(() => {
+            setLoadingCollection(false)
+          })
         break
-      // setShowDetailsModal(false)
-      // setShowPaymentModal(false)
-
-      // setSelectedBookingForPayment(booking)
-
-      // setTimeout(() => setShowPaymentDetailsModal(true), 50)
-      // break
 
       case "bill_collection_details": {
         setShowDetailsModal(false)
@@ -970,70 +1212,105 @@ export default function VillaRaagBookingPage() {
         : [];
 
 
-  const handleCancelBooking = () => {
-    if (!cancelReason.trim()) return
+  const handleCancelBooking = async () => {
+    if (!cancelReason.trim() || !selectedBookingId || isSubmitting) return
 
-    setBookings((prev) =>
-      prev.map((booking) =>
-        booking.id === selectedBookingId
-          ? { ...booking, status: "cancelled" as const, lastUpdated: new Date().toISOString() }
-          : booking,
-      ),
-    )
+    setIsSubmitting(true)
+    try {
+      const booking = bookings.find((b) => b.id === selectedBookingId)
+      if (!booking) throw new Error("Booking not found")
 
-    setShowCancelModal(false)
-    setCancelReason("")
-    setCancelRemarks("")
-    setSelectedBookingId("")
+      const res = await fetch("/api/villa-bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "cancel",
+          bookingId: booking.bookingId,
+          cancelReason,
+          cancellationRemarks: cancelRemarks,
+        }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || "Failed to cancel booking")
+      }
+
+      await fetchBookings()
+      setShowCancelModal(false)
+      setCancelReason("")
+      setCancelRemarks("")
+      setSelectedBookingId("")
+    } catch (err: any) {
+      alert(err.message || "An error occurred while cancelling the booking.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
-  const handlePaymentSubmit = () => {
+  const handlePaymentSubmit = async () => {
     if (
       !paymentData.receivedAmount ||
       !paymentData.paymentMode ||
       !paymentData.receivedDate ||
-      !paymentData.receiptNumber
+      !paymentData.receiptNumber ||
+      !selectedBookingForPayment ||
+      isSubmitting
     ) {
       return
     }
 
-    if (selectedBookingForPayment) {
-      const record = {
-        amount: Number.parseFloat(paymentData.receivedAmount),
-        method: paymentData.paymentMode || "unknown",
-        date: paymentData.receivedDate || new Date().toISOString(),
-        receiptNumber: paymentData.receiptNumber || undefined,
-        collectedBy: paymentData.paymentCollectedBy || undefined,
-        note: undefined,
-      }
-
-      setBookings((prev) =>
-        prev.map((booking) =>
-          booking.id === selectedBookingForPayment.id
-            ? {
-              ...booking,
-              receivedAmount: booking.receivedAmount + Number.parseFloat(paymentData.receivedAmount),
-              paymentStatus: "paid",
-              lastUpdated: new Date().toISOString(),
-              paymentRecords: [...(booking.paymentRecords || []), record],
-            }
-            : booking,
-        ),
-      )
+    const amount = parseFloat(paymentData.receivedAmount)
+    if (isNaN(amount) || amount <= 0) {
+      alert("Please enter a valid positive received amount")
+      return
     }
 
-    setShowPaymentModal(false)
-    setSelectedBookingForPayment(null)
-    setPaymentData({
-      receivedAmount: "",
-      currency: "INR",
-      paymentMode: "",
-      receivedDate: "",
-      receiptNumber: "",
-      screenshot: null,
-      paymentLocation: "",
-      paymentCollectedBy: "",
-    })
+    const pending = selectedBookingForPayment.amount - selectedBookingForPayment.receivedAmount
+    if (amount > pending) {
+      alert("Received amount cannot exceed the pending amount")
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const res = await fetch("/api/villa-bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "payment",
+          bookingId: selectedBookingForPayment.bookingId,
+          receivedAmount: amount,
+          paymentMode: paymentData.paymentMode,
+          receivedDate: paymentData.receivedDate,
+          receiptNumber: paymentData.receiptNumber,
+          paymentCollectedBy: paymentData.paymentCollectedBy,
+        }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || "Failed to submit payment")
+      }
+
+      await fetchBookings()
+      setShowPaymentModal(false)
+      setSelectedBookingForPayment(null)
+      setPaymentData({
+        receivedAmount: "",
+        currency: "INR",
+        paymentMode: "",
+        receivedDate: "",
+        receiptNumber: "",
+        screenshot: null,
+        paymentLocation: "",
+        paymentCollectedBy: "",
+      })
+    } catch (err: any) {
+      alert(err.message || "An error occurred while submitting payment.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const computeReceivedPercentage = (received: number | string, total: number | string) => {
@@ -2483,12 +2760,12 @@ export default function VillaRaagBookingPage() {
                           <TableCell className="font-medium text-slate-900 max-w-[140px] truncate">{booking.invoiceNumber || "-"}</TableCell>
                           <TableCell className="font-medium text-slate-900">
                             {booking.invoiceUrl && (
-                              <a href={booking.invoiceUrl} target="_blank" className="text-blue-600 underline">View Invoice</a>
+                              <a href={booking.invoiceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">View Invoice</a>
                             )}
                           </TableCell>
                           <TableCell className="font-medium text-slate-900">
                             {booking.InvoiceHistoryLink && (
-                              <a href={booking.InvoiceHistoryLink} target="_blank" className="text-blue-600 underline">View History</a>
+                              <a href={booking.InvoiceHistoryLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">View History</a>
                             )}
                           </TableCell>
 
@@ -2607,6 +2884,26 @@ export default function VillaRaagBookingPage() {
                                   >
                                     <Eye className="h-4 w-4 text-pink-600" />
                                     <span className="text-slate-700">View Details</span>
+                                  </button>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                  <button
+                                    onClick={() => handleAction("payment_upload", booking.id)}
+                                    className="flex items-center gap-2 px-3 py-2 hover:bg-blue-50 cursor-pointer w-full text-left"
+                                    aria-label={`Collect payment for ${booking.bookingId}`}
+                                  >
+                                    <CreditCard className="h-4 w-4 text-emerald-600" />
+                                    <span className="text-slate-700">Collect Payment</span>
+                                  </button>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                  <button
+                                    onClick={() => handleAction("cancel", booking.id)}
+                                    className="flex items-center gap-2 px-3 py-2 hover:bg-red-50 cursor-pointer w-full text-left"
+                                    aria-label={`Cancel booking for ${booking.bookingId}`}
+                                  >
+                                    <XCircle className="h-4 w-4 text-red-600" />
+                                    <span className="text-slate-700">Cancel Booking</span>
                                   </button>
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator className="my-1 border-blue-200" />
@@ -2783,7 +3080,7 @@ export default function VillaRaagBookingPage() {
                         </TableCell>
                         <TableCell>
                           {booking.invoiceUrl ? (
-                            <a href={booking.invoiceUrl} target="_blank" className="text-blue-600 underline hover:text-blue-800">View Invoice</a>
+                            <a href={booking.invoiceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-800">View Invoice</a>
                           ) : "-"}
                         </TableCell>
                         <TableCell className="text-sm text-slate-700">{booking.bookerName || "-"}</TableCell>
@@ -2973,7 +3270,7 @@ export default function VillaRaagBookingPage() {
                         </TableCell>
                         <TableCell className="font-medium text-slate-900">
                           {booking.invoiceUrl ? (
-                            <a href={booking.invoiceUrl} target="_blank" className="text-blue-600 underline hover:text-blue-800">View Invoice</a>
+                            <a href={booking.invoiceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-800">View Invoice</a>
                           ) : "-"}
                         </TableCell>
                         <TableCell className="text-sm text-slate-700">
@@ -3445,184 +3742,126 @@ export default function VillaRaagBookingPage() {
             </DialogContent>
           </Dialog>
 
-          {/* Payment Details Modal */}
-          <Dialog open={showPaymentDetailsModal} onOpenChange={setShowPaymentDetailsModal}>
-            <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-3 text-indigo-700">
-                  <div className="p-2 bg-indigo-100 rounded-lg">
-                    <Upload className="h-6 w-6 text-indigo-600" />
-                  </div>
-                  <div>
-                    <div className="text-xl font-bold">Payment Collection History</div>
-                    <div className="text-sm font-normal text-slate-500 mt-0.5">Complete transaction details and records</div>
-                  </div>
-                </DialogTitle>
-              </DialogHeader>
 
-              {!selectedBookingForPayment ? (
-                <div className="py-16 text-center">
-                  <div className="inline-block p-4 bg-slate-100 rounded-full mb-3">
-                    <Clock className="h-8 w-8 text-slate-400 animate-spin" />
-                  </div>
-                  <p className="text-sm text-slate-500">Loading booking details...</p>
-                </div>
-              ) : (
-                <div className="px-6 pb-6 space-y-5">
-                  <Card className="border border-slate-200 shadow-sm bg-gradient-to-br from-white to-slate-50">
-                    <CardHeader className="py-3 bg-gradient-to-r from-indigo-50 to-blue-50 border-b border-indigo-100">
-                      <CardTitle className="text-sm font-bold text-indigo-800 flex items-center gap-2">
-                        <Home className="h-4 w-4" />
-                        Booking Information
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm pt-4">
-                      <div className="space-y-1.5">
-                        <Label className="text-slate-500 flex items-center gap-1.5"><Receipt className="h-3.5 w-3.5" />Booking ID</Label>
-                        <p className="font-semibold text-slate-900 text-base">{selectedBookingForPayment.bookingId}</p>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-slate-500 flex items-center gap-1.5"><Receipt className="h-3.5 w-3.5" />Reservation No</Label>
-                        <p className="font-semibold text-slate-900 text-base">{selectedBookingForPayment.reservationNo || "-"}</p>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-slate-500 flex items-center gap-1.5"><Home className="h-3.5 w-3.5" />Room</Label>
-                        <p className="font-semibold text-slate-900 text-base">{selectedBookingForPayment.roomName}</p>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-slate-500 flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" />Check-In</Label>
-                        <p className="font-semibold text-slate-900 text-base">{fmtDateSafe(selectedBookingForPayment.checkIn)}</p>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-slate-500 flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" />Check-Out</Label>
-                        <p className="font-semibold text-slate-900 text-base">{fmtDateSafe(selectedBookingForPayment.checkOut)}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border border-slate-200 shadow-sm bg-gradient-to-br from-white to-slate-50">
-                    <CardHeader className="py-3 bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-100">
-                      <CardTitle className="text-sm font-bold text-emerald-800 flex items-center gap-2">
-                        <User className="h-4 w-4" />
-                        Guest Information
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm pt-4">
-                      <div className="space-y-1.5">
-                        <Label className="text-slate-500 flex items-center gap-1.5"><User className="h-3.5 w-3.5" />Guest Name</Label>
-                        <p className="font-semibold text-slate-900 text-base">{selectedBookingForPayment.guestName}</p>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-slate-500 flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" />Mobile</Label>
-                        <p className="font-semibold text-slate-900 text-base">{selectedBookingForPayment.mobile || "-"}</p>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-slate-500 flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" />Email</Label>
-                        <p className="font-semibold text-slate-900 text-base truncate">{selectedBookingForPayment.email || "-"}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-5 rounded-xl border border-blue-200 shadow-sm">
-                      <Label className="text-blue-700 font-semibold mb-2 flex items-center gap-1.5"><CreditCard className="h-4 w-4" />Total Booking Amount</Label>
-                      <div className="font-bold text-2xl text-blue-900 mt-1">{formatCurrency(selectedBookingForPayment.amount)}</div>
-                    </div>
-                    <div className="bg-gradient-to-br from-emerald-50 to-green-50 p-5 rounded-xl border border-emerald-200 shadow-sm">
-                      <Label className="text-emerald-700 font-semibold mb-2 flex items-center gap-1.5"><CreditCard className="h-4 w-4" />Total Received</Label>
-                      <div className="font-bold text-2xl text-emerald-900 mt-1">{formatCurrency(selectedBookingForPayment.receivedAmount)}</div>
-                    </div>
-                    <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-5 rounded-xl border border-amber-200 shadow-sm">
-                      <Label className="text-amber-700 font-semibold mb-2 flex items-center gap-1.5"><CreditCard className="h-4 w-4" />Pending Amount</Label>
-                      <div className="font-bold text-2xl text-amber-900 mt-1">{formatCurrency(selectedBookingForPayment.amount - selectedBookingForPayment.receivedAmount)}</div>
-                    </div>
-                  </div>
-
-                  <Card className="border border-slate-200 shadow-sm bg-white">
-                    <CardHeader className="py-3 bg-gradient-to-r from-purple-50 to-pink-50 border-b border-purple-100">
-                      <CardTitle className="text-sm font-bold text-purple-800 flex items-center gap-2">
-                        <Receipt className="h-4 w-4" />
-                        Payment Collection Details
-                      </CardTitle>
-                    </CardHeader>
-                    {derivedPaymentRecords.length > 0 ? (
-                      <div className="space-y-3">
-                        {derivedPaymentRecords.map((r, i) => (
-                          <div key={i} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4 border-l-4 border-indigo-500 rounded-lg bg-gradient-to-r from-slate-50 to-white shadow-sm hover:shadow-md transition-shadow">
-                            <div className="space-y-1">
-                              <Label className="text-slate-500 flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" />Payment Date</Label>
-                              <p className="text-sm font-semibold text-slate-900">{fmtDateTimeSafe(r.date)}</p>
-                            </div>
-                            <div className="space-y-1">
-                              <Label className="text-slate-500 flex items-center gap-1.5"><CreditCard className="h-3.5 w-3.5" />Payment Mode</Label>
-                              <p className="text-sm font-semibold text-slate-900">{r.method || "-"}</p>
-                            </div>
-                            <div className="space-y-1">
-                              <Label className="text-slate-500 flex items-center gap-1.5"><Receipt className="h-3.5 w-3.5" />Receipt Number</Label>
-                              <p className="text-sm font-semibold text-slate-900">{r.receiptNumber || "-"}</p>
-                            </div>
-                            <div className="space-y-1">
-                              <Label className="text-slate-500 flex items-center gap-1.5"><User className="h-3.5 w-3.5" />Collected By</Label>
-                              <p className="text-sm font-semibold text-slate-900">{r.collectedBy || "-"}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="py-12 text-center">
-                        <div className="inline-block p-4 bg-slate-100 rounded-full mb-3">
-                          <Receipt className="h-8 w-8 text-slate-400" />
-                        </div>
-                        <p className="text-sm text-slate-600 font-medium">No payment records available for this booking.</p>
-                      </div>
-                    )}
-                  </Card>
-
-                  <div className="flex gap-3 pt-2">
-                    <Button onClick={() => { setShowPaymentDetailsModal(false); setSelectedBookingForPayment(null) }} className="shadow-md">Close</Button>
-                  </div>
-                </div>
-              )}
-            </DialogContent>
-          </Dialog>
 
           {/* Payment Upload Modal */}
           <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
-            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 text-blue-600">
-                  <Upload className="h-5 w-5" />
+            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-6 rounded-lg bg-white border border-[#E7E2D3] shadow-2xl">
+              {/* Top Accent Strip */}
+              <div className="h-1.5 w-full shrink-0 -mt-6 -mx-6 bg-[#1F2430]" />
+
+              <DialogHeader className="pt-2">
+                <DialogTitle className="flex items-center gap-2 text-lg font-bold text-[#1F2430]">
+                  <Upload className="h-5 w-5 text-[#AE8C4A]" />
                   Payment Collection Details
                 </DialogTitle>
               </DialogHeader>
-              <div className="space-y-6 py-4">
+
+              <div className="flex-1 overflow-y-auto space-y-6 py-4 pr-1">
                 {selectedBookingForPayment && (
-                  <div className="bg-blue-50 p-4 rounded-lg space-y-2">
-                    <h3 className="font-semibold text-blue-900">Client Information</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <Label className="text-blue-700">Client Name:</Label>
-                        <p className="font-medium">{selectedBookingForPayment.guestName}</p>
+                  <div className="space-y-6">
+                    {/* Divided Premium Info Bar */}
+                    <div className="flex items-stretch divide-x border border-[#E7E2D3] rounded-lg overflow-hidden bg-white shadow-sm">
+                      <div className="flex-1 p-4 text-center">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#8A8F98]">Guest Name</span>
+                        <p className="mt-1.5 text-sm font-semibold text-[#D6483F]">{selectedBookingForPayment.guestName}</p>
                       </div>
-                      <div>
-                        <Label className="text-blue-700">Mobile No.:</Label>
-                        <p className="font-medium">{selectedBookingForPayment.mobile || "N/A"}</p>
+                      <div className="flex-1 p-4 text-center">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#8A8F98]">Mobile</span>
+                        <p className="mt-1.5 text-sm font-semibold text-[#1F2430]">{selectedBookingForPayment.mobile || "—"}</p>
                       </div>
-                      <div>
-                        <Label className="text-blue-700">Booking Amount:</Label>
-                        <p className="font-medium">{selectedBookingForPayment.amount.toLocaleString()}</p>
+                      <div className="flex-1 p-4 text-center">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#8A8F98]">Booking Amount</span>
+                        <p className="mt-1.5 text-sm font-semibold text-[#1F2430]">₹{Number(selectedBookingForPayment.amount).toLocaleString()}</p>
                       </div>
-                      <div>
-                        <Label className="text-blue-700">Pending Amount:</Label>
-                        <p className="font-medium">{(selectedBookingForPayment.amount - selectedBookingForPayment.receivedAmount).toLocaleString()}</p>
+                      <div className="flex-1 p-4 text-center">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#8A8F98]">Pending Amount</span>
+                        <p className="mt-1.5 text-sm font-semibold text-[#2F6FE0]">
+                          ₹{Number(selectedBookingForPayment.amount - selectedBookingForPayment.receivedAmount).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 border-t border-[#E7E2D3] pt-5">
+                      <h4 className="font-bold text-[#AE8C4A] text-xs uppercase tracking-wider">Payment Input Fields</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="receivedAmount" className="text-xs font-semibold text-slate-700">Received Amount (INR) *</Label>
+                          <Input
+                            id="receivedAmount"
+                            type="number"
+                            min="0.01"
+                            step="any"
+                            placeholder="Enter amount"
+                            className="border-[#E7E2D3] focus-visible:ring-[#AE8C4A]"
+                            value={paymentData.receivedAmount}
+                            onChange={(e) => setPaymentData({ ...paymentData, receivedAmount: e.target.value })}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="paymentMode" className="text-xs font-semibold text-slate-700">Payment Mode *</Label>
+                          <Select
+                            value={paymentData.paymentMode}
+                            onValueChange={(v) => setPaymentData({ ...paymentData, paymentMode: v })}
+                          >
+                            <SelectTrigger id="paymentMode" className="border-[#E7E2D3] focus-visible:ring-[#AE8C4A]">
+                              <SelectValue placeholder="Select payment mode" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-white border-[#E7E2D3]">
+                              <SelectItem value="UPI">UPI</SelectItem>
+                              <SelectItem value="Cash">Cash</SelectItem>
+                              <SelectItem value="Credit Card">Credit Card</SelectItem>
+                              <SelectItem value="Debit Card">Debit Card</SelectItem>
+                              <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                              <SelectItem value="Cheque / DD">Cheque / DD</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="receivedDate" className="text-xs font-semibold text-slate-700">Received Date *</Label>
+                          <Input
+                            id="receivedDate"
+                            type="date"
+                            className="border-[#E7E2D3] focus-visible:ring-[#AE8C4A]"
+                            value={paymentData.receivedDate}
+                            onChange={(e) => setPaymentData({ ...paymentData, receivedDate: e.target.value })}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="receiptNumber" className="text-xs font-semibold text-slate-700">Receipt / Transaction Number *</Label>
+                          <Input
+                            id="receiptNumber"
+                            type="text"
+                            placeholder="Enter receipt/transaction number"
+                            className="border-[#E7E2D3] focus-visible:ring-[#AE8C4A]"
+                            value={paymentData.receiptNumber}
+                            onChange={(e) => setPaymentData({ ...paymentData, receiptNumber: e.target.value })}
+                          />
+                        </div>
+
+                        <div className="space-y-2 md:col-span-2">
+                          <Label htmlFor="paymentCollectedBy" className="text-xs font-semibold text-slate-700">Payment Collected By</Label>
+                          <Input
+                            id="paymentCollectedBy"
+                            type="text"
+                            placeholder="Enter collector name"
+                            className="border-[#E7E2D3] focus-visible:ring-[#AE8C4A]"
+                            value={paymentData.paymentCollectedBy}
+                            onChange={(e) => setPaymentData({ ...paymentData, paymentCollectedBy: e.target.value })}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
                 )}
               </div>
-              <DialogFooter className="flex gap-2">
+              <DialogFooter className="flex gap-2 pt-4 border-t border-[#E7E2D3]">
                 <Button
                   variant="outline"
+                  className="border-[#E7E2D3] text-slate-700 hover:bg-[#FBF9F4] font-medium"
                   onClick={() => {
                     setShowPaymentModal(false);
                     setSelectedBookingForPayment(null);
@@ -3633,15 +3872,111 @@ export default function VillaRaagBookingPage() {
                 </Button>
                 <Button
                   onClick={handlePaymentSubmit}
-                  disabled={!paymentData.receivedAmount || !paymentData.paymentMode || !paymentData.receivedDate || !paymentData.receiptNumber}
-                  className="bg-blue-600 hover:bg-blue-700"
+                  disabled={!paymentData.receivedAmount || !paymentData.paymentMode || !paymentData.receivedDate || !paymentData.receiptNumber || isSubmitting}
+                  className="bg-[#1F2430] hover:bg-[#AE8C4A] text-white font-semibold shadow-sm transition-all"
                 >
                   <Upload className="h-4 w-4 mr-2" />
-                  Submit Payment
+                  {isSubmitting ? "Submitting..." : "Submit Payment"}
                 </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
+
+          {selectedBookingForCollection && (
+            <CollectionModal
+              isOpen={showCollectionPopup}
+              onClose={() => {
+                setShowCollectionPopup(false)
+                setSelectedBookingForCollection(null)
+                setCollectionReceipts([])
+                setGasDetails(null)
+              }}
+              bookingId={selectedBookingForCollection.bookingId || selectedBookingForCollection.id}
+              guestName={selectedBookingForCollection.guestName}
+              checkInLabel={fmtDateSafe(selectedBookingForCollection.checkIn)}
+              mobile={
+                gasDetails?.mobile !== undefined && gasDetails.mobile !== null
+                  ? gasDetails.mobile
+                  : selectedBookingForCollection.mobile
+              }
+              folio={
+                gasDetails?.folio ||
+                selectedBookingForCollection.invoiceNumber ||
+                "VRV" + selectedBookingForCollection.bookingId
+              }
+              receipts={
+                collectionReceipts.length > 0
+                  ? collectionReceipts.map((r: any, idx: number) => {
+                    const totalAmt = Number(r.received_amount) || 0
+                    const recAmt = Number(r.reconciled_amount) || 0
+
+                    let reconciledAmount = null
+                    let folioAmount = 0
+                    let orderAmount = 0
+
+                    if (recAmt === totalAmt) {
+                      reconciledAmount = totalAmt
+                      folioAmount = totalAmt
+                      orderAmount = 0
+                    } else if (recAmt === 0) {
+                      reconciledAmount = null
+                      folioAmount = totalAmt
+                      orderAmount = 0
+                    } else {
+                      reconciledAmount = recAmt
+                      folioAmount = 0
+                      orderAmount = totalAmt
+                    }
+
+                    const isAgency =
+                      (selectedBookingForCollection.source || "").toLowerCase().includes("agent") ||
+                      (selectedBookingForCollection.source || "").toLowerCase().includes("ota") ||
+                      (selectedBookingForCollection.source || "").toLowerCase().includes("engine") ||
+                      (selectedBookingForCollection.sourceType || "").toLowerCase().includes("agent") ||
+                      (selectedBookingForCollection.sourceType || "").toLowerCase().includes("ota")
+
+                    return {
+                      id: String(r.id || idx + 1),
+                      receiptNo: r.receipt_number && r.receipt_number !== "-" ? r.receipt_number : null,
+                      date: r.payment_received_date ? fmtDateTimeSafe(r.payment_received_date) : "",
+                      createdAt: r.timestamp ? fmtDateTimeSafe(r.timestamp) : (r.created_at ? fmtDateTimeSafe(r.created_at) : ""),
+                      mode: r.payment_mode || "Unknown",
+                      paymentType: r.payment_type !== undefined ? r.payment_type : "-",
+                      status: r.received_status || "RECEIVED",
+                      totalAmount: totalAmt,
+                      reconciledAmount,
+                      folioAmount,
+                      orderAmount,
+                      currency: r.currency || "INR",
+                      paidBy: r.name || selectedBookingForCollection.guestName,
+                      paidByType: isAgency ? "AGENCY" : "GUEST",
+                      createdBy: r.payment_collected_by || null,
+                      bankOrCard: null,
+                      notes: r.remarks && r.remarks !== "NULL" ? r.remarks : null,
+                    }
+                  })
+                  : (selectedBookingForCollection.paymentRecords || []).map((r: any, idx: number) => ({
+                    id: String(idx + 1),
+                    receiptNo: r.receiptNumber || `RCPT-${idx + 1}`,
+                    date: r.date ? new Date(r.date).toLocaleString() : "",
+                    createdAt: r.date ? new Date(r.date).toLocaleString() : "",
+                    mode: r.method || "Unknown",
+                    paymentType: "-",
+                    status: "RECEIVED",
+                    totalAmount: Number(r.amount) || 0,
+                    reconciledAmount: Number(r.amount) || 0,
+                    folioAmount: Number(r.amount) || 0,
+                    orderAmount: 0,
+                    currency: "INR",
+                    paidBy: selectedBookingForCollection.guestName,
+                    paidByType: "GUEST",
+                    createdBy: r.collectedBy || "System",
+                    bankOrCard: null,
+                    notes: r.note || null,
+                  }))
+              }
+            />
+          )}
         </div>
       </div>
     </div>
