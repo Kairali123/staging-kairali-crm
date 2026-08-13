@@ -25,6 +25,8 @@ evidence rather than reopening resolved changelog items.
 2026-08-13T10:38Z: Database control workspace created. GitHub issues #1–#11 now hold
 the first P0/P1/P2 queue and daily report, all assigned to Satyam. The sanitized launch
 summary was emailed to the governance owner's authenticated mailbox. Governance files
-were pushed on `codex/database-delivery-control` at `3ce22d5`; issue #11 tracks review
-enforcement and recurring direct-mail configuration. First audit batch is complete;
-DB-003 remains live for the remaining reconciliation.
+were pushed on `codex/database-delivery-control`; draft PR #12 is mergeable and requests
+Satyam's review. Issue #11 tracks review enforcement and recurring direct-mail
+configuration. The PR's Vercel context is currently unstable because the main Vercel
+status failed at a team-invite target, while Preview Comments passed. First audit batch
+is complete; DB-003 remains live for the remaining reconciliation.
