@@ -8,9 +8,10 @@ Operate the CARMA-DB autonomous database delivery structure for Satyam.
 
 ## NEXT ACTION
 
-Publish the CARMA-DB control plane through draft PR #12, run its first merged GitHub
-workflow wave, and use the first 30-case preflight to advance the 51-system discovery
-inventory without production database mutations.
+Obtain Satyam's accountable-owner review and Sunaj's independent-verifier review on
+ready PR #12, merge after approval, run its first GitHub workflow wave, and use the
+first 30-case preflight to advance the 51-system discovery inventory without production
+database mutations.
 
 ## EXIT EVIDENCE
 
@@ -32,4 +33,6 @@ are live. Existing automation `crm-database-daily-control` now runs three weekda
 at 09:15, 13:15, and 17:15 IST, with an 8-working-hour decision SLA and at most one
 material email per local day. Satyam is accountable; Sunaj is independent verifier;
 Abhilash receives material/final escalations. DB-003 remains open in the register while
-DB-012 is the single live control task.
+DB-012 is the single live control task. PR #12 is ready, mergeable, and requests reviews
+from both Satyam and Sunaj; the known Vercel team-invite status remains unrelated and
+failed.
