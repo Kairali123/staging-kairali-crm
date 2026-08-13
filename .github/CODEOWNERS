@@ -1,0 +1,15 @@
+# Governance controls must be reviewed by the governance owner.
+/.github/ @AbhilashKairali
+/AGENTS.md @AbhilashKairali
+/AI-HUMAN.md @AbhilashKairali
+/AUTOMATIONS.md @AbhilashKairali
+/GATES.md @AbhilashKairali
+/PARAMETERS.md @AbhilashKairali
+/TOOLBOX.md @AbhilashKairali
+
+# Database-bearing code and control documents are jointly owned. GitHub requires an
+# independent approval for an author's own PR when branch protection is enabled.
+/lib/db.ts @chauhansatyam @AbhilashKairali
+/app/api/ @chauhansatyam @AbhilashKairali
+/scratch/ @chauhansatyam @AbhilashKairali
+/docs/DATABASE_*.md @chauhansatyam @AbhilashKairali

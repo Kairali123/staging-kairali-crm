@@ -1,0 +1,12 @@
+# TOOLBOX
+
+An available tool is not automatically an allowed tool. Add a row before relying on it.
+
+| Tool | Purpose | Allowed actions | Approval needed | Required proof |
+|---|---|---|---|---|
+| Local repository and Git | Inspect, reproduce, edit, test, and prepare database fixes | Read files/history; create issue-scoped branches; edit approved scope; run non-destructive checks; commit to a non-`main` branch | Direct push to `main`, history rewrite, deletion, or work outside the live issue requires Abhilash | Diff, command output, commit SHA, and clean scope check |
+| GitHub | Public accountability queue and reviewed delivery | Create/update database issues, daily reports, branches, draft PRs, comments, and review requests; assign Satyam; mention governance owner | Merge, close without exit proof, change repository access/settings, or bypass protection requires Abhilash | Issue/PR URL, reviewer, checks, merge/deployment state |
+| Codex, Claude, or another AI selected by Satyam | Accelerate diagnosis, implementation, tests, and review preparation | Analyze sanitized artifacts; make issue-scoped local changes; propose tests and rollback | Sending secrets, personal/customer data, production extracts, or granting external access is forbidden; consequential changes still follow gates | Prompt/task scope, diff, tests, and Satyam's human verification |
+| Database client or administration console | Diagnose and verify database behavior | Read-only metadata/health checks and sanitized reproduction using approved credentials | Any schema write, production data write, privilege change, credential rotation, or destructive query requires Gate 4 approval | Target/environment, redacted command class, before/after counts, backup, verification, rollback |
+| Email or mail connector | Send the daily digest and urgent escalation | Draft from the approved template; send only to the approved distribution list | Sender, recipients, trigger, and credentials must be recorded before first send or automation | Sent-message ID/time and linked GitHub daily report |
+| Vercel/secret store | Maintain runtime database configuration | Read configuration metadata; update a value only as part of an approved credential/config issue | Every secret change and deployment requires Abhilash; never copy values into Git or chat | Environment name, variable name only, deployment ID, smoke test; no value |

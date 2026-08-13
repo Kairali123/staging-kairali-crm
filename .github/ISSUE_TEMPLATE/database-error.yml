@@ -1,0 +1,109 @@
+name: Database error
+description: Publish and drive one sanitized database error to verified closure.
+title: "[DB][P?] "
+labels:
+  - bug
+assignees:
+  - chauhansatyam
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include credentials, connection strings, tokens, customer identifiers, raw production rows, recordings, or unrestricted SQL output. Sanitize evidence before publishing.
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - P0 — security exposure, data loss/corruption, database unavailable, or critical production flow stopped
+        - P1 — major production failure or high-risk defect without a safe workaround
+        - P2 — limited impact or a safe workaround exists
+        - P3 — improvement, cleanup, observability, or preventive work
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options:
+        - Production
+        - Preview / staging
+        - Local development
+        - Unknown — needs confirmation
+    validations:
+      required: true
+  - type: input
+    id: detected
+    attributes:
+      label: Detection time (IST)
+      placeholder: YYYY-MM-DD HH:MM IST
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact and affected flow
+      description: State who or what is affected without naming customers.
+    validations:
+      required: true
+  - type: textarea
+    id: signature
+    attributes:
+      label: Sanitized error signature
+      description: Use a stable error class/message fragment, route or job, and correlation/timestamp. Remove sensitive values.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction or observation steps
+      description: Give the smallest safe steps and expected versus actual behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized evidence
+      description: Link safe logs, screenshots, tests, or code locations. Explain any missing evidence.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Suspected database scope
+      description: Name code paths and table/object names only when safe; never paste production data.
+    validations:
+      required: true
+  - type: textarea
+    id: next_action
+    attributes:
+      label: Owner, next action, and blocker
+      value: |
+        Owner: @chauhansatyam
+        Next action:
+        Blocker: None
+    validations:
+      required: true
+  - type: textarea
+    id: ai_plan
+    attributes:
+      label: AI assistance and human verification plan
+      description: State which AI may be used, what it will receive, and how Satyam will verify its output.
+    validations:
+      required: true
+  - type: textarea
+    id: rollback
+    attributes:
+      label: Proposed fix, verification, and rollback
+      description: Complete before moving the issue to REVIEW. Gate 4 applies to production-impacting changes.
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Publication safety
+      options:
+        - label: I sanitized this issue and included no secret, customer data, production row data, recording, or unrestricted SQL output.
+          required: true
+        - label: I will not execute a production data/schema/privilege/credential/environment change without Gate 4 approval.
+          required: true
