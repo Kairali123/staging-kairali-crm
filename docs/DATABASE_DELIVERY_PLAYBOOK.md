@@ -1,5 +1,11 @@
 # Database Delivery Playbook
 
+This playbook is governed by the same autonomous structure used for Sunaj's CARMA
+programme. The database adaptation is CARMA-DB; see
+[`DATABASE_CARMA.md`](DATABASE_CARMA.md),
+[`DATABASE_ASSET_DISCOVERY.md`](DATABASE_ASSET_DISCOVERY.md), and
+[`DATABASE_CONTROL_AUTOPILOT.md`](DATABASE_CONTROL_AUTOPILOT.md).
+
 ## Mandate
 
 Satyam Kumar (`@chauhansatyam`) owns fast delivery of all Kairali CRM database work.
@@ -54,10 +60,12 @@ the daily report with:
 - AI assistance used and the human verification performed;
 - the first task for the next working period.
 
-He then mentions `@AbhilashKairali`. The active Codex automation runs on working days
-at 18:00 Asia/Kolkata, updates the sanitized GitHub daily report, and emails the
-established Satyam/owner/sysadmin loop through the connected owner mailbox. The private
-recipient list and mail credential stay outside Git.
+The active Codex automation runs on working days at 09:15, 13:15, and 17:15
+Asia/Kolkata. Each wave refreshes the sanitized Dashboard, Batch, Focus, and daily
+issues. It emails the established Satyam/owner/sysadmin loop through the connected
+owner mailbox at most once per local day, and only for a material decision,
+verification request, blocker, status change, or completion. Routine wave progress
+stays in GitHub. The private recipient list and mail credential remain outside Git.
 
 ## Fast fix lane
 

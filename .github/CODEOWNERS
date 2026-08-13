@@ -13,3 +13,8 @@
 /app/api/ @chauhansatyam @AbhilashKairali
 /scratch/ @chauhansatyam @AbhilashKairali
 /docs/DATABASE_*.md @chauhansatyam @AbhilashKairali
+
+# CARMA-DB uses Satyam as accountable owner and Sunaj as independent verifier.
+/database-control/ @chauhansatyam @Kairali123 @AbhilashKairali
+/scripts/database-control-*.mjs @chauhansatyam @Kairali123 @AbhilashKairali
+/.github/workflows/database-control-autopilot.yml @chauhansatyam @Kairali123 @AbhilashKairali

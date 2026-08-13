@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "program": "CARMA-DB",
+  "sprintStartedAt": "2026-08-13T00:00:00+05:30",
+  "phase": "asset_discovery",
+  "activeCaseId": "DBS-D4490043",
+  "completedSystemIds": [],
+  "deferredSystemIds": [],
+  "learnedRules": [
+    "A historical completion statement is evidence to reconcile, not independent proof of the result.",
+    "Never rotate a credential blindly when an earlier rotation is reported; first verify current use and old-credential rejection without exposing either value."
+  ],
+  "lastInventoryRunAt": null,
+  "lastPlanRunAt": "2026-08-13T11:29:33.415Z",
+  "lastEmailLocalDate": "2026-08-13"
+}

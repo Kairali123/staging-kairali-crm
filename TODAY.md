@@ -2,4 +2,4 @@
 
 | ID | Task | Bounded batch | Next action | Status |
 |---|---|---|---|---|
-| DB-003 | Publish the current database error inventory | First batch: 8 active work obligations plus daily report; credential/email evidence reconciled | Reconcile the next bounded set of current data-integrity/query and runtime findings; Satyam updates GitHub #3 by 18:00 IST | IN PROGRESS — first batch and daily loop checkpointed |
+| DB-012 | Operate CARMA-DB autonomous database delivery | Initial registry: 51 systems, 126 assets, 30-case preflight; Focus #14, Dashboard #15, Batch #16; three-wave automation active | Publish the control plane in PR #12, obtain independent review, and run the first merged workflow wave | IN PROGRESS — CONTROL PLANE ACTIVE; MERGE/RUN PENDING |

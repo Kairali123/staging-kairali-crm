@@ -2,31 +2,34 @@
 
 ## LIVE TASK
 
-**DB-003**
+**DB-012**
 
-Publish and reconcile the current database error inventory.
+Operate the CARMA-DB autonomous database delivery structure for Satyam.
 
 ## NEXT ACTION
 
-Reconcile known database findings from `README.md`, `ECOSYSTEM.md`, and
-`docs/REVIEW_CHANGELOG.md` in a second bounded batch, focusing on current data
-integrity/query correctness and database-backed runtime failures. Link completed
-evidence rather than reopening resolved changelog items.
+Publish the CARMA-DB control plane through draft PR #12, run its first merged GitHub
+workflow wave, and use the first 30-case preflight to advance the 51-system discovery
+inventory without production database mutations.
 
 ## EXIT EVIDENCE
 
-- GitHub issue URLs for every active finding.
-- Each issue has severity, reproduction/evidence, next action, owner, and closure proof.
-- No secret, personal/customer data, or production row data is published.
-- The daily report links the resulting queue.
+- All 51 registered systems have evidence for all eight discovery categories and
+  Satyam's completeness attestation.
+- Dashboard #15, Batch #16, and per-focus issues stay synchronized with the registry.
+- Higher-risk changes have Sunaj's independent verification, regression proof, and a
+  rollback record.
+- No restricted data is published and no production database mutation is automated.
+- Satyam gives final CARMA-DB approval and the final digest is delivered.
 
 ## LAST CHECKPOINT
 
-2026-08-13T11:14Z: Existing records resolved both Satyam addresses and the established
-sysadmin loop. The 31 July sysadmin report says credential rotation, Vercel updates,
-deployment and smoke checks completed; independent old-credential rejection/current-
-runtime proof remains open in #1. The corrected handoff was sent to Satyam and Sunaj.
-Working-day 18:00 IST automation `crm-database-daily-control` is ACTIVE. Issues #1, #2,
-#3 and #11 were corrected accordingly. Draft PR #12 still requests Satyam's review;
-repository ruleset enforcement and first scheduled-digest receipt remain open. DB-003
-remains live for the second audit reconciliation batch.
+2026-08-13T11:25Z: Owner selected the same autonomous structure used for Sunaj. The
+CARMA-DB control plane discovered 51 repository-visible systems, 126 metadata-only
+assets, 75 candidate objects, and 17 write-capable systems; validation passed with
+production database writes disabled. GitHub Focus #14, Dashboard #15, and Batch #16
+are live. Existing automation `crm-database-daily-control` now runs three weekday waves
+at 09:15, 13:15, and 17:15 IST, with an 8-working-hour decision SLA and at most one
+material email per local day. Satyam is accountable; Sunaj is independent verifier;
+Abhilash receives material/final escalations. DB-003 remains open in the register while
+DB-012 is the single live control task.
