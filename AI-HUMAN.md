@@ -39,9 +39,10 @@ in this folder is authoritative.
 3. Work severity-first: P0, then P1, P2, and P3. Abhilash may override priority.
 4. Before sign-off, update every issue touched that day and the daily report with
    opened, fixed, reviewed, verified, blocked, and carried-forward counts.
-5. Notify `@AbhilashKairali` on the daily report. GitHub notifications are the initial
-   email loop; direct-email automation remains disabled until its recipient list,
-   sender, trigger time, and credentials are approved outside Git.
+5. Notify `@AbhilashKairali` on the daily report. The ACTIVE working-day automation in
+   `AUTOMATIONS.md` sends the sanitized 18:00 IST digest through the connected owner
+   mailbox to the established Satyam/owner/sysadmin loop. Recipients and credentials
+   remain outside Git.
 
 ## Prevent drift and forgetting
 

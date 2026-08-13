@@ -22,11 +22,11 @@ evidence rather than reopening resolved changelog items.
 
 ## LAST CHECKPOINT
 
-2026-08-13T10:38Z: Database control workspace created. GitHub issues #1–#11 now hold
-the first P0/P1/P2 queue and daily report, all assigned to Satyam. The sanitized launch
-summary was emailed to the governance owner's authenticated mailbox. Governance files
-were pushed on `codex/database-delivery-control`; draft PR #12 is mergeable and requests
-Satyam's review. Issue #11 tracks review enforcement and recurring direct-mail
-configuration. The PR's Vercel context is currently unstable because the main Vercel
-status failed at a team-invite target, while Preview Comments passed. First audit batch
-is complete; DB-003 remains live for the remaining reconciliation.
+2026-08-13T11:14Z: Existing records resolved both Satyam addresses and the established
+sysadmin loop. The 31 July sysadmin report says credential rotation, Vercel updates,
+deployment and smoke checks completed; independent old-credential rejection/current-
+runtime proof remains open in #1. The corrected handoff was sent to Satyam and Sunaj.
+Working-day 18:00 IST automation `crm-database-daily-control` is ACTIVE. Issues #1, #2,
+#3 and #11 were corrected accordingly. Draft PR #12 still requests Satyam's review;
+repository ruleset enforcement and first scheduled-digest receipt remain open. DB-003
+remains live for the second audit reconciliation batch.

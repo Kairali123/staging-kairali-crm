@@ -54,9 +54,10 @@ the daily report with:
 - AI assistance used and the human verification performed;
 - the first task for the next working period.
 
-He then mentions `@AbhilashKairali`. GitHub notifications are the initial email loop.
-Direct mail remains blocked until the sender, private recipient list, delivery time,
-and credential are approved and stored outside Git.
+He then mentions `@AbhilashKairali`. The active Codex automation runs on working days
+at 18:00 Asia/Kolkata, updates the sanitized GitHub daily report, and emails the
+established Satyam/owner/sysadmin loop through the connected owner mailbox. The private
+recipient list and mail credential stay outside Git.
 
 ## Fast fix lane
 
@@ -110,4 +111,5 @@ request, at least one approval, approval from Code Owners, dismissal of stale ap
 and no direct/bypass push for Satyam. Do not enable a required status check until that
 check is known to pass reliably in this repository.
 
-The direct-email automation also remains intentionally inactive; see `AUTOMATIONS.md`.
+The direct-email automation is active; see `AUTOMATIONS.md`. Receipt of its first
+scheduled digest and the repository enforcement rules remain open in GitHub issue #11.
