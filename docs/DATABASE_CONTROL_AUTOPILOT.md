@@ -46,8 +46,9 @@ Chat memory is not the source of truth.
 2. **Prove completeness:** update the eight-category coverage matrix and preserve
    unresolved/checked-none evidence.
 3. **Observe:** read issues, PRs, runtime/test evidence, recurrence and prior decisions.
-4. **Prepare:** run three weekday waves of 10 isolated cases and assemble up to 10
-   evidence-ready Satyam decisions.
+4. **Prepare:** run three weekday waves and advance at least 25 isolated ready cases per
+   working day. This is a floor; Satyam may expand the case set and take any number of
+   evidence-ready decisions.
 5. **Act:** make only policy-authorized repository changes; otherwise prepare a draft,
    migration plan or precise decision packet.
 6. **Verify:** run focused regression and original-failure-path checks; route higher

@@ -2,9 +2,10 @@
 
 CARMA-DB is the governed completion loop for reviewing every Kairali CRM database
 consumer, query path, object and operational control individually without processing
-them sequentially. CARMA-DB AI advances up to 30 isolated cases through three weekday
-waves. Satyam receives consolidated batches of up to 10 decisions. AI cannot silently
-skip a path or approve Satyam's final gate.
+them sequentially. CARMA-DB AI exposes the full ready set through three weekday waves.
+At least 25 ready cases advance each working day. This is a minimum, not a cap: Satyam
+may expand the working set and take any number of additional ready decisions. AI cannot
+silently skip a path or approve Satyam's final gate.
 
 ## Roles
 
@@ -72,8 +73,9 @@ requires Abhilash's recorded approval. Closure requires linked evidence and roll
 
 ## Parallel work and communication
 
-CARMA-DB runs three weekday waves of 10 cases. The full inventory is re-reconciled each
-day; routine AI work never waits for one blocked system. Satyam receives one decision
+CARMA-DB runs three weekday waves and advances at least 25 ready cases per working day,
+with no upper workload or decision cap for Satyam. The full inventory is re-reconciled
+each day; routine AI work never waits for one blocked system. Satyam receives one decision
 batch, not one interruption per route. The decision SLA is eight working hours. After
 24 hours, independent technical work continues and one material escalation may be sent.
 

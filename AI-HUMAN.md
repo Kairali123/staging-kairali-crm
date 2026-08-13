@@ -37,8 +37,9 @@ in this folder is authoritative.
 1. Treat `database-control/policy.json`, `database-control/state.json`,
    `database-control/asset-registry.json`, and `public/database-control-plan.json` as
    the machine-readable control plane.
-2. Run three weekday waves at 09:15, 13:15, and 17:15 Asia/Kolkata. Each wave may
-   preflight up to 10 cases; batch no more than 10 human decisions.
+2. Run three weekday waves at 09:15, 13:15, and 17:15 Asia/Kolkata. Advance at least
+   25 ready database cases across each working day. This is a floor, not a cap: Satyam
+   may expand the working set and take any number of additional ready decisions.
 3. Inventory all eight asset/control categories before promoting a repair. Continue
    safe AI discovery, evidence, repository-only fixes, tests, monitoring, and GitHub
    updates without waiting for routine input.

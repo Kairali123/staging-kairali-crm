@@ -10,8 +10,8 @@ Operate the CARMA-DB autonomous database delivery structure for Satyam.
 
 Obtain Satyam's accountable-owner review and Sunaj's independent-verifier review on
 ready PR #12, merge after approval, run its first GitHub workflow wave, and use the
-first 30-case preflight to advance the 51-system discovery inventory without production
-database mutations.
+the uncapped ready-case preflight to advance at least 25 cases per working day across
+the 51-system discovery inventory without production database mutations.
 
 ## EXIT EVIDENCE
 
@@ -36,3 +36,10 @@ Abhilash receives material/final escalations. DB-003 remains open in the registe
 DB-012 is the single live control task. PR #12 is ready, mergeable, and requests reviews
 from both Satyam and Sunaj; the known Vercel team-invite status remains unrelated and
 failed.
+
+2026-08-13 owner correction: the earlier ten-case and ten-decision limits are removed.
+At least 25 ready database cases must advance per working day; Satyam may expand the
+case set and take additional ready decisions without an upper limit. Eight reconciled
+database work obligations are currently individual issues; remaining audit candidates
+must be reconciled under #2 rather than falsely treating every registered system as an
+error.

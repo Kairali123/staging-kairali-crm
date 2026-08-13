@@ -31,6 +31,11 @@ if (!policy?.roles?.independentVerifier?.github) errors.push("independent verifi
 if (policy?.automaticRepositoryWriteControls?.productionDatabaseWriteAllowed !== false) {
   errors.push("production database writes must remain disabled");
 }
+if (policy?.minimumDailyCases < 25) errors.push("minimum daily database cases must be at least 25");
+if (policy?.caseLimit !== null) errors.push("Satyam's database case count must not have an upper limit");
+if (policy?.humanDecisionLimit !== null) errors.push("Satyam's decision count must not have an upper limit");
+if (policy?.ownerMayExpandCaseCount !== true) errors.push("Satyam must be allowed to expand the case count");
+if (policy?.ownerMayTakeAdditionalDecisions !== true) errors.push("Satyam must be allowed to take additional decisions");
 if (!Array.isArray(registry?.systems) || registry.systems.length === 0) errors.push("registry has no systems");
 if (!Array.isArray(registry?.assets) || registry.assets.length === 0) errors.push("registry has no assets");
 
@@ -66,6 +71,12 @@ for (const forbidden of [/mysql:\/\//i, /DB_PASSWORD\s*=/i, /BEGIN (?:RSA |OPENS
 }
 
 if (plan?.controls?.productionDatabaseWritesAllowed !== false) errors.push("plan must keep production writes disabled");
+if (plan?.controls?.minimumDailyCases < 25) errors.push("plan minimum daily cases must be at least 25");
+if (plan?.controls?.caseLimit !== null) errors.push("plan must not impose a case limit on Satyam");
+if (plan?.controls?.humanDecisionLimit !== null) errors.push("plan must not impose a decision limit on Satyam");
+if ((plan?.preflight?.length || 0) < Math.min(registry?.summary?.seenSystems || 0, policy?.minimumDailyCases || 25)) {
+  errors.push("plan does not expose the minimum ready-case working set");
+}
 if (plan?.inventory?.seenSystems !== registry?.summary?.seenSystems) errors.push("plan and registry system counts differ");
 if (publicPlan?.inventory?.seenSystems !== registry?.summary?.seenSystems) errors.push("public plan and registry system counts differ");
 if (publicRegistry?.summary?.seenSystems !== registry?.summary?.seenSystems) errors.push("public registry and private registry system counts differ");

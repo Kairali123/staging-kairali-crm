@@ -36,7 +36,7 @@ const seenSystems = registry.systems
   .sort((left, right) => right.riskScore - left.riskScore || left.sourcePath.localeCompare(right.sourcePath));
 
 const discoveryComplete = seenSystems.filter(system => system.discoveryComplete);
-const preflight = seenSystems.slice(0, policy.dailyPreflightTarget).map(system => ({
+const preflight = seenSystems.map(system => ({
   systemId: system.systemId,
   sourcePath: system.sourcePath,
   company: system.company,
@@ -49,7 +49,6 @@ const preflight = seenSystems.slice(0, policy.dailyPreflightTarget).map(system =
 }));
 const humanDecisionBatch = seenSystems
   .filter(system => ["ready_for_satyam", "verification_required", "blocked"].includes(system.decisionStatus))
-  .slice(0, policy.maxActiveHumanCases)
   .map(system => ({
     systemId: system.systemId,
     sourcePath: system.sourcePath,
@@ -101,12 +100,16 @@ const plan = {
   sprint: {
     expectedFirstPassWorkingDays: policy.sprintWorkingDays,
     workWavesPerDay: policy.workWavesPerDay,
-    casesPerWorkWave: policy.casesPerWorkWave,
-    dailyPreflightTarget: policy.dailyPreflightTarget
+    minimumDailyCases: policy.minimumDailyCases,
+    caseLimit: policy.caseLimit,
+    ownerMayExpandCaseCount: policy.ownerMayExpandCaseCount
   },
   controls: {
-    maxConcurrentAiCases: policy.maxConcurrentAiCases,
-    maxActiveHumanCases: policy.maxActiveHumanCases,
+    minimumDailyCases: policy.minimumDailyCases,
+    caseLimit: policy.caseLimit,
+    humanDecisionLimit: policy.humanDecisionLimit,
+    ownerMayExpandCaseCount: policy.ownerMayExpandCaseCount,
+    ownerMayTakeAdditionalDecisions: policy.ownerMayTakeAdditionalDecisions,
     automaticRepositoryWriteMinimumConfidence: policy.confidence.automaticRepositoryWriteMinimum,
     productionDatabaseWritesAllowed: policy.automaticRepositoryWriteControls.productionDatabaseWriteAllowed
   },

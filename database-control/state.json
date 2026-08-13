@@ -11,6 +11,6 @@
     "Never rotate a credential blindly when an earlier rotation is reported; first verify current use and old-credential rejection without exposing either value."
   ],
   "lastInventoryRunAt": null,
-  "lastPlanRunAt": "2026-08-13T11:29:33.415Z",
+  "lastPlanRunAt": "2026-08-13T11:46:49.493Z",
   "lastEmailLocalDate": "2026-08-13"
 }

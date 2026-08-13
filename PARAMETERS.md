@@ -11,7 +11,7 @@
 | Out of scope | Unrelated application work; production data/schema/credential changes without the applicable gate; secrets or customer data in Git, email, or AI prompts |
 | Preferred brain | Codex or Claude |
 | Task selection | Satyam may promote the highest-severity ready database issue; Abhilash may reprioritize or stop work |
-| Batch cap | Three weekday waves × 10 technical cases; no more than 10 consolidated human decisions |
+| Minimum throughput | Advance at least 25 ready database cases per working day across three waves; no upper case or decision limit for Satyam |
 | Unattended mode | Disabled unless an approved `AUTOMATIONS.md` row is ACTIVE |
 | External actions | Require authority recorded in `GATES.md`, `DECISIONS.md`, or the live task |
 | Checkpoint rule | After every batch, material state change, and before ending a session |
