@@ -6,6 +6,7 @@
     "build": "next build",
     "database:control:inventory": "node scripts/database-control-inventory.mjs",
     "database:control:plan": "node scripts/database-control-plan.mjs",
+    "database:control:wave": "node scripts/database-control-wave.mjs",
     "database:control:validate": "node scripts/database-control-validate.mjs",
     "dev": "next dev",
     "lint": "next lint",

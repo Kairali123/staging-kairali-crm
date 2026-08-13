@@ -118,6 +118,16 @@ const plan = {
   preflight,
   humanDecisionBatch,
   activeCase: active,
+  dailyProgress: state.dailyProgress || {
+    localDate: null,
+    minimumTarget: policy.minimumDailyCases,
+    advancedCount: 0,
+    minimumMet: false,
+    remainingToMinimum: policy.minimumDailyCases,
+    caseLimit: policy.caseLimit,
+    ownerMayExpandCaseCount: policy.ownerMayExpandCaseCount,
+    advancedSystemIds: []
+  },
   communication: policy.communication
 };
 

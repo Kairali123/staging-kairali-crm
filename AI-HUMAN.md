@@ -24,8 +24,8 @@ in this folder is authoritative.
 3. Reproduce the error, state the root-cause hypothesis, and choose the smallest
    reversible fix. Satyam may use Kairali's AI or his own AI, but remains accountable
    for every generated change and every factual claim.
-4. Keep each batch within the cap in `PARAMETERS.md` and keep one issue per branch/PR
-   unless the issue explicitly approves a bounded batch.
+4. Meet the minimum throughput in `PARAMETERS.md`; Satyam may expand the working set.
+   Keep one issue per branch/PR unless the issue explicitly approves a bounded batch.
 5. Record a new idea in `OPEN_REGISTER.md`; do not execute it mid-task.
 6. Use only tools and actions allowed by `TOOLBOX.md` and `GATES.md`.
 7. After each batch or state change, update the GitHub issue, cursor, today table, and

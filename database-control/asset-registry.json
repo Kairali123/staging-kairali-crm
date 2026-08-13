@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "program": "CARMA-DB",
-  "generatedAt": "2026-08-13T11:46:48.587Z",
-  "sourceCommit": "862113a5bcd006b0b7719c4be0acf4b26a026ad7",
+  "generatedAt": "2026-08-13T12:03:37.301Z",
+  "sourceCommit": "d941c1c03c34aebe004486fc9f3d7864cbf7e50e",
   "evidenceBoundary": "Repository-visible metadata only. No live rows, credentials, connection strings or unrestricted SQL are stored.",
   "coverageCategories": [
     "consumer",
@@ -36,7 +36,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-2D537A92",
         "DBA-4EDF7AD6",
@@ -83,7 +83,7 @@
       "ownerCompletenessAttested": false,
       "decisionStatus": "ai_discovery_required",
       "assignedTo": "CARMA-DB AI",
-      "nextAction": "Complete automated evidence packet before asking Satyam",
+      "nextAction": "Collect approved evidence for schema_keys_relationships",
       "backupStatus": "unverified",
       "rollbackStatus": "unverified",
       "regressionStatus": "not_run",
@@ -98,8 +98,46 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/actions/crmData.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/actions/crmData.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
+        },
+        {
+          "timestamp": "2026-08-13T12:01:02.139Z",
+          "type": "repository_preflight_advanced",
+          "evidence": "Prepared a sanitized repository evidence packet for DBS-4A39C82C; live control categories remain explicitly unverified"
+        },
+        {
+          "timestamp": "2026-08-13T12:03:35.798Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/actions/crmData.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
-      ]
+      ],
+      "preflightStatus": "repository_evidence_packet_ready",
+      "lastAdvancedAt": "2026-08-13T12:01:02.139Z",
+      "lastAdvancedLocalDate": "2026-08-13",
+      "preflightEvidence": {
+        "sourceCommit": "d941c1c03c34aebe004486fc9f3d7864cbf7e50e",
+        "sourcePath": "app/actions/crmData.ts",
+        "methods": [],
+        "operationClasses": [
+          "select"
+        ],
+        "writeCapable": false,
+        "repositoryVisibleObjects": [
+          "ai_voice_leads_received",
+          "ai_voice_leads_sent"
+        ],
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ],
+        "evidenceBoundary": "Repository metadata only; no rows, credentials, connection strings or unrestricted SQL"
+      }
     },
     {
       "systemId": "DBS-D4490043",
@@ -114,7 +152,7 @@
       "writeCapable": true,
       "riskClass": "high",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-2BBD17EA",
         "DBA-7AB65B20"
@@ -159,7 +197,7 @@
       "ownerCompletenessAttested": false,
       "decisionStatus": "ai_discovery_required",
       "assignedTo": "CARMA-DB AI",
-      "nextAction": "Complete automated evidence packet before asking Satyam",
+      "nextAction": "Collect approved evidence for schema_keys_relationships",
       "backupStatus": "unverified",
       "rollbackStatus": "unverified",
       "regressionStatus": "not_run",
@@ -174,8 +212,45 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/account-tracker/db-init.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/account-tracker/db-init.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
+        },
+        {
+          "timestamp": "2026-08-13T12:01:02.139Z",
+          "type": "repository_preflight_advanced",
+          "evidence": "Prepared a sanitized repository evidence packet for DBS-D4490043; live control categories remain explicitly unverified"
+        },
+        {
+          "timestamp": "2026-08-13T12:03:35.798Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/account-tracker/db-init.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
-      ]
+      ],
+      "preflightStatus": "repository_evidence_packet_ready",
+      "lastAdvancedAt": "2026-08-13T12:01:02.139Z",
+      "lastAdvancedLocalDate": "2026-08-13",
+      "preflightEvidence": {
+        "sourceCommit": "d941c1c03c34aebe004486fc9f3d7864cbf7e50e",
+        "sourcePath": "app/api/account-tracker/db-init.ts",
+        "methods": [],
+        "operationClasses": [
+          "schema"
+        ],
+        "writeCapable": true,
+        "repositoryVisibleObjects": [
+          "ktahv_account_tracker"
+        ],
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ],
+        "evidenceBoundary": "Repository metadata only; no rows, credentials, connection strings or unrestricted SQL"
+      }
     },
     {
       "systemId": "DBS-3DBA2C77",
@@ -194,7 +269,7 @@
       "writeCapable": true,
       "riskClass": "high",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-53D000D8",
         "DBA-7AB65B20"
@@ -239,7 +314,7 @@
       "ownerCompletenessAttested": false,
       "decisionStatus": "ai_discovery_required",
       "assignedTo": "CARMA-DB AI",
-      "nextAction": "Complete automated evidence packet before asking Satyam",
+      "nextAction": "Collect approved evidence for schema_keys_relationships",
       "backupStatus": "unverified",
       "rollbackStatus": "unverified",
       "regressionStatus": "not_run",
@@ -254,8 +329,49 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/account-tracker/management-verification/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/account-tracker/management-verification/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
+        },
+        {
+          "timestamp": "2026-08-13T12:01:02.139Z",
+          "type": "repository_preflight_advanced",
+          "evidence": "Prepared a sanitized repository evidence packet for DBS-3DBA2C77; live control categories remain explicitly unverified"
+        },
+        {
+          "timestamp": "2026-08-13T12:03:35.798Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/account-tracker/management-verification/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
-      ]
+      ],
+      "preflightStatus": "repository_evidence_packet_ready",
+      "lastAdvancedAt": "2026-08-13T12:01:02.139Z",
+      "lastAdvancedLocalDate": "2026-08-13",
+      "preflightEvidence": {
+        "sourceCommit": "d941c1c03c34aebe004486fc9f3d7864cbf7e50e",
+        "sourcePath": "app/api/account-tracker/management-verification/route.ts",
+        "methods": [
+          "POST"
+        ],
+        "operationClasses": [
+          "select",
+          "update",
+          "transaction"
+        ],
+        "writeCapable": true,
+        "repositoryVisibleObjects": [
+          "ktahv_account_tracker"
+        ],
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ],
+        "evidenceBoundary": "Repository metadata only; no rows, credentials, connection strings or unrestricted SQL"
+      }
     },
     {
       "systemId": "DBS-4D5456C1",
@@ -272,7 +388,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-7AB65B20",
         "DBA-F9741B27"
@@ -317,7 +433,7 @@
       "ownerCompletenessAttested": false,
       "decisionStatus": "ai_discovery_required",
       "assignedTo": "CARMA-DB AI",
-      "nextAction": "Complete automated evidence packet before asking Satyam",
+      "nextAction": "Collect approved evidence for schema_keys_relationships",
       "backupStatus": "unverified",
       "rollbackStatus": "unverified",
       "regressionStatus": "not_run",
@@ -332,8 +448,47 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/account-tracker/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/account-tracker/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
+        },
+        {
+          "timestamp": "2026-08-13T12:01:02.139Z",
+          "type": "repository_preflight_advanced",
+          "evidence": "Prepared a sanitized repository evidence packet for DBS-4D5456C1; live control categories remain explicitly unverified"
+        },
+        {
+          "timestamp": "2026-08-13T12:03:35.798Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/account-tracker/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
-      ]
+      ],
+      "preflightStatus": "repository_evidence_packet_ready",
+      "lastAdvancedAt": "2026-08-13T12:01:02.139Z",
+      "lastAdvancedLocalDate": "2026-08-13",
+      "preflightEvidence": {
+        "sourceCommit": "d941c1c03c34aebe004486fc9f3d7864cbf7e50e",
+        "sourcePath": "app/api/account-tracker/route.ts",
+        "methods": [
+          "GET"
+        ],
+        "operationClasses": [
+          "select"
+        ],
+        "writeCapable": false,
+        "repositoryVisibleObjects": [
+          "ktahv_account_tracker"
+        ],
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ],
+        "evidenceBoundary": "Repository metadata only; no rows, credentials, connection strings or unrestricted SQL"
+      }
     },
     {
       "systemId": "DBS-B5525E88",
@@ -349,7 +504,7 @@
       "writeCapable": true,
       "riskClass": "high",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-81668CDF",
         "DBA-94D98E55",
@@ -396,7 +551,7 @@
       "ownerCompletenessAttested": false,
       "decisionStatus": "ai_discovery_required",
       "assignedTo": "CARMA-DB AI",
-      "nextAction": "Complete automated evidence packet before asking Satyam",
+      "nextAction": "Collect approved evidence for schema_keys_relationships",
       "backupStatus": "unverified",
       "rollbackStatus": "unverified",
       "regressionStatus": "not_run",
@@ -411,8 +566,47 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/auth/[...nextauth]/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/auth/[...nextauth]/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
+        },
+        {
+          "timestamp": "2026-08-13T12:01:02.139Z",
+          "type": "repository_preflight_advanced",
+          "evidence": "Prepared a sanitized repository evidence packet for DBS-B5525E88; live control categories remain explicitly unverified"
+        },
+        {
+          "timestamp": "2026-08-13T12:03:35.798Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/auth/[...nextauth]/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
-      ]
+      ],
+      "preflightStatus": "repository_evidence_packet_ready",
+      "lastAdvancedAt": "2026-08-13T12:01:02.139Z",
+      "lastAdvancedLocalDate": "2026-08-13",
+      "preflightEvidence": {
+        "sourceCommit": "d941c1c03c34aebe004486fc9f3d7864cbf7e50e",
+        "sourcePath": "app/api/auth/[...nextauth]/route.ts",
+        "methods": [],
+        "operationClasses": [
+          "insert",
+          "update"
+        ],
+        "writeCapable": true,
+        "repositoryVisibleObjects": [
+          "google_tokens",
+          "refresh_token"
+        ],
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ],
+        "evidenceBoundary": "Repository metadata only; no rows, credentials, connection strings or unrestricted SQL"
+      }
     },
     {
       "systemId": "DBS-30342BB0",
@@ -429,7 +623,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-0BAD2DC4",
         "DBA-508EC2F3",
@@ -480,7 +674,7 @@
       "ownerCompletenessAttested": false,
       "decisionStatus": "ai_discovery_required",
       "assignedTo": "CARMA-DB AI",
-      "nextAction": "Complete automated evidence packet before asking Satyam",
+      "nextAction": "Collect approved evidence for schema_keys_relationships",
       "backupStatus": "unverified",
       "rollbackStatus": "unverified",
       "regressionStatus": "not_run",
@@ -495,8 +689,50 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/bot-lookup/recent/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/bot-lookup/recent/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
+        },
+        {
+          "timestamp": "2026-08-13T12:01:02.139Z",
+          "type": "repository_preflight_advanced",
+          "evidence": "Prepared a sanitized repository evidence packet for DBS-30342BB0; live control categories remain explicitly unverified"
+        },
+        {
+          "timestamp": "2026-08-13T12:03:35.798Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/bot-lookup/recent/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
-      ]
+      ],
+      "preflightStatus": "repository_evidence_packet_ready",
+      "lastAdvancedAt": "2026-08-13T12:01:02.139Z",
+      "lastAdvancedLocalDate": "2026-08-13",
+      "preflightEvidence": {
+        "sourceCommit": "d941c1c03c34aebe004486fc9f3d7864cbf7e50e",
+        "sourcePath": "app/api/bot-lookup/recent/route.ts",
+        "methods": [
+          "GET"
+        ],
+        "operationClasses": [
+          "select"
+        ],
+        "writeCapable": false,
+        "repositoryVisibleObjects": [
+          "ktahv_bookings_fms_v3_part1",
+          "master_buffer",
+          "orders_fms",
+          "villa_raag_client_booking_fms"
+        ],
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ],
+        "evidenceBoundary": "Repository metadata only; no rows, credentials, connection strings or unrestricted SQL"
+      }
     },
     {
       "systemId": "DBS-D83BFAF6",
@@ -513,7 +749,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-508EC2F3",
         "DBA-70937943",
@@ -570,7 +806,7 @@
       "ownerCompletenessAttested": false,
       "decisionStatus": "ai_discovery_required",
       "assignedTo": "CARMA-DB AI",
-      "nextAction": "Complete automated evidence packet before asking Satyam",
+      "nextAction": "Collect approved evidence for schema_keys_relationships",
       "backupStatus": "unverified",
       "rollbackStatus": "unverified",
       "regressionStatus": "not_run",
@@ -585,8 +821,53 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/bot-lookup/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/bot-lookup/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
+        },
+        {
+          "timestamp": "2026-08-13T12:01:02.139Z",
+          "type": "repository_preflight_advanced",
+          "evidence": "Prepared a sanitized repository evidence packet for DBS-D83BFAF6; live control categories remain explicitly unverified"
+        },
+        {
+          "timestamp": "2026-08-13T12:03:35.798Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/bot-lookup/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
-      ]
+      ],
+      "preflightStatus": "repository_evidence_packet_ready",
+      "lastAdvancedAt": "2026-08-13T12:01:02.139Z",
+      "lastAdvancedLocalDate": "2026-08-13",
+      "preflightEvidence": {
+        "sourceCommit": "d941c1c03c34aebe004486fc9f3d7864cbf7e50e",
+        "sourcePath": "app/api/bot-lookup/route.ts",
+        "methods": [
+          "GET"
+        ],
+        "operationClasses": [
+          "select"
+        ],
+        "writeCapable": false,
+        "repositoryVisibleObjects": [
+          "dispatch_fms_factory",
+          "ktahv_bookings_fms_v3_part1",
+          "master_buffer",
+          "orders_fms",
+          "staging_buffer_new",
+          "the",
+          "villa_raag_client_booking_fms"
+        ],
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ],
+        "evidenceBoundary": "Repository metadata only; no rows, credentials, connection strings or unrestricted SQL"
+      }
     },
     {
       "systemId": "DBS-DD3085B4",
@@ -603,7 +884,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-4E1649A6",
         "DBA-79B63730",
@@ -652,7 +933,7 @@
       "ownerCompletenessAttested": false,
       "decisionStatus": "ai_discovery_required",
       "assignedTo": "CARMA-DB AI",
-      "nextAction": "Complete automated evidence packet before asking Satyam",
+      "nextAction": "Collect approved evidence for schema_keys_relationships",
       "backupStatus": "unverified",
       "rollbackStatus": "unverified",
       "regressionStatus": "not_run",
@@ -667,8 +948,49 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/calendar/mobile/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/calendar/mobile/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
+        },
+        {
+          "timestamp": "2026-08-13T12:01:02.139Z",
+          "type": "repository_preflight_advanced",
+          "evidence": "Prepared a sanitized repository evidence packet for DBS-DD3085B4; live control categories remain explicitly unverified"
+        },
+        {
+          "timestamp": "2026-08-13T12:03:35.798Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/calendar/mobile/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
-      ]
+      ],
+      "preflightStatus": "repository_evidence_packet_ready",
+      "lastAdvancedAt": "2026-08-13T12:01:02.139Z",
+      "lastAdvancedLocalDate": "2026-08-13",
+      "preflightEvidence": {
+        "sourceCommit": "d941c1c03c34aebe004486fc9f3d7864cbf7e50e",
+        "sourcePath": "app/api/calendar/mobile/route.ts",
+        "methods": [
+          "GET"
+        ],
+        "operationClasses": [
+          "select"
+        ],
+        "writeCapable": false,
+        "repositoryVisibleObjects": [
+          "event",
+          "google_tokens",
+          "the"
+        ],
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ],
+        "evidenceBoundary": "Repository metadata only; no rows, credentials, connection strings or unrestricted SQL"
+      }
     },
     {
       "systemId": "DBS-3A916059",
@@ -685,7 +1007,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-76C06963",
         "DBA-DB6059DE"
@@ -730,7 +1052,7 @@
       "ownerCompletenessAttested": false,
       "decisionStatus": "ai_discovery_required",
       "assignedTo": "CARMA-DB AI",
-      "nextAction": "Complete automated evidence packet before asking Satyam",
+      "nextAction": "Collect approved evidence for schema_keys_relationships",
       "backupStatus": "unverified",
       "rollbackStatus": "unverified",
       "regressionStatus": "not_run",
@@ -745,8 +1067,47 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/conversion/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/conversion/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
+        },
+        {
+          "timestamp": "2026-08-13T12:01:02.139Z",
+          "type": "repository_preflight_advanced",
+          "evidence": "Prepared a sanitized repository evidence packet for DBS-3A916059; live control categories remain explicitly unverified"
+        },
+        {
+          "timestamp": "2026-08-13T12:03:35.798Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/conversion/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
-      ]
+      ],
+      "preflightStatus": "repository_evidence_packet_ready",
+      "lastAdvancedAt": "2026-08-13T12:01:02.139Z",
+      "lastAdvancedLocalDate": "2026-08-13",
+      "preflightEvidence": {
+        "sourceCommit": "d941c1c03c34aebe004486fc9f3d7864cbf7e50e",
+        "sourcePath": "app/api/conversion/route.ts",
+        "methods": [
+          "GET"
+        ],
+        "operationClasses": [
+          "select"
+        ],
+        "writeCapable": false,
+        "repositoryVisibleObjects": [
+          "conversion_updates_employeewise"
+        ],
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ],
+        "evidenceBoundary": "Repository metadata only; no rows, credentials, connection strings or unrestricted SQL"
+      }
     },
     {
       "systemId": "DBS-3DE0B3CE",
@@ -763,7 +1124,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-70937943",
         "DBA-8442A660",
@@ -825,6 +1186,11 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/debug-leads/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/debug-leads/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
       ]
     },
@@ -843,7 +1209,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-70937943",
         "DBA-8442A660",
@@ -905,6 +1271,11 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/enquiry/[id]/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/enquiry/[id]/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
       ]
     },
@@ -923,7 +1294,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-174295A6",
         "DBA-8C8EAF56",
@@ -985,6 +1356,11 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/expense/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/expense/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
       ]
     },
@@ -1001,7 +1377,7 @@
       "writeCapable": true,
       "riskClass": "high",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-E73C2F88"
       ],
@@ -1043,7 +1419,7 @@
       "ownerCompletenessAttested": false,
       "decisionStatus": "ai_discovery_required",
       "assignedTo": "CARMA-DB AI",
-      "nextAction": "Complete automated evidence packet before asking Satyam",
+      "nextAction": "Collect approved evidence for table_or_view",
       "backupStatus": "unverified",
       "rollbackStatus": "unverified",
       "regressionStatus": "not_run",
@@ -1058,8 +1434,44 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/fms/enquiry-reverification/db-init.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/fms/enquiry-reverification/db-init.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
+        },
+        {
+          "timestamp": "2026-08-13T12:01:02.139Z",
+          "type": "repository_preflight_advanced",
+          "evidence": "Prepared a sanitized repository evidence packet for DBS-67B84ACF; live control categories remain explicitly unverified"
+        },
+        {
+          "timestamp": "2026-08-13T12:03:35.798Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/fms/enquiry-reverification/db-init.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
-      ]
+      ],
+      "preflightStatus": "repository_evidence_packet_ready",
+      "lastAdvancedAt": "2026-08-13T12:01:02.139Z",
+      "lastAdvancedLocalDate": "2026-08-13",
+      "preflightEvidence": {
+        "sourceCommit": "d941c1c03c34aebe004486fc9f3d7864cbf7e50e",
+        "sourcePath": "app/api/fms/enquiry-reverification/db-init.ts",
+        "methods": [],
+        "operationClasses": [
+          "schema"
+        ],
+        "writeCapable": true,
+        "repositoryVisibleObjects": [],
+        "missingCoverage": [
+          "table_or_view",
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ],
+        "evidenceBoundary": "Repository metadata only; no rows, credentials, connection strings or unrestricted SQL"
+      }
     },
     {
       "systemId": "DBS-E17CF94A",
@@ -1078,7 +1490,7 @@
       "writeCapable": true,
       "riskClass": "high",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-7A022061",
         "DBA-82D7910E",
@@ -1129,7 +1541,7 @@
       "ownerCompletenessAttested": false,
       "decisionStatus": "ai_discovery_required",
       "assignedTo": "CARMA-DB AI",
-      "nextAction": "Complete automated evidence packet before asking Satyam",
+      "nextAction": "Collect approved evidence for schema_keys_relationships",
       "backupStatus": "unverified",
       "rollbackStatus": "unverified",
       "regressionStatus": "not_run",
@@ -1144,8 +1556,52 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/fms/enquiry-reverification/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/fms/enquiry-reverification/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
+        },
+        {
+          "timestamp": "2026-08-13T12:01:02.139Z",
+          "type": "repository_preflight_advanced",
+          "evidence": "Prepared a sanitized repository evidence packet for DBS-E17CF94A; live control categories remain explicitly unverified"
+        },
+        {
+          "timestamp": "2026-08-13T12:03:35.798Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/fms/enquiry-reverification/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
-      ]
+      ],
+      "preflightStatus": "repository_evidence_packet_ready",
+      "lastAdvancedAt": "2026-08-13T12:01:02.139Z",
+      "lastAdvancedLocalDate": "2026-08-13",
+      "preflightEvidence": {
+        "sourceCommit": "d941c1c03c34aebe004486fc9f3d7864cbf7e50e",
+        "sourcePath": "app/api/fms/enquiry-reverification/route.ts",
+        "methods": [
+          "GET",
+          "POST"
+        ],
+        "operationClasses": [
+          "select",
+          "update"
+        ],
+        "writeCapable": true,
+        "repositoryVisibleObjects": [
+          "enquiry",
+          "fms_enquiry_cold_reverification_v2",
+          "reverification",
+          "scan"
+        ],
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ],
+        "evidenceBoundary": "Repository metadata only; no rows, credentials, connection strings or unrestricted SQL"
+      }
     },
     {
       "systemId": "DBS-7D52BAD5",
@@ -1162,7 +1618,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-C897C912",
         "DBA-F4198DFC"
@@ -1222,6 +1678,11 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/invoice-history/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/invoice-history/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
       ]
     },
@@ -1240,7 +1701,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-0F5C47ED",
         "DBA-1A52E9A4",
@@ -1328,6 +1789,11 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/ktahv-bookings/formdataktahv/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/ktahv-bookings/formdataktahv/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
       ]
     },
@@ -1346,7 +1812,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-0DDA48B0",
         "DBA-1149F658",
@@ -1428,6 +1894,11 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/ktahv-bookings/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/ktahv-bookings/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
       ]
     },
@@ -1446,7 +1917,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-4F881C97",
         "DBA-8A48C2A0"
@@ -1506,6 +1977,11 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/ktahv-payment-history/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/ktahv-payment-history/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
       ]
     },
@@ -1524,7 +2000,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-70937943",
         "DBA-8442A660",
@@ -1590,6 +2066,11 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/leads/[id]/history/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/leads/[id]/history/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
       ]
     },
@@ -1608,7 +2089,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-70937943",
         "DBA-8442A660",
@@ -1670,6 +2151,11 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/leads/[id]/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/leads/[id]/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
       ]
     },
@@ -1688,7 +2174,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-5E91BAF6",
         "DBA-70937943",
@@ -1750,6 +2236,11 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/leads/filter/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/leads/filter/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
       ]
     },
@@ -1768,7 +2259,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-391050D9",
         "DBA-474C43E9",
@@ -1832,6 +2323,11 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/leads/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/leads/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
       ]
     },
@@ -1850,7 +2346,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-00BA7564",
         "DBA-70937943",
@@ -1912,6 +2408,11 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/leads/search/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/leads/search/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
       ]
     },
@@ -1930,7 +2431,7 @@
       "writeCapable": true,
       "riskClass": "high",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-D37C67FA",
         "DBA-F938D49D"
@@ -1975,7 +2476,7 @@
       "ownerCompletenessAttested": false,
       "decisionStatus": "ai_discovery_required",
       "assignedTo": "CARMA-DB AI",
-      "nextAction": "Complete automated evidence packet before asking Satyam",
+      "nextAction": "Collect approved evidence for schema_keys_relationships",
       "backupStatus": "unverified",
       "rollbackStatus": "unverified",
       "regressionStatus": "not_run",
@@ -1990,8 +2491,47 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/mark-followed-up/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/mark-followed-up/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
+        },
+        {
+          "timestamp": "2026-08-13T12:01:02.139Z",
+          "type": "repository_preflight_advanced",
+          "evidence": "Prepared a sanitized repository evidence packet for DBS-F6CC67CC; live control categories remain explicitly unverified"
+        },
+        {
+          "timestamp": "2026-08-13T12:03:35.798Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/mark-followed-up/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
-      ]
+      ],
+      "preflightStatus": "repository_evidence_packet_ready",
+      "lastAdvancedAt": "2026-08-13T12:01:02.139Z",
+      "lastAdvancedLocalDate": "2026-08-13",
+      "preflightEvidence": {
+        "sourceCommit": "d941c1c03c34aebe004486fc9f3d7864cbf7e50e",
+        "sourcePath": "app/api/mark-followed-up/route.ts",
+        "methods": [
+          "POST"
+        ],
+        "operationClasses": [
+          "insert"
+        ],
+        "writeCapable": true,
+        "repositoryVisibleObjects": [
+          "deal_assistant_followups"
+        ],
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ],
+        "evidenceBoundary": "Repository metadata only; no rows, credentials, connection strings or unrestricted SQL"
+      }
     },
     {
       "systemId": "DBS-7FD51E10",
@@ -2010,7 +2550,7 @@
       "writeCapable": true,
       "riskClass": "high",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-B2D3D662",
         "DBA-B827F08D",
@@ -2057,7 +2597,7 @@
       "ownerCompletenessAttested": false,
       "decisionStatus": "ai_discovery_required",
       "assignedTo": "CARMA-DB AI",
-      "nextAction": "Complete automated evidence packet before asking Satyam",
+      "nextAction": "Collect approved evidence for schema_keys_relationships",
       "backupStatus": "unverified",
       "rollbackStatus": "unverified",
       "regressionStatus": "not_run",
@@ -2072,8 +2612,50 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/meetings/[id]/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/meetings/[id]/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
+        },
+        {
+          "timestamp": "2026-08-13T12:01:02.139Z",
+          "type": "repository_preflight_advanced",
+          "evidence": "Prepared a sanitized repository evidence packet for DBS-7FD51E10; live control categories remain explicitly unverified"
+        },
+        {
+          "timestamp": "2026-08-13T12:03:35.798Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/meetings/[id]/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
-      ]
+      ],
+      "preflightStatus": "repository_evidence_packet_ready",
+      "lastAdvancedAt": "2026-08-13T12:01:02.139Z",
+      "lastAdvancedLocalDate": "2026-08-13",
+      "preflightEvidence": {
+        "sourceCommit": "d941c1c03c34aebe004486fc9f3d7864cbf7e50e",
+        "sourcePath": "app/api/meetings/[id]/route.ts",
+        "methods": [
+          "DELETE",
+          "GET"
+        ],
+        "operationClasses": [
+          "select",
+          "delete"
+        ],
+        "writeCapable": true,
+        "repositoryVisibleObjects": [
+          "meeting_tasks",
+          "meetings"
+        ],
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ],
+        "evidenceBoundary": "Repository metadata only; no rows, credentials, connection strings or unrestricted SQL"
+      }
     },
     {
       "systemId": "DBS-9BE79677",
@@ -2091,7 +2673,7 @@
       "writeCapable": true,
       "riskClass": "high",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-04C6ED6B",
         "DBA-07F2AFAB",
@@ -2156,7 +2738,7 @@
       "ownerCompletenessAttested": false,
       "decisionStatus": "ai_discovery_required",
       "assignedTo": "CARMA-DB AI",
-      "nextAction": "Complete automated evidence packet before asking Satyam",
+      "nextAction": "Collect approved evidence for schema_keys_relationships",
       "backupStatus": "unverified",
       "rollbackStatus": "unverified",
       "regressionStatus": "not_run",
@@ -2171,8 +2753,58 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/meetings/extract-tasks/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/meetings/extract-tasks/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
+        },
+        {
+          "timestamp": "2026-08-13T12:01:02.139Z",
+          "type": "repository_preflight_advanced",
+          "evidence": "Prepared a sanitized repository evidence packet for DBS-9BE79677; live control categories remain explicitly unverified"
+        },
+        {
+          "timestamp": "2026-08-13T12:03:35.798Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/meetings/extract-tasks/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
-      ]
+      ],
+      "preflightStatus": "repository_evidence_packet_ready",
+      "lastAdvancedAt": "2026-08-13T12:01:02.139Z",
+      "lastAdvancedLocalDate": "2026-08-13",
+      "preflightEvidence": {
+        "sourceCommit": "d941c1c03c34aebe004486fc9f3d7864cbf7e50e",
+        "sourcePath": "app/api/meetings/extract-tasks/route.ts",
+        "methods": [
+          "POST"
+        ],
+        "operationClasses": [
+          "select",
+          "insert"
+        ],
+        "writeCapable": true,
+        "repositoryVisibleObjects": [
+          "context",
+          "conversation",
+          "DB",
+          "Meet",
+          "meeting_tasks",
+          "messages",
+          "participant",
+          "speaker-attributed",
+          "the",
+          "transcript",
+          "users"
+        ],
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ],
+        "evidenceBoundary": "Repository metadata only; no rows, credentials, connection strings or unrestricted SQL"
+      }
     },
     {
       "systemId": "DBS-604E8C24",
@@ -2193,7 +2825,7 @@
       "writeCapable": true,
       "riskClass": "high",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-20CF1468",
         "DBA-2852E348",
@@ -2244,7 +2876,7 @@
       "ownerCompletenessAttested": false,
       "decisionStatus": "ai_discovery_required",
       "assignedTo": "CARMA-DB AI",
-      "nextAction": "Complete automated evidence packet before asking Satyam",
+      "nextAction": "Collect approved evidence for schema_keys_relationships",
       "backupStatus": "unverified",
       "rollbackStatus": "unverified",
       "regressionStatus": "not_run",
@@ -2259,8 +2891,54 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/meetings/save/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/meetings/save/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
+        },
+        {
+          "timestamp": "2026-08-13T12:01:02.139Z",
+          "type": "repository_preflight_advanced",
+          "evidence": "Prepared a sanitized repository evidence packet for DBS-604E8C24; live control categories remain explicitly unverified"
+        },
+        {
+          "timestamp": "2026-08-13T12:03:35.798Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/meetings/save/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
-      ]
+      ],
+      "preflightStatus": "repository_evidence_packet_ready",
+      "lastAdvancedAt": "2026-08-13T12:01:02.139Z",
+      "lastAdvancedLocalDate": "2026-08-13",
+      "preflightEvidence": {
+        "sourceCommit": "d941c1c03c34aebe004486fc9f3d7864cbf7e50e",
+        "sourcePath": "app/api/meetings/save/route.ts",
+        "methods": [
+          "GET",
+          "PATCH",
+          "POST"
+        ],
+        "operationClasses": [
+          "select",
+          "insert",
+          "update"
+        ],
+        "writeCapable": true,
+        "repositoryVisibleObjects": [
+          "existing",
+          "it",
+          "meetings",
+          "specific"
+        ],
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ],
+        "evidenceBoundary": "Repository metadata only; no rows, credentials, connection strings or unrestricted SQL"
+      }
     },
     {
       "systemId": "DBS-CDBD032D",
@@ -2283,7 +2961,7 @@
       "writeCapable": true,
       "riskClass": "high",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-B2D3D662",
         "DBA-D3881BEF"
@@ -2328,7 +3006,7 @@
       "ownerCompletenessAttested": false,
       "decisionStatus": "ai_discovery_required",
       "assignedTo": "CARMA-DB AI",
-      "nextAction": "Complete automated evidence packet before asking Satyam",
+      "nextAction": "Collect approved evidence for schema_keys_relationships",
       "backupStatus": "unverified",
       "rollbackStatus": "unverified",
       "regressionStatus": "not_run",
@@ -2343,8 +3021,53 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/meetings/tasks/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/meetings/tasks/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
+        },
+        {
+          "timestamp": "2026-08-13T12:01:02.139Z",
+          "type": "repository_preflight_advanced",
+          "evidence": "Prepared a sanitized repository evidence packet for DBS-CDBD032D; live control categories remain explicitly unverified"
+        },
+        {
+          "timestamp": "2026-08-13T12:03:35.798Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/meetings/tasks/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
-      ]
+      ],
+      "preflightStatus": "repository_evidence_packet_ready",
+      "lastAdvancedAt": "2026-08-13T12:01:02.139Z",
+      "lastAdvancedLocalDate": "2026-08-13",
+      "preflightEvidence": {
+        "sourceCommit": "d941c1c03c34aebe004486fc9f3d7864cbf7e50e",
+        "sourcePath": "app/api/meetings/tasks/route.ts",
+        "methods": [
+          "DELETE",
+          "GET",
+          "PATCH",
+          "POST"
+        ],
+        "operationClasses": [
+          "select",
+          "insert",
+          "update",
+          "delete"
+        ],
+        "writeCapable": true,
+        "repositoryVisibleObjects": [
+          "meeting_tasks"
+        ],
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ],
+        "evidenceBoundary": "Repository metadata only; no rows, credentials, connection strings or unrestricted SQL"
+      }
     },
     {
       "systemId": "DBS-534FCE10",
@@ -2362,7 +3085,7 @@
       "writeCapable": true,
       "riskClass": "high",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-09D38089",
         "DBA-79B63730",
@@ -2413,7 +3136,7 @@
       "ownerCompletenessAttested": false,
       "decisionStatus": "ai_discovery_required",
       "assignedTo": "CARMA-DB AI",
-      "nextAction": "Complete automated evidence packet before asking Satyam",
+      "nextAction": "Collect approved evidence for schema_keys_relationships",
       "backupStatus": "unverified",
       "rollbackStatus": "unverified",
       "regressionStatus": "not_run",
@@ -2428,8 +3151,51 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/new-order-fms/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/new-order-fms/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
+        },
+        {
+          "timestamp": "2026-08-13T12:01:02.139Z",
+          "type": "repository_preflight_advanced",
+          "evidence": "Prepared a sanitized repository evidence packet for DBS-534FCE10; live control categories remain explicitly unverified"
+        },
+        {
+          "timestamp": "2026-08-13T12:03:35.798Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/new-order-fms/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
-      ]
+      ],
+      "preflightStatus": "repository_evidence_packet_ready",
+      "lastAdvancedAt": "2026-08-13T12:01:02.139Z",
+      "lastAdvancedLocalDate": "2026-08-13",
+      "preflightEvidence": {
+        "sourceCommit": "d941c1c03c34aebe004486fc9f3d7864cbf7e50e",
+        "sourcePath": "app/api/new-order-fms/route.ts",
+        "methods": [
+          "GET"
+        ],
+        "operationClasses": [
+          "select",
+          "update"
+        ],
+        "writeCapable": true,
+        "repositoryVisibleObjects": [
+          "dispatch_fms_factory",
+          "orders_fms",
+          "Status",
+          "the"
+        ],
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ],
+        "evidenceBoundary": "Repository metadata only; no rows, credentials, connection strings or unrestricted SQL"
+      }
     },
     {
       "systemId": "DBS-6B3D0FE4",
@@ -2446,7 +3212,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-3927C672",
         "DBA-8A48C2A0"
@@ -2506,6 +3272,11 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/payment/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/payment/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
       ]
     },
@@ -2530,7 +3301,7 @@
       "writeCapable": true,
       "riskClass": "high",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-6C4A2F38",
         "DBA-9965F17F",
@@ -2577,7 +3348,7 @@
       "ownerCompletenessAttested": false,
       "decisionStatus": "ai_discovery_required",
       "assignedTo": "CARMA-DB AI",
-      "nextAction": "Complete automated evidence packet before asking Satyam",
+      "nextAction": "Collect approved evidence for schema_keys_relationships",
       "backupStatus": "unverified",
       "rollbackStatus": "unverified",
       "regressionStatus": "not_run",
@@ -2592,8 +3363,54 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/pipeline/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/pipeline/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
+        },
+        {
+          "timestamp": "2026-08-13T12:01:02.139Z",
+          "type": "repository_preflight_advanced",
+          "evidence": "Prepared a sanitized repository evidence packet for DBS-386C7B78; live control categories remain explicitly unverified"
+        },
+        {
+          "timestamp": "2026-08-13T12:03:35.798Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/pipeline/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
-      ]
+      ],
+      "preflightStatus": "repository_evidence_packet_ready",
+      "lastAdvancedAt": "2026-08-13T12:01:02.139Z",
+      "lastAdvancedLocalDate": "2026-08-13",
+      "preflightEvidence": {
+        "sourceCommit": "d941c1c03c34aebe004486fc9f3d7864cbf7e50e",
+        "sourcePath": "app/api/pipeline/route.ts",
+        "methods": [
+          "DELETE",
+          "GET",
+          "PATCH",
+          "POST"
+        ],
+        "operationClasses": [
+          "select",
+          "insert",
+          "update",
+          "delete"
+        ],
+        "writeCapable": true,
+        "repositoryVisibleObjects": [
+          "checkpoint",
+          "pipeline_checkpoints"
+        ],
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ],
+        "evidenceBoundary": "Repository metadata only; no rows, credentials, connection strings or unrestricted SQL"
+      }
     },
     {
       "systemId": "DBS-A9A91D72",
@@ -2610,7 +3427,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-45D18631",
         "DBA-7A022061",
@@ -2674,6 +3491,11 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/potential-value/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/potential-value/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
       ]
     },
@@ -2693,7 +3515,7 @@
       "writeCapable": true,
       "riskClass": "high",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-1232C299",
         "DBA-138256C7",
@@ -2740,7 +3562,7 @@
       "ownerCompletenessAttested": false,
       "decisionStatus": "ai_discovery_required",
       "assignedTo": "CARMA-DB AI",
-      "nextAction": "Complete automated evidence packet before asking Satyam",
+      "nextAction": "Collect approved evidence for schema_keys_relationships",
       "backupStatus": "unverified",
       "rollbackStatus": "unverified",
       "regressionStatus": "not_run",
@@ -2755,8 +3577,49 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/received-leads/feedback/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/received-leads/feedback/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
+        },
+        {
+          "timestamp": "2026-08-13T12:01:02.139Z",
+          "type": "repository_preflight_advanced",
+          "evidence": "Prepared a sanitized repository evidence packet for DBS-C4181D50; live control categories remain explicitly unverified"
+        },
+        {
+          "timestamp": "2026-08-13T12:03:35.798Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/received-leads/feedback/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
-      ]
+      ],
+      "preflightStatus": "repository_evidence_packet_ready",
+      "lastAdvancedAt": "2026-08-13T12:01:02.139Z",
+      "lastAdvancedLocalDate": "2026-08-13",
+      "preflightEvidence": {
+        "sourceCommit": "d941c1c03c34aebe004486fc9f3d7864cbf7e50e",
+        "sourcePath": "app/api/received-leads/feedback/route.ts",
+        "methods": [
+          "POST"
+        ],
+        "operationClasses": [
+          "select",
+          "update"
+        ],
+        "writeCapable": true,
+        "repositoryVisibleObjects": [
+          "ai_voice_leads_received",
+          "feedback"
+        ],
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ],
+        "evidenceBoundary": "Repository metadata only; no rows, credentials, connection strings or unrestricted SQL"
+      }
     },
     {
       "systemId": "DBS-CB31C680",
@@ -2773,7 +3636,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-03D0933F",
         "DBA-4EDF7AD6",
@@ -2835,6 +3698,11 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/received-leads/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/received-leads/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
       ]
     },
@@ -2853,7 +3721,7 @@
       "writeCapable": true,
       "riskClass": "high",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-4EDF7AD6",
         "DBA-9E632CAD"
@@ -2898,7 +3766,7 @@
       "ownerCompletenessAttested": false,
       "decisionStatus": "ai_discovery_required",
       "assignedTo": "CARMA-DB AI",
-      "nextAction": "Complete automated evidence packet before asking Satyam",
+      "nextAction": "Collect approved evidence for schema_keys_relationships",
       "backupStatus": "unverified",
       "rollbackStatus": "unverified",
       "regressionStatus": "not_run",
@@ -2913,8 +3781,47 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/received-leads/transfer/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/received-leads/transfer/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
+        },
+        {
+          "timestamp": "2026-08-13T12:01:02.139Z",
+          "type": "repository_preflight_advanced",
+          "evidence": "Prepared a sanitized repository evidence packet for DBS-0E7BC39C; live control categories remain explicitly unverified"
+        },
+        {
+          "timestamp": "2026-08-13T12:03:35.798Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/received-leads/transfer/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
-      ]
+      ],
+      "preflightStatus": "repository_evidence_packet_ready",
+      "lastAdvancedAt": "2026-08-13T12:01:02.139Z",
+      "lastAdvancedLocalDate": "2026-08-13",
+      "preflightEvidence": {
+        "sourceCommit": "d941c1c03c34aebe004486fc9f3d7864cbf7e50e",
+        "sourcePath": "app/api/received-leads/transfer/route.ts",
+        "methods": [
+          "POST"
+        ],
+        "operationClasses": [
+          "update"
+        ],
+        "writeCapable": true,
+        "repositoryVisibleObjects": [
+          "ai_voice_leads_received"
+        ],
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ],
+        "evidenceBoundary": "Repository metadata only; no rows, credentials, connection strings or unrestricted SQL"
+      }
     },
     {
       "systemId": "DBS-A9338A73",
@@ -2931,7 +3838,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-8160F027",
         "DBA-F8AC66F0"
@@ -2991,6 +3898,11 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/sent-leads/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/sent-leads/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
       ]
     },
@@ -3010,7 +3922,7 @@
       "writeCapable": true,
       "riskClass": "high",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-02F3BB2B",
         "DBA-140A77FE",
@@ -3069,7 +3981,7 @@
       "ownerCompletenessAttested": false,
       "decisionStatus": "ai_discovery_required",
       "assignedTo": "CARMA-DB AI",
-      "nextAction": "Complete automated evidence packet before asking Satyam",
+      "nextAction": "Collect approved evidence for schema_keys_relationships",
       "backupStatus": "unverified",
       "rollbackStatus": "unverified",
       "regressionStatus": "not_run",
@@ -3084,8 +3996,55 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/stalled-deals/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/stalled-deals/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
+        },
+        {
+          "timestamp": "2026-08-13T12:01:02.139Z",
+          "type": "repository_preflight_advanced",
+          "evidence": "Prepared a sanitized repository evidence packet for DBS-68A46805; live control categories remain explicitly unverified"
+        },
+        {
+          "timestamp": "2026-08-13T12:03:35.798Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/stalled-deals/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
-      ]
+      ],
+      "preflightStatus": "repository_evidence_packet_ready",
+      "lastAdvancedAt": "2026-08-13T12:01:02.139Z",
+      "lastAdvancedLocalDate": "2026-08-13",
+      "preflightEvidence": {
+        "sourceCommit": "d941c1c03c34aebe004486fc9f3d7864cbf7e50e",
+        "sourcePath": "app/api/stalled-deals/route.ts",
+        "methods": [
+          "GET"
+        ],
+        "operationClasses": [
+          "select",
+          "update"
+        ],
+        "writeCapable": true,
+        "repositoryVisibleObjects": [
+          "const",
+          "conversion_updates_employeewise",
+          "deal_assistant_followups",
+          "followup_activity",
+          "history",
+          "master_buffer",
+          "staging_buffer_new",
+          "stats"
+        ],
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ],
+        "evidenceBoundary": "Repository metadata only; no rows, credentials, connection strings or unrestricted SQL"
+      }
     },
     {
       "systemId": "DBS-449F2E58",
@@ -3102,7 +4061,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-704E20D9",
         "DBA-AB00C28E"
@@ -3162,6 +4121,11 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/support-tickets/my-tickets/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/support-tickets/my-tickets/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
       ]
     },
@@ -3180,7 +4144,7 @@
       "writeCapable": true,
       "riskClass": "high",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-704E20D9",
         "DBA-FCFF465A"
@@ -3225,7 +4189,7 @@
       "ownerCompletenessAttested": false,
       "decisionStatus": "ai_discovery_required",
       "assignedTo": "CARMA-DB AI",
-      "nextAction": "Complete automated evidence packet before asking Satyam",
+      "nextAction": "Collect approved evidence for schema_keys_relationships",
       "backupStatus": "unverified",
       "rollbackStatus": "unverified",
       "regressionStatus": "not_run",
@@ -3240,8 +4204,47 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/support-tickets/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/support-tickets/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
+        },
+        {
+          "timestamp": "2026-08-13T12:01:02.139Z",
+          "type": "repository_preflight_advanced",
+          "evidence": "Prepared a sanitized repository evidence packet for DBS-16B8C2ED; live control categories remain explicitly unverified"
+        },
+        {
+          "timestamp": "2026-08-13T12:03:35.798Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/support-tickets/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
-      ]
+      ],
+      "preflightStatus": "repository_evidence_packet_ready",
+      "lastAdvancedAt": "2026-08-13T12:01:02.139Z",
+      "lastAdvancedLocalDate": "2026-08-13",
+      "preflightEvidence": {
+        "sourceCommit": "d941c1c03c34aebe004486fc9f3d7864cbf7e50e",
+        "sourcePath": "app/api/support-tickets/route.ts",
+        "methods": [
+          "POST"
+        ],
+        "operationClasses": [
+          "insert"
+        ],
+        "writeCapable": true,
+        "repositoryVisibleObjects": [
+          "support_tickets"
+        ],
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ],
+        "evidenceBoundary": "Repository metadata only; no rows, credentials, connection strings or unrestricted SQL"
+      }
     },
     {
       "systemId": "DBS-55544F28",
@@ -3258,7 +4261,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-4110BFB2"
       ],
@@ -3300,7 +4303,7 @@
       "ownerCompletenessAttested": false,
       "decisionStatus": "ai_discovery_required",
       "assignedTo": "CARMA-DB AI",
-      "nextAction": "Complete automated evidence packet before asking Satyam",
+      "nextAction": "Collect approved evidence for table_or_view",
       "backupStatus": "unverified",
       "rollbackStatus": "unverified",
       "regressionStatus": "not_run",
@@ -3315,8 +4318,46 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/test-db/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/test-db/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
+        },
+        {
+          "timestamp": "2026-08-13T12:01:02.139Z",
+          "type": "repository_preflight_advanced",
+          "evidence": "Prepared a sanitized repository evidence packet for DBS-55544F28; live control categories remain explicitly unverified"
+        },
+        {
+          "timestamp": "2026-08-13T12:03:35.798Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/test-db/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
-      ]
+      ],
+      "preflightStatus": "repository_evidence_packet_ready",
+      "lastAdvancedAt": "2026-08-13T12:01:02.139Z",
+      "lastAdvancedLocalDate": "2026-08-13",
+      "preflightEvidence": {
+        "sourceCommit": "d941c1c03c34aebe004486fc9f3d7864cbf7e50e",
+        "sourcePath": "app/api/test-db/route.ts",
+        "methods": [
+          "GET"
+        ],
+        "operationClasses": [
+          "select"
+        ],
+        "writeCapable": false,
+        "repositoryVisibleObjects": [],
+        "missingCoverage": [
+          "table_or_view",
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ],
+        "evidenceBoundary": "Repository metadata only; no rows, credentials, connection strings or unrestricted SQL"
+      }
     },
     {
       "systemId": "DBS-9F5DD25B",
@@ -3333,7 +4374,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-2C983A46",
         "DBA-E9FDC419",
@@ -3395,6 +4436,11 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/total-traffic/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/total-traffic/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
       ]
     },
@@ -3415,7 +4461,7 @@
       "writeCapable": true,
       "riskClass": "high",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-508EC2F3",
         "DBA-8A48C2A0",
@@ -3462,7 +4508,7 @@
       "ownerCompletenessAttested": false,
       "decisionStatus": "ai_discovery_required",
       "assignedTo": "CARMA-DB AI",
-      "nextAction": "Complete automated evidence packet before asking Satyam",
+      "nextAction": "Collect approved evidence for schema_keys_relationships",
       "backupStatus": "unverified",
       "rollbackStatus": "unverified",
       "regressionStatus": "not_run",
@@ -3477,8 +4523,50 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/villa-bookings/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/villa-bookings/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
+        },
+        {
+          "timestamp": "2026-08-13T12:01:02.139Z",
+          "type": "repository_preflight_advanced",
+          "evidence": "Prepared a sanitized repository evidence packet for DBS-BD5FE90D; live control categories remain explicitly unverified"
+        },
+        {
+          "timestamp": "2026-08-13T12:03:35.798Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/villa-bookings/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
-      ]
+      ],
+      "preflightStatus": "repository_evidence_packet_ready",
+      "lastAdvancedAt": "2026-08-13T12:01:02.139Z",
+      "lastAdvancedLocalDate": "2026-08-13",
+      "preflightEvidence": {
+        "sourceCommit": "d941c1c03c34aebe004486fc9f3d7864cbf7e50e",
+        "sourcePath": "app/api/villa-bookings/route.ts",
+        "methods": [
+          "GET",
+          "POST"
+        ],
+        "operationClasses": [
+          "select",
+          "update"
+        ],
+        "writeCapable": true,
+        "repositoryVisibleObjects": [
+          "payment_collection",
+          "villa_raag_client_booking_fms"
+        ],
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ],
+        "evidenceBoundary": "Repository metadata only; no rows, credentials, connection strings or unrestricted SQL"
+      }
     },
     {
       "systemId": "DBS-75370A82",
@@ -3495,7 +4583,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-23107FFD",
         "DBA-4EDF7AD6",
@@ -3557,6 +4645,11 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/voice-summary/leads/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/voice-summary/leads/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
       ]
     },
@@ -3575,7 +4668,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-4EDF7AD6",
         "DBA-994B1B4E",
@@ -3637,6 +4730,11 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/voicecall/non-qualified/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/voicecall/non-qualified/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
       ]
     },
@@ -3655,7 +4753,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-45D18631",
         "DBA-70937943",
@@ -3721,6 +4819,11 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/api/wasted-leads/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/api/wasted-leads/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
       ]
     },
@@ -3739,7 +4842,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-10365A4C",
         "DBA-508EC2F3"
@@ -3799,6 +4902,11 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned app/villa-bookings/route.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned app/villa-bookings/route.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
       ]
     },
@@ -3813,7 +4921,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-5F055AB3"
       ],
@@ -3855,7 +4963,7 @@
       "ownerCompletenessAttested": false,
       "decisionStatus": "ai_discovery_required",
       "assignedTo": "CARMA-DB AI",
-      "nextAction": "Complete automated evidence packet before asking Satyam",
+      "nextAction": "Collect approved evidence for table_or_view",
       "backupStatus": "unverified",
       "rollbackStatus": "unverified",
       "regressionStatus": "not_run",
@@ -3870,8 +4978,42 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned lib/db.ts at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned lib/db.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
+        },
+        {
+          "timestamp": "2026-08-13T12:01:02.139Z",
+          "type": "repository_preflight_advanced",
+          "evidence": "Prepared a sanitized repository evidence packet for DBS-E3746F45; live control categories remain explicitly unverified"
+        },
+        {
+          "timestamp": "2026-08-13T12:03:35.798Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned lib/db.ts at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
-      ]
+      ],
+      "preflightStatus": "repository_evidence_packet_ready",
+      "lastAdvancedAt": "2026-08-13T12:01:02.139Z",
+      "lastAdvancedLocalDate": "2026-08-13",
+      "preflightEvidence": {
+        "sourceCommit": "d941c1c03c34aebe004486fc9f3d7864cbf7e50e",
+        "sourcePath": "lib/db.ts",
+        "methods": [],
+        "operationClasses": [],
+        "writeCapable": false,
+        "repositoryVisibleObjects": [],
+        "missingCoverage": [
+          "table_or_view",
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ],
+        "evidenceBoundary": "Repository metadata only; no rows, credentials, connection strings or unrestricted SQL"
+      }
     },
     {
       "systemId": "DBS-840496FE",
@@ -3886,7 +5028,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-12DD7BEA",
         "DBA-C7775537"
@@ -3946,6 +5088,11 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned scratch/check_booking_db.js at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned scratch/check_booking_db.js at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
       ]
     },
@@ -3960,7 +5107,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-202E23B6",
         "DBA-61B67B66"
@@ -4020,6 +5167,11 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned scratch/inspect_db.js at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned scratch/inspect_db.js at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
       ]
     },
@@ -4036,7 +5188,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-12DD7BEA",
         "DBA-1D7ED0BF",
@@ -4098,6 +5250,11 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned scratch/read-values.js at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned scratch/read-values.js at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
       ]
     },
@@ -4112,7 +5269,7 @@
       "writeCapable": false,
       "riskClass": "medium",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "assetIds": [
         "DBA-4B417BEF",
         "DBA-ADCAFD40"
@@ -4172,6 +5329,11 @@
           "timestamp": "2026-08-13T11:46:48.587Z",
           "type": "repository_inventory_scan",
           "evidence": "Scanned scratch/test-db.js at 862113a5bcd006b0b7719c4be0acf4b26a026ad7"
+        },
+        {
+          "timestamp": "2026-08-13T11:57:52.275Z",
+          "type": "repository_inventory_scan",
+          "evidence": "Scanned scratch/test-db.js at d941c1c03c34aebe004486fc9f3d7864cbf7e50e"
         }
       ]
     }
@@ -4184,7 +5346,7 @@
       "name": "app/api/leads/search/route.ts",
       "sourcePath": "app/api/leads/search/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4195,7 +5357,7 @@
       "name": "app/api/stalled-deals/route.ts",
       "sourcePath": "app/api/stalled-deals/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4206,7 +5368,7 @@
       "name": "app/api/received-leads/route.ts",
       "sourcePath": "app/api/received-leads/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4219,7 +5381,7 @@
         "DBS-9BE79677"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4230,7 +5392,7 @@
       "name": "app/api/meetings/extract-tasks/route.ts",
       "sourcePath": "app/api/meetings/extract-tasks/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4241,7 +5403,7 @@
       "name": "app/api/new-order-fms/route.ts",
       "sourcePath": "app/api/new-order-fms/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4252,7 +5414,7 @@
       "name": "app/api/bot-lookup/recent/route.ts",
       "sourcePath": "app/api/bot-lookup/recent/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4263,7 +5425,7 @@
       "name": "app/api/ktahv-bookings/route.ts",
       "sourcePath": "app/api/ktahv-bookings/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4276,7 +5438,7 @@
         "DBS-93EC7EE7"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4287,7 +5449,7 @@
       "name": "app/villa-bookings/route.ts",
       "sourcePath": "app/villa-bookings/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4300,7 +5462,7 @@
         "DBS-9BE79677"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4313,7 +5475,7 @@
         "DBS-66932D7C"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4324,7 +5486,7 @@
       "name": "app/api/received-leads/feedback/route.ts",
       "sourcePath": "app/api/received-leads/feedback/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4339,7 +5501,7 @@
         "DBS-840496FE"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4352,7 +5514,7 @@
         "DBS-C4181D50"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4365,7 +5527,7 @@
         "DBS-68A46805"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4378,7 +5540,7 @@
         "DBS-1A374D28"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4391,7 +5553,7 @@
         "DBS-93EC7EE7"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4402,7 +5564,7 @@
       "name": "scratch/read-values.js",
       "sourcePath": "scratch/read-values.js",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4413,7 +5575,7 @@
       "name": "scratch/inspect_db.js",
       "sourcePath": "scratch/inspect_db.js",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4426,7 +5588,7 @@
         "DBS-93EC7EE7"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4439,7 +5601,7 @@
         "DBS-604E8C24"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4452,7 +5614,7 @@
         "DBS-9BE79677"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4463,7 +5625,7 @@
       "name": "app/api/voice-summary/leads/route.ts",
       "sourcePath": "app/api/voice-summary/leads/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4474,7 +5636,7 @@
       "name": "app/api/meetings/save/route.ts",
       "sourcePath": "app/api/meetings/save/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4487,7 +5649,7 @@
         "DBS-93EC7EE7"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4498,7 +5660,7 @@
       "name": "app/api/account-tracker/db-init.ts",
       "sourcePath": "app/api/account-tracker/db-init.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4511,7 +5673,7 @@
         "DBS-9BE79677"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4524,7 +5686,7 @@
         "DBS-9F5DD25B"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4535,7 +5697,7 @@
       "name": "app/actions/crmData.ts",
       "sourcePath": "app/actions/crmData.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4548,7 +5710,7 @@
         "DBS-93EC7EE7"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4561,7 +5723,7 @@
         "DBS-604E8C24"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4574,7 +5736,7 @@
         "DBS-9BE79677"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4587,7 +5749,7 @@
         "DBS-A0EDD3C1"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4598,7 +5760,7 @@
       "name": "app/api/payment/route.ts",
       "sourcePath": "app/api/payment/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4609,7 +5771,7 @@
       "name": "app/api/test-db/route.ts",
       "sourcePath": "app/api/test-db/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4623,7 +5785,7 @@
         "DBS-A9A91D72"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4634,7 +5796,7 @@
       "name": "app/api/leads/route.ts",
       "sourcePath": "app/api/leads/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4645,7 +5807,7 @@
       "name": "scratch/test-db.js",
       "sourcePath": "scratch/test-db.js",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4656,7 +5818,7 @@
       "name": "app/api/calendar/mobile/route.ts",
       "sourcePath": "app/api/calendar/mobile/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4674,7 +5836,7 @@
         "DBS-D9B1921B"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4685,7 +5847,7 @@
       "name": "app/api/ktahv-payment-history/route.ts",
       "sourcePath": "app/api/ktahv-payment-history/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4701,7 +5863,7 @@
         "DBS-F02E5D8B"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4712,7 +5874,7 @@
       "name": "app/api/account-tracker/management-verification/route.ts",
       "sourcePath": "app/api/account-tracker/management-verification/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4723,7 +5885,7 @@
       "name": "app/api/leads/filter/route.ts",
       "sourcePath": "app/api/leads/filter/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4734,7 +5896,7 @@
       "name": "lib/db.ts",
       "sourcePath": "lib/db.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4747,7 +5909,7 @@
         "DBS-9BE79677"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4760,7 +5922,7 @@
         "DBS-30A2E049"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4773,7 +5935,7 @@
         "DBS-CB31C680"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4784,7 +5946,7 @@
       "name": "app/api/pipeline/route.ts",
       "sourcePath": "app/api/pipeline/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4797,7 +5959,7 @@
         "DBS-66932D7C"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4811,7 +5973,7 @@
         "DBS-449F2E58"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4833,7 +5995,7 @@
         "DBS-D83BFAF6"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4844,7 +6006,7 @@
       "name": "app/api/conversion/route.ts",
       "sourcePath": "app/api/conversion/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4860,7 +6022,7 @@
         "DBS-DD3085B4"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4875,7 +6037,7 @@
         "DBS-E17CF94A"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4888,7 +6050,7 @@
         "DBS-534FCE10"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4903,7 +6065,7 @@
         "DBS-D4490043"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4916,7 +6078,7 @@
         "DBS-9BE79677"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4930,7 +6092,7 @@
         "DBS-D83BFAF6"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4941,7 +6103,7 @@
       "name": "app/api/sent-leads/route.ts",
       "sourcePath": "app/api/sent-leads/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4954,7 +6116,7 @@
         "DBS-B5525E88"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4967,7 +6129,7 @@
         "DBS-E17CF94A"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -4991,7 +6153,7 @@
         "DBS-D83BFAF6"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5002,7 +6164,7 @@
       "name": "app/api/ktahv-bookings/formdataktahv/route.ts",
       "sourcePath": "app/api/ktahv-bookings/formdataktahv/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5019,7 +6181,7 @@
         "DBS-BD5FE90D"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5030,7 +6192,7 @@
       "name": "app/api/expense/route.ts",
       "sourcePath": "app/api/expense/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5043,7 +6205,7 @@
         "DBS-66932D7C"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5056,7 +6218,7 @@
         "DBS-66932D7C"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5067,7 +6229,7 @@
       "name": "app/api/bot-lookup/route.ts",
       "sourcePath": "app/api/bot-lookup/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5080,7 +6242,7 @@
         "DBS-93EC7EE7"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5094,7 +6256,7 @@
         "DBS-DD3085B4"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5107,7 +6269,7 @@
         "DBS-66932D7C"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5120,7 +6282,7 @@
         "DBS-D9B1921B"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5133,7 +6295,7 @@
         "DBS-386C7B78"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5147,7 +6309,7 @@
         "DBS-8ACF6547"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5160,7 +6322,7 @@
         "DBS-93EC7EE7"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5171,7 +6333,7 @@
       "name": "app/api/wasted-leads/route.ts",
       "sourcePath": "app/api/wasted-leads/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5184,7 +6346,7 @@
         "DBS-DD3085B4"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5195,7 +6357,7 @@
       "name": "app/api/received-leads/transfer/route.ts",
       "sourcePath": "app/api/received-leads/transfer/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5208,7 +6370,7 @@
         "DBS-66932D7C"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5221,7 +6383,7 @@
         "DBS-604E8C24"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5232,7 +6394,7 @@
       "name": "app/api/potential-value/route.ts",
       "sourcePath": "app/api/potential-value/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5243,7 +6405,7 @@
       "name": "app/api/villa-bookings/route.ts",
       "sourcePath": "app/api/villa-bookings/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5256,7 +6418,7 @@
         "DBS-93EC7EE7"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5267,7 +6429,7 @@
       "name": "app/api/support-tickets/my-tickets/route.ts",
       "sourcePath": "app/api/support-tickets/my-tickets/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5278,7 +6440,7 @@
       "name": "app/api/leads/[id]/history/route.ts",
       "sourcePath": "app/api/leads/[id]/history/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5296,7 +6458,7 @@
         "DBS-D83BFAF6"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5307,7 +6469,7 @@
       "name": "app/api/auth/[...nextauth]/route.ts",
       "sourcePath": "app/api/auth/[...nextauth]/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5322,7 +6484,7 @@
         "DBS-CDBD032D"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5333,7 +6495,7 @@
       "name": "app/api/meetings/[id]/route.ts",
       "sourcePath": "app/api/meetings/[id]/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5348,7 +6510,7 @@
         "DBS-D83BFAF6"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5361,7 +6523,7 @@
         "DBS-E17CF94A"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5374,7 +6536,7 @@
         "DBS-9BE79677"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5388,7 +6550,7 @@
         "DBS-7FD51E10"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5401,7 +6563,7 @@
         "DBS-E17CF94A"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5412,7 +6574,7 @@
       "name": "scratch/check_booking_db.js",
       "sourcePath": "scratch/check_booking_db.js",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5426,7 +6588,7 @@
         "DBS-7D52BAD5"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5439,7 +6601,7 @@
         "DBS-66932D7C"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5452,7 +6614,7 @@
         "DBS-9BE79677"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5465,7 +6627,7 @@
         "DBS-8ACF6547"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5479,7 +6641,7 @@
         "DBS-F6CC67CC"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5490,7 +6652,7 @@
       "name": "app/api/meetings/tasks/route.ts",
       "sourcePath": "app/api/meetings/tasks/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5503,7 +6665,7 @@
         "DBS-68A46805"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5514,7 +6676,7 @@
       "name": "app/api/voicecall/non-qualified/route.ts",
       "sourcePath": "app/api/voicecall/non-qualified/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5528,7 +6690,7 @@
         "DBS-68A46805"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5539,7 +6701,7 @@
       "name": "app/api/leads/[id]/route.ts",
       "sourcePath": "app/api/leads/[id]/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5550,7 +6712,7 @@
       "name": "app/api/debug-leads/route.ts",
       "sourcePath": "app/api/debug-leads/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5561,7 +6723,7 @@
       "name": "app/api/fms/enquiry-reverification/db-init.ts",
       "sourcePath": "app/api/fms/enquiry-reverification/db-init.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5572,7 +6734,7 @@
       "name": "app/api/enquiry/[id]/route.ts",
       "sourcePath": "app/api/enquiry/[id]/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5585,7 +6747,7 @@
         "DBS-68A46805"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5598,7 +6760,7 @@
         "DBS-93EC7EE7"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5609,7 +6771,7 @@
       "name": "app/api/total-traffic/route.ts",
       "sourcePath": "app/api/total-traffic/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5622,7 +6784,7 @@
         "DBS-93EC7EE7"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5635,7 +6797,7 @@
         "DBS-66932D7C"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5648,7 +6810,7 @@
         "DBS-93EC7EE7"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5661,7 +6823,7 @@
         "DBS-93EC7EE7"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5672,7 +6834,7 @@
       "name": "app/api/invoice-history/route.ts",
       "sourcePath": "app/api/invoice-history/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5687,7 +6849,7 @@
         "DBS-A9338A73"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5698,7 +6860,7 @@
       "name": "app/api/fms/enquiry-reverification/route.ts",
       "sourcePath": "app/api/fms/enquiry-reverification/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5709,7 +6871,7 @@
       "name": "app/api/mark-followed-up/route.ts",
       "sourcePath": "app/api/mark-followed-up/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5722,7 +6884,7 @@
         "DBS-93EC7EE7"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5733,7 +6895,7 @@
       "name": "app/api/account-tracker/route.ts",
       "sourcePath": "app/api/account-tracker/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5746,7 +6908,7 @@
         "DBS-386C7B78"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5757,7 +6919,7 @@
       "name": "app/api/support-tickets/route.ts",
       "sourcePath": "app/api/support-tickets/route.ts",
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     },
@@ -5771,7 +6933,7 @@
         "DBS-9F5DD25B"
       ],
       "lifecycleState": "seen",
-      "lastSeenAt": "2026-08-13T11:46:48.587Z",
+      "lastSeenAt": "2026-08-13T12:03:35.798Z",
       "containsBusinessRows": false,
       "containsCredentials": false
     }

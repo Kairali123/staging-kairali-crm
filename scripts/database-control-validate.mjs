@@ -77,6 +77,25 @@ if (plan?.controls?.humanDecisionLimit !== null) errors.push("plan must not impo
 if ((plan?.preflight?.length || 0) < Math.min(registry?.summary?.seenSystems || 0, policy?.minimumDailyCases || 25)) {
   errors.push("plan does not expose the minimum ready-case working set");
 }
+if (state?.dailyProgress?.localDate && state.dailyProgress.minimumMet !== true) {
+  errors.push("started daily wave has not met the minimum database case throughput");
+}
+if (state?.dailyProgress?.advancedSystemIds) {
+  const uniqueAdvanced = new Set(state.dailyProgress.advancedSystemIds);
+  if (uniqueAdvanced.size !== state.dailyProgress.advancedSystemIds.length) {
+    errors.push("daily progress contains duplicate advanced system IDs");
+  }
+  if (state.dailyProgress.advancedCount !== uniqueAdvanced.size) {
+    errors.push("daily progress advanced count does not match its system IDs");
+  }
+  for (const systemId of uniqueAdvanced) {
+    const system = registry.systems.find(item => item.systemId === systemId);
+    if (!system) errors.push(`advanced system is missing from registry: ${systemId}`);
+    else if (system.preflightStatus !== "repository_evidence_packet_ready") {
+      errors.push(`advanced system lacks a repository evidence packet: ${systemId}`);
+    }
+  }
+}
 if (plan?.inventory?.seenSystems !== registry?.summary?.seenSystems) errors.push("plan and registry system counts differ");
 if (publicPlan?.inventory?.seenSystems !== registry?.summary?.seenSystems) errors.push("public plan and registry system counts differ");
 if (publicRegistry?.summary?.seenSystems !== registry?.summary?.seenSystems) errors.push("public registry and private registry system counts differ");
@@ -109,4 +128,7 @@ if (errors.length) {
 console.log("CARMA-DB VALIDATION: PASS");
 console.log(`- ${registry.summary.seenSystems} repository-visible database systems`);
 console.log(`- ${registry.summary.registeredAssets} metadata-only controlled assets`);
+if (state?.dailyProgress?.localDate) {
+  console.log(`- ${state.dailyProgress.advancedCount}/${state.dailyProgress.minimumTarget} daily cases advanced`);
+}
 console.log("- production database writes remain disabled");

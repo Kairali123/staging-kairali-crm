@@ -57,6 +57,15 @@ Chat memory is not the source of truth.
    acceptance or final approval after safe AI work is exhausted.
 8. **Monitor:** record post-change evidence and promote the next ready case.
 
+The auditable repository preflight command is:
+
+```bash
+npm run database:control:wave
+```
+
+It records distinct cases advanced that day and prepares metadata-only evidence
+packets. It does not certify live controls or authorize a database write.
+
 ## Communication without noise
 
 - GitHub updates routine progress without email.

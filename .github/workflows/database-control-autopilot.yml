@@ -37,6 +37,12 @@ jobs:
       - name: Build the current CARMA-DB plan
         run: npm run database:control:plan
 
+      - name: Advance the daily CARMA-DB evidence wave
+        run: npm run database:control:wave
+
+      - name: Rebuild the plan with daily advancement evidence
+        run: npm run database:control:plan
+
       - name: Verify CARMA-DB safety and evidence rules
         run: npm run database:control:validate
 
@@ -81,6 +87,7 @@ jobs:
               `**Ready technical cases:** ${plan.preflight.length}; at least ${plan.controls.minimumDailyCases} must advance each working day`,
               `**Work cadence:** ${plan.sprint.workWavesPerDay} weekday waves; no upper case limit for Satyam`,
               `**Human decisions ready:** ${plan.humanDecisionBatch.length}; no upper decision limit for Satyam`,
+              `**Advanced today:** ${plan.dailyProgress.advancedCount} / ${plan.dailyProgress.minimumTarget} minimum`,
               `**Asset discovery:** ${plan.inventory.discoveryCompleteSystems} / ${plan.inventory.registeredSystems} systems certified; ${plan.inventory.registeredAssets} controlled assets`,
               `**Write-capable paths:** ${registry.summary.writeCapableSystems}`,
               "",
@@ -120,6 +127,7 @@ jobs:
               `**Discovery wave:** ${plan.inventory.discoveryWave.length} / ${plan.inventory.registeredSystems} registered systems`,
               `**Ready technical cases:** ${plan.preflight.length}; minimum ${plan.controls.minimumDailyCases} advanced per working day`,
               `**Satyam decisions ready:** ${plan.humanDecisionBatch.length}; no upper limit`,
+              `**Advanced today:** ${plan.dailyProgress.advancedCount} / ${plan.dailyProgress.minimumTarget} minimum`,
               "",
               "## Company allocation",
               "",
@@ -191,5 +199,6 @@ jobs:
           name: carma-db-plan-${{ github.run_number }}
           path: |
             monitoring/database-control-plan.json
+            monitoring/database-control-wave.json
             database-control/asset-registry.json
           retention-days: 30

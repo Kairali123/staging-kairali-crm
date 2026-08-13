@@ -10,7 +10,7 @@ Operate the CARMA-DB autonomous database delivery structure for Satyam.
 
 Obtain Satyam's accountable-owner review and Sunaj's independent-verifier review on
 ready PR #12, merge after approval, run its first GitHub workflow wave, and use the
-the uncapped ready-case preflight to advance at least 25 cases per working day across
+uncapped ready-case preflight to advance at least 25 cases per working day across
 the 51-system discovery inventory without production database mutations.
 
 ## EXIT EVIDENCE
@@ -43,3 +43,12 @@ case set and take additional ready decisions without an upper limit. Eight recon
 database work obligations are currently individual issues; remaining audit candidates
 must be reconciled under #2 rather than falsely treating every registered system as an
 error.
+
+2026-08-13T12:01Z heartbeat: inventory, plan, and validation passed. The auditable
+wave advanced 25 distinct repository evidence packets (17 P1/write-capable, 8 P2/read;
+6 KTAHV, 19 cross-company), meeting the 25-case minimum with no production database
+write and no false discovery certification. All 51 systems remain ready and 0/51 are
+discovery-certified because live schema/index, backup/restore, monitoring, and owner
+attestation evidence is still missing. PR #12 has no submitted Satyam or Sunaj review.
+The established Gmail thread has no human reply after today's handoff, so a second
+email was suppressed under the one-material-message-per-day rule.
