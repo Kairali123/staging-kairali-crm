@@ -8,10 +8,11 @@ Operate the CARMA-DB autonomous database delivery structure for Satyam.
 
 ## NEXT ACTION
 
-Obtain Satyam's accountable-owner review and Sunaj's independent-verifier review on
-ready PR #12, merge after approval, run its first GitHub workflow wave, and use the
-uncapped ready-case preflight to advance at least 25 cases per working day across
-the 51-system discovery inventory without production database mutations.
+Prepare the final unprepared repository evidence packet, obtain Satyam's accountable-
+owner review and Sunaj's independent-verifier review on ready PR #12, merge only after
+approval, and continue live-control evidence and issue reconciliation without production
+database mutations. The 25-case minimum is already met for 2026-08-14; Satyam may expand
+the working set without an upper limit.
 
 ## EXIT EVIDENCE
 
@@ -52,3 +53,14 @@ discovery-certified because live schema/index, backup/restore, monitoring, and o
 attestation evidence is still missing. PR #12 has no submitted Satyam or Sunaj review.
 The established Gmail thread has no human reply after today's handoff, so a second
 email was suppressed under the one-material-message-per-day rule.
+
+2026-08-14T03:52Z heartbeat: the ordered inventory, plan, wave, plan, and validation
+sequence passed. The wave advanced 25 distinct systems not counted on 13 August (all
+P2/read-only; 7 KTAHV, 18 cross-company), meeting 25/25 and bringing repository evidence
+packet coverage to 50/51. One packet (DBS-8F4891B2) remains available for optional
+expansion; 0/51 systems are discovery-certified and production writes remain zero.
+GitHub daily #17, Dashboard #15, Batch #16, Focus #14, reconciliation #2 and enforcement
+#11 were synchronized. PR #12 remains open and mergeable with zero submitted Satyam or
+Sunaj reviews. The established Gmail thread still had no human reply, so the one allowed
+material 14 August review request was sent to the mandated loop with an 8-working-hour
+deadline.

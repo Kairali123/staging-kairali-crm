@@ -19,9 +19,12 @@ const priorProgress = state.dailyProgress?.localDate === localDate
   ? state.dailyProgress
   : { localDate, minimumTarget: policy.minimumDailyCases, advancedSystemIds: [], waveRuns: [] };
 const alreadyAdvanced = new Set(priorProgress.advancedSystemIds || []);
+const completedSystemIds = new Set(state.completedSystemIds || []);
+const registryBySystemId = new Map(registry.systems.map(system => [system.systemId, system]));
 const remainingToMinimum = Math.max(0, policy.minimumDailyCases - alreadyAdvanced.size);
 const selected = (plan.preflight || [])
-  .filter(item => !alreadyAdvanced.has(item.systemId))
+  .filter(item => !alreadyAdvanced.has(item.systemId) && !completedSystemIds.has(item.systemId))
+  .filter(item => registryBySystemId.get(item.systemId)?.preflightStatus !== "repository_evidence_packet_ready")
   .slice(0, remainingToMinimum);
 const selectedIds = new Set(selected.map(item => item.systemId));
 
@@ -65,7 +68,9 @@ const waveRun = {
   advancedSystemIds: selected.map(item => item.systemId),
   note: selected.length
     ? "Repository evidence packets prepared; no live database or production mutation performed"
-    : "Daily minimum already met; no duplicate case advancement"
+    : advancedSystemIds.length >= policy.minimumDailyCases
+      ? "Daily minimum already met; no duplicate case advancement"
+      : "No new repository evidence packet was eligible; prior packets were not counted again"
 };
 const dailyProgress = {
   localDate,
@@ -95,6 +100,10 @@ const waveArtifact = {
   minimumMet: dailyProgress.minimumMet,
   caseLimit: policy.caseLimit,
   productionDatabaseWritesPerformed: false,
+  selectionRule: "Exclude completed systems and do not count an existing repository evidence packet again",
+  remainingUnpreparedRepositoryPackets: systems.filter(
+    system => system.preflightStatus !== "repository_evidence_packet_ready" && !completedSystemIds.has(system.systemId)
+  ).length,
   waveRuns: dailyProgress.waveRuns,
   cases: advancedSystemIds.map(systemId => planBySystemId.get(systemId)).filter(Boolean).map(item => ({
     systemId: item.systemId,
@@ -112,7 +121,6 @@ await writeFile(path.join(root, "database-control", "asset-registry.json"), `${J
 await writeFile(path.join(root, "database-control", "state.json"), `${JSON.stringify({
   ...state,
   dailyProgress,
-  lastInventoryRunAt: registry.generatedAt,
   lastWaveRunAt: generatedAt
 }, null, 2)}\n`);
 await writeFile(path.join(root, "monitoring", "database-control-wave.json"), `${JSON.stringify(waveArtifact, null, 2)}\n`);
