@@ -22,10 +22,13 @@ const alreadyAdvanced = new Set(priorProgress.advancedSystemIds || []);
 const completedSystemIds = new Set(state.completedSystemIds || []);
 const registryBySystemId = new Map(registry.systems.map(system => [system.systemId, system]));
 const remainingToMinimum = Math.max(0, policy.minimumDailyCases - alreadyAdvanced.size);
+const selectionCapacity = remainingToMinimum > 0
+  ? remainingToMinimum
+  : policy.maxAutomaticWritesPerRun;
 const selected = (plan.preflight || [])
   .filter(item => !alreadyAdvanced.has(item.systemId) && !completedSystemIds.has(item.systemId))
   .filter(item => registryBySystemId.get(item.systemId)?.preflightStatus !== "repository_evidence_packet_ready")
-  .slice(0, remainingToMinimum);
+  .slice(0, selectionCapacity);
 const selectedIds = new Set(selected.map(item => item.systemId));
 
 const systems = registry.systems.map(system => {
@@ -98,6 +101,7 @@ const waveArtifact = {
   advancedThisRun: selected.length,
   advancedToday: advancedSystemIds.length,
   minimumMet: dailyProgress.minimumMet,
+  optionalExpansionThisRun: alreadyAdvanced.size >= policy.minimumDailyCases ? selected.length : 0,
   caseLimit: policy.caseLimit,
   productionDatabaseWritesPerformed: false,
   selectionRule: "Exclude completed systems and do not count an existing repository evidence packet again",

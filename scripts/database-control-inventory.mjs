@@ -5,6 +5,7 @@ import path from "node:path";
 
 const root = process.cwd();
 const registryPath = path.join(root, "database-control", "asset-registry.json");
+const statePath = path.join(root, "database-control", "state.json");
 const publicPath = path.join(root, "public", "database-control-registry.json");
 const sourceExtensions = new Set([".js", ".jsx", ".mjs", ".ts", ".tsx"]);
 const ignoredDirectories = new Set([
@@ -344,4 +345,9 @@ const publicRegistry = {
 };
 await writeFile(registryPath, serialized);
 await writeFile(publicPath, `${JSON.stringify(publicRegistry, null, 2)}\n`);
+const state = JSON.parse(await readFile(statePath, "utf8"));
+await writeFile(statePath, `${JSON.stringify({
+  ...state,
+  lastInventoryRunAt: generatedAt
+}, null, 2)}\n`);
 console.log(`CARMA-DB inventory: ${registry.summary.seenSystems} systems, ${registry.summary.registeredAssets} assets, ${registry.summary.writeCapableSystems} write-capable systems`);

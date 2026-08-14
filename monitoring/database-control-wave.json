@@ -1,16 +1,17 @@
 {
   "schemaVersion": 1,
   "program": "CARMA-DB",
-  "generatedAt": "2026-08-14T03:53:38.243Z",
+  "generatedAt": "2026-08-14T08:00:25.956Z",
   "localDate": "2026-08-14",
   "minimumTarget": 25,
   "advancedThisRun": 0,
-  "advancedToday": 25,
+  "advancedToday": 26,
   "minimumMet": true,
+  "optionalExpansionThisRun": 0,
   "caseLimit": null,
   "productionDatabaseWritesPerformed": false,
   "selectionRule": "Exclude completed systems and do not count an existing repository evidence packet again",
-  "remainingUnpreparedRepositoryPackets": 1,
+  "remainingUnpreparedRepositoryPackets": 0,
   "waveRuns": [
     {
       "generatedAt": "2026-08-14T03:48:49.564Z",
@@ -46,6 +47,20 @@
     },
     {
       "generatedAt": "2026-08-14T03:53:38.243Z",
+      "advancedCount": 0,
+      "advancedSystemIds": [],
+      "note": "Daily minimum already met; no duplicate case advancement"
+    },
+    {
+      "generatedAt": "2026-08-14T07:57:50.025Z",
+      "advancedCount": 1,
+      "advancedSystemIds": [
+        "DBS-8F4891B2"
+      ],
+      "note": "Repository evidence packets prepared; no live database or production mutation performed"
+    },
+    {
+      "generatedAt": "2026-08-14T08:00:25.956Z",
       "advancedCount": 0,
       "advancedSystemIds": [],
       "note": "Daily minimum already met; no duplicate case advancement"
@@ -390,6 +405,20 @@
     },
     {
       "systemId": "DBS-6C34A11E",
+      "company": "KTAHV",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "advancement": "repository_evidence_packet_ready"
+    },
+    {
+      "systemId": "DBS-8F4891B2",
       "company": "KTAHV",
       "priority": "P2",
       "riskScore": 65,
