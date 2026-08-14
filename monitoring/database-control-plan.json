@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "program": "CARMA-DB",
-  "generatedAt": "2026-08-14T08:00:26.194Z",
+  "generatedAt": "2026-08-14T11:53:35.432Z",
   "phase": "asset_discovery",
   "mode": "repository_autopilot_production_database_writes_disabled",
   "inventory": {
@@ -1862,6 +1862,12 @@
       },
       {
         "generatedAt": "2026-08-14T08:00:25.956Z",
+        "advancedCount": 0,
+        "advancedSystemIds": [],
+        "note": "Daily minimum already met; no duplicate case advancement"
+      },
+      {
+        "generatedAt": "2026-08-14T11:53:35.270Z",
         "advancedCount": 0,
         "advancedSystemIds": [],
         "note": "Daily minimum already met; no duplicate case advancement"

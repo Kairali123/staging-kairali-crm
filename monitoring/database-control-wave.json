@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "program": "CARMA-DB",
-  "generatedAt": "2026-08-14T08:00:25.956Z",
+  "generatedAt": "2026-08-14T11:53:35.270Z",
   "localDate": "2026-08-14",
   "minimumTarget": 25,
   "advancedThisRun": 0,
@@ -61,6 +61,12 @@
     },
     {
       "generatedAt": "2026-08-14T08:00:25.956Z",
+      "advancedCount": 0,
+      "advancedSystemIds": [],
+      "note": "Daily minimum already met; no duplicate case advancement"
+    },
+    {
+      "generatedAt": "2026-08-14T11:53:35.270Z",
       "advancedCount": 0,
       "advancedSystemIds": [],
       "note": "Daily minimum already met; no duplicate case advancement"

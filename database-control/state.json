@@ -10,8 +10,8 @@
     "A historical completion statement is evidence to reconcile, not independent proof of the result.",
     "Never rotate a credential blindly when an earlier rotation is reported; first verify current use and old-credential rejection without exposing either value."
   ],
-  "lastInventoryRunAt": "2026-08-14T08:00:24.600Z",
-  "lastPlanRunAt": "2026-08-14T08:00:26.194Z",
+  "lastInventoryRunAt": "2026-08-14T11:53:34.088Z",
+  "lastPlanRunAt": "2026-08-14T11:53:35.432Z",
   "lastEmailLocalDate": "2026-08-14",
   "dailyProgress": {
     "localDate": "2026-08-14",
@@ -101,14 +101,23 @@
         "advancedCount": 0,
         "advancedSystemIds": [],
         "note": "Daily minimum already met; no duplicate case advancement"
+      },
+      {
+        "generatedAt": "2026-08-14T11:53:35.270Z",
+        "advancedCount": 0,
+        "advancedSystemIds": [],
+        "note": "Daily minimum already met; no duplicate case advancement"
       }
     ]
   },
-  "lastWaveRunAt": "2026-08-14T08:00:25.956Z",
-  "lastHeartbeatRunAt": "2026-08-14T08:00:31Z",
-  "lastGitHubSyncAt": "2026-08-14T08:00:00Z",
-  "lastMailboxCheckAt": "2026-08-14T07:58:30Z",
-  "latestReviewStatus": "PR #12 open and mergeable; Satyam and Sunaj requested; no review submitted",
+  "lastWaveRunAt": "2026-08-14T11:53:35.270Z",
+  "lastHeartbeatRunAt": "2026-08-14T11:55:40Z",
+  "lastGitHubSyncAt": "2026-08-14T11:55:30Z",
+  "lastMailboxCheckAt": "2026-08-14T11:54:30Z",
+  "latestReviewStatus": "PR #12 open and mergeable; zero Satyam/Sunaj reviews after 24 hours; consolidated escalation active on #17",
   "latestMailboxStatus": "No human reply after the 2026-08-14 material review request; second email suppressed by the daily limit",
-  "emailSuppressedReason": "One material CRM database email was sent on 2026-08-14; update GitHub only for the rest of the local day"
+  "emailSuppressedReason": "One material CRM database email was sent on 2026-08-14; the 24-hour escalation was recorded in GitHub only",
+  "lastEscalationAt": "2026-08-14T11:55:00Z",
+  "lastEscalationReason": "PR #12 had zero requested-reviewer submissions after 24 hours",
+  "lastEscalationChannel": "GitHub daily issue #17; no duplicate email"
 }
