@@ -62,6 +62,12 @@
       "test_and_fixture_repair"
     ]
   },
+  "repositoryControlChecks": {
+    "requiredWorkflow": "CARMA-DB repository control",
+    "deploymentPreviewRequired": false,
+    "deploymentChecksAffectRepositoryControlApproval": false,
+    "rulesetEnforcementIssue": 11
+  },
   "satyamDecisions": [
     "business_priority",
     "data_semantics",

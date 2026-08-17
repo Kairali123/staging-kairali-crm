@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "program": "CARMA-DB",
+  "generatedAt": "2026-08-17T03:57:00Z",
+  "test": "two_fresh_clone_scheduled_equivalent_checkpoint_readback",
+  "sourceRevision": "ce1f7bf",
+  "checkpointStorage": "temporary append-only carma-db-checkpoint branch",
+  "run1": {
+    "advancedBefore": 25,
+    "advancedThisRun": 10,
+    "advancedAfter": 35,
+    "advancedSystemIds": [
+      "DBS-3DE0B3CE",
+      "DBS-7902580C",
+      "DBS-1A374D28",
+      "DBS-7D52BAD5",
+      "DBS-93EC7EE7",
+      "DBS-66932D7C",
+      "DBS-7C748DCE",
+      "DBS-8ACF6547",
+      "DBS-722F89C4",
+      "DBS-AA9B7AED"
+    ],
+    "validation": "pass"
+  },
+  "run2": {
+    "freshClone": true,
+    "checkpointAdvancedCountReadBeforeRun": 35,
+    "checkpointWaveRunsReadBeforeRun": 2,
+    "advancedThisRun": 10,
+    "advancedAfter": 45,
+    "advancedSystemIds": [
+      "DBS-A0EDD3C1",
+      "DBS-99B720EC",
+      "DBS-6B3D0FE4",
+      "DBS-A9A91D72",
+      "DBS-CB31C680",
+      "DBS-A9338A73",
+      "DBS-449F2E58",
+      "DBS-9F5DD25B",
+      "DBS-75370A82",
+      "DBS-D9B1921B"
+    ],
+    "validation": "pass"
+  },
+  "duplicateSystemIdsAcrossRuns": [],
+  "productionDatabaseWrites": 0,
+  "result": "pass"
+}

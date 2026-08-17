@@ -77,6 +77,12 @@ workflow has serialized concurrency, so a later wave reads the earlier wave's di
 case IDs before selecting more work. The checkpoint branch is control evidence only;
 it is not a deployment branch and never contains database rows or secrets.
 
+Pull requests use the read-only `CARMA-DB repository control` check. The CARMA-DB
+policy and validator explicitly keep deployment-preview checks outside repository-only
+control approval. A Vercel preview may still appear in GitHub, but it is neither live
+database evidence nor a CARMA-DB approval requirement. Activating a repository ruleset
+that requires the CARMA-DB check remains the owner-gated work tracked in issue #11.
+
 ## Communication without noise
 
 - GitHub updates routine progress without email.

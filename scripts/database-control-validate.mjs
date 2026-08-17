@@ -37,6 +37,15 @@ if (!policy?.roles?.independentVerifier?.github) errors.push("independent verifi
 if (policy?.automaticRepositoryWriteControls?.productionDatabaseWriteAllowed !== false) {
   errors.push("production database writes must remain disabled");
 }
+if (policy?.repositoryControlChecks?.requiredWorkflow !== "CARMA-DB repository control") {
+  errors.push("CARMA-DB repository-control workflow is not named in policy");
+}
+if (policy?.repositoryControlChecks?.deploymentPreviewRequired !== false) {
+  errors.push("repository-only CARMA-DB approval must not depend on a deployment preview");
+}
+if (policy?.repositoryControlChecks?.deploymentChecksAffectRepositoryControlApproval !== false) {
+  errors.push("deployment status must remain outside repository-only CARMA-DB approval");
+}
 if (policy?.minimumDailyCases < 25) errors.push("minimum daily database cases must be at least 25");
 if (policy?.caseLimit !== null) errors.push("Satyam's database case count must not have an upper limit");
 if (policy?.humanDecisionLimit !== null) errors.push("Satyam's decision count must not have an upper limit");
@@ -115,6 +124,18 @@ if (!workflow.includes("carma-db-checkpoint")) {
 }
 if (!workflow.includes("Persist append-only CARMA-DB checkpoint")) {
   errors.push("database-control workflow has no checkpoint persistence step");
+}
+let verificationWorkflow = "";
+try {
+  verificationWorkflow = await readFile(path.join(root, ".github/workflows/database-control-verify.yml"), "utf8");
+} catch (error) {
+  errors.push(`database-control verification workflow: ${error.message}`);
+}
+if (!verificationWorkflow.startsWith("name: CARMA-DB repository control")) {
+  errors.push("dedicated CARMA-DB pull-request verification check is missing");
+}
+if (!verificationWorkflow.includes("contents: read") || !verificationWorkflow.includes("npm run database:control:validate")) {
+  errors.push("CARMA-DB pull-request verification is not read-only or does not validate controls");
 }
 if (plan?.inventory?.seenSystems !== registry?.summary?.seenSystems) errors.push("plan and registry system counts differ");
 if (publicPlan?.inventory?.seenSystems !== registry?.summary?.seenSystems) errors.push("public plan and registry system counts differ");
