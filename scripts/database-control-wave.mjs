@@ -21,19 +21,56 @@ const priorProgress = state.dailyProgress?.localDate === localDate
 const alreadyAdvanced = new Set(priorProgress.advancedSystemIds || []);
 const completedSystemIds = new Set(state.completedSystemIds || []);
 const registryBySystemId = new Map(registry.systems.map(system => [system.systemId, system]));
+const nextAdvancement = system => {
+  if (system.preflightStatus !== "repository_evidence_packet_ready") {
+    return "repository_evidence_packet_ready";
+  }
+  if (system.evidenceRequestStatus !== "live_control_evidence_request_ready") {
+    return "live_control_evidence_request_ready";
+  }
+  return null;
+};
 const remainingToMinimum = Math.max(0, policy.minimumDailyCases - alreadyAdvanced.size);
 const selectionCapacity = remainingToMinimum > 0
   ? remainingToMinimum
   : policy.maxAutomaticWritesPerRun;
 const selected = (plan.preflight || [])
   .filter(item => !alreadyAdvanced.has(item.systemId) && !completedSystemIds.has(item.systemId))
-  .filter(item => registryBySystemId.get(item.systemId)?.preflightStatus !== "repository_evidence_packet_ready")
+  .map(item => ({
+    ...item,
+    advancement: nextAdvancement(registryBySystemId.get(item.systemId))
+  }))
+  .filter(item => item.advancement)
   .slice(0, selectionCapacity);
 const selectedIds = new Set(selected.map(item => item.systemId));
 
 const systems = registry.systems.map(system => {
   if (!selectedIds.has(system.systemId)) return system;
   const item = selected.find(candidate => candidate.systemId === system.systemId);
+  if (item.advancement === "live_control_evidence_request_ready") {
+    const event = {
+      timestamp: generatedAt,
+      type: "live_control_evidence_request_prepared",
+      evidence: `Prepared a sanitized live-control evidence request for ${system.systemId}; no live evidence or production mutation was performed`
+    };
+    return {
+      ...system,
+      evidenceRequestStatus: "live_control_evidence_request_ready",
+      lastAdvancedAt: generatedAt,
+      lastAdvancedLocalDate: localDate,
+      liveControlEvidenceRequest: {
+        requestedCoverage: item.missingCoverage,
+        accountableOwner: policy.roles.accountableOwner.github,
+        independentVerifier: policy.roles.independentVerifier.github,
+        evidenceBoundary: "Sanitized control evidence only; no credentials, connection strings, customer data, raw rows or unrestricted SQL",
+        productionWriteAllowed: false
+      },
+      nextAction: item.missingCoverage.length
+        ? `Obtain approved sanitized evidence for ${item.missingCoverage[0]}`
+        : "Obtain Satyam completeness attestation",
+      changeHistory: [...(system.changeHistory || []), event]
+    };
+  }
   const event = {
     timestamp: generatedAt,
     type: "repository_preflight_advanced",
@@ -65,15 +102,19 @@ const advancedSystemIds = [...new Set([
   ...(priorProgress.advancedSystemIds || []),
   ...selected.map(item => item.systemId)
 ])];
+const advancementsBySystemId = {
+  ...(priorProgress.advancementsBySystemId || {}),
+  ...Object.fromEntries(selected.map(item => [item.systemId, item.advancement]))
+};
 const waveRun = {
   generatedAt,
   advancedCount: selected.length,
   advancedSystemIds: selected.map(item => item.systemId),
   note: selected.length
-    ? "Repository evidence packets prepared; no live database or production mutation performed"
+    ? "Repository-only control packets advanced; no live database or production mutation performed"
     : advancedSystemIds.length >= policy.minimumDailyCases
       ? "Daily minimum already met; no duplicate case advancement"
-      : "No new repository evidence packet was eligible; prior packets were not counted again"
+      : "No new repository-only control stage was eligible; completed stages were not counted again"
 };
 const dailyProgress = {
   localDate,
@@ -84,6 +125,7 @@ const dailyProgress = {
   caseLimit: policy.caseLimit,
   ownerMayExpandCaseCount: policy.ownerMayExpandCaseCount,
   advancedSystemIds,
+  advancementsBySystemId,
   waveRuns: [...(priorProgress.waveRuns || []), waveRun]
 };
 const planBySystemId = new Map((plan.preflight || []).map(item => [item.systemId, item]));
@@ -104,9 +146,12 @@ const waveArtifact = {
   optionalExpansionThisRun: alreadyAdvanced.size >= policy.minimumDailyCases ? selected.length : 0,
   caseLimit: policy.caseLimit,
   productionDatabaseWritesPerformed: false,
-  selectionRule: "Exclude completed systems and do not count an existing repository evidence packet again",
+  selectionRule: "Exclude completed and already-advanced-today systems; advance only the next incomplete repository-safe control stage",
   remainingUnpreparedRepositoryPackets: systems.filter(
     system => system.preflightStatus !== "repository_evidence_packet_ready" && !completedSystemIds.has(system.systemId)
+  ).length,
+  remainingLiveControlEvidenceRequests: systems.filter(
+    system => system.evidenceRequestStatus !== "live_control_evidence_request_ready" && !completedSystemIds.has(system.systemId)
   ).length,
   waveRuns: dailyProgress.waveRuns,
   cases: advancedSystemIds.map(systemId => planBySystemId.get(systemId)).filter(Boolean).map(item => ({
@@ -116,7 +161,7 @@ const waveArtifact = {
     riskScore: item.riskScore,
     writeCapable: item.writeCapable,
     missingCoverage: item.missingCoverage,
-    advancement: "repository_evidence_packet_ready"
+    advancement: advancementsBySystemId[item.systemId]
   }))
 };
 

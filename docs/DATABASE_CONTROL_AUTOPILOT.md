@@ -64,7 +64,18 @@ npm run database:control:wave
 ```
 
 It records distinct cases advanced that day and prepares metadata-only evidence
-packets. It does not certify live controls or authorize a database write.
+packets. After repository preflight, it may prepare a sanitized live-control evidence
+request for the same system on a later working day; that request is a new control stage,
+not live evidence or discovery certification. A system is counted at most once per
+local day and a completed stage is never counted twice.
+
+Scheduled runs use the append-only `carma-db-checkpoint` branch. Each run starts from
+the previous checkpoint, merges the current `main` control code, runs the ordered
+inventory/plan/wave/plan/validation sequence, and commits only the private state,
+private registry, monitoring artifacts, and their sanitized public projections. The
+workflow has serialized concurrency, so a later wave reads the earlier wave's distinct
+case IDs before selecting more work. The checkpoint branch is control evidence only;
+it is not a deployment branch and never contains database rows or secrets.
 
 ## Communication without noise
 

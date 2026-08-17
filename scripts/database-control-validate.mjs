@@ -18,6 +18,12 @@ const registry = await readJson("database-control/asset-registry.json");
 const plan = await readJson("monitoring/database-control-plan.json");
 const publicPlan = await readJson("public/database-control-plan.json");
 const publicRegistry = await readJson("public/database-control-registry.json");
+let workflow = "";
+try {
+  workflow = await readFile(path.join(root, ".github/workflows/database-control-autopilot.yml"), "utf8");
+} catch (error) {
+  errors.push(`database-control workflow: ${error.message}`);
+}
 const allowedCoverageStates = new Set(["discovered", "checked_none", "unverified", "blocked"]);
 
 if (policy?.program !== "CARMA-DB") errors.push("policy program must be CARMA-DB");
@@ -94,7 +100,21 @@ if (state?.dailyProgress?.advancedSystemIds) {
     else if (system.preflightStatus !== "repository_evidence_packet_ready") {
       errors.push(`advanced system lacks a repository evidence packet: ${systemId}`);
     }
+    const advancement = state.dailyProgress.advancementsBySystemId?.[systemId];
+    if (!advancement) errors.push(`advanced system lacks its auditable stage: ${systemId}`);
+    if (advancement === "live_control_evidence_request_ready" && system?.evidenceRequestStatus !== advancement) {
+      errors.push(`advanced system lacks its live-control evidence request: ${systemId}`);
+    }
   }
+}
+if (!/^permissions:\n\s+contents: write$/m.test(workflow)) {
+  errors.push("database-control workflow cannot persist durable repository checkpoints");
+}
+if (!workflow.includes("carma-db-checkpoint")) {
+  errors.push("database-control workflow has no durable checkpoint branch");
+}
+if (!workflow.includes("Persist append-only CARMA-DB checkpoint")) {
+  errors.push("database-control workflow has no checkpoint persistence step");
 }
 if (plan?.inventory?.seenSystems !== registry?.summary?.seenSystems) errors.push("plan and registry system counts differ");
 if (publicPlan?.inventory?.seenSystems !== registry?.summary?.seenSystems) errors.push("public plan and registry system counts differ");

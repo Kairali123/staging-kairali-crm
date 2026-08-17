@@ -8,11 +8,11 @@ Operate the CARMA-DB autonomous database delivery structure for Satyam.
 
 ## NEXT ACTION
 
-Follow the consolidated escalation on daily #17: obtain Satyam's accountable-owner
-review and Sunaj's independent-verifier review on ready PR #12, while Sunaj proceeds on
-the assigned infrastructure-verification lanes. Merge only after approval and collect
-approved live-control evidence for the 51 preflight-ready systems while continuing #2
-reconciliation. The 2026-08-14 minimum is exceeded at 26/25; no workload cap applies.
+Publish and prove the append-only scheduled checkpoint correction requested by Sunaj on
+PR #12, then obtain Sunaj's re-review and Satyam's accountable-owner review. Reconcile
+Satyam's promised 17 August SQL QA/QC database evidence into #1–#10 and create one
+sanitized issue for each newly confirmed error. Monday's minimum is met at 25/25; 26
+optional live-control evidence-request cases remain and no workload cap applies.
 
 ## EXIT EVIDENCE
 
@@ -85,3 +85,14 @@ so infrastructure verification was jointly assigned to Sunaj on #1, #5, #6, #7, 
 bounded options, recommendation, no-decision consequence and an 8-working-hour deadline.
 Dashboard #15, Batch #16, Focus #14, daily #17 and reconciliation #2 were synchronized.
 The already-used daily email allowance suppressed a second message.
+
+2026-08-17T03:54Z heartbeat: Sunaj submitted changes requested on PR #12 after finding
+that scheduled runner state was artifact-only and not read back by later waves, and that
+the access-only Vercel status remained failed. GitHub readback found no branch protection
+and no repository rulesets, so Vercel is not currently required; enforcement remains
+open under #11. The Monday ordered sequence passed and advanced 25 distinct sanitized
+live-control evidence-request packets (17 P1/write-capable and 8 P2/read-only), leaving
+26 optional ready cases. Discovery certification remains 0/51, no new database error was
+confirmed, and production writes remain zero. Daily #18 and control issues #2/#14/#15/#16
+were synchronized. Sunaj's 16 August email says Satyam will submit the final sanitized SQL
+QA/QC database section on 17 August.

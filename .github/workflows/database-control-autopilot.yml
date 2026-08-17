@@ -13,7 +13,7 @@ on:
       - ".github/workflows/database-control-autopilot.yml"
 
 permissions:
-  contents: read
+  contents: write
   issues: write
 
 concurrency:
@@ -26,6 +26,21 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Restore append-only CARMA-DB checkpoint
+        shell: bash
+        run: |
+          git config user.name "carma-db-control[bot]"
+          git config user.email "carma-db-control[bot]@users.noreply.github.com"
+          git fetch origin main
+          if git fetch origin refs/heads/carma-db-checkpoint:refs/remotes/origin/carma-db-checkpoint; then
+            git switch --force-create carma-db-checkpoint origin/carma-db-checkpoint
+            git merge --no-edit -X ours origin/main
+          else
+            git switch --create carma-db-checkpoint origin/main
+          fi
 
       - uses: actions/setup-node@v7
         with:
@@ -45,6 +60,23 @@ jobs:
 
       - name: Verify CARMA-DB safety and evidence rules
         run: npm run database:control:validate
+
+      - name: Persist append-only CARMA-DB checkpoint
+        shell: bash
+        run: |
+          git add \
+            database-control/state.json \
+            database-control/asset-registry.json \
+            monitoring/database-control-plan.json \
+            monitoring/database-control-wave.json \
+            public/database-control-plan.json \
+            public/database-control-registry.json
+          if git diff --cached --quiet; then
+            echo "No checkpoint change to persist"
+          else
+            git commit -m "checkpoint CARMA-DB wave ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            git push origin HEAD:refs/heads/carma-db-checkpoint
+          fi
 
       - name: Update private CARMA-DB dashboard, batch, and focus issues
         uses: actions/github-script@v9
