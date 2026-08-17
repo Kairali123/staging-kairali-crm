@@ -96,3 +96,9 @@ live-control evidence-request packets (17 P1/write-capable and 8 P2/read-only), 
 confirmed, and production writes remain zero. Daily #18 and control issues #2/#14/#15/#16
 were synchronized. Sunaj's 16 August email says Satyam will submit the final sanitized SQL
 QA/QC database section on 17 August.
+
+The checkpoint correction and two-run proof were published through head `132911d`; the
+new read-only CARMA-DB PR check passed. Both reviewers were requested again. One material
+17 August message was sent in the established thread with a 17:30 IST deadline for
+Satyam's sanitized SQL QA/QC submission/accountable review and Sunaj's re-review; the
+daily email allowance is now used.

@@ -12,7 +12,7 @@
   ],
   "lastInventoryRunAt": "2026-08-17T03:49:28.345Z",
   "lastPlanRunAt": "2026-08-17T03:49:29.640Z",
-  "lastEmailLocalDate": "2026-08-14",
+  "lastEmailLocalDate": "2026-08-17",
   "dailyProgress": {
     "localDate": "2026-08-17",
     "minimumTarget": 25,
@@ -111,12 +111,13 @@
     ]
   },
   "lastWaveRunAt": "2026-08-17T03:49:29.455Z",
-  "lastHeartbeatRunAt": "2026-08-17T03:54:00Z",
-  "lastGitHubSyncAt": "2026-08-17T03:54:00Z",
-  "lastMailboxCheckAt": "2026-08-17T03:47:00Z",
-  "latestReviewStatus": "PR #12 open and mergeable; Sunaj requested checkpoint persistence/readback and Vercel required-check resolution; Satyam review absent",
-  "latestMailboxStatus": "Sunaj reports Satyam final SQL QA/QC database evidence is due 2026-08-17; submission not yet received",
+  "lastHeartbeatRunAt": "2026-08-17T03:59:00Z",
+  "lastGitHubSyncAt": "2026-08-17T03:58:00Z",
+  "lastMailboxCheckAt": "2026-08-17T03:59:00Z",
+  "latestReviewStatus": "PR #12 correction published with green CARMA-DB repository-control check; Sunaj and Satyam re-reviews requested",
+  "latestMailboxStatus": "One material 2026-08-17 verification message sent in the established thread; Satyam SQL QA/QC submission and both reviews due by 17:30 IST",
   "emailSuppressedReason": null,
+  "lastEmailMessageId": "1a00ddec88f93820",
   "lastEscalationAt": "2026-08-14T11:55:00Z",
   "lastEscalationReason": "PR #12 had zero requested-reviewer submissions after 24 hours",
   "lastEscalationChannel": "GitHub daily issue #17; no duplicate email"
