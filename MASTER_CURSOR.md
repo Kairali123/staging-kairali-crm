@@ -8,10 +8,10 @@ Operate the CARMA-DB autonomous database delivery structure for Satyam.
 
 ## NEXT ACTION
 
-Advance the remaining 16 optional live-control evidence requests without duplicates.
+Advance the remaining 6 optional live-control evidence requests without duplicates.
 Obtain Satyam's value-free dispositions for #19–#24 and accountable-owner PR review,
 plus Sunaj's independent re-review. Keep the audit at HOLD — QA/QC only; no Stage 2
-mutation is authorized. Monday is at 35/25 with 35/51 requests ready and no workload
+mutation is authorized. Monday is at 45/25 with 45/51 requests ready and no workload
 cap.
 
 ## EXIT EVIDENCE
@@ -114,3 +114,13 @@ recorded without creating an error. The ordered midday wave advanced 10 disjoint
 cases, bringing the day to 35/25 and evidence requests to 35/51 with 16 optional cases
 remaining, 0/51 certified and zero production writes. Dashboard #15, Batch #16, Focus
 #14, daily #18, #2, #6 and #9 were synchronized. No second email was sent.
+
+2026-08-17T11:52Z heartbeat: the ordered 17:15 IST closeout sequence passed and
+advanced 10 additional P2/read-only cross-company evidence requests. Monday closed at
+45/25 with 45/51 requests ready and six optional cases remaining. All 45 case IDs are
+distinct across three waves and every pairwise overlap is zero. Discovery certification
+remains 0/51, production writes remain zero and no new database error was confirmed.
+PR #12 remains mergeable with its CARMA-DB check green, but Satyam has not submitted
+an accountable review and Sunaj has not re-reviewed the corrected head. The established
+thread has no later database reply; a second email was suppressed under the one-message
+daily rule.
