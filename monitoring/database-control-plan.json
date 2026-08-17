@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "program": "CARMA-DB",
-  "generatedAt": "2026-08-17T03:49:29.640Z",
+  "generatedAt": "2026-08-17T07:49:34.742Z",
   "phase": "asset_discovery",
   "mode": "repository_autopilot_production_database_writes_disabled",
   "inventory": {
@@ -1780,7 +1780,7 @@
   "dailyProgress": {
     "localDate": "2026-08-17",
     "minimumTarget": 25,
-    "advancedCount": 25,
+    "advancedCount": 35,
     "minimumMet": true,
     "remainingToMinimum": 0,
     "caseLimit": null,
@@ -1810,7 +1810,17 @@
       "DBS-30342BB0",
       "DBS-D83BFAF6",
       "DBS-DD3085B4",
-      "DBS-3A916059"
+      "DBS-3A916059",
+      "DBS-3DE0B3CE",
+      "DBS-7902580C",
+      "DBS-1A374D28",
+      "DBS-7D52BAD5",
+      "DBS-93EC7EE7",
+      "DBS-66932D7C",
+      "DBS-7C748DCE",
+      "DBS-8ACF6547",
+      "DBS-722F89C4",
+      "DBS-AA9B7AED"
     ],
     "advancementsBySystemId": {
       "DBS-D4490043": "live_control_evidence_request_ready",
@@ -1837,7 +1847,17 @@
       "DBS-30342BB0": "live_control_evidence_request_ready",
       "DBS-D83BFAF6": "live_control_evidence_request_ready",
       "DBS-DD3085B4": "live_control_evidence_request_ready",
-      "DBS-3A916059": "live_control_evidence_request_ready"
+      "DBS-3A916059": "live_control_evidence_request_ready",
+      "DBS-3DE0B3CE": "live_control_evidence_request_ready",
+      "DBS-7902580C": "live_control_evidence_request_ready",
+      "DBS-1A374D28": "live_control_evidence_request_ready",
+      "DBS-7D52BAD5": "live_control_evidence_request_ready",
+      "DBS-93EC7EE7": "live_control_evidence_request_ready",
+      "DBS-66932D7C": "live_control_evidence_request_ready",
+      "DBS-7C748DCE": "live_control_evidence_request_ready",
+      "DBS-8ACF6547": "live_control_evidence_request_ready",
+      "DBS-722F89C4": "live_control_evidence_request_ready",
+      "DBS-AA9B7AED": "live_control_evidence_request_ready"
     },
     "waveRuns": [
       {
@@ -1869,6 +1889,23 @@
           "DBS-D83BFAF6",
           "DBS-DD3085B4",
           "DBS-3A916059"
+        ],
+        "note": "Repository-only control packets advanced; no live database or production mutation performed"
+      },
+      {
+        "generatedAt": "2026-08-17T07:49:34.578Z",
+        "advancedCount": 10,
+        "advancedSystemIds": [
+          "DBS-3DE0B3CE",
+          "DBS-7902580C",
+          "DBS-1A374D28",
+          "DBS-7D52BAD5",
+          "DBS-93EC7EE7",
+          "DBS-66932D7C",
+          "DBS-7C748DCE",
+          "DBS-8ACF6547",
+          "DBS-722F89C4",
+          "DBS-AA9B7AED"
         ],
         "note": "Repository-only control packets advanced; no live database or production mutation performed"
       }

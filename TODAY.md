@@ -2,4 +2,4 @@
 
 | ID | Task | Bounded batch | Next action | Status |
 |---|---|---|---|---|
-| DB-012 | Operate CARMA-DB autonomous database delivery | 25 distinct sanitized live-control evidence requests advanced: 17 P1/write-capable and 8 P2/read-only; 26 optional cases remain; 0 production writes | Publish append-only checkpoint correction and two-run readback; obtain Satyam review/SQL QA-QC evidence and Sunaj re-review; continue #2 | IN PROGRESS — 25/25; 25/51 REQUESTS; 0/51 CERTIFIED; CHANGES REQUESTED |
+| DB-012 | Operate CARMA-DB autonomous database delivery | 35 distinct cases advanced; 35/51 evidence requests; Satyam audit reconciled into existing #6 plus new #19–#24; 0 production writes | Advance the remaining 16 optional requests; obtain Satyam dispositions/review and Sunaj re-review; keep Stage 2 blocked | IN PROGRESS — 35/25; 35/51 REQUESTS; 14 WORK ISSUES; 0/51 CERTIFIED |

@@ -10,13 +10,13 @@
     "A historical completion statement is evidence to reconcile, not independent proof of the result.",
     "Never rotate a credential blindly when an earlier rotation is reported; first verify current use and old-credential rejection without exposing either value."
   ],
-  "lastInventoryRunAt": "2026-08-17T03:49:28.345Z",
-  "lastPlanRunAt": "2026-08-17T03:49:29.640Z",
+  "lastInventoryRunAt": "2026-08-17T07:49:33.424Z",
+  "lastPlanRunAt": "2026-08-17T07:49:34.742Z",
   "lastEmailLocalDate": "2026-08-17",
   "dailyProgress": {
     "localDate": "2026-08-17",
     "minimumTarget": 25,
-    "advancedCount": 25,
+    "advancedCount": 35,
     "minimumMet": true,
     "remainingToMinimum": 0,
     "caseLimit": null,
@@ -46,7 +46,17 @@
       "DBS-30342BB0",
       "DBS-D83BFAF6",
       "DBS-DD3085B4",
-      "DBS-3A916059"
+      "DBS-3A916059",
+      "DBS-3DE0B3CE",
+      "DBS-7902580C",
+      "DBS-1A374D28",
+      "DBS-7D52BAD5",
+      "DBS-93EC7EE7",
+      "DBS-66932D7C",
+      "DBS-7C748DCE",
+      "DBS-8ACF6547",
+      "DBS-722F89C4",
+      "DBS-AA9B7AED"
     ],
     "advancementsBySystemId": {
       "DBS-D4490043": "live_control_evidence_request_ready",
@@ -73,7 +83,17 @@
       "DBS-30342BB0": "live_control_evidence_request_ready",
       "DBS-D83BFAF6": "live_control_evidence_request_ready",
       "DBS-DD3085B4": "live_control_evidence_request_ready",
-      "DBS-3A916059": "live_control_evidence_request_ready"
+      "DBS-3A916059": "live_control_evidence_request_ready",
+      "DBS-3DE0B3CE": "live_control_evidence_request_ready",
+      "DBS-7902580C": "live_control_evidence_request_ready",
+      "DBS-1A374D28": "live_control_evidence_request_ready",
+      "DBS-7D52BAD5": "live_control_evidence_request_ready",
+      "DBS-93EC7EE7": "live_control_evidence_request_ready",
+      "DBS-66932D7C": "live_control_evidence_request_ready",
+      "DBS-7C748DCE": "live_control_evidence_request_ready",
+      "DBS-8ACF6547": "live_control_evidence_request_ready",
+      "DBS-722F89C4": "live_control_evidence_request_ready",
+      "DBS-AA9B7AED": "live_control_evidence_request_ready"
     },
     "waveRuns": [
       {
@@ -107,17 +127,44 @@
           "DBS-3A916059"
         ],
         "note": "Repository-only control packets advanced; no live database or production mutation performed"
+      },
+      {
+        "generatedAt": "2026-08-17T07:49:34.578Z",
+        "advancedCount": 10,
+        "advancedSystemIds": [
+          "DBS-3DE0B3CE",
+          "DBS-7902580C",
+          "DBS-1A374D28",
+          "DBS-7D52BAD5",
+          "DBS-93EC7EE7",
+          "DBS-66932D7C",
+          "DBS-7C748DCE",
+          "DBS-8ACF6547",
+          "DBS-722F89C4",
+          "DBS-AA9B7AED"
+        ],
+        "note": "Repository-only control packets advanced; no live database or production mutation performed"
       }
     ]
   },
-  "lastWaveRunAt": "2026-08-17T03:49:29.455Z",
-  "lastHeartbeatRunAt": "2026-08-17T03:59:00Z",
-  "lastGitHubSyncAt": "2026-08-17T03:58:00Z",
-  "lastMailboxCheckAt": "2026-08-17T03:59:00Z",
-  "latestReviewStatus": "PR #12 correction published with green CARMA-DB repository-control check; Sunaj and Satyam re-reviews requested",
-  "latestMailboxStatus": "One material 2026-08-17 verification message sent in the established thread; Satyam SQL QA/QC submission and both reviews due by 17:30 IST",
-  "emailSuppressedReason": null,
+  "lastWaveRunAt": "2026-08-17T07:49:34.578Z",
+  "lastHeartbeatRunAt": "2026-08-17T07:52:00Z",
+  "lastGitHubSyncAt": "2026-08-17T07:52:00Z",
+  "lastMailboxCheckAt": "2026-08-17T07:47:00Z",
+  "latestReviewStatus": "PR #12 remains mergeable with green CARMA-DB check; no new Satyam or Sunaj approval after re-request",
+  "latestMailboxStatus": "Satyam Stage 1 read-only audit received in a separate thread and reconciled into #6 and #19-#24",
+  "emailSuppressedReason": "One material CRM database email was already sent on 2026-08-17; the new audit and midday wave were published through GitHub only",
   "lastEmailMessageId": "1a00ddec88f93820",
+  "latestAuditReconciliation": {
+    "receivedAt": "2026-08-17T04:58:49Z",
+    "reconciledAt": "2026-08-17T07:52:00Z",
+    "approvalGate": "hold_qa_qc_only",
+    "individualFindingIssues": [6, 19, 20, 21, 22, 23, 24],
+    "newIssueCount": 6,
+    "positiveForeignKeyChecks": 101,
+    "positiveForeignKeyOrphans": 0,
+    "productionDatabaseWritesPerformed": false
+  },
   "lastEscalationAt": "2026-08-14T11:55:00Z",
   "lastEscalationReason": "PR #12 had zero requested-reviewer submissions after 24 hours",
   "lastEscalationChannel": "GitHub daily issue #17; no duplicate email"

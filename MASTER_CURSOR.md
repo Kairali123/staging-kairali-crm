@@ -8,11 +8,11 @@ Operate the CARMA-DB autonomous database delivery structure for Satyam.
 
 ## NEXT ACTION
 
-Publish and prove the append-only scheduled checkpoint correction requested by Sunaj on
-PR #12, then obtain Sunaj's re-review and Satyam's accountable-owner review. Reconcile
-Satyam's promised 17 August SQL QA/QC database evidence into #1–#10 and create one
-sanitized issue for each newly confirmed error. Monday's minimum is met at 25/25; 26
-optional live-control evidence-request cases remain and no workload cap applies.
+Advance the remaining 16 optional live-control evidence requests without duplicates.
+Obtain Satyam's value-free dispositions for #19–#24 and accountable-owner PR review,
+plus Sunaj's independent re-review. Keep the audit at HOLD — QA/QC only; no Stage 2
+mutation is authorized. Monday is at 35/25 with 35/51 requests ready and no workload
+cap.
 
 ## EXIT EVIDENCE
 
@@ -102,3 +102,15 @@ new read-only CARMA-DB PR check passed. Both reviewers were requested again. One
 17 August message was sent in the established thread with a 17:30 IST deadline for
 Satyam's sanitized SQL QA/QC submission/accountable review and Sunaj's re-review; the
 daily email allowance is now used.
+
+2026-08-17T07:52Z heartbeat: Satyam's separate read-only Stage 1 QA/QC submission and
+controlled workbook were reconciled. Existing #6 now contains the confirmed excessive-
+privilege control failure. Six sanitized issues were created: #19 future-date anomalies,
+#20 missing primary-key controls, #21 zero-row completeness, #22 negative-value
+anomalies, #23 duplicate index signatures and #24 sensitive-like column classification.
+Aggregate anomalies remain explicitly subject to business-rule validation. Positive
+evidence—101 declared foreign-key relationships checked with no orphan references—was
+recorded without creating an error. The ordered midday wave advanced 10 disjoint optional
+cases, bringing the day to 35/25 and evidence requests to 35/51 with 16 optional cases
+remaining, 0/51 certified and zero production writes. Dashboard #15, Batch #16, Focus
+#14, daily #18, #2, #6 and #9 were synchronized. No second email was sent.
