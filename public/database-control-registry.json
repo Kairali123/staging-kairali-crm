@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "program": "CARMA-DB",
-  "generatedAt": "2026-08-18T07:46:56.593Z",
+  "generatedAt": "2026-08-18T11:48:49.842Z",
   "evidenceBoundary": "Sanitized aggregate control metadata only. Source paths, database object names, credentials, rows and evidence text are excluded.",
   "coverageCategories": [
     "consumer",
