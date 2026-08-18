@@ -8,10 +8,10 @@ Operate the CARMA-DB autonomous database delivery structure for Satyam.
 
 ## NEXT ACTION
 
-Advance the remaining 32 optional value-free consumer reconciliation packets without duplicates.
+Advance the remaining 22 optional value-free consumer reconciliation packets without duplicates.
 Obtain Satyam's value-free dispositions for #19–#24 and accountable-owner PR review,
 plus Sunaj's independent re-review. Keep the audit at HOLD — QA/QC only; no Stage 2
-mutation is authorized. Tuesday is at 25/25 with 51/51 requests and 19/51 reconciliation
+mutation is authorized. Tuesday is at 35/25 with 51/51 requests and 29/51 reconciliation
 packets ready; there is no workload cap.
 
 ## EXIT EVIDENCE
@@ -137,3 +137,16 @@ audit event. A second ordered sequence advanced 19 different systems and passed 
 writes are zero. Daily #25 and #2/#14/#15/#16 were synchronized. No email was sent
 because the morning update was routine and the new 24-hour escalation threshold had not
 yet elapsed.
+
+2026-08-18T07:50Z heartbeat: the ordered 13:15 IST sequence passed and advanced 10
+additional value-free consumer reconciliation packets. Tuesday is at 35/25 with all 35
+case IDs unique across wave runs and zero pairwise overlap; 51/51 evidence requests and
+29/51 reconciliation packets are ready, leaving 22 optional packets without a workload
+cap. Discovery certification remains 0/51, no new confirmed error was found, and
+production writes remain zero. PR #12's CARMA-DB check is green, but Satyam has supplied
+no issue disposition or accountable review and Sunaj has not re-reviewed the corrected
+head. After more than 24 hours without the required response, infrastructure verification
+was routed to Sunaj on #19, #21 and #22 (the other higher-risk lanes were already routed),
+one consolidated escalation was posted on daily #25, and the single material 18 August
+email was sent in the established thread with a 17:30 IST deadline. Further email today
+is suppressed.
