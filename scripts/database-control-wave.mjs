@@ -28,6 +28,9 @@ const nextAdvancement = system => {
   if (system.evidenceRequestStatus !== "live_control_evidence_request_ready") {
     return "live_control_evidence_request_ready";
   }
+  if (system.reconciliationPacketStatus !== "live_control_reconciliation_packet_ready") {
+    return "live_control_reconciliation_packet_ready";
+  }
   return null;
 };
 const remainingToMinimum = Math.max(0, policy.minimumDailyCases - alreadyAdvanced.size);
@@ -47,6 +50,42 @@ const selectedIds = new Set(selected.map(item => item.systemId));
 const systems = registry.systems.map(system => {
   if (!selectedIds.has(system.systemId)) return system;
   const item = selected.find(candidate => candidate.systemId === system.systemId);
+  if (item.advancement === "live_control_reconciliation_packet_ready") {
+    const event = {
+      timestamp: generatedAt,
+      type: "live_control_reconciliation_packet_prepared",
+      evidence: `Prepared a value-free consumer reconciliation packet for ${system.systemId}; aggregate audit evidence remains unmapped and non-certifying`
+    };
+    return {
+      ...system,
+      reconciliationPacketStatus: "live_control_reconciliation_packet_ready",
+      lastAdvancedAt: generatedAt,
+      lastAdvancedLocalDate: localDate,
+      liveControlReconciliationPacket: {
+        requestedCoverage: item.missingCoverage,
+        repositoryCandidateCount: system.repositoryVisibleObjects.length,
+        aggregateAuditEvidence: {
+          mappingStatus: "aggregate_evidence_unmapped_to_consumer",
+          findingIssueNumbers: state.latestAuditReconciliation?.individualFindingIssues || [],
+          positiveForeignKeyChecks: state.latestAuditReconciliation?.positiveForeignKeyChecks || 0,
+          positiveForeignKeyOrphans: state.latestAuditReconciliation?.positiveForeignKeyOrphans || 0
+        },
+        accountableOwner: policy.roles.accountableOwner.github,
+        independentVerifier: policy.roles.independentVerifier.github,
+        evidenceBoundary: "Value-free control mapping only; no credentials, connection strings, customer data, raw rows, object names or unrestricted SQL",
+        productionWriteAllowed: false,
+        repositoryWriteControls: {
+          evidenceConfidence: 1,
+          backupReference: registry.sourceCommit,
+          rollback: "Restore the prior registry, state and monitoring artifacts from the Git parent",
+          regressionTest: "npm run database:control:validate",
+          auditEventType: event.type
+        }
+      },
+      nextAction: "Map approved sanitized live metadata to this consumer; keep all unresolved categories unverified",
+      changeHistory: [...(system.changeHistory || []), event]
+    };
+  }
   if (item.advancement === "live_control_evidence_request_ready") {
     const event = {
       timestamp: generatedAt,
@@ -152,6 +191,9 @@ const waveArtifact = {
   ).length,
   remainingLiveControlEvidenceRequests: systems.filter(
     system => system.evidenceRequestStatus !== "live_control_evidence_request_ready" && !completedSystemIds.has(system.systemId)
+  ).length,
+  remainingLiveControlReconciliationPackets: systems.filter(
+    system => system.reconciliationPacketStatus !== "live_control_reconciliation_packet_ready" && !completedSystemIds.has(system.systemId)
   ).length,
   waveRuns: dailyProgress.waveRuns,
   cases: advancedSystemIds.map(systemId => planBySystemId.get(systemId)).filter(Boolean).map(item => ({

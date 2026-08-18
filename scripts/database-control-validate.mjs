@@ -97,6 +97,11 @@ if (state?.dailyProgress?.localDate && state.dailyProgress.minimumMet !== true) 
 }
 if (state?.dailyProgress?.advancedSystemIds) {
   const uniqueAdvanced = new Set(state.dailyProgress.advancedSystemIds);
+  const allowedAdvancements = new Set([
+    "repository_evidence_packet_ready",
+    "live_control_evidence_request_ready",
+    "live_control_reconciliation_packet_ready"
+  ]);
   if (uniqueAdvanced.size !== state.dailyProgress.advancedSystemIds.length) {
     errors.push("daily progress contains duplicate advanced system IDs");
   }
@@ -111,9 +116,34 @@ if (state?.dailyProgress?.advancedSystemIds) {
     }
     const advancement = state.dailyProgress.advancementsBySystemId?.[systemId];
     if (!advancement) errors.push(`advanced system lacks its auditable stage: ${systemId}`);
+    else if (!allowedAdvancements.has(advancement)) errors.push(`advanced system has unsupported stage ${advancement}: ${systemId}`);
     if (advancement === "live_control_evidence_request_ready" && system?.evidenceRequestStatus !== advancement) {
       errors.push(`advanced system lacks its live-control evidence request: ${systemId}`);
     }
+    if (advancement === "live_control_reconciliation_packet_ready" && system?.reconciliationPacketStatus !== advancement) {
+      errors.push(`advanced system lacks its live-control reconciliation packet: ${systemId}`);
+    }
+  }
+}
+for (const system of registry?.systems || []) {
+  if (system.reconciliationPacketStatus !== "live_control_reconciliation_packet_ready") continue;
+  const packet = system.liveControlReconciliationPacket;
+  const controls = packet?.repositoryWriteControls;
+  if (system.evidenceRequestStatus !== "live_control_evidence_request_ready") {
+    errors.push(`${system.systemId} reconciliation packet was prepared before its evidence request`);
+  }
+  if (!packet) errors.push(`${system.systemId} reconciliation packet evidence is missing`);
+  if (packet?.aggregateAuditEvidence?.mappingStatus !== "aggregate_evidence_unmapped_to_consumer") {
+    errors.push(`${system.systemId} reconciliation packet must preserve the unmapped aggregate-audit boundary`);
+  }
+  if (packet?.productionWriteAllowed !== false) {
+    errors.push(`${system.systemId} reconciliation packet must prohibit production writes`);
+  }
+  if ((controls?.evidenceConfidence || 0) < policy.confidence.automaticRepositoryWriteMinimum) {
+    errors.push(`${system.systemId} reconciliation packet lacks automatic-write confidence`);
+  }
+  if (!controls?.backupReference || !controls?.rollback || !controls?.regressionTest || !controls?.auditEventType) {
+    errors.push(`${system.systemId} reconciliation packet lacks backup, rollback, regression or audit controls`);
   }
 }
 if (!/^permissions:\n\s+contents: write$/m.test(workflow)) {

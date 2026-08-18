@@ -66,8 +66,16 @@ npm run database:control:wave
 It records distinct cases advanced that day and prepares metadata-only evidence
 packets. After repository preflight, it may prepare a sanitized live-control evidence
 request for the same system on a later working day; that request is a new control stage,
-not live evidence or discovery certification. A system is counted at most once per
-local day and a completed stage is never counted twice.
+not live evidence or discovery certification. After that request is ready, a later
+working-day wave may prepare a value-free consumer reconciliation packet. That packet
+links the consumer to the aggregate audit boundary and open control issues, but keeps
+the evidence explicitly unmapped and non-certifying until approved consumer-level
+proof exists. A system is counted at most once per local day and a completed stage is
+never counted twice.
+
+Each reconciliation-packet write records deterministic evidence confidence, the prior
+Git commit as its repository backup, a revert path, the CARMA-DB validator as regression
+proof and an append-only audit event. It never authorizes a production database write.
 
 Scheduled runs use the append-only `carma-db-checkpoint` branch. Each run starts from
 the previous checkpoint, merges the current `main` control code, runs the ordered

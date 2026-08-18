@@ -31,6 +31,7 @@ Every system has:
 - read/write classification and sanitized table/view names;
 - the eight-category coverage matrix;
 - evidence, owner, AI and human to-dos;
+- a value-free aggregate-audit reconciliation packet after the live-control request;
 - append-only change history; and
 - backup, rollback, regression and independent-review state.
 
