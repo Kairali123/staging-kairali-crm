@@ -730,7 +730,7 @@ function CH({ children, indigo, icon }: { children: React.ReactNode; indigo?: bo
 }
 
 const I = {
-  file: <svg w="13" h="13" viewBox="0 0 24 24" fill="none" stroke="#7b5d1b" strokeWidth="2" strokeLinecap="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" /><polyline points="13 2 13 9 20 9" /></svg>,
+  file: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7b5d1b" strokeWidth="2" strokeLinecap="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" /><polyline points="13 2 13 9 20 9" /></svg>,
 };
 // inline SVG factory to keep it concise
 function Svg({ d, indigo }: { d: string; indigo?: boolean }) {

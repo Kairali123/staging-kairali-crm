@@ -6,6 +6,7 @@ import React, { useState, useEffect, useCallback } from "react";
 // TYPES
 // ─────────────────────────────────────────────────────────────────
 export interface LeadRow {
+  id?: string | number;
   srNo: number;
   dateTime: string;       // date_and_time
   weekNumber: string;     // week_number
@@ -20,6 +21,9 @@ export interface LeadRow {
   bookingStatus: string;  // booking_status
   type: string;           // NBD_CRR
   company: string;        // company
+  ivrUrl?: string;
+  priority?: string;
+  urgency?: string;
 }
 
 export interface ModalMeta {
@@ -39,7 +43,7 @@ interface LeadDetailModalProps {
 // ─────────────────────────────────────────────────────────────────
 const ROWS_OPTIONS = [5, 10, 25, 50, 100];
 
-const TABLE_COLUMNS = [
+const TABLE_COLUMNS: { key: keyof LeadRow; label: string; minW: number }[] = [
   { key: "srNo", label: "Sr. No.", minW: 60 },
   { key: "dateTime", label: "Date and Time", minW: 160 },
   { key: "weekNumber", label: "Week Number", minW: 120 },
@@ -463,7 +467,7 @@ export default function LeadDetailModal({ isOpen, onClose, meta }: LeadDetailMod
               ) : (
                 sliced.map((row, idx) => (
                   <tr
-                    key={row.id + idx}
+                    key={`${row.id ?? row.bookingId ?? row.srNo}-${idx}`}
                     style={{ background: idx % 2 === 0 ? "#fff" : "#f8fafc" }}
                   >
                     {TABLE_COLUMNS.map((col) => {

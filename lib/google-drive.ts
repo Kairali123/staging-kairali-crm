@@ -81,7 +81,8 @@ function getDriveClient() {
 export async function uploadAudioToDrive(
   audioBuffer: Buffer,
   fileName: string,
-  mimeType = 'audio/webm'
+  mimeType = 'audio/webm',
+  ownerEmail?: string,
 ): Promise<{ fileId: string; streamUrl: string; webViewLink: string }> {
   const drive = getDriveClient()
   const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID
@@ -99,6 +100,12 @@ export async function uploadAudioToDrive(
       name: fileName,
       parents: [folderId],
       mimeType,
+      appProperties: ownerEmail
+        ? {
+            crmOwnerEmail: ownerEmail,
+            crmUploadPurpose: 'meeting-audio',
+          }
+        : undefined,
     },
     media: { mimeType, body: stream },
   } as any)

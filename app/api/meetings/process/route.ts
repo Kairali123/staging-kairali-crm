@@ -4,6 +4,15 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from "openai";
+import { getMeetingSession, meetingUnauthorized } from '@/lib/meetings-auth'
+import { checkApiRateLimit, rateLimitResponse } from '@/lib/api-rate-limit'
+
+const MAX_TRANSCRIPT_CHARS = 120_000
+const MAX_CONTEXT_CHARS = 200
+
+function normalizeBoundedText(value: unknown, maxLength: number): string {
+    return typeof value === 'string' ? value.trim().slice(0, maxLength) : ''
+}
 
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY || 'dummy-key-for-build',
@@ -54,15 +63,31 @@ Rules:
 
 export async function POST(req: NextRequest) {
     try {
+        const session = getMeetingSession(req)
+        if (!session) return meetingUnauthorized()
+        const limit = await checkApiRateLimit(req, 'meetings.process', session.email, 30, 60 * 60 * 1000)
+        if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds)
+
         const body = await req.json()
         const { transcript, title, meeting_type } = body
+        const safeTranscript = normalizeBoundedText(transcript, MAX_TRANSCRIPT_CHARS)
 
-        if (!transcript || transcript.trim().length < 20) {
+        if (safeTranscript.length < 20) {
             return NextResponse.json(
                 { error: 'Transcript is too short or empty' },
                 { status: 400 }
             )
         }
+
+        if (typeof transcript !== 'string' || transcript.length > MAX_TRANSCRIPT_CHARS) {
+            return NextResponse.json(
+                { error: 'Transcript is too large' },
+                { status: 413 }
+            )
+        }
+
+        const safeTitle = normalizeBoundedText(title, MAX_CONTEXT_CHARS) || 'Untitled'
+        const safeMeetingType = normalizeBoundedText(meeting_type, MAX_CONTEXT_CHARS) || 'online'
 
         // response_format: {
         //         type: "json_schema",
@@ -81,11 +106,11 @@ export async function POST(req: NextRequest) {
                 },
                 {
                     role: "user",
-                    content: `Meeting Title: ${title || 'Untitled'}
-Type: ${meeting_type || 'online'}
+                    content: `Meeting Title: ${safeTitle}
+Type: ${safeMeetingType}
 
 Transcript:
-${transcript}`,
+${safeTranscript}`,
                 },
             ],
         });

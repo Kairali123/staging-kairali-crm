@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
+import { getSessionUser, hasDoctorConsultationAccess } from "@/lib/authz"
 
 // Mock prescription data
 const mockPrescriptionData = {
@@ -31,8 +32,16 @@ const mockPrescriptionData = {
   },
 }
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
-  const prescriptionId = params.id
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const user = getSessionUser(request)
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+  if (!hasDoctorConsultationAccess(user)) {
+    return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+  }
+
+  const { id: prescriptionId } = await params
 
   // Simulate API delay
   await new Promise((resolve) => setTimeout(resolve, 300))

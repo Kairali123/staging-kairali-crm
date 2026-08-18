@@ -23,6 +23,14 @@ export interface DateGroup {
     sources: SourceDayRow[];
 }
 
+export type LeadRow = Record<string, string | number | boolean | null | undefined>;
+
+export interface ModalMeta {
+    type: string;
+    leads: LeadRow[];
+    isSyncing?: boolean;
+}
+
 const SOURCE_COLORS: Record<string, string> = {
     IVR: "#059669", Facebook: "#2563eb", WhatsApp: "#16a34a",
     "Google Ads": "#d97706", "Chatbase AI": "#7c3aed", Others: "#64748b",
@@ -246,4 +254,3 @@ export function useVoiceSummary() {
 
     return { data, loading, isRefreshing, error, refetch: () => fetchData(true) };
 }
-

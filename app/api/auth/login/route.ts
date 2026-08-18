@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { createSessionCookieValue } from '@/lib/session'
 import { AUTH_SCRIPT_URL } from '@/lib/role-permissions'
+import { checkLoginRateLimit, clearLoginRateLimit } from '@/lib/login-rate-limit'
+import { getRequestSourceIp, recordSecurityEvent } from '@/lib/security-audit'
+import { isMfaRequired, isMfaSatisfied } from '@/lib/mfa-policy'
 
 // Same GAS endpoint hooks/use-auth.tsx used to call directly from the browser.
 // Moved server-side so credentials never sit in a client-visible URL, and so this
@@ -23,6 +26,7 @@ const NO_STORE = 'private, no-store'
 // unusable without learning which part of it we rejected.
 const MSG_MISSING_FIELDS = 'Missing email, password, or company'
 const MSG_INVALID_CREDENTIALS = 'Invalid credentials or inactive account'
+const MSG_MFA_REQUIRED = 'Additional verification required'
 const MSG_TIMEOUT = 'Login service timed out'
 const MSG_FAILED = 'Login failed'
 
@@ -47,6 +51,7 @@ export async function POST(req: NextRequest) {
   const requestId = randomUUID()
   const startedAt = Date.now()
   const elapsed = () => Date.now() - startedAt
+  const sourceIp = getRequestSourceIp(req)
 
   console.info(`[login:${requestId}] request started`)
 
@@ -58,12 +63,26 @@ export async function POST(req: NextRequest) {
     // A body we cannot parse is a malformed client request, not a server fault.
     // The log line is fixed: neither the body nor the parse error is recorded.
     console.error(`[login:${requestId}] request body could not be parsed (${elapsed()}ms)`)
+    recordSecurityEvent({
+      action: 'auth.login',
+      outcome: 'failure',
+      sourceIp,
+      correlationId: requestId,
+      context: { reason: 'unparseable_body' },
+    })
     return jsonNoStore({ success: false, message: MSG_MISSING_FIELDS }, 400)
   }
 
   // A primitive, array, or null body has no credentials to read, and every
   // field lookup on it would silently yield undefined.
   if (!isRecord(payload)) {
+    recordSecurityEvent({
+      action: 'auth.login',
+      outcome: 'failure',
+      sourceIp,
+      correlationId: requestId,
+      context: { reason: 'malformed_request' },
+    })
     return jsonNoStore({ success: false, message: MSG_MISSING_FIELDS }, 400)
   }
 
@@ -73,12 +92,49 @@ export async function POST(req: NextRequest) {
   // String()-coerced, so a number or object became a credential like "[object
   // Object]" in the upstream query.
   if (!isNonEmptyString(email) || !isNonEmptyString(password) || !isNonEmptyString(company)) {
+    recordSecurityEvent({
+      action: 'auth.login',
+      outcome: 'failure',
+      sourceIp,
+      correlationId: requestId,
+      context: { reason: 'malformed_request' },
+    })
     return jsonNoStore({ success: false, message: MSG_MISSING_FIELDS }, 400)
+  }
+
+  const limit = checkLoginRateLimit(sourceIp, email)
+  if (!limit.allowed) {
+    recordSecurityEvent({
+      action: 'auth.login.rate_limited',
+      outcome: 'denied',
+      actor: email,
+      sourceIp,
+      correlationId: requestId,
+      context: { retryAfterSeconds: limit.retryAfterSeconds },
+    })
+    return NextResponse.json(
+      { success: false, message: MSG_INVALID_CREDENTIALS },
+      {
+        status: 429,
+        headers: {
+          'Cache-Control': NO_STORE,
+          'Retry-After': String(limit.retryAfterSeconds),
+        },
+      },
+    )
   }
 
   const sharedSecret = process.env.GAS_SHARED_SECRET?.trim()
   if (!sharedSecret) {
     console.error(`[login:${requestId}] GAS_SHARED_SECRET is not configured (${elapsed()}ms)`)
+    recordSecurityEvent({
+      action: 'auth.login',
+      outcome: 'failure',
+      actor: email,
+      sourceIp,
+      correlationId: requestId,
+      context: { reason: 'auth_service_not_configured' },
+    })
     return jsonNoStore({ success: false, message: MSG_FAILED }, 503)
   }
 
@@ -113,6 +169,14 @@ export async function POST(req: NextRequest) {
       // GAS answers failures with an HTML error page that can name the script,
       // the deployment, and the executing account. Status and body stay here.
       console.error(`[login:${requestId}] upstream returned a non-success status (${elapsed()}ms)`)
+      recordSecurityEvent({
+        action: 'auth.login',
+        outcome: 'failure',
+        actor: email,
+        sourceIp,
+        correlationId: requestId,
+        context: { reason: 'auth_service_status', status: gasResponse.status },
+      })
       return jsonNoStore({ success: false, message: MSG_FAILED }, 502)
     }
 
@@ -123,12 +187,28 @@ export async function POST(req: NextRequest) {
   } catch {
     if (timedOut) {
       console.error(`[login:${requestId}] upstream request timed out after ${elapsed()}ms`)
+      recordSecurityEvent({
+        action: 'auth.login',
+        outcome: 'failure',
+        actor: email,
+        sourceIp,
+        correlationId: requestId,
+        context: { reason: 'auth_service_timeout' },
+      })
       return jsonNoStore({ success: false, message: MSG_TIMEOUT }, 504)
     }
     // Transport failure or malformed upstream payload. The exception object is
     // deliberately not logged: transport errors can still contain sensitive
     // request metadata.
     console.error(`[login:${requestId}] upstream request failed (${elapsed()}ms)`)
+    recordSecurityEvent({
+      action: 'auth.login',
+      outcome: 'failure',
+      actor: email,
+      sourceIp,
+      correlationId: requestId,
+      context: { reason: 'auth_service_transport' },
+    })
     return jsonNoStore({ success: false, message: MSG_FAILED }, 502)
   } finally {
     clearTimeout(timer)
@@ -138,6 +218,14 @@ export async function POST(req: NextRequest) {
   // rejected login — reporting it as 401 would blame the user for an outage.
   if (!isRecord(data)) {
     console.error(`[login:${requestId}] upstream returned an unexpected payload (${elapsed()}ms)`)
+    recordSecurityEvent({
+      action: 'auth.login',
+      outcome: 'failure',
+      actor: email,
+      sourceIp,
+      correlationId: requestId,
+      context: { reason: 'auth_service_unexpected_payload' },
+    })
     return jsonNoStore({ success: false, message: MSG_FAILED }, 502)
   }
 
@@ -147,6 +235,14 @@ export async function POST(req: NextRequest) {
   // Password".
   if (data.success === false) {
     console.info(`[login:${requestId}] upstream rejected credentials (${elapsed()}ms)`)
+    recordSecurityEvent({
+      action: 'auth.login',
+      outcome: 'failure',
+      actor: email,
+      sourceIp,
+      correlationId: requestId,
+      context: { reason: 'invalid_credentials' },
+    })
     return jsonNoStore({ success: false, message: MSG_INVALID_CREDENTIALS }, 401)
   }
 
@@ -159,6 +255,14 @@ export async function POST(req: NextRequest) {
   // is reported as the upstream fault it is, under the same fixed log category.
   if (data.success !== true || !isRecord(user)) {
     console.error(`[login:${requestId}] upstream returned an unexpected payload (${elapsed()}ms)`)
+    recordSecurityEvent({
+      action: 'auth.login',
+      outcome: 'failure',
+      actor: email,
+      sourceIp,
+      correlationId: requestId,
+      context: { reason: 'auth_service_unexpected_payload' },
+    })
     return jsonNoStore({ success: false, message: MSG_FAILED }, 502)
   }
 
@@ -173,12 +277,32 @@ export async function POST(req: NextRequest) {
       : [],
   }
 
+  if (isMfaRequired() && !isMfaSatisfied(finalUser)) {
+    recordSecurityEvent({
+      action: 'auth.login.mfa',
+      outcome: 'denied',
+      actor: email,
+      sourceIp,
+      correlationId: requestId,
+      context: { reason: 'mfa_attestation_missing' },
+    })
+    return jsonNoStore({ success: false, message: MSG_MFA_REQUIRED }, 403)
+  }
+
   let sessionCookie: string
   try {
     // Throws when NEXTAUTH_SECRET is unset — a deployment fault, not upstream.
     sessionCookie = createSessionCookieValue(finalUser)
   } catch {
     console.error(`[login:${requestId}] session cookie could not be signed (${elapsed()}ms)`)
+    recordSecurityEvent({
+      action: 'auth.login',
+      outcome: 'failure',
+      actor: email,
+      sourceIp,
+      correlationId: requestId,
+      context: { reason: 'session_cookie_sign_failed' },
+    })
     return jsonNoStore({ success: false, message: MSG_FAILED }, 500)
   }
 
@@ -195,6 +319,14 @@ export async function POST(req: NextRequest) {
   })
 
   console.info(`[login:${requestId}] login succeeded (${elapsed()}ms)`)
+  clearLoginRateLimit(email)
+  recordSecurityEvent({
+    action: 'auth.login',
+    outcome: 'success',
+    actor: email,
+    sourceIp,
+    correlationId: requestId,
+  })
 
   return response
 }

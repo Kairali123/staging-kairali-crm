@@ -541,6 +541,7 @@ export interface User {
   permissions: string[]
   employeeId: string
   phone: string
+  imageUrl?: string
   joinDate: string
   isActive: boolean
   reportingTo?: string

@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import type { FollowUp } from "./Use-call-history"
+import type { FollowUp } from "@/hooks/Use-call-history"
 
 interface Lead {
   leadId?: string | number

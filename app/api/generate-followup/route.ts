@@ -6,6 +6,7 @@ import {
   getSummaryPrompt,
   getNextBestActionPrompt,
 } from '@/lib/config'
+import { getSessionUser, hasDealAssistantAccess } from '@/lib/authz'
 
 export const dynamic = 'force-dynamic'
 
@@ -106,6 +107,14 @@ function buildLocalFallback(mode: string, input: {
 
 export async function POST(req: NextRequest) {
   try {
+    const user = getSessionUser(req)
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    }
+    if (!hasDealAssistantAccess(user)) {
+      return NextResponse.json({ success: false, error: 'Insufficient permissions' }, { status: 403 })
+    }
+
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey || apiKey.trim() === '') {
       return NextResponse.json(

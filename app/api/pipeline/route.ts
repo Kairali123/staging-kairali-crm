@@ -167,15 +167,40 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
+import { getSessionUser, hasAdminRole, hasAnyPermission } from '@/lib/authz'
 
 // Increase body limit — transcripts can be large for long meetings
-export const config = {
-  api: { bodyParser: { sizeLimit: '10mb' } }
+
+
+function pipelineUnauthorized() {
+  return NextResponse.json(
+    { error: 'Unauthorized' },
+    { status: 401, headers: { 'Cache-Control': 'private, no-store' } },
+  )
+}
+
+function pipelineForbidden() {
+  return NextResponse.json(
+    { error: 'Insufficient permissions' },
+    { status: 403, headers: { 'Cache-Control': 'private, no-store' } },
+  )
+}
+
+function getAuthorizedPipelineUser(req: NextRequest): any | NextResponse {
+  const user = getSessionUser(req)
+  if (!user) return pipelineUnauthorized()
+  if (hasAnyPermission(user, ['meetings.view']) || hasAdminRole(user, 'lower')) {
+    return user
+  }
+  return pipelineForbidden()
 }
 
 // ── POST: create new checkpoint ───────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
+    const user = getAuthorizedPipelineUser(req)
+    if (user instanceof NextResponse) return user
+
     const body = await req.json()
     const db   = await getPool()
 
@@ -207,6 +232,9 @@ export async function POST(req: NextRequest) {
 // ── PATCH: update checkpoint after each step ──────────────────────────────────
 export async function PATCH(req: NextRequest) {
   try {
+    const user = getAuthorizedPipelineUser(req)
+    if (user instanceof NextResponse) return user
+
     const body = await req.json()
     const { id, ...fields } = body
 
@@ -259,6 +287,9 @@ export async function PATCH(req: NextRequest) {
 // ── GET: load checkpoint ──────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
   try {
+    const user = getAuthorizedPipelineUser(req)
+    if (user instanceof NextResponse) return user
+
     const id = new URL(req.url).searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
@@ -311,6 +342,9 @@ export async function GET(req: NextRequest) {
 // ── DELETE: clear checkpoint on success ───────────────────────────────────────
 export async function DELETE(req: NextRequest) {
   try {
+    const user = getAuthorizedPipelineUser(req)
+    if (user instanceof NextResponse) return user
+
     const id = new URL(req.url).searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 

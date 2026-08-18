@@ -1,7 +1,6 @@
 /*path: app/layout.tsx */
 import type React from "react"
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
 import "./globals.css"
 import { AuthProvider } from "@/hooks/use-auth"
 import { LeadsProvider } from "@/hooks/use-leads"
@@ -12,11 +11,6 @@ import { NextAuthSessionProvider } from "@/components/session-provider"
 import { Suspense } from "react"
 import { Toaster } from "sonner"
 import ChatWidget from "@/components/bot-widget/ChatWidget"
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-sans",
-})
 
 export const metadata: Metadata = {
   title: "Kairali Group Management System",
@@ -33,7 +27,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} antialiased`}>
+    <html lang="en" className="antialiased">
       <body>
         <Suspense
           fallback={

@@ -38,11 +38,13 @@ function parseNumberSafe(value: unknown): number {
 export default function useGooglePPCData() {
   const [rawData, setRawData] = useState<PPCRawRow[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchPPC = async () => {
       try {
         setLoading(true);
+        setError(null);
 
         const res = await fetch(API_URL);
         if (!res.ok) {
@@ -95,6 +97,7 @@ export default function useGooglePPCData() {
       } catch (err) {
         console.error("Google PPC API Error:", err);
         setRawData([]);
+        setError(err instanceof Error ? err.message : "Failed to load Google PPC data");
       } finally {
         setLoading(false);
       }
@@ -155,5 +158,5 @@ export default function useGooglePPCData() {
     }));
   }, [rawData]);
 
-  return { rawData, aggregatedData, loading };
+  return { rawData, aggregatedData, loading, error };
 }

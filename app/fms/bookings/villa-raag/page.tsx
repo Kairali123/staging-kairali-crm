@@ -116,8 +116,12 @@ interface Booking {
   noOfRooms?: number | string
   mealPlan?: string
   checkIn: string
+  "Arrival Date"?: string
+  arrivalDate?: string
   checkInTime?: string
   checkOut: string
+  "Departure Date"?: string
+  departureDate?: string
   checkOutTime?: string
   lengthOfStay?: number
   villaType: string
@@ -142,12 +146,18 @@ interface Booking {
   paymentsAmount?: number
   netPaymentsByGuest?: number
   netPayableAtHotel?: number
+  outletRevenue?: number
+  finalTotalAmount?: number
   approvedTillDate: string
-  status: "confirmed" | "no show" | "cancelled" | "payment_pending" | "auto_release"
+  status: "confirmed" | "no show" | "cancelled" | "payment_pending" | "auto_release" | "pending" | "hold"
   assignedTo: string
   team: "sales" | "accounts"
   createdDate: string
   lastUpdated: string
+  lastModifiedOn?: string
+  lastModified?: string
+  updatedAt?: string
+  modifiedAt?: string
   lastModifiedBy?: string
   source: string
   sourceType?: string
@@ -160,10 +170,13 @@ interface Booking {
   paymentSettlementStatus: "full_payment_received" | "booking_cancelled" | "partial_payment" | "pending"
   bookingStatus?: string
   cancellationRemarks?: string
+  complimentary?: boolean | string | null
   complimentaryStatus?: string
   receivedPercentage?: number
   salesperson?: string
   contactNumber?: string
+  total_pax?: number
+  pax?: number
   totalAmount?: string
   paidAmount?: string
   paymentRecords?: Array<{
@@ -460,12 +473,12 @@ export default function VillaRaagBookingPage() {
         page += 1
       }
 
-      const formatted = data.map((item: any, index: number) => {
+      const formatted: Booking[] = data.map((item: any, index: number): Booking => {
         const invoiceAmount = getNumeric(item, "invoice_amount") ?? 0
         const receivedAmount = getNumeric(item, "total_received_amount") ?? 0
 
         const statusRaw = (getString(item, "booking_status") || "").toLowerCase()
-        let status: any
+        let status: Booking["status"]
         if (statusRaw.includes("cancel")) status = "cancelled"
         else if (statusRaw.includes("no show")) status = "no show"
         else if (statusRaw.includes("hold")) status = "hold"
@@ -872,6 +885,8 @@ export default function VillaRaagBookingPage() {
     .sort((a, b) => {
       const aValue = a[sortField]
       const bValue = b[sortField]
+      if (aValue === undefined || aValue === null) return bValue === undefined || bValue === null ? 0 : 1
+      if (bValue === undefined || bValue === null) return -1
       if (aValue < bValue) return sortDirection === "asc" ? -1 : 1
       if (aValue > bValue) return sortDirection === "asc" ? 1 : -1
       return 0
@@ -1144,9 +1159,9 @@ export default function VillaRaagBookingPage() {
               if (data.length > 0) {
                 const first = data[0]
                 setGasDetails({
-                  folio: first.folio_number || null,
-                  mobile: first.mobile_no || null,
-                  checkInLabel: null
+                  folio: first.folio_number || undefined,
+                  mobile: first.mobile_no || undefined,
+                  checkInLabel: undefined
                 })
               }
             }
@@ -1193,7 +1208,7 @@ export default function VillaRaagBookingPage() {
   const derivedPaymentRecords =
     selectedBookingForPayment?.paymentRecords?.length
       ? selectedBookingForPayment.paymentRecords
-      : selectedBookingForPayment?.receivedAmount > 0
+      : selectedBookingForPayment && (selectedBookingForPayment.receivedAmount ?? 0) > 0
         ? [
           {
             date:
@@ -1319,11 +1334,12 @@ export default function VillaRaagBookingPage() {
     return t > 0 ? Number(((r / t) * 100).toFixed(2)) : 0
   }
 
-  const formatCurrency = (value: number) => {
+  const formatCurrency = (value?: number | string | null) => {
+    const amount = Number(value ?? 0)
     try {
-      return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(value)
+      return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(amount)
     } catch (e) {
-      return `${value.toLocaleString()}`
+      return `${amount.toLocaleString()}`
     }
   }
 
@@ -2467,7 +2483,7 @@ export default function VillaRaagBookingPage() {
                               }}
                             />
                             <Pie data={revenueChartData} dataKey="amount" nameKey="name" cx="50%" cy="50%" innerRadius={100} outerRadius={150} paddingAngle={3} labelLine={false}
-                              label={({ name, amount }) => { const pct = revenueTotal ? ((amount / revenueTotal) * 100).toFixed(1) : 0; return `${pct}%` }}
+                              label={({ amount }: any) => { const pct = revenueTotal ? ((Number(amount) / revenueTotal) * 100).toFixed(1) : 0; return `${pct}%` }}
                               animationBegin={0} animationDuration={1100} animationEasing="ease-out" style={{ filter: "drop-shadow(0px 4px 8px rgba(0,0,0,0.15))" }}>
                               {revenueChartData.map((entry, index) => (
                                 <Cell key={`cell-${index}`} fill={`url(#gradient-${index})`} stroke="#ffffff" strokeWidth={3} />

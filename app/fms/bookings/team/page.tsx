@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, Suspense, use, useMemo, useCallback } from "react"
 import { createPortal } from "react-dom"
 import { useRouter } from "next/navigation"
-import { useBookings, Booking } from "@/hooks/use-fms-bookings"
+import { useBookings, Booking as BaseBooking } from "@/hooks/use-fms-bookings"
 import { normalizeUserName } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
 import { StageWisePendingsReport } from "@/components/fms/stage-wise-pendings"
@@ -151,6 +151,47 @@ function normalizeName(name?: string): string {
 function stageHasPlanned(stage?: { planned?: unknown } | null): boolean {
   const planned = stage?.planned;
   return typeof planned === "string" ? planned.trim() !== "" : !!planned;
+}
+
+type BookingStage = Record<string, any>
+
+type BookingStageRecord = Record<string, BookingStage>
+
+type Booking = Omit<
+  BaseBooking,
+  | "salesPersonStage"
+  | "accountsPersonStage"
+  | "foPersonStage"
+  | "checkOutPersonStage"
+  | "paymentReceivedDate"
+  | "team"
+  | "paymentStatus"
+> & {
+  salesPersonStage?: BookingStageRecord
+  accountsPersonStage?: BookingStageRecord
+  foPersonStage?: BookingStageRecord
+  checkOutPersonStage?: BookingStageRecord
+  checkoutVerificationStatus?: string
+  checkoutVerificationRemarks?: string
+  paymentReceivedDate?: string | Date
+  team?: string
+  paymentStatus?: any
+  bookingDetails?: {
+    bookingTakenBy?: string
+    [key: string]: unknown
+  }
+  paymentDetails?: {
+    uploadedScreenshot?: string
+    [key: string]: unknown
+  }
+  salesperson?: string
+  phone?: string
+  phoneNumber?: string
+  mobileNo?: string
+  guestMobile?: string
+  type?: string
+  cancelledAt?: string
+  [key: string]: any
 }
 
 function parseDDMMYYYYDate(dateStr: any): Date | null {
@@ -440,11 +481,12 @@ export default function SalesAccountsTeamPage() {
     return data;
   };
 
-  let { bookings: fetchedBookings, setBookings: setFetchedBookings, pendingCount, nameAliases, loading, error, refetch: refetchBookings } = useBookings();
+  let { bookings: fetchedBaseBookings, setBookings: setFetchedBookings, pendingCount, nameAliases, loading, error, refetch: refetchBookings } = useBookings();
+  const fetchedBookings = fetchedBaseBookings as unknown as Booking[];
 
   const setBookings = useCallback((update: Booking[] | ((prev: Booking[]) => Booking[])) => {
     _setBookings(update);
-    setFetchedBookings(update);
+    setFetchedBookings(update as any);
   }, [setFetchedBookings]);
   const { user, hasActionPermission } = useAuth()
   const router = useRouter()
@@ -838,7 +880,7 @@ export default function SalesAccountsTeamPage() {
 
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [selectedBookingForPayment, setSelectedBookingForPayment] = useState<Booking | null>(null)
-  const [paymentData, setPaymentData] = useState({
+  const [paymentData, setPaymentData] = useState<any>({
     amount: "",
     receivedAmount: "",
     currency: "INR",
@@ -1067,6 +1109,7 @@ export default function SalesAccountsTeamPage() {
     salesAgentRemarks: "",
 
     uploadedScreenshot: "",
+    paymentStatus: "",
     paymentCollectionHistory: [] as Array<{
       index: number;
       collectionDate: string;
@@ -1967,7 +2010,7 @@ export default function SalesAccountsTeamPage() {
             b.bookingTakenBy?.trim() ||
             b.salesperson?.trim()
           )
-          .filter(Boolean)
+          .filter((name): name is string => Boolean(name))
       )
     ).sort((a, b) => a.localeCompare(b));
   }, [bookings]);
@@ -1997,7 +2040,7 @@ export default function SalesAccountsTeamPage() {
       new Set(
         bookings
           .map(b => b.dataSource?.trim())
-          .filter(Boolean)
+          .filter((source): source is string => Boolean(source))
       )
     ).sort((a, b) => a.localeCompare(b));
   }, [bookings]);
@@ -4015,7 +4058,7 @@ export default function SalesAccountsTeamPage() {
     return () => clearTimeout(t)
   }, [debouncedSearchTerm, statusFilter, teamFilter, checkInFilter, checkOutFilter, assignedFilter, sourceFilter, filteredBookings.length])
 
-  const handleAction = (action: string, bookingId: string, booking) => {
+  const handleAction = (action: string, bookingId: string, booking?: Booking) => {
 
     // Close all modals first to prevent conflicts
     setShowCancelModal(false)
@@ -4042,9 +4085,9 @@ export default function SalesAccountsTeamPage() {
           break
         }
         case "view":
-          const booking = bookings.find((b) => b.id === bookingId)
-          if (booking) {
-            setViewBookingData(booking)
+          const foundBooking = bookings.find((b) => b.id === bookingId)
+          if (foundBooking) {
+            setViewBookingData(foundBooking)
             setShowViewModal(true)
           }
           break
@@ -4052,10 +4095,12 @@ export default function SalesAccountsTeamPage() {
           const currentBooking = bookings.find((b) => b.id === bookingId)
 
           // setSelectedBookingId(bookingId)
-          setSelectedBookingForCancelledBookings(currentBooking)
-          setSelectedBookingId(bookingId)
-          setIsCancelled(false)
-          setShowCancelModal(true)
+          if (currentBooking) {
+            setSelectedBookingForCancelledBookings(currentBooking)
+            setSelectedBookingId(bookingId)
+            setIsCancelled(false)
+            setShowCancelModal(true)
+          }
           break
         case "payment_upload":
           const paymentBooking = bookings.find((b) => b.id === bookingId)
@@ -4071,6 +4116,7 @@ export default function SalesAccountsTeamPage() {
               screenshot: null,
               paymentLocation: "",
               paymentCollectedBy: user?.name || "",
+              pendingPaymentAmount: "",
             })
 
             setShowPaymentModal(true)
@@ -4139,7 +4185,7 @@ export default function SalesAccountsTeamPage() {
             // Initialize data from backend API
             const initializedData = initializeAccountsVerifyDataFromAPI(accountsBooking);
 
-            setAccountsVerifyData(initializedData);
+            setAccountsVerifyData(initializedData as any);
 
             setShowAccountsVerifyModal(true)
           }
@@ -4149,7 +4195,7 @@ export default function SalesAccountsTeamPage() {
           if (foPMSBooking) {
             setSelectedBookingForFOPMS(foPMSBooking)
             const initializedData = initializeAccountsVerifyDataFromAPI(foPMSBooking);
-            setAccountsVerifyData(initializedData);
+            setAccountsVerifyData(initializedData as any);
 
             // Initialize FO data from booking if available
             const foStages = foPMSBooking.foPersonStage || {};
@@ -4265,7 +4311,7 @@ export default function SalesAccountsTeamPage() {
       // Update local state
       setBookings(prevBookings => prevBookings.map((b) =>
       ((b.id === selectedBookingId || b.bookingId === selectedBookingForCancelledBookings?.bookingId)
-        ? {
+        ? ({
           ...b,
           status: "cancelled" as const,
           cancelByUserCheck: "Cancelled",
@@ -4312,7 +4358,7 @@ export default function SalesAccountsTeamPage() {
               doer: cancelledBy,
             } : b.checkOutPersonStage?.["1"],
           },
-        }
+        } as Booking)
         : b)
       ));
 
@@ -4802,6 +4848,7 @@ export default function SalesAccountsTeamPage() {
           salesAgentVerified: false,
           salesAgentRemarks: "",
           uploadedScreenshot: "",
+          paymentStatus: "",
           paymentCollectionHistory: [],
         })
       } else {
@@ -5127,14 +5174,14 @@ export default function SalesAccountsTeamPage() {
         return false; // No pending work
       }
       if (hasRole("account_manager")) {
-        var stage = b?.accountsPersonStage["1"] as any;
+        var stage = b?.accountsPersonStage?.["1"] as any;
         if (stage?.status.trim().toLowerCase().indexOf("cancelled") > -1 && stage?.actual.trim() !== "" && b?.isAutoReleased !== "Auto Released") {
           return true; // PENDING work
         }
         return false; // No pending work
       }
       if (hasRole("operation_manager")) {
-        var stage = b?.foPersonStage["1"] as any;
+        var stage = b?.foPersonStage?.["1"] as any;
         if (stage?.status.trim().toLowerCase().indexOf("cancelled") > -1 && stage?.actual.trim() !== "" && b?.isAutoReleased !== "Auto Released") {
           return true; // PENDING work
         }
@@ -5186,7 +5233,7 @@ export default function SalesAccountsTeamPage() {
   useEffect(() => {
     if (!selectedBookingForPayment) {
       if (paymentData.pendingPaymentAmount !== "") {
-        setPaymentData((prev) => ({
+        setPaymentData((prev: any) => ({
           ...prev,
           pendingPaymentAmount: "",
         }));
@@ -5219,7 +5266,7 @@ export default function SalesAccountsTeamPage() {
     });
 
     if (paymentData.pendingPaymentAmount !== pendingVal) {
-      setPaymentData((prev) => ({
+      setPaymentData((prev: any) => ({
         ...prev,
         pendingPaymentAmount: pendingVal,
       }));
@@ -5261,7 +5308,7 @@ export default function SalesAccountsTeamPage() {
       return false; // No pending work
     }
     if (hasRole("account_manager")) {
-      var stage = b?.accountsPersonStage["1"] as any;
+      var stage = b?.accountsPersonStage?.["1"] as any;
       if (stage?.status.trim().toLowerCase().indexOf("cancelled") > -1 && stage?.actual.trim() !== "" && b?.isAutoReleased !== "Auto Released") {
         return true; // PENDING work
       }
@@ -5269,7 +5316,7 @@ export default function SalesAccountsTeamPage() {
       // return b?.accountsVerifyStatus.toLowerCase().indexOf("cancelled") !== -1;
     }
     if (hasRole("operation_manager")) {
-      var stage = b?.foPersonStage["1"] as any;
+      var stage = b?.foPersonStage?.["1"] as any;
       if (stage?.status.trim().toLowerCase().indexOf("cancelled") > -1 && stage?.actual.trim() !== "" && b?.isAutoReleased !== "Auto Released") {
         return true; // PENDING work
       }
@@ -5584,7 +5631,7 @@ export default function SalesAccountsTeamPage() {
       <span
         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(status, type)}`}
       >
-        {formatStatus(status, type)}
+        {formatStatus(status)}
       </span>
     )
   }
@@ -6850,7 +6897,7 @@ export default function SalesAccountsTeamPage() {
                             <LabelList
                               dataKey="amount"
                               position="top"
-                              formatter={(v) => `₹${((v || 0) / 1000).toFixed(0)}k`}
+                              formatter={(v) => `₹${(Number(v || 0) / 1000).toFixed(0)}k`}
                               style={{ fontSize: 10, fill: '#0f172a', fontWeight: 600 }}
                             />
                           </Bar>
@@ -7393,7 +7440,7 @@ export default function SalesAccountsTeamPage() {
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" portal={false}>
+                              <DropdownMenuContent align="end">
                                 {/* <DropdownMenuItem
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -9781,7 +9828,7 @@ export default function SalesAccountsTeamPage() {
                                 </Button>
                               </DropdownMenuTrigger>
 
-                              <DropdownMenuContent align="end" portal={false}>
+                              <DropdownMenuContent align="end">
 
                                 {/* View Details */}
                                 <DropdownMenuItem
@@ -10244,7 +10291,7 @@ export default function SalesAccountsTeamPage() {
                             </Button>
                           </DropdownMenuTrigger>
 
-                          <DropdownMenuContent align="end" portal={false}>
+                          <DropdownMenuContent align="end">
 
                             {/* View */}
                             <DropdownMenuItem
@@ -10673,7 +10720,6 @@ export default function SalesAccountsTeamPage() {
             }}
           >
             <DialogContent
-              modal={false}
               className="
             sm:max-w-md
             md:max-w-2xl
@@ -14252,7 +14298,7 @@ export default function SalesAccountsTeamPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {Object.entries(viewBookingData?.accountsPersonStage || {}).map(
+                        {(Object.entries(viewBookingData?.accountsPersonStage || {}) as [string, BookingStage][]).map(
                           ([stageKey, stage], idx) => (
                             stage.planned && (
                               <tr key={stageKey} className="border-b border-green-100">
@@ -14324,7 +14370,7 @@ export default function SalesAccountsTeamPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {Object.entries(viewBookingData?.foPersonStage || {}).map(
+                        {(Object.entries(viewBookingData?.foPersonStage || {}) as [string, BookingStage][]).map(
                           ([stageKey, stage]) => (
                             stage.planned && (
                               <tr key={stageKey} className="border-b border-amber-100">
@@ -14404,7 +14450,7 @@ export default function SalesAccountsTeamPage() {
                       </thead>
                       <tbody>
                         {
-                          Object.entries(viewBookingData?.foPersonStage || {}).map(
+                          (Object.entries(viewBookingData?.foPersonStage || {}) as [string, BookingStage][]).map(
                             ([stageKey, stage]) => (
                               stage.planned && (
                                 <tr className="border-b border-purple-100">
@@ -14529,11 +14575,11 @@ export default function SalesAccountsTeamPage() {
                   setShowArrivalTicketModal(false)
                   setSelectedBookingForArrival(null)
                 }}
-                onSubmit={(data: any) => {
-                  showFormSubmitSuccess(data?.responseMessage || "Arrival flight details saved")
+                onSubmit={() => {
+                  showFormSubmitSuccess("Arrival flight details saved")
                   setShowArrivalTicketModal(false)
                   setSelectedBookingForArrival(null)
-                  refetch()
+                  refetchBookings()
                 }}
               />
             </div>,
@@ -14553,11 +14599,11 @@ export default function SalesAccountsTeamPage() {
                   setShowDepartureTicketModal(false)
                   setSelectedBookingForDeparture(null)
                 }}
-                onSubmit={(data: any) => {
-                  showFormSubmitSuccess(data?.responseMessage || "Departure flight details saved")
+                onSubmit={() => {
+                  showFormSubmitSuccess("Departure flight details saved")
                   setShowDepartureTicketModal(false)
                   setSelectedBookingForDeparture(null)
-                  refetch()
+                  refetchBookings()
                 }}
               />
             </div>,

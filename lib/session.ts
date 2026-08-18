@@ -1,6 +1,23 @@
-import { createHmac, timingSafeEqual } from 'crypto'
+import { createHmac, randomUUID, timingSafeEqual } from 'crypto'
 
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days — matches previous cookie lifetime
+
+declare global {
+  var _crmRevokedSessionIds: Map<string, number> | undefined
+}
+
+function revokedSessionIds(): Map<string, number> {
+  if (!global._crmRevokedSessionIds) {
+    global._crmRevokedSessionIds = new Map()
+  }
+  return global._crmRevokedSessionIds
+}
+
+function pruneRevokedSessionIds(now = Date.now()): void {
+  for (const [sid, expiresAt] of revokedSessionIds()) {
+    if (expiresAt <= now) revokedSessionIds().delete(sid)
+  }
+}
 
 function sign(encodedPayload: string): string {
   const secret = process.env.NEXTAUTH_SECRET
@@ -8,16 +25,7 @@ function sign(encodedPayload: string): string {
   return createHmac('sha256', secret).update(encodedPayload).digest('base64url')
 }
 
-// Signed session cookie value: "<base64url payload>.<hmac signature>"
-// The payload embeds its own expiry so a captured cookie can't be replayed
-// past its lifetime even if the Set-Cookie Max-Age is stripped or edited.
-export function createSessionCookieValue(user: unknown): string {
-  const payload = JSON.stringify({ user, exp: Date.now() + SESSION_TTL_MS })
-  const encoded = Buffer.from(payload, 'utf8').toString('base64url')
-  return `${encoded}.${sign(encoded)}`
-}
-
-export function verifySessionCookieValue(raw: string): any | null {
+function readVerifiedPayload(raw: string): any | null {
   const parts = raw.split('.')
   if (parts.length !== 2) return null
   const [encoded, signature] = parts
@@ -36,10 +44,60 @@ export function verifySessionCookieValue(raw: string): any | null {
   }
 
   try {
-    const payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'))
-    if (!payload.exp || Date.now() > payload.exp) return null
-    return payload.user
+    return JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'))
   } catch {
     return null
   }
+}
+
+export function readVerifiedSessionPayload(raw: string | undefined | null): any | null {
+  return raw ? readVerifiedPayload(raw) : null
+}
+
+// Signed session cookie value: "<base64url payload>.<hmac signature>"
+// The payload embeds its own expiry so a captured cookie can't be replayed
+// past its lifetime even if the Set-Cookie Max-Age is stripped or edited.
+// Every newly minted cookie also carries a session id (`sid`) so logout can
+// revoke that exact session. Legacy cookies without sid are rejected by default;
+// set CRM_ALLOW_LEGACY_SESSION_COOKIES=true only for a short migration window.
+export function createSessionCookieValue(user: unknown): string {
+  const now = Date.now()
+  const payload = JSON.stringify({
+    user,
+    exp: now + SESSION_TTL_MS,
+    iat: now,
+    sid: randomUUID(),
+  })
+  const encoded = Buffer.from(payload, 'utf8').toString('base64url')
+  return `${encoded}.${sign(encoded)}`
+}
+
+export function verifySessionCookieValue(raw: string): any | null {
+  pruneRevokedSessionIds()
+  const payload = readVerifiedPayload(raw)
+  if (!payload?.exp || Date.now() > payload.exp) return null
+
+  if (typeof payload.sid !== 'string' || !payload.sid) {
+    return process.env.CRM_ALLOW_LEGACY_SESSION_COOKIES === 'true'
+      ? (payload.user ?? null)
+      : null
+  }
+
+  if (revokedSessionIds().has(payload.sid)) {
+    return null
+  }
+
+  return payload.user ?? null
+}
+
+export function revokeSessionCookieValue(raw: string | undefined | null): boolean {
+  if (!raw) return false
+
+  const payload = readVerifiedPayload(raw)
+  if (typeof payload?.sid !== 'string' || !payload.sid) return false
+
+  pruneRevokedSessionIds()
+  const expiresAt = typeof payload.exp === 'number' ? payload.exp : Date.now() + SESSION_TTL_MS
+  revokedSessionIds().set(payload.sid, expiresAt)
+  return true
 }

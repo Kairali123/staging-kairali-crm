@@ -1,0 +1,4 @@
+eventId,timestamp,action,outcome,actor,target,sourceIp,correlationId,context
+"4abff807-4eb1-409e-806c-91007583ea9a","2026-08-14T04:57:21.839Z","api.access_denied","denied","","/api/auth/me","::1","33144e17-17f3-471b-8ea3-233b9b88abce","{""reason"":""missing_session""}"
+"b267156d-a173-4b5b-bba0-6d63ab56bafc","2026-08-14T04:57:21.887Z","api.access_denied","denied","","/api/auth/me","::1","6d823dbe-de40-445a-afd1-27969f399536","{""reason"":""missing_session""}"
+"b1a15457-c18a-407e-85d0-f94c2907b121","2026-08-14T04:58:46.350Z","auth.login","success","sysadmin@kairali.com","","::1","6c7ffc3a-05c2-47d6-b142-7ec007ddb94e","{}"

@@ -178,13 +178,13 @@ function Pagination({ total, page, perPage, onPage, onPerPage }: { total: number
             <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12.5, color: "#64748b" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <span>Rows/page</span>
-                    <select value={perPage} onChange={e => { onPerPage(Number(e.target.value)); onPage(1); }} style={{ height: 30, padding: "0 6px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12.5, fontFamily: "inherit", background: "#fff", color: "#374151", cursor: "pointer" }}>
+                    <select aria-label="Rows per page" value={perPage} onChange={e => { onPerPage(Number(e.target.value)); onPage(1); }} style={{ height: 30, padding: "0 6px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12.5, fontFamily: "inherit", background: "#fff", color: "#374151", cursor: "pointer" }}>
                         {[10, 25, 50].map(n => <option key={n} value={n}>{n}</option>)}
                     </select>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <span>Go to</span>
-                    <input type="number" min={1} max={totalPages} value={goInput} onChange={e => setGoInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleGo()} placeholder="Page" style={{ height: 30, width: 56, padding: "0 8px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12.5, fontFamily: "inherit", background: "#fff", color: "#374151", textAlign: "center", outline: "none" }} />
+                    <input aria-label="Go to page" type="number" min={1} max={totalPages} value={goInput} onChange={e => setGoInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleGo()} placeholder="Page" style={{ height: 30, width: 56, padding: "0 8px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12.5, fontFamily: "inherit", background: "#fff", color: "#374151", textAlign: "center", outline: "none" }} />
                     <button onClick={handleGo} style={{ height: 30, padding: "0 14px", borderRadius: 6, border: "none", background: "#4f46e5", color: "#fff", fontSize: 12.5, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}>Go</button>
                 </div>
             </div>
@@ -467,7 +467,7 @@ function inRange(dateNum: number, from: Date | null, to: Date | null): boolean {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 function SentDataPageInner() {
-    const { data: sentApiData, loading: sentLoading, isRefreshing: hookRefreshing, refetch } = useSentLeads();
+    const { data: sentApiData, loading: sentLoading, isRefreshing: hookRefreshing, error: sentError, refetch } = useSentLeads();
     const { hasPermission } = useAuth();
 
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -634,6 +634,30 @@ function SentDataPageInner() {
         );
     }
 
+    if (sentError && sentApiData.length === 0) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 flex items-center justify-center px-4">
+                <div style={{ maxWidth: 560, width: "100%", background: "#fff", border: "1px solid #fecaca", borderRadius: 16, padding: "22px 24px", boxShadow: "0 12px 30px rgba(220,38,38,.08)" }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 12, background: "#fef2f2", color: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 20, fontWeight: 800 }}>!</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 18, fontWeight: 800, color: "#991b1b" }}>Could not load sent calls</div>
+                            <div style={{ fontSize: 13, color: "#7f1d1d", marginTop: 6, lineHeight: 1.6 }}>{sentError}</div>
+                            <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
+                                <button onClick={handleRefresh} style={{ background: "#dc2626", color: "#fff", border: "none", borderRadius: 8, padding: "9px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                                    Retry now
+                                </button>
+                                <button onClick={() => window.location.reload()} style={{ background: "#fff", color: "#991b1b", border: "1px solid #fecaca", borderRadius: 8, padding: "9px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                                    Reload page
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="font-sans bg-[#f0f2f8] min-h-full text-slate-800">
             <style>{`
@@ -673,6 +697,21 @@ function SentDataPageInner() {
                     </div>
                 </div>
             </div>
+
+            {sentError && sentApiData.length > 0 && (
+                <div className="mx-2 sm:mx-4 lg:mx-5 mt-4">
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 12, background: "#fff7ed", border: "1px solid #fdba74", borderRadius: 12, padding: "12px 14px", color: "#9a3412" }}>
+                        <div style={{ width: 28, height: 28, borderRadius: 8, background: "#ffedd5", color: "#c2410c", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontWeight: 900 }}>!</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 800 }}>Background refresh failed</div>
+                            <div style={{ fontSize: 12.5, marginTop: 4, lineHeight: 1.6 }}>{sentError}</div>
+                        </div>
+                        <button onClick={handleRefresh} style={{ background: "#ea580c", color: "#fff", border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+                            Retry
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* ── Filters ── */}
             <div className="mt-3 mx-2 sm:mx-4 lg:mx-5">

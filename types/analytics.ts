@@ -5,6 +5,9 @@ export interface AnalyticsData {
   fms: FMSAnalytics
   helpdesk: HelpdeskAnalytics
   executive: ExecutiveKPIs
+  referrals?: ReferralAnalytics
+  complaints?: ComplaintAnalytics
+  feedback?: FeedbackAnalytics
 }
 
 export interface SalesAnalytics {
@@ -67,6 +70,24 @@ export interface ExecutiveKPIs {
   leadConversionRate: number
   systemUptime: number
   costPerAcquisition: number
+}
+
+export interface ReferralAnalytics {
+  totalReferrals: number
+  conversionRate: number
+  topReferrers: Array<{ name: string; count: number; reward: number }>
+}
+
+export interface ComplaintAnalytics {
+  totalComplaints: number
+  resolutionRate: number
+  topCategories: Array<{ category: string; count: number; severity: string }>
+}
+
+export interface FeedbackAnalytics {
+  avgRating: number
+  totalReviews: number
+  ratingDistribution: Array<{ rating: number; count: number; percentage: number }>
 }
 
 export interface ReportFilter {

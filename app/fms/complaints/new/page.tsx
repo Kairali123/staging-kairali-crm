@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useState } from "react"
+import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -195,8 +196,8 @@ export default function NewComplaintPage() {
                 <Save className="mr-2 h-4 w-4" />
                 Register Complaint
               </Button>
-              <Button type="button" variant="outline" href="/fms/complaints">
-                Cancel
+              <Button type="button" variant="outline" asChild>
+                <Link href="/fms/complaints">Cancel</Link>
               </Button>
             </div>
           </form>

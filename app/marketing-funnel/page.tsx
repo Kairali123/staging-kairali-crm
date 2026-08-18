@@ -17,6 +17,7 @@ import { LeadQualitySection } from "@/components/marketing/lead-quality-section"
 import { TrafficSourcePerformance } from "@/components/marketing/traffic-source-performance"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { LeadTargetReport } from "@/components/marketing/lead-target-report"
+import type { Company } from "@/hooks/use-lead-target-report"
 
 export default function MarketingFunnelPage() {
   // Router and search params
@@ -354,7 +355,7 @@ export default function MarketingFunnelPage() {
         <div className="absolute inset-0 z-40 bg-white/80 backdrop-blur-sm flex items-center justify-center">
           <div className="flex flex-col items-center">
             <img
-              src="/grouploader"
+              src="/grouploader.gif"
               alt="Loading"
               className="h-[110px] w-auto"
             />
@@ -395,6 +396,7 @@ export default function MarketingFunnelPage() {
                   <SheetTrigger asChild>
                     <Button
                       size="icon"
+                      aria-label="Open filters"
                       className="h-10 w-10 bg-white/15 text-white hover:bg-white/25"
                     >
                       <Filter className="h-5 w-5" />
@@ -750,7 +752,7 @@ export default function MarketingFunnelPage() {
         )}
       >
         {/* KPI – has full-width header */}
-        <KPISection />
+        <KPISection filters={filters} />
         <LeadQualitySection />
 
         <TrafficSourcePerformance filters={filters} />

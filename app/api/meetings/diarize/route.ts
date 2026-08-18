@@ -6,11 +6,18 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
+import { getMeetingSession, meetingUnauthorized } from '@/lib/meetings-auth'
+import { checkApiRateLimit, rateLimitResponse } from '@/lib/api-rate-limit'
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || 'dummy-key-for-build' })
 
 export async function POST(req: NextRequest) {
   try {
+    const session = getMeetingSession(req)
+    if (!session) return meetingUnauthorized()
+    const limit = await checkApiRateLimit(req, 'meetings.diarize', session.email, 30, 60 * 60 * 1000)
+    if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds)
+
     const body = await req.json()
     const { segments, participants, meetingTitle } = body
 

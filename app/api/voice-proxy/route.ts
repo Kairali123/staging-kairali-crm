@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getSessionUser, hasAdminRole, hasAnyPermission } from '@/lib/authz';
 
 const SENT_VOICE_GAS_URL =
     "https://script.google.com/macros/s/AKfycbym45pQfgcyqKRHLMtMt3gc0KWMcfPiHYngBZuswB7frxb7t4BMfxlVG1zFbe50bMH0/exec";
@@ -46,8 +47,21 @@ async function fetchVoiceData(targetUrl: string) {
 }
 
 export async function GET(req: NextRequest) {
+    const user = getSessionUser(req);
+    if (!user) {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(req.url);
     const type = searchParams.get('type_proxy'); // 'sent' or 'all'
+    if (type !== 'sent' && type !== 'all') {
+        return NextResponse.json({ success: false, error: 'Invalid type_proxy' }, { status: 400 });
+    }
+
+    const requiredPermission = type === 'sent' ? 'ai_voice_sent.view' : 'ai_voice_received.view';
+    if (!hasAdminRole(user, 'lower') && !hasAnyPermission(user, [requiredPermission])) {
+        return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
 
     // Remove our proxy-specific param
     const forwardParams = new URLSearchParams(searchParams.toString());

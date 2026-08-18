@@ -1244,6 +1244,7 @@ export default function FMSPendingTasksPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-slate-500">Rows/page</span>
                       <select
+                        aria-label="Rows per page"
                         value={itemsPerPage}
                         onChange={(e) => {
                           const val = Number(e.target.value)
@@ -1264,6 +1265,7 @@ export default function FMSPendingTasksPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-slate-500">Go to</span>
                       <input
+                        aria-label="Go to page"
                         type="number"
                         min={1}
                         max={totalPages}

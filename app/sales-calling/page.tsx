@@ -138,7 +138,7 @@ function SH({ children, bg = "#1e3a5f", w = "w-[100px]", bdr = "border-r border-
         {sortKey ? (
           <div className="flex items-center gap-0.5">
             {isSorted ? (
-              currentSort.direction === "asc" ? <ArrowUp size={10} className="text-yellow-400" /> : <ArrowDown size={10} className="text-yellow-400" />
+              currentSort?.direction === "asc" ? <ArrowUp size={10} className="text-yellow-400" /> : <ArrowDown size={10} className="text-yellow-400" />
             ) : (
               <ChevronsUpDown size={8} className="opacity-40" />
             )}

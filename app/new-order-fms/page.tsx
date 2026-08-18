@@ -1298,7 +1298,7 @@ function StageContent({ stageIndex, order }: { stageIndex: number; order: Order 
                     highlight
                 >
                     <Row label="Tracking ID" value={s7?.trackingid || "-"} />
-                    <Row label="Dispatch Through" value={s7?.dispatchthrough || s7?.dispatchtrough || order?.dispatchThrough || order?.dispatchtrough || "-"} />
+                    <Row label="Dispatch Through" value={s7?.dispatchthrough || s7?.dispatchtrough || order?.dispatchThrough || "-"} />
                     <Row label="Tracking URL" value={s7?.trackingurl || "-"} />
                 </InfoCard>
                 <TimingCard order={order} stageIndex={7} />

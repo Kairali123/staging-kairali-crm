@@ -400,14 +400,16 @@ export function ConvertedLeadsReports() {
   const getSortedCategoryData = (data: ReportDataWithCategories[], reportKey: string) => {
     const config = sortConfigs[reportKey]
     if (!config || !config.key) return data
+    const sortKey = config.key
 
     return [...data].sort((a, b) => {
-      if (config.key === "name") {
+      if (sortKey === "name") {
         return config.direction === "asc" ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name)
       }
 
       // For category-specific sorting
-      const [category, field] = config.key.split(".")
+      const [category, field] = sortKey.split(".")
+      if (!category || !field) return 0
       const categoryKey = category as keyof Omit<ReportDataWithCategories, "name">
       const fieldKey = field as keyof CategoryData
 
@@ -427,9 +429,10 @@ export function ConvertedLeadsReports() {
   const getSortedData = (data: ReportData[], reportKey: string) => {
     const config = sortConfigs[reportKey]
     if (!config || !config.key) return data
+    const sortKey = config.key
 
     return [...data].sort((a, b) => {
-      const key = config.key as keyof ReportData
+      const key = sortKey as keyof ReportData
       const aValue = a[key]
       const bValue = b[key]
 

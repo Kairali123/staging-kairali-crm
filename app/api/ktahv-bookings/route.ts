@@ -211,12 +211,15 @@ export async function GET(req: NextRequest) {
                 new Date(r.departure_date), new Date(), resId,
             );
 
-            const cancelledCheckForUser = getStatusFast(
+            const cancelledCheckForUserResult = getStatusFast(
                 resId, accountsMap, autoReleasedMap, false,
                 r.nb_bvs_doer_remarks, r.nb_bvs_reason_of_cancellation,
                 r.nb_bvs_actual, r.booking_status, r.narration,
                 r.timestamp, r.nb_bvs_action_status,
             );
+            const cancelledCheckForUser = Array.isArray(cancelledCheckForUserResult)
+                ? cancelledCheckForUserResult
+                : [cancelledCheckForUserResult, null, null];
 
             const isAutoReleased = resId in autoReleasedMap;
             const isUnderAutoReleased = !isAutoReleased && !!underAutoReleaseDate?.status;
@@ -444,10 +447,10 @@ function buildPiMap(data: any[]): Record<string, string> {
     }
     return map;
 }
-async function getcheckinids(checkinconn: any) {
+async function getcheckinids(checkinconn: any): Promise<Record<string, boolean>> {
     try {
         const [checkinrows] = await checkinconn.execute(`SELECT booking_date_time , reservation_id  FROM ktahv_checkinmasterfms WHERE booking_date_time IS NOT NULL `);
-        let checkinidmap = {};
+        let checkinidmap: Record<string, boolean> = {};
         for (let i = 0; i < checkinrows.length; i++) {
             let r = checkinrows[i];
             if (!r.booking_date_time || !r.reservation_id) continue;
@@ -715,7 +718,7 @@ async function getMainBookingsData(conn: any): Promise<any[]> {
         conn?.release();
     }
 }
-async function getGuesttrackerData(guestconn: any): Promise<any[]> {
+async function getGuesttrackerData(guestconn: any): Promise<Record<string, any>> {
     try {
         const [rows] = await guestconn.execute(`
             SELECT 
@@ -750,7 +753,7 @@ async function getGuesttrackerData(guestconn: any): Promise<any[]> {
             LEFT JOIN ktahv_bookings_fms_v3_part1 nb
             ON nb.reservation_id = gt.booking_id COLLATE utf8mb4_unicode_ci
             `);
-        let datamap = {};
+        let datamap: Record<string, any> = {};
         for (let i = 0; i < rows.length; i++) {
             let r = rows[i];
             datamap[String(r.booking_id).trim()] = {
@@ -893,7 +896,7 @@ function getStatusFast(
     resId: string, map: Record<string, any>, autoReleasedMap: Record<string, any>,
     flag: boolean | true,
     salesPersonRemark: string | null, salesPersonReason: string | null,
-    salesPersonDoneDate: string | null, pmsStatusNew?: string,
+    salesPersonDoneDate: string | Date | null, pmsStatusNew?: string,
     pmsRemarks?: string, pmsActualReceived?: string, salesPersonSt?: string,
 ) {
     const d = map[resId];

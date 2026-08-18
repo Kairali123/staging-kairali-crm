@@ -111,6 +111,7 @@ export interface DeptM { total: number; resolved: number; open: number; assigned
 export interface CatM { total: number; resolved: number; open: number; overdue: number; timeTaken: number }
 export interface TypeM { total: number; resolved: number; open: number; escalated: number; takenTime: number }
 export type FreqT = [string, number, number, number, string, string]
+export type KPI = "totalTickets" | "resolvedTickets" | "pendingTickets" | "highPriority" | "positiveFeedback" | null
 
 export interface RC {
   chatId: string; name: string; room: string; issueType: string
@@ -195,7 +196,6 @@ export interface RC {
   whatsapptodepartmenthead?: string;
   whatsapptogm?: string;
   staffEmail?: string;
-  staffName?: string;
   headName?: string;
   headEmail?: string;
 }
@@ -330,7 +330,6 @@ function processRiyaSharmaData(rows: RiyaSharmaRecord[]): DD {
       subCategory: row.subcategory,
       urgencyTAT: row.urgencytatmin,
       score: row.satisfationscore,
-      staffName: row.assignto || row.doerstaff,
       generateDate: row.genratetimestamp || row.plannedstaff,
       chatDoneDate: row.chatdonedatetime,
       conversationId: row.conversationid,

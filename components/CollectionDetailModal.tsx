@@ -6,6 +6,7 @@ import React, { useState, useEffect, useCallback } from "react";
 // TYPES
 // ─────────────────────────────────────────────────────────────────
 export interface LeadRow {
+  id?: string | number;
   srNo: number;
   dateTime: string;        // payment_date
   bookingId: string;       // booking_id  (Reference ID)
@@ -17,6 +18,9 @@ export interface LeadRow {
   invoice_amount: string;   // invoice_amount
   salesPerson: string;     // payment_collected_by (Collected By)
   received_status: string;   // received_status
+  ivrUrl?: string;
+  priority?: string;
+  urgency?: string;
 }
 
 export interface ModalMeta {
@@ -36,7 +40,7 @@ interface LeadDetailModalProps {
 // ─────────────────────────────────────────────────────────────────
 const ROWS_OPTIONS = [5, 10, 25, 50, 100];
 
-const TABLE_COLUMNS = [
+const TABLE_COLUMNS: { key: keyof LeadRow; label: string; minW: number }[] = [
   { key: "srNo",          label: "S.No",            minW: 60  },
   { key: "dateTime",      label: "Date",             minW: 140 },
   { key: "bookingId",     label: "Reference ID",     minW: 160 },
@@ -457,44 +461,13 @@ export default function LeadDetailModal({ isOpen, onClose, meta }: LeadDetailMod
               ) : (
                 sliced.map((row, idx) => (
                   <tr
-                    key={row.id + idx}
+                    key={`${row.id ?? row.bookingId ?? row.srNo}-${idx}`}
                     style={{ background: idx % 2 === 0 ? "#fff" : "#f8fafc" }}
                   >
                     {TABLE_COLUMNS.map((col) => {
                       const raw = row[col.key];
                       const val = raw !== undefined && raw !== null && String(raw).trim() !== ""
                         ? String(raw) : "—";
-
-                      if (col.key === "ivrUrl" && val !== "—") {
-                        return (
-                          <td key={col.key} style={tdBase}>
-                            <a href={val} target="_blank" rel="noreferrer" style={{
-                              background: "#0ea5e9", color: "#fff",
-                              padding: "3px 12px", borderRadius: "6px",
-                              fontSize: "10px", fontWeight: 700, textDecoration: "none",
-                              whiteSpace: "nowrap",
-                            }}>
-                              Listen
-                            </a>
-                          </td>
-                        );
-                      }
-
-                      if (col.key === "priority") {
-                        return (
-                          <td key={col.key} style={tdBase}>
-                            <span style={{ ...badgePill, ...priorityStyle(val) }}>{val}</span>
-                          </td>
-                        );
-                      }
-
-                      if (col.key === "urgency") {
-                        return (
-                          <td key={col.key} style={tdBase}>
-                            <span style={{ ...badgePill, ...urgencyStyle(val) }}>{val}</span>
-                          </td>
-                        );
-                      }
 
                       return (
                         <td key={col.key} style={tdBase}>

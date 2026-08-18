@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySessionCookieValue } from "@/lib/session";
+import { hasAdminRole, hasServerActionPermission } from "@/lib/authz";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -23,6 +24,9 @@ export async function POST(req: NextRequest) {
     }
     if (!session) {
         return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+    if (!hasAdminRole(session, "lower") && !hasServerActionPermission(session, "ktahvPage", "checkOutVerify")) {
+        return NextResponse.json({ success: false, error: "Insufficient permissions" }, { status: 403 });
     }
 
     const sharedSecret = process.env.GAS_SHARED_SECRET;

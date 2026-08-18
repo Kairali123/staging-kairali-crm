@@ -314,6 +314,7 @@ function Pagination({ total, page, rowsPerPage, onPageChange, onRowsPerPageChang
         <div className="flex items-center justify-center sm:justify-start gap-2">
           <span className="font-medium text-xs text-slate-600">Rows</span>
           <select
+            aria-label="Rows per page"
             value={rowsPerPage}
             onChange={e => { onRowsPerPageChange(Number(e.target.value)); onPageChange(1) }}
             className={`h-9 rounded-md border border-slate-300 bg-white px-2 text-sm font-semibold focus:outline-none focus:ring-2 ${btnPrimary.includes("emerald") ? "focus:ring-emerald-500" : btnPrimary.includes("violet") ? "focus:ring-violet-500" : "focus:ring-blue-500"}`}
@@ -329,6 +330,7 @@ function Pagination({ total, page, rowsPerPage, onPageChange, onRowsPerPageChang
           <span className="text-xs text-slate-600">Page <span className="font-semibold">{page}</span> of <span className="font-semibold">{totalPages}</span></span>
           <div className="flex items-center gap-1">
             <input
+              aria-label="Go to page"
               type="number" min={1} max={totalPages} value={goToValue}
               onChange={e => setGoToValue(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleGo() } }}
@@ -1148,7 +1150,7 @@ export default function GoogleAdwordReportsPage() {
                 <div>
                   <label className="text-xs text-slate-500 mb-1.5 block uppercase font-semibold tracking-wide">Status</label>
                   <div className="relative">
-                    <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1) }} className={selectCls}>
+                    <select aria-label="Status filter" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1) }} className={selectCls}>
                       <option value="all">All Status</option>
                       {uniqueStatuses.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
@@ -1158,7 +1160,7 @@ export default function GoogleAdwordReportsPage() {
                 <div>
                   <label className="text-xs text-slate-500 mb-1.5 block uppercase font-semibold tracking-wide">Channel</label>
                   <div className="relative">
-                    <select value={channelFilter} onChange={e => { setChannelFilter(e.target.value); setPage(1) }} className={selectCls}>
+                    <select aria-label="Channel filter" value={channelFilter} onChange={e => { setChannelFilter(e.target.value); setPage(1) }} className={selectCls}>
                       <option value="all">All Channels</option>
                       {uniqueChannels.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
@@ -1168,7 +1170,7 @@ export default function GoogleAdwordReportsPage() {
                 <div>
                   <label className="text-xs text-slate-500 mb-1.5 block uppercase font-semibold tracking-wide">Date Range</label>
                   <div className="relative">
-                    <select value={datePreset} onChange={e => handleDatePreset(e.target.value)} className={selectCls}>
+                    <select aria-label="Date range filter" value={datePreset} onChange={e => handleDatePreset(e.target.value)} className={selectCls}>
                       {DATE_PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                     </select>
                     <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />

@@ -125,6 +125,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from "openai";
 import { getPool } from '@/lib/db'
+import {
+  canAccessMeetingOwner,
+  getMeetingSession,
+  meetingForbidden,
+  meetingUnauthorized,
+} from '@/lib/meetings-auth'
+import { checkApiRateLimit, rateLimitResponse } from '@/lib/api-rate-limit'
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || 'dummy-key-for-build' })
 
@@ -205,6 +212,11 @@ Return the same JSON schema with added field:
 
 export async function POST(req: NextRequest) {
   try {
+    const session = getMeetingSession(req)
+    if (!session) return meetingUnauthorized()
+    const limit = await checkApiRateLimit(req, 'meetings.extract_tasks', session.email, 30, 60 * 60 * 1000)
+    if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds)
+
     const body = await req.json()
     const {
       meeting_id,
@@ -212,11 +224,20 @@ export async function POST(req: NextRequest) {
       transcript,          // plain transcript (fallback)
       formatted_transcript, // speaker-attributed transcript (preferred)
       participants,         // from Meet/Zoom API: [{ name, email, role }]
-      assigned_by,          // logged-in user name
     } = body
 
     if (!meeting_id) {
       return NextResponse.json({ error: 'meeting_id required' }, { status: 400 })
+    }
+
+    const db = await getPool()
+    const [[meeting]]: any = await db.execute(
+      'SELECT id, recorded_by FROM meetings WHERE id = ?',
+      [meeting_id],
+    )
+    if (!meeting) return NextResponse.json({ error: 'Meeting not found' }, { status: 404 })
+    if (!canAccessMeetingOwner(session, meeting.recorded_by)) {
+      return meetingForbidden('You do not have permission to extract tasks for this meeting.')
     }
 
     const transcriptToUse = formatted_transcript || transcript || ''
@@ -317,20 +338,18 @@ ${JSON.stringify(extracted, null, 2)}`,
 
     // ── Bulk insert into meeting_tasks ────────────────────────────────────
     const today = new Date().toISOString().split('T')[0]
-    const db = await getPool()
-
     const values = validated.map(t => [
       meeting_id,
       meeting_title || 'Untitled Meeting',
       t.task || 'Untitled Task',
       ['high', 'medium', 'low'].includes(t.priority) ? t.priority : 'medium',
       t.assigned_to || 'Self',
-      t.assigned_by || assigned_by || null,
+      session.email,
       t.deadline || null,
       'todo',
       today,
       typeof t.confidence === 'number' ? Math.round(t.confidence * 100) / 100 : null,
-      t.assigned_by || null,
+      t.assigned_by || session.name,
       t.flagged ? 1 : 0,
       0,  // reviewed = false initially
       t.flag_reason || null,

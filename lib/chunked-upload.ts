@@ -59,6 +59,10 @@ export async function uploadAudioChunked(
     }
     uploadUrl = sessionData.uploadUrl
   }
+  if (!uploadUrl) {
+    throw new Error('Could not create upload session')
+  }
+  const activeUploadUrl: string = uploadUrl
 
   // ── Step 2: Resume offset if reusing session ──────────────────────────────
   let startByte = 0
@@ -67,14 +71,14 @@ export async function uploadAudioChunked(
       const res  = await fetch('/api/meetings/upload-chunk', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ uploadUrl, totalSize: blob.size }),
+        body:    JSON.stringify({ uploadUrl: activeUploadUrl, totalSize: blob.size }),
       })
       const data = await res.json()
       if (data.complete && data.fileId) {
         return {
           fileId:    data.fileId,
           streamUrl: `/api/meetings/audio?id=${data.fileId}`,
-          uploadUrl,
+          uploadUrl: activeUploadUrl,
         }
       }
       startByte = data.resumeFrom || 0
@@ -97,7 +101,7 @@ export async function uploadAudioChunked(
 
     for (let retry = 0; retry < 3; retry++) {
       try {
-        const proxyUrl = `/api/meetings/upload-chunk?uploadUrl=${encodeURIComponent(uploadUrl!)}`
+        const proxyUrl = `/api/meetings/upload-chunk?uploadUrl=${encodeURIComponent(activeUploadUrl)}`
 
         const res = await fetch(proxyUrl, {
           method:  'PUT',
@@ -157,7 +161,7 @@ export async function uploadAudioChunked(
       const res  = await fetch('/api/meetings/upload-chunk', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ uploadUrl, totalSize: blob.size }),
+        body:    JSON.stringify({ uploadUrl: activeUploadUrl, totalSize: blob.size }),
       })
       const data = await res.json()
       fileId = data.fileId || ''
@@ -171,6 +175,6 @@ export async function uploadAudioChunked(
   return {
     fileId,
     streamUrl: `/api/meetings/audio?id=${fileId}`,
-    uploadUrl,
+    uploadUrl: activeUploadUrl,
   }
 }

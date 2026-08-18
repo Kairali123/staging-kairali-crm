@@ -9,9 +9,13 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import { getMeetingSession, meetingUnauthorized } from '@/lib/meetings-auth'
 
 export async function GET(req: NextRequest) {
   try {
+    const session = getMeetingSession(req)
+    if (!session) return meetingUnauthorized()
+
     const { searchParams } = new URL(req.url)
     const meetingId = searchParams.get('meetingId')
 

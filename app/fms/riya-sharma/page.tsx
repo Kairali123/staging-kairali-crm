@@ -92,7 +92,7 @@ export default function RiyaSharmaPage() {
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-medium">10:00 AM</p>
-                  <Badge variant="default" size="sm">
+                  <Badge variant="default">
                     Confirmed
                   </Badge>
                 </div>
@@ -104,7 +104,7 @@ export default function RiyaSharmaPage() {
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-medium">2:30 PM</p>
-                  <Badge variant="secondary" size="sm">
+                  <Badge variant="secondary">
                     Pending
                   </Badge>
                 </div>

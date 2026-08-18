@@ -1190,7 +1190,7 @@ export default function ComplaintsPage() {
                           </div>
                           <div>
                             <div className="text-xs font-medium text-muted-foreground mb-1">Urgency</div>
-                            <Badge className={getSeverityColor(complaint.urgency)} variant="outline" size="sm">
+                            <Badge className={getSeverityColor(complaint.urgency)} variant="outline">
                               {complaint.urgency.toUpperCase()}
                             </Badge>
                           </div>
@@ -1211,7 +1211,6 @@ export default function ComplaintsPage() {
                             <Badge
                               className={getVerificationColor(complaint.verificationStatus)}
                               variant="outline"
-                              size="sm"
                             >
                               {complaint.verificationStatus.toUpperCase()}
                             </Badge>

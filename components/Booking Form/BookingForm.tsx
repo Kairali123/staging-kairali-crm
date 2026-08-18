@@ -282,10 +282,12 @@ function validateStep(step: number, state: any, bookingType: string): Record<str
   if (step === appStep) {
     const app = state.approval as ApprovalInfo;
     if (app && app.isApprovalRequired) {
-      if (!filled(app.approvalGivenDate)) errs.approvalGivenDate = "Required";
-      if (!filled(app.approvalValidTillDate)) {
+      const approvalGivenDate = app.approvalGivenDate ?? "";
+      const approvalValidTillDate = app.approvalValidTillDate ?? "";
+      if (!filled(approvalGivenDate)) errs.approvalGivenDate = "Required";
+      if (!filled(approvalValidTillDate)) {
         errs.approvalValidTillDate = "Required";
-      } else if (filled(app.approvalGivenDate) && new Date(app.approvalValidTillDate) < new Date(app.approvalGivenDate)) {
+      } else if (filled(approvalGivenDate) && new Date(approvalValidTillDate) < new Date(approvalGivenDate)) {
         errs.approvalValidTillDate = "Valid Till Date must not be before Given Date";
       }
       if (!filled(app.approvedBy)) errs.approvedBy = "Required";
@@ -1065,7 +1067,7 @@ export default function BookingForm({ bookingId, formType = "individual", onSucc
           return matched ? matched.code : s;
         };
 
-        const countryStateMap = apiData?.countryStateMap || DEFAULT_COUNTRY_STATE_MAP;
+        const countryStateMap: Record<string, string[]> = apiData?.countryStateMap || DEFAULT_COUNTRY_STATE_MAP;
         const toNormalizedState = (country: string, stateStr: string): string => {
           if (!stateStr) return '';
           const trimmedState = String(stateStr).trim();
@@ -1076,7 +1078,7 @@ export default function BookingForm({ bookingId, formType = "individual", onSucc
           if (!countryKey) return trimmedState;
           const stateList = countryStateMap[countryKey] || [];
           const matchedState = stateList.find(
-            s => s.toLowerCase() === trimmedState.toLowerCase()
+            (s: string) => s.toLowerCase() === trimmedState.toLowerCase()
           );
           return matchedState || trimmedState;
         };

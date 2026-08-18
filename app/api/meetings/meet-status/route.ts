@@ -8,9 +8,13 @@
 // - If end_time is null/absent → meeting is still running
 
 import { NextRequest, NextResponse } from 'next/server'
+import { getMeetingSession, meetingUnauthorized } from '@/lib/meetings-auth'
 
 export async function GET(req: NextRequest) {
   try {
+    const session = getMeetingSession(req)
+    if (!session) return meetingUnauthorized()
+
     const { searchParams } = new URL(req.url)
     const code  = searchParams.get('code')   // e.g. abc-xyz-pqr
     const token = searchParams.get('token')  // Google OAuth access token

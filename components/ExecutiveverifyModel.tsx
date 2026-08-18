@@ -166,7 +166,7 @@ export default function ExecutiveVerifierModal({
                 setForm({
                     ...EMPTY_FORM,
                     doer: record.savedDoer || defaultDoerName || "",
-                    doerEmail: record.savedDoerEmail || defaultDoerEmail || "",
+                    doerEmail: record.savedDoerEmail || defaultDoerEmail || "verifier@kairaligroup.com",
                     coldBy: record.savedColdBy || "",
                     coldRemarksBySalesTeam: record.savedColdRemarks || "",
                 });
@@ -191,10 +191,8 @@ export default function ExecutiveVerifierModal({
             rating >= 1 &&
             rating <= 10 &&
             form.suggestedSolution.trim() !== "" &&
-            form.remarks.trim() !== "" &&
+            form.remarks.trim() !== ""
             // form.htCreatedStatus !== "" && // commented out with HT Created Status field
-            form.doerEmail.trim() !== "" &&
-            EMAIL_REGEX.test(form.doerEmail.trim())
             // form.hsStatus !== "" && // commented out with HS Status field
         );
     }, [form]);
@@ -336,6 +334,7 @@ export default function ExecutiveVerifierModal({
                                     onChange={(v) => update("whatWentWrong", v)}
                                     className="w-full"
                                     disabled={isAlreadySubmitted}
+                                    maxLength={500}
                                 />
 
                                 <TextAreaField
@@ -345,6 +344,7 @@ export default function ExecutiveVerifierModal({
                                     onChange={(v) => update("suggestedSolution", v)}
                                     className="w-full"
                                     disabled={isAlreadySubmitted}
+                                    maxLength={500}
                                 />
                             </div>
 
@@ -355,6 +355,7 @@ export default function ExecutiveVerifierModal({
                                 onChange={(v) => update("remarks", v)}
                                 className="w-full"
                                 disabled={isAlreadySubmitted}
+                                maxLength={500}
                             />
                         </div>
                     )}
@@ -509,6 +510,7 @@ function TextAreaField({
     onChange,
     className = "",
     disabled,
+    maxLength,
 }: {
     label: string;
     required?: boolean;
@@ -516,15 +518,24 @@ function TextAreaField({
     onChange: (v: string) => void;
     className?: string;
     disabled?: boolean;
+    maxLength?: number;
 }) {
     return (
         <div className={className}>
-            <FieldLabel label={label} required={required} />
+            <div className="flex justify-between items-center mb-1">
+                <FieldLabel label={label} required={required} />
+                {maxLength && (
+                    <span className="text-[10px] text-gray-400 font-medium">
+                        {value.length}/{maxLength}
+                    </span>
+                )}
+            </div>
             <textarea
                 rows={3}
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
                 disabled={disabled}
+                maxLength={maxLength}
                 className="w-full resize-none rounded-md border border-indigo-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white disabled:bg-gray-100 disabled:text-gray-500 disabled:border-gray-300 disabled:cursor-not-allowed"
             />
         </div>

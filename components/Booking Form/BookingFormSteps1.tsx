@@ -16,6 +16,14 @@ import {
   MAX_NAME_LEN, MAX_NATIONALITY_LEN, MAX_ZIP_LEN, MAX_ADDRESS_LEN, MAX_CHILD_NAME_LEN,
 } from "./BookingFormBase";
 
+function scopedGuestErrors(errors: Record<string, string> | undefined, prefix: string): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(errors ?? {})
+      .filter(([key]) => key.startsWith(prefix))
+      .map(([key, value]) => [key.replace(prefix, ""), value])
+  );
+}
+
 // ─── Individual Form ─────────────────────────────────────────────────────────
 
 /* Step 0: Primary Guest Personal Info + Booking Info */
@@ -365,11 +373,7 @@ function Step1SecondaryGuests({
               <Step0PrimaryGuest
                 guest={g}
                 onChange={ng => { const arr = [...secondaryGuests]; arr[idx] = ng; onSecondaryChange(arr); }}
-                errors={Object.fromEntries(
-                  Object.entries(errors || {})
-                    .filter(([k]) => k.startsWith(`guest${g.guestNumber}_`))
-                    .map(([k, v]) => [k.replace(`guest${g.guestNumber}_`, ""), v])
-                )}
+                errors={scopedGuestErrors(errors, `guest${g.guestNumber}_`)}
                 apiData={apiData}
                 hideHeader
               />
@@ -382,11 +386,7 @@ function Step1SecondaryGuests({
                 maxPax={maxPax}
                 radioNameSuffix={`guest-${g.guestNumber}`}
                 roomNumberLocked={roomNumberLocked}
-                errors={Object.fromEntries(
-                  Object.entries(errors || {})
-                    .filter(([k]) => k.startsWith(`guest${g.guestNumber}_`))
-                    .map(([k, v]) => [k.replace(`guest${g.guestNumber}_`, ""), v])
-                )}
+                errors={scopedGuestErrors(errors, `guest${g.guestNumber}_`)}
               />
             </div>
           </div>

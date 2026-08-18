@@ -13,6 +13,7 @@ import { Download, Printer, TrendingUp, TrendingDown, TableIcon, BarChart3, Chev
 import { format } from "date-fns"
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, ReferenceLine, Cell, LabelList, Area, AreaChart } from "recharts"
 import type { SalesRow } from "@/hooks/useSalesData"
+import type { Border, Fill } from "exceljs"
 import { Medal } from "lucide-react"
 
 // ─── Sticky column pixel constants ────────────────────────────────────────────
@@ -77,7 +78,7 @@ export default function SalesReportsPage() {
     </div>
   )
 
-  const { salesData, loading } = useSalesData()
+  const { salesData, loading, error, refetch } = useSalesData()
   const isInitialLoad = useRef(true)
 
   useEffect(() => {
@@ -273,6 +274,8 @@ export default function SalesReportsPage() {
         // sort by full date descending when year ties
         return b.date.split("-").reverse().join("").localeCompare(a.date.split("-").reverse().join(""))
       })
+    } else if (sortBy === "rank") {
+      base = [...filteredData]
     } else {
       base = [...filteredData].sort((a, b) => {
         const av = a[sortBy], bv = b[sortBy]
@@ -350,14 +353,14 @@ export default function SalesReportsPage() {
     ]
 
     // ── Helper styles ──────────────────────────────────────────────────────────
-    const titleFill: ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A5F" } }
-    const infoFill: ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E293B" } }
-    const headerFill: ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF334155" } }
-    const greenFill: ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD1FAE5" } }
-    const redFill: ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFEE2E2" } }
-    const altFill: ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } }
+    const titleFill: Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A5F" } }
+    const infoFill: Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E293B" } }
+    const headerFill: Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF334155" } }
+    const greenFill: Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD1FAE5" } }
+    const redFill: Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFEE2E2" } }
+    const altFill: Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } }
 
-    const thin: ExcelJS.Border = { style: "thin", color: { argb: "FFE2E8F0" } }
+    const thin: Border = { style: "thin", color: { argb: "FFE2E8F0" } }
     const allBorders = { top: thin, left: thin, bottom: thin, right: thin }
 
     // ── ROW 1 — Title ──────────────────────────────────────────────────────────
@@ -1011,6 +1014,15 @@ export default function SalesReportsPage() {
                       <div key={i} className="h-12 bg-slate-100 rounded-lg animate-pulse" />
                     ))}
                   </div>
+                ) : error ? (
+                  <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
+                    <AlertCircle className="h-12 w-12 text-red-300 mb-4" />
+                    <p className="text-base font-semibold text-slate-700 mb-1">Unable to load sales report data</p>
+                    <p className="text-sm text-slate-500 max-w-md">{error}</p>
+                    <Button onClick={refetch} className="mt-5">
+                      Retry
+                    </Button>
+                  </div>
                 ) : filteredDateGroups.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-20">
                     <Calendar className="h-12 w-12 text-slate-300 mb-4" />
@@ -1324,7 +1336,7 @@ export default function SalesReportsPage() {
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex items-center justify-center sm:justify-start gap-2 text-sm text-slate-600">
                           <span className="font-medium">Rows</span>
-                          <select value={itemsPerPage} onChange={e => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1) }} className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500">
+                          <select aria-label="Rows per page" value={itemsPerPage} onChange={e => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1) }} className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500">
                             <option value={5}>5</option><option value={10}>10</option><option value={20}>20</option><option value={50}>50</option>
                           </select>
                           <span className="text-xs text-slate-500">
@@ -1334,7 +1346,7 @@ export default function SalesReportsPage() {
                         <div className="flex flex-wrap items-center justify-center gap-2 text-sm text-slate-600">
                           <span>Page <span className="font-semibold">{currentPage}</span> of <span className="font-semibold">{totalDatePages}</span></span>
                           <div className="flex items-center gap-1">
-                            <input type="number" min={1} max={totalDatePages} value={goToPage} onChange={e => setGoToPage(e.target.value)} placeholder="Go" className="w-16 h-9 rounded-md border border-slate-300 px-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                            <input aria-label="Go to page" type="number" min={1} max={totalDatePages} value={goToPage} onChange={e => setGoToPage(e.target.value)} placeholder="Go" className="w-16 h-9 rounded-md border border-slate-300 px-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500" />
                             <button onClick={() => { const p = Number(goToPage); if (p >= 1 && p <= totalDatePages) { setCurrentPage(p); setGoToPage("") } }} className="h-9 px-3 rounded-md bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition">Go</button>
                           </div>
                         </div>
@@ -1493,14 +1505,14 @@ export default function SalesReportsPage() {
                               <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'rgba(148,163,184,0.08)' }} />
                               <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="3 3" />
                               <Bar dataKey="planned" fill="url(#pg)" name="Planned Sales" radius={[6, 6, 0, 0]} maxBarSize={60} />
-                              <Bar dataKey="actual" fill="url(#ag)" name="Actual Sales" radius={[6, 6, 0, 0]} maxBarSize={60}
-                                label={{ position: "top", formatter: (v: any, e: any, i: number) => { const dp = monthlyChartData[i]; const vp = dp?.variancePercent ? Number(dp.variancePercent) : 0; return vp !== 0 ? `${vp > 0 ? "+" : ""}${vp.toFixed(1)}%` : "" }, fill: "#64748b", fontSize: 11, fontWeight: "600", offset: 8 }}
-                              />
+                              <Bar dataKey="actual" fill="url(#ag)" name="Actual Sales" radius={[6, 6, 0, 0]} maxBarSize={60}>
+                                <LabelList dataKey="variancePercent" position="top" formatter={(value: unknown) => { const variance = Number(value); return Number.isFinite(variance) && variance !== 0 ? `${variance > 0 ? "+" : ""}${variance.toFixed(1)}%` : "" }} style={{ fill: "#64748b", fontSize: 11, fontWeight: 600 }} />
+                              </Bar>
                               <Bar dataKey="unverified" fill="url(#ug)" name="Unverified Sales" radius={[6, 6, 0, 0]} maxBarSize={60} />
                               <Bar dataKey="cancelled" fill="url(#cg)" name="Cancelled Sales" radius={[6, 6, 0, 0]} maxBarSize={60} />
                               <Bar dataKey="variance" name="Variance" radius={[4, 4, 0, 0]} maxBarSize={35}>
                                 {monthlyChartData.map((e, i) => <Cell key={`c-${i}`} fill={e.variance >= 0 ? "#22c55e" : "#ef4444"} opacity={0.75} />)}
-                                <LabelList dataKey="variancePercent" position="top" formatter={(v: any) => v !== undefined ? `${v > 0 ? "+" : ""}${Number(v).toFixed(1)}%` : ""} style={{ fill: "#64748b", fontSize: 10, fontWeight: 600 }} />
+                                <LabelList dataKey="variancePercent" position="top" formatter={(value: unknown) => { const variance = Number(value); return Number.isFinite(variance) ? `${variance > 0 ? "+" : ""}${variance.toFixed(1)}%` : "" }} style={{ fill: "#64748b", fontSize: 10, fontWeight: 600 }} />
                               </Bar>
                             </BarChart>
                           </ResponsiveContainer>

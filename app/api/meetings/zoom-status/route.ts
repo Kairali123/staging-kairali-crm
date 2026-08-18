@@ -1,5 +1,6 @@
 // src/app/api/meetings/zoom-status/route.ts
 import { NextRequest, NextResponse } from 'next/server'
+import { getMeetingSession, meetingUnauthorized } from '@/lib/meetings-auth'
 
 function getSession(req: NextRequest) {
   const raw = req.cookies.get('zoom_session')?.value
@@ -9,6 +10,9 @@ function getSession(req: NextRequest) {
 
 // ── GET: return zoom session ──────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
+  const crmSession = getMeetingSession(req)
+  if (!crmSession) return meetingUnauthorized()
+
   const session = getSession(req)
   if (!session?.accessToken) return NextResponse.json({ connected: false })
   if (Date.now() > session.expiresAt) return NextResponse.json({ connected: false, expired: true })
@@ -23,6 +27,9 @@ export async function GET(req: NextRequest) {
 // ── POST: check meeting status + host ────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
+    const crmSession = getMeetingSession(req)
+    if (!crmSession) return meetingUnauthorized()
+
     const body          = await req.json()
     const { meetingId } = body
 

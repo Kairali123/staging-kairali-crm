@@ -61,8 +61,8 @@ export default function DuplicateLeadsPage() {
   const mergeDuplicates = async (primaryLead: Lead, duplicateLeads: Lead[]) => {
     // Merge remarks from all leads
     const allRemarks = [
-      ...primaryLead.remarks,
-      ...duplicateLeads.flatMap((lead) => lead.remarks.map((remark) => `[From ${lead.name}]: ${remark}`)),
+      ...(primaryLead.remarks ?? []),
+      ...duplicateLeads.flatMap((lead) => (lead.remarks ?? []).map((remark) => `[From ${lead.name}]: ${remark}`)),
     ]
 
     // Update primary lead with merged data
@@ -76,7 +76,7 @@ export default function DuplicateLeadsPage() {
     for (const duplicate of duplicateLeads) {
       await updateLead(duplicate.id, {
         status: "cold",
-        remarks: [...duplicate.remarks, `Merged with lead ${primaryLead.id} - ${primaryLead.name}`],
+        remarks: [...(duplicate.remarks ?? []), `Merged with lead ${primaryLead.id} - ${primaryLead.name}`],
       })
     }
   }

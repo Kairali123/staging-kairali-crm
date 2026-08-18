@@ -25,6 +25,29 @@ import type { Lead } from "@/types/lead"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useRef } from "react"
 
+type DateFilter =
+  | "all"
+  | "today"
+  | "yesterday"
+  | "this_week"
+  | "last_week"
+  | "this_month"
+  | "last_month"
+  | "this_year"
+  | "last_year"
+  | "custom"
+
+type DuplicateLead = Omit<Lead, "urgency"> & {
+  vSrc?: string
+  sentStatus?: string
+  mailStatus?: string
+  verifiedSource?: string
+  testCol?: string
+  reasonAssignOrDelete?: string
+  gptExtractionStatus?: string
+  urgency?: Lead["urgency"] | "high"
+}
+
 const sanitizeIvrUrl = (url: string | null | undefined): string | null => {
   if (!url || typeof url !== 'string') return null
   const trimmedUrl = url.trim()
@@ -40,6 +63,7 @@ export default function LeadAssignmentPage() {
     isLoading: isLeadLoading,
     error,
     getLeads,
+    refreshLeads,
     isLeadsLoaded
   } = useLeads()
   const router = useRouter()
@@ -47,19 +71,19 @@ export default function LeadAssignmentPage() {
   const [searchInput, setSearchInput] = useState("")
   const [appliedSearch, setAppliedSearch] = useState("")
   const [isSearching, setIsSearching] = useState(false)
-  const [dbSearchResults, setDbSearchResults] = useState<Lead[] | null>(null)
+  const [dbSearchResults, setDbSearchResults] = useState<DuplicateLead[] | null>(null)
   const [priorityFilter, setPriorityFilter] = useState("all")
   const [sourceFilter, setSourceFilter] = useState("all")
   const [urgencyFilter, setUrgencyFilter] = useState("all")
   const [assignToFilter, setAssignToFilter] = useState("all")
-  const [filteredLeads, setFilteredLeads] = useState<Lead[]>([])
+  const [filteredLeads, setFilteredLeads] = useState<DuplicateLead[]>([])
   const [sortField, setSortField] = useState<string>("")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
   const [selectedCompany, setSelectedCompany] = useState("ALL")
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
   const [gotoPage, setGotoPage] = useState("")
-  const [dateFilter, setDateFilter] = useState<"all" | "yesterday">("all")
+  const [dateFilter, setDateFilter] = useState<DateFilter>("all")
   const resultRef = useRef<HTMLDivElement | null>(null)
 
   const [startDate, setStartDate] = useState(() => {
@@ -73,7 +97,7 @@ export default function LeadAssignmentPage() {
     return lastDay.toISOString().split('T')[0]
   })
   const [dateError, setDateError] = useState("")
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
+  const [selectedLead, setSelectedLead] = useState<DuplicateLead | null>(null)
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [isCallHistoryDialogOpen, setIsCallHistoryDialogOpen] = useState(false)
   const { followUps, isLoading: isCallHistoryLoading, error: callHistoryError } = useSqlCallHistory(
@@ -81,7 +105,7 @@ export default function LeadAssignmentPage() {
   )
   const [isSqvDialogOpen, setIsSqvDialogOpen] = useState(false)
   const [customDateRange, setCustomDateRange] = useState({ start: "", end: "" })
-  const [filteredByDateLeads, setFilteredByDateLeads] = useState<Lead[]>(leads)
+  const [filteredByDateLeads, setFilteredByDateLeads] = useState<DuplicateLead[]>(leads as DuplicateLead[])
 
   const getSqvData = (leadId: string) => ({
     verifiedStatus: "Yes",
@@ -94,12 +118,12 @@ export default function LeadAssignmentPage() {
     priority: "High",
   })
 
-  const handleLoadLeads = async () => { await getLeads() }
+  const handleLoadLeads = async () => { await refreshLeads({ force: true }) }
 
   const uniqueLeadSources = useMemo(() => {
     if (!leads || leads.length === 0) return []
     const sources = new Set<string>()
-    leads.forEach(lead => { if (lead.vSrc) sources.add(lead.vSrc) })
+    ;(leads as DuplicateLead[]).forEach(lead => { if (lead.vSrc) sources.add(lead.vSrc) })
     return Array.from(sources).sort()
   }, [leads])
 
@@ -147,7 +171,7 @@ export default function LeadAssignmentPage() {
     if (user && !selectedCompany) setSelectedCompany(user.company || "KTAHV")
   }, [user, selectedCompany])
 
-  const formatIST = (date) => {
+  const formatIST = (date: Date) => {
     const ist = new Date(date.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }))
     const y = ist.getFullYear()
     const m = String(ist.getMonth() + 1).padStart(2, "0")
@@ -157,10 +181,10 @@ export default function LeadAssignmentPage() {
 
   useEffect(() => {
     var filtered = selectedCompany === "ALL"
-      ? leads
-      : leads.filter((lead) => lead.company === selectedCompany)
+      ? leads as DuplicateLead[]
+      : (leads as DuplicateLead[]).filter((lead) => lead.company === selectedCompany)
 
-    filtered = filtered.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    filtered = filtered.sort((a, b) => new Date(b.updatedAt ?? b.createdAt).getTime() - new Date(a.updatedAt ?? a.createdAt).getTime())
 
     if (dateFilter !== "all") {
       const now = new Date()
@@ -214,7 +238,7 @@ export default function LeadAssignmentPage() {
         } else {
           setDateError("")
           filtered = filtered.filter((lead) => {
-            const leadDate = new Date(lead.updatedAt).setHours(0, 0, 0, 0)
+            const leadDate = new Date(lead.updatedAt ?? lead.createdAt).setHours(0, 0, 0, 0)
             const filterStartDate = new Date(startDate).setHours(0, 0, 0, 0)
             const filterEndDate = new Date(endDate).setHours(23, 59, 59, 999)
             return leadDate >= filterStartDate && leadDate <= filterEndDate
@@ -222,12 +246,12 @@ export default function LeadAssignmentPage() {
         }
       } else if (startDate && !endDate) {
         filtered = filtered.filter((lead) => {
-          const leadDate = new Date(lead.updatedAt).setHours(0, 0, 0, 0)
+          const leadDate = new Date(lead.updatedAt ?? lead.createdAt).setHours(0, 0, 0, 0)
           return leadDate >= new Date(startDate).setHours(0, 0, 0, 0)
         })
       } else if (endDate && !startDate) {
         filtered = filtered.filter((lead) => {
-          const leadDate = new Date(lead.updatedAt).setHours(0, 0, 0, 0)
+          const leadDate = new Date(lead.updatedAt ?? lead.createdAt).setHours(0, 0, 0, 0)
           return leadDate <= new Date(endDate).setHours(23, 59, 59, 999)
         })
       }
@@ -250,7 +274,7 @@ export default function LeadAssignmentPage() {
     setIsSearching(true)
     fetch(`/api/leads/search?q=${encodeURIComponent(appliedSearch)}`)
       .then(r => r.json())
-      .then(json => { if (json.success) setDbSearchResults(json.data as Lead[]) })
+      .then(json => { if (json.success) setDbSearchResults(json.data as DuplicateLead[]) })
       .catch(err => console.error('[Search]', err))
       .finally(() => setIsSearching(false))
   }, [appliedSearch])
@@ -282,8 +306,10 @@ export default function LeadAssignmentPage() {
         let bValueN = b[sortField as keyof typeof b]
         if (typeof aValueN === "string") aValueN = aValueN.toLowerCase()
         if (typeof bValueN === "string") bValueN = bValueN.toLowerCase()
-        if (aValueN < bValueN) return sortDirection === "asc" ? -1 : 1
-        if (aValueN > bValueN) return sortDirection === "asc" ? 1 : -1
+        const aComparable = aValueN == null ? "" : String(aValueN)
+        const bComparable = bValueN == null ? "" : String(bValueN)
+        if (aComparable < bComparable) return sortDirection === "asc" ? -1 : 1
+        if (aComparable > bComparable) return sortDirection === "asc" ? 1 : -1
         return 0
       })
     }
@@ -432,7 +458,7 @@ export default function LeadAssignmentPage() {
                 {/* Date Range */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Date Range</label>
-                  <Select value={dateFilter} onValueChange={setDateFilter}>
+                  <Select value={dateFilter} onValueChange={(value) => setDateFilter(value as DateFilter)}>
                     <SelectTrigger className="h-10 w-full rounded-md border-gray-300"><SelectValue placeholder="All Dates" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All</SelectItem>
@@ -647,8 +673,8 @@ export default function LeadAssignmentPage() {
                       <tr key={lead.id === "-" ? `row-${index}` : lead.id} className="bg-white hover:bg-[#BFDBFF] transition-colors">
                         <td className="px-4 py-3 whitespace-nowrap border-r border-slate-100">
                           <div className="text-sm">
-                            <div className="font-medium text-slate-900">{new Date(lead.updatedAt).toLocaleDateString("en-GB")}</div>
-                            <div className="text-xs text-slate-500">{new Date(lead.updatedAt).toLocaleTimeString("en-GB", { hour12: false })}</div>
+                            <div className="font-medium text-slate-900">{new Date(lead.updatedAt ?? lead.createdAt).toLocaleDateString("en-GB")}</div>
+                            <div className="text-xs text-slate-500">{new Date(lead.updatedAt ?? lead.createdAt).toLocaleTimeString("en-GB", { hour12: false })}</div>
                           </div>
                         </td>
                         <td className="px-4 py-3 border-r border-slate-100" style={{ maxWidth: '120px', minWidth: '100px' }}>

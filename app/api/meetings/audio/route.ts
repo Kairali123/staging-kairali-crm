@@ -5,6 +5,15 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { google } from 'googleapis'
+import { getPool } from '@/lib/db'
+import {
+  canAccessMeetingOwner,
+  getMeetingSession,
+  isValidDriveFileId,
+  meetingForbidden,
+  meetingUnauthorized,
+  normalizeEmail,
+} from '@/lib/meetings-auth'
 
 export const runtime = 'nodejs'
 
@@ -18,20 +27,47 @@ function getDriveClient() {
   return google.drive({ version: 'v3', auth })
 }
 
+async function loadSavedMeetingOwner(fileId: string): Promise<string | null> {
+  const pool = await getPool()
+  const [[meeting]]: any = await pool.execute(
+    `SELECT recorded_by FROM meetings
+     WHERE audio_url LIKE ?
+     ORDER BY id DESC
+     LIMIT 1`,
+    [`%id=${fileId}%`],
+  )
+  return meeting?.recorded_by || null
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
     const fileId = searchParams.get('id')
     if (!fileId) return new NextResponse('Missing file id', { status: 400 })
+    if (!isValidDriveFileId(fileId)) return new NextResponse('Invalid file id', { status: 400 })
+
+    const session = getMeetingSession(req)
+    if (!session) return meetingUnauthorized()
 
     const drive = getDriveClient()
 
     // ── 1. File metadata (size + mimeType) ────────────────────────────────────
     const meta = await drive.files.get({
       fileId,
-      fields:            'size, mimeType, name',
+      fields:            'size, mimeType, name, appProperties',
       supportsAllDrives: true,
     })
+    const driveOwnerEmail = normalizeEmail(meta.data.appProperties?.crmOwnerEmail)
+    const savedMeetingOwner = driveOwnerEmail ? null : await loadSavedMeetingOwner(fileId)
+    const canAccess =
+      session.isAdmin ||
+      driveOwnerEmail === session.email ||
+      (savedMeetingOwner ? canAccessMeetingOwner(session, savedMeetingOwner) : false)
+
+    if (!canAccess) {
+      return meetingForbidden('You do not have access to this audio.')
+    }
+
     const totalSize = parseInt(meta.data.size || '0')
     let   mimeType  = meta.data.mimeType || 'audio/mpeg'
     // Normalize generic types so the browser picks the right decoder
@@ -43,11 +79,32 @@ export async function GET(req: NextRequest) {
     let end   = totalSize - 1
     if (rangeHeader) {
       const match = rangeHeader.match(/bytes=(\d+)-(\d*)/)
-      if (match) {
-        start = parseInt(match[1])
-        end   = match[2] ? parseInt(match[2]) : totalSize - 1
+      if (!match) {
+        return new NextResponse('Invalid range', {
+          status: 416,
+          headers: { 'Cache-Control': 'private, no-store' },
+        })
+      }
+
+      start = parseInt(match[1])
+      end   = match[2] ? parseInt(match[2]) : totalSize - 1
+      if (
+        !Number.isSafeInteger(start) ||
+        !Number.isSafeInteger(end) ||
+        start < 0 ||
+        end < start ||
+        start >= totalSize
+      ) {
+        return new NextResponse('Invalid range', {
+          status: 416,
+          headers: {
+            'Cache-Control': 'private, no-store',
+            'Content-Range': `bytes */${totalSize}`,
+          },
+        })
       }
     }
+    end = Math.min(end, totalSize - 1)
     const chunkSize = end - start + 1
 
     // ── 3. Stream the requested bytes from Drive ──────────────────────────────
@@ -70,7 +127,7 @@ export async function GET(req: NextRequest) {
       'Content-Type':   mimeType,
       'Content-Length': String(chunkSize),
       'Accept-Ranges':  'bytes',
-      'Cache-Control':  'public, max-age=3600',
+      'Cache-Control':  'private, no-store',
     }
     if (rangeHeader) {
       headers['Content-Range'] = `bytes ${start}-${end}/${totalSize}`

@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
+import { getSessionUser } from '@/lib/authz'
 
 export async function GET(req: NextRequest) {
+    const user = getSessionUser(req)
+    if (!user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const pool = await getPool()
     try {
         // Fetch recent Lead ID

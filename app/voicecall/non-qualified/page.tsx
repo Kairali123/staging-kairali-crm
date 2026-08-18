@@ -777,13 +777,13 @@ export default function NonQualifiedReportPage() {
                                   const val = dataset.data[i] as number
                                   const pct = total > 0 ? ((val / total) * 100).toFixed(1) : "0.0"
                                   const meta = chart.getDatasetMeta(0)
-                                  const style = meta.controller.getStyle(i) as any
+                                  const style = meta.controller.getStyle(i, false) as any
                                   return {
                                     text: `${label}: ${val} (${pct}%)`,
                                     fillStyle: style.backgroundColor,
                                     strokeStyle: style.borderColor,
                                     lineWidth: style.borderWidth,
-                                    hidden: isNaN(val) || (meta.data[i] && meta.data[i].hidden),
+                                    hidden: isNaN(val) || !chart.getDataVisibility(i),
                                     index: i
                                   }
                                 })
@@ -1098,6 +1098,7 @@ export default function NonQualifiedReportPage() {
                   <div className="flex items-center gap-1.5">
                     <span className="text-slate-500 whitespace-nowrap">Rows/page</span>
                     <select
+                      aria-label="Rows per page"
                       value={rowsPerPage}
                       onChange={e => {
                         setRowsPerPage(Number(e.target.value))
@@ -1112,6 +1113,7 @@ export default function NonQualifiedReportPage() {
                   <div className="flex items-center gap-1.5">
                     <span className="text-slate-500 whitespace-nowrap">Go to</span>
                     <input
+                      aria-label="Go to page"
                       type="number"
                       min={1}
                       max={totalPages}

@@ -1,21 +1,5 @@
-// /** @type {import('next').NextConfig} */
-// const nextConfig = {
-//   typescript: {
-//     ignoreBuildErrors: true,
-//   },
-//   images: {
-//     unoptimized: true,
-//   },
-// }
-
-// export default nextConfig
-
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   images: {
     unoptimized: true,
   },
@@ -30,16 +14,23 @@ const nextConfig = {
     },
   },
 
-  // ── Response headers — allow Drive CORS for direct browser uploads ────────
+  // Do not add wildcard CORS to authenticated CRM APIs. Meeting uploads now go
+  // through session-authenticated route handlers, and direct browser uploads to
+  // Google Drive depend on Google's own CORS policy rather than exposing CRM API
+  // responses to every origin.
   async headers() {
     return [
       {
-        // Allow Drive's upload domain to be called from browser
-        source: '/api/meetings/:path*',
+        source: '/:path*',
         headers: [
-          { key: 'Access-Control-Allow-Origin',  value: '*'                                },
-          { key: 'Access-Control-Allow-Methods', value: 'GET, POST, PUT, PATCH, DELETE, OPTIONS' },
-          { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization, x-content-range, x-content-length' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()' },
+          { key: 'Content-Security-Policy-Report-Only', value: "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:" },
+          ...(process.env.NODE_ENV === 'production'
+            ? [{ key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' }]
+            : []),
         ],
       },
     ]

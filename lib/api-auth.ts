@@ -13,7 +13,7 @@ function safeCompare(a: string, b: string): boolean {
 // or the internal frontend (same session cookie check as middleware.ts).
 // MEASUREMENT_API_TOKEN_EXPIRES_AT is an ISO date (e.g. "2026-10-19"); past that date the
 // token is rejected even if it still matches, forcing rotation rather than a silent forever-token.
-export function authorizeApiRequest(req: NextRequest): boolean {
+export async function authorizeApiRequest(req: NextRequest): Promise<boolean> {
   const authHeader = req.headers.get('authorization')
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.slice(7).trim()

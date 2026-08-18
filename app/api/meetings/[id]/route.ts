@@ -5,30 +5,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
 import { deleteAudioFromDrive } from '@/lib/google-drive'
-
-const ADMIN_ROLES = ['super_admin', 'admin']
-
-// Can this caller access this meeting?
-function canAccess(meeting: any, email: string, role: string): boolean {
-  if (ADMIN_ROLES.includes(role)) return true
-  return meeting.recorded_by === email
-}
+import {
+  canAccessMeetingOwner,
+  getMeetingSession,
+  meetingForbidden,
+  meetingUnauthorized,
+} from '@/lib/meetings-auth'
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = getMeetingSession(req)
+    if (!session) return meetingUnauthorized()
+
     const { id }    = await params
     const meetingId = parseInt(id)
     const pool = await getPool()
     if (isNaN(meetingId)) {
       return NextResponse.json({ error: 'Invalid meeting ID' }, { status: 400 })
     }
-
-    const { searchParams } = new URL(req.url)
-    const email = searchParams.get('email') || ''
-    const role  = searchParams.get('role')  || ''
 
     const [[meeting]]: any = await pool.execute(
       'SELECT * FROM meetings WHERE id = ?',
@@ -40,11 +37,8 @@ export async function GET(
     }
 
     // ── Ownership check ─────────────────────────────────────────────────────
-    if (!canAccess(meeting, email, role)) {
-      return NextResponse.json(
-        { error: 'You do not have access to this meeting.' },
-        { status: 403 }
-      )
+    if (!canAccessMeetingOwner(session, meeting.recorded_by)) {
+      return meetingForbidden('You do not have access to this meeting.')
     }
 
     const parsed = {
@@ -74,16 +68,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = getMeetingSession(req)
+    if (!session) return meetingUnauthorized()
+
     const { id }    = await params
     const meetingId = parseInt(id)
     const pool = await getPool()
     if (isNaN(meetingId)) {
       return NextResponse.json({ error: 'Invalid meeting ID' }, { status: 400 })
     }
-
-    const { searchParams } = new URL(req.url)
-    const email = searchParams.get('email') || ''
-    const role  = searchParams.get('role')  || ''
 
     const [[meeting]]: any = await pool.execute(
       'SELECT id, audio_url, recorded_by FROM meetings WHERE id = ?',
@@ -95,11 +88,8 @@ export async function DELETE(
     }
 
     // ── Ownership check — only owner or admin can delete ────────────────────
-    if (!canAccess(meeting, email, role)) {
-      return NextResponse.json(
-        { error: 'You do not have permission to delete this meeting.' },
-        { status: 403 }
-      )
+    if (!canAccessMeetingOwner(session, meeting.recorded_by)) {
+      return meetingForbidden('You do not have permission to delete this meeting.')
     }
 
     if (meeting.audio_url) {

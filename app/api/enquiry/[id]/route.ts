@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getPool, sql } from '@/lib/db'
+import { getPool } from '@/lib/db'
 
 function safeDate(val: any, fallback = ''): string {
   if (val === null || val === undefined || val === '') return fallback
@@ -33,27 +33,25 @@ export async function GET(
   try {
     const pool = await getPool()
 
-    const result = await pool
-      .request()
-      .input('leadId', sql.VarChar, leadId)
-      .query(`
+    const [rows] = await pool.execute(`
   SELECT 
 *FROM master_buffer mb
 INNER JOIN staging_buffer_new sbn 
 ON mb.lead_id = sbn.lead_id
-WHERE mb.lead_id = @leadId
+WHERE mb.lead_id = ?
 ORDER BY sbn.sl_no DESC
 LIMIT 1;
-`)
+`, [leadId])
+    const recordset = Array.isArray(rows) ? rows : []
 
-    if (result.recordset.length === 0) {
+    if (recordset.length === 0) {
       return NextResponse.json(
         { success: false, message: `No data found for Lead ID: ${leadId}` },
         { status: 404 }
       )
     }
 
-    const raw = result.recordset[0]
+    const raw = recordset[0] as Record<string, unknown>
 
     const data = {
       Lead_id: safeStr(raw.Lead_id),

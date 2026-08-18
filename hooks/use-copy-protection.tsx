@@ -177,10 +177,10 @@ const useCopyProtection = (options: ContentProtectionOptions = {}) => {
     // Apply CSS for text selection
     if (disableTextSelection) {
       document.body.style.userSelect = 'none';
-      document.body.style.webkitUserSelect = 'none';
-      document.body.style.mozUserSelect = 'none';
-      document.body.style.msUserSelect = 'none';
-      document.body.style.webkitTouchCallout = 'none';
+      document.body.style.setProperty('-webkit-user-select', 'none');
+      document.body.style.setProperty('-moz-user-select', 'none');
+      document.body.style.setProperty('-ms-user-select', 'none');
+      document.body.style.setProperty('-webkit-touch-callout', 'none');
     }
 
     // Cleanup function
@@ -196,10 +196,10 @@ const useCopyProtection = (options: ContentProtectionOptions = {}) => {
       // Reset text selection
       if (disableTextSelection) {
         document.body.style.userSelect = '';
-        document.body.style.webkitUserSelect = '';
-        document.body.style.mozUserSelect = '';
-        document.body.style.msUserSelect = '';
-        document.body.style.webkitTouchCallout = '';
+        document.body.style.removeProperty('-webkit-user-select');
+        document.body.style.removeProperty('-moz-user-select');
+        document.body.style.removeProperty('-ms-user-select');
+        document.body.style.removeProperty('-webkit-touch-callout');
       }
     };
   }, [

@@ -80,6 +80,31 @@ interface CallHistory {
   duration: string
 }
 
+type DateFilter =
+  | "all"
+  | "today"
+  | "yesterday"
+  | "this_week"
+  | "last_week"
+  | "this_month"
+  | "last_month"
+  | "this_year"
+  | "last_year"
+  | "custom"
+
+type AssignmentLead = Lead & {
+  intent?: string
+  vSrc?: string
+  sentStatus?: string
+  "NBD/CRR"?: string
+  NBD_CRR?: string
+  reasonAssignOrDelete?: string
+  gptExtractionStatus?: string
+  mailStatus?: string
+  verifiedSource?: string
+  testCol?: string
+}
+
 
 const CACHE_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes cache validity
 const globalLeadsCache = new Map<string, { timestamp: number, data: any[] }>();
@@ -103,7 +128,7 @@ export default function LeadAssignmentPage() {
   } = useLeads()
 
   const router = useRouter()
-  const [unassignedLeads, setUnassignedLeads] = useState<Lead[]>([])
+  const [unassignedLeads, setUnassignedLeads] = useState<AssignmentLead[]>([])
   //const [searchTerm, setSearchTerm] = useState("")
   // Search states
   const [searchInput, setSearchInput] = useState("")
@@ -143,10 +168,7 @@ export default function LeadAssignmentPage() {
   const [gotoPage, setGotoPage] = useState("")
   const [totalPages, setTotalPages] = useState(1)
   const [totalLeads, setTotalLeads] = useState(0)
-  const [dateFilter, setDateFilter] = useState<
-    "all" | "today" | "yesterday" | "this_week" | "last_week" |
-    "this_month" | "last_month" | "this_year" | "last_year" | "custom"
-  >("this_week")
+  const [dateFilter, setDateFilter] = useState<DateFilter>("this_week")
   const resultRef = useRef<HTMLDivElement | null>(null)
   const [startDate, setStartDate] = useState(() => {
     // Default: this Sunday (IST)
@@ -304,7 +326,7 @@ export default function LeadAssignmentPage() {
   })
   const [dateError, setDateError] = useState("")
 
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
+  const [selectedLead, setSelectedLead] = useState<AssignmentLead | null>(null)
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [isCallHistoryDialogOpen, setIsCallHistoryDialogOpen] = useState(false)
   // Call History: only fetch when dialog is opened (not on every selectedLead change)
@@ -552,7 +574,7 @@ export default function LeadAssignmentPage() {
         if (selectedCompany && selectedCompany !== 'ALL') params.set('company', selectedCompany)
 
         // 🚀 SMART LIMIT: Use small limit for recent data, large limit only for big ranges
-        const isSmallRange = dateFilter === 'today' || dateFilter === 'yesterday' || dateFilter === 'thisweek'
+        const isSmallRange = dateFilter === 'today' || dateFilter === 'yesterday' || dateFilter === 'this_week'
         params.set('pageSize', isSmallRange ? '2000' : '50000')
 
         // 🚀 OPTIMIZATION: Only fetch full detailed list if the date range is manageable.
@@ -983,7 +1005,7 @@ export default function LeadAssignmentPage() {
 
         if (trulyNew.length > 0) {
           // 1. Determine which of these trulyNew leads belong in the current DATE/COMPANY view
-          const matchingForBuffer = trulyNew.filter(lead => {
+          const matchingForBuffer = trulyNew.filter((lead: AssignmentLead) => {
             if (selectedCompany !== 'ALL' && lead.company !== selectedCompany) return false
 
             if (dateFilter === "all") return true
@@ -1009,7 +1031,7 @@ export default function LeadAssignmentPage() {
             setTotalLeads(merged.length)
 
             // 2. Increment newLeadsCount ONLY if the lead matches the currently active micro-filters (search, priority, etc.)
-            const matchingActiveFilters = matchingForBuffer.filter(lead => {
+            const matchingActiveFilters = matchingForBuffer.filter((lead: AssignmentLead) => {
               // Search filter
               if (searchInput) {
                 const term = searchInput.toLowerCase()
@@ -1062,7 +1084,7 @@ export default function LeadAssignmentPage() {
             const cacheFrom = parts[1]
             const cacheTo = parts[2]
 
-            const leadsForThisCache = trulyNew.filter(lead => {
+            const leadsForThisCache = trulyNew.filter((lead: AssignmentLead) => {
               if (cacheFrom === 'all') return true
               const leadMs = parseCRMDate(lead.updatedAt || lead.createdAt)
               const cStartMs = new Date(cacheFrom).setHours(0, 0, 0, 0)
@@ -1267,7 +1289,7 @@ export default function LeadAssignmentPage() {
     setDataSourceCurrentPage(1)
   }, [dataSourceSortField, dataSourceSortDirection])
 
-  const [filteredByDateLeads, setFilteredByDateLeads] = useState<Lead[]>(leads)
+  const [filteredByDateLeads, setFilteredByDateLeads] = useState<AssignmentLead[]>(leads as AssignmentLead[])
 
   useEffect(() => {
     if (user && !selectedCompany) {
@@ -1386,6 +1408,9 @@ export default function LeadAssignmentPage() {
         if (typeof aValueN === "string") aValueN = aValueN.toLowerCase()
         if (typeof bValueN === "string") bValueN = bValueN.toLowerCase()
 
+        if (aValueN == null && bValueN == null) return 0
+        if (aValueN == null) return sortDirection === "asc" ? -1 : 1
+        if (bValueN == null) return sortDirection === "asc" ? 1 : -1
         if (aValueN < bValueN) return sortDirection === "asc" ? -1 : 1
         if (aValueN > bValueN) return sortDirection === "asc" ? 1 : -1
         return 0
@@ -3321,7 +3346,7 @@ Cancelled Amt:
         spendAmount: acc.spendAmount + source.spendAmount,
         wastedQty: acc.wastedQty + (source.wastedQty || 0),
         potentialLostValue: acc.potentialLostValue + (source.potentialLostValue || 0),
-        lostReasons: [...acc.lostReasons, ...(source.lostReasons ? source.lostReasons.split(',').map(r => r.trim()).filter(Boolean) : [])],
+        lostReasons: [...acc.lostReasons, ...(source.lostReasons ? source.lostReasons.split(',').map((r: string) => r.trim()).filter(Boolean) : [])],
         unverifiedConversionAmount: acc.unverifiedConversionAmount + (source.unverifiedConversionAmount || 0),
         cancelledLeadQty: acc.cancelledLeadQty + (source.cancelledLeadQty || 0),
         cancelledLeadAmount: acc.cancelledLeadAmount + (source.cancelledLeadAmount || 0),
@@ -3897,7 +3922,7 @@ Cancelled Amt:
                   <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
                     Date Range
                   </label>
-                  <Select value={dateFilter} onValueChange={setDateFilter}>
+                  <Select value={dateFilter} onValueChange={(value) => setDateFilter(value as DateFilter)}>
                     <SelectTrigger className="h-10 w-full rounded-md border-gray-300">
                       <SelectValue placeholder="All Dates" />
                     </SelectTrigger>
@@ -5295,7 +5320,7 @@ Cancelled Amt:
                                 <td className="px-4 py-3 text-center text-sm text-slate-700">
                                   {(dateGroup.totals.wastedQty || 0) > 0 && (
                                     <div className="flex flex-wrap gap-1 justify-center">
-                                      {dateGroup.totals.lostReasons?.slice(0, 1).map((reason, idx) => (
+                                      {dateGroup.totals.lostReasons?.slice(0, 1).map((reason: string, idx: number) => (
                                         <span
                                           key={idx}
                                           className="px-2 py-0.5 text-xs rounded-full"
@@ -5635,7 +5660,7 @@ Cancelled Amt:
                                     {/* <td className="px-4 py-3 text-center text-sm text-slate-700 border-b border-slate-100">
                                       {(source.wastedQty || 0) > 0 && (
                                         <div className="flex flex-wrap gap-1 justify-center">
-                                          {source.lostReasons?.split(',').map((reason, idx) => {
+                                          {source.lostReasons?.split(',').map((reason: string, idx: number) => {
                                             const cleanReason = reason.includes('(') ? reason.split('(')[0].trim() : reason.trim();
                                             const link = `https://script.google.com/macros/s/AKfycbyepUl170PJVzR2iecl7kMExjlRO_isTfOn1JrZftN3q5h4HoeJRv81K_QJUEVdp_YhoA/exec?company=${selectedCompany}&date=${dateGroup.date.split("-").reverse().join("-")}&src=${source.dataSource}&priority=All&showConverted=false&reason=${encodeURIComponent(cleanReason)}`;
 
@@ -5663,7 +5688,7 @@ Cancelled Amt:
                                     <td className="px-4 py-3 text-center text-sm text-slate-700 border-b border-slate-100">
                                       {(source.wastedQty || 0) > 0 && (
                                         <div className="flex flex-wrap gap-1 justify-center">
-                                          {source.lostReasons?.split(',').map((reason, idx) => {
+                                          {source.lostReasons?.split(',').map((reason: string, idx: number) => {
                                             const cleanReason = reason.includes('(')
                                               ? reason.split('(')[0].trim()
                                               : reason.trim();
@@ -6090,7 +6115,7 @@ Cancelled Amt:
                             cx="50%"
                             cy="50%"
                             labelLine={false}
-                            label={({ name, value, percent }) => `${name}: ${value} (${(percent * 100).toFixed(0)}%)`}
+                            label={({ name, value, percent = 0 }) => `${name}: ${value} (${(percent * 100).toFixed(0)}%)`}
                             outerRadius={100}
                             fill="#8884d8"
                             dataKey="value"
@@ -7058,12 +7083,12 @@ Cancelled Amt:
                       <span>{new Date(selectedLead.createdAt).toLocaleTimeString('en-GB', { hour12: false })}</span> */}
                       <span>{selectedLead.sentStatus
                         ? new Date(parseCRMDate(selectedLead.sentStatus)).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-                        : new Date(parseCRMDate(selectedLead.updatedAt)).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                        : new Date(parseCRMDate(selectedLead.updatedAt ?? selectedLead.createdAt)).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
                       }</span>
                       <span style={{ color: 'rgba(255,255,255,0.15)' }}>|</span>
                       <span>{selectedLead.sentStatus
                         ? new Date(parseCRMDate(selectedLead.sentStatus)).toLocaleTimeString('en-GB', { hour12: false })
-                        : new Date(parseCRMDate(selectedLead.updatedAt)).toLocaleTimeString('en-GB', { hour12: false })
+                        : new Date(parseCRMDate(selectedLead.updatedAt ?? selectedLead.createdAt)).toLocaleTimeString('en-GB', { hour12: false })
                       }</span>
                       {selectedLead.source && <>
                         <span style={{ color: 'rgba(255,255,255,0.15)' }}>|</span>
@@ -7334,7 +7359,7 @@ Cancelled Amt:
                         {/* <PField label="Created At" value={new Date(selectedLead.createdAt).toLocaleString('en-GB')} />
                         <PField label="Updated At" value={new Date(selectedLead.updatedAt).toLocaleString('en-GB')} /> */}
                         <PField label="Created At" value={new Date(parseCRMDate(selectedLead.createdAt)).toLocaleString('en-GB')} />
-                        <PField label="Updated At" value={new Date(parseCRMDate(selectedLead.updatedAt)).toLocaleString('en-GB')} />
+                        <PField label="Updated At" value={new Date(parseCRMDate(selectedLead.updatedAt ?? selectedLead.createdAt)).toLocaleString('en-GB')} />
                         <PField label="Sent Status" value={selectedLead.sentStatus} />
                         <PField label="Mail Status" value={selectedLead.mailStatus} />
                         <PField label="NBD / CRR" value={selectedLead['NBD/CRR']} />
@@ -7552,5 +7577,3 @@ Cancelled Amt:
 
   )
 }
-
-

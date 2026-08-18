@@ -157,6 +157,7 @@ function Pagination({
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: C.muted }}>
         <span>Rows</span>
         <select
+          aria-label="Rows per page"
           value={rowsPerPage}
           onChange={(e) => { onRowsPerPageChange(Number(e.target.value)); onPageChange(1); }}
           style={{ padding: '4px 8px', borderRadius: 6, border: `1px solid ${C.border}`, background: '#fff', fontSize: 13, cursor: 'pointer', outline: 'none' }}
@@ -174,6 +175,7 @@ function Pagination({
           Page {currentPage} of {totalPages}
         </span>
         <input
+          aria-label="Go to page"
           type="number"
           value={goPage}
           onChange={(e) => setGoPage(e.target.value)}
@@ -673,7 +675,7 @@ export default function AIReportAnalysisPage() {
     load('2024-01-01', todayStr())
     // toast2('Filters cleared', 'info')
   }
-  const tKPI = (s: KPI) => setKPI(p => p === s ? null : s)
+  const tKPI = (s: KPI) => setKPI((p: KPI) => p === s ? null : s)
 
   const dL = Object.keys(data.dayWiseComplaints)
   const dV = Object.values(data.dayWiseComplaints)

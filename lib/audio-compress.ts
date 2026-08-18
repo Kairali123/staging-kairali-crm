@@ -29,7 +29,7 @@ async function ensureLoaded(onLog?: (msg: string) => void): Promise<FFmpeg> {
     loadPromise = ffmpeg.load({
       coreURL: await toBlobURL(`${BASE_URL}/ffmpeg-core.js`,  'text/javascript'),
       wasmURL: await toBlobURL(`${BASE_URL}/ffmpeg-core.wasm`, 'application/wasm'),
-    })
+    }).then(() => undefined)
   }
   await loadPromise
   return ffmpeg!
@@ -87,7 +87,15 @@ export async function compressAudio(
     ])
 
     const data = await ff.readFile(outputName)
-    const blob = new Blob([data], { type: 'audio/mp3' })
+    const bytes = typeof data === 'string'
+      ? new TextEncoder().encode(data)
+      : (() => {
+          const buffer = new ArrayBuffer(data.byteLength)
+          const view = new Uint8Array(buffer)
+          view.set(data)
+          return view
+        })()
+    const blob = new Blob([bytes], { type: 'audio/mp3' })
 
     // Cleanup wasm FS
     try { await ff.deleteFile(inputName)  } catch {}

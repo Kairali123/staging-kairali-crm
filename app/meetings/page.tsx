@@ -132,6 +132,7 @@ interface ActionItem {
   priority: 'high' | 'medium' | 'low'
   status?: 'pending' | 'in-progress' | 'completed'
   company?: 'KTAHV' | 'KAPPL' | 'VILLA RAGA' | 'ADMIN' | 'ALLIANCES' | 'OTHERS'
+  _db_id?: number | string
 }
 
 interface KeyDecision {
@@ -3404,7 +3405,7 @@ export default function MeetingFMS() {
                                 <select
                                   value={t.company || ''}
                                   onChange={e => {
-                                    const val = e.target.value as string
+                                    const val = e.target.value as NonNullable<ActionItem['company']>
                                     saveTask(tPopup.midx, origIdx, { ...t, company: val })
                                   }}
                                   disabled={!(t as any)._db_id || !!taskActions[`delegate-${mid}-${origIdx}`] || taskActions[`ht-${mid}-${origIdx}`] || taskActions[`email-${mid}-${origIdx}`]}
@@ -3581,7 +3582,7 @@ export default function MeetingFMS() {
                 style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 13, fontWeight: 500, color: '#475569', background: '#fff', cursor: 'pointer' }}>
                 Cancel
               </button>
-              <button onClick={() => deleteMeeting(delPopup.m.id)}
+              <button onClick={() => delPopup && deleteMeeting(delPopup.m.id)}
                 style={{ flex: 1, padding: '10px 0', borderRadius: 10, background: '#dc2626', color: '#fff', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                 Delete Meeting
               </button>

@@ -4,13 +4,21 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
-
-// Roles that can see EVERY meeting
-const ADMIN_ROLES = ['super_admin', 'admin']
+import {
+  canAccessMeetingOwner,
+  getMeetingSession,
+  meetingForbidden,
+  meetingUnauthorized,
+  parseMeetingAudioUrl,
+} from '@/lib/meetings-auth'
+import { isMeetingUploadedFileOwner } from '@/lib/meeting-upload-sessions'
 
 // ── POST: create a meeting, stamped with the recorder ─────────────────────────
 export async function POST(req: NextRequest) {
   try {
+    const session = getMeetingSession(req)
+    if (!session) return meetingUnauthorized()
+
     const body = await req.json()
     const pool = await getPool()
     const {
@@ -19,15 +27,21 @@ export async function POST(req: NextRequest) {
       transcript, diarized_transcript, summary,
       action_items, key_decisions, participants, follow_ups,
       lead_id, contact_email,
-      recorded_by, recorded_by_name,   // ← who recorded it
     } = body
 
     if (!recorded_at) {
       return NextResponse.json({ error: 'recorded_at is required' }, { status: 400 })
     }
-    // Ownership is required now — refuse to save an unowned meeting
-    if (!recorded_by) {
-      return NextResponse.json({ error: 'recorded_by (recorder email) is required' }, { status: 400 })
+    const recorded_by = session.email
+    const recorded_by_name = session.name
+    let safeAudioUrl: string | null = null
+    if (audio_url) {
+      const parsedAudioUrl = parseMeetingAudioUrl(audio_url, req.nextUrl.origin)
+      const fileId = parsedAudioUrl?.searchParams.get('id')
+      if (!parsedAudioUrl || !isMeetingUploadedFileOwner(fileId, session.email)) {
+        return NextResponse.json({ error: 'Invalid or unauthorized audio_url' }, { status: 400 })
+      }
+      safeAudioUrl = `${parsedAudioUrl.pathname}?${parsedAudioUrl.searchParams.toString()}`
     }
 
     // ── Idempotency guard ────────────────────────────────────────────────────
@@ -45,7 +59,7 @@ export async function POST(req: NextRequest) {
       platform      || null,
       duration_sec  || 0,
       audio_size_kb || 0,
-      audio_url     || null,
+      safeAudioUrl,
       transcript    || null,
       diarized_transcript || null,
       summary       || null,
@@ -95,6 +109,9 @@ export async function POST(req: NextRequest) {
 // ── GET: list meetings, scoped to the caller's visibility ─────────────────────
 export async function GET(req: NextRequest) {
   try {
+    const session = getMeetingSession(req)
+    if (!session) return meetingUnauthorized()
+
     const pool = await getPool()
     const { searchParams } = new URL(req.url)
     const page      = parseInt(searchParams.get('page')  || '1')
@@ -103,9 +120,6 @@ export async function GET(req: NextRequest) {
     const type      = searchParams.get('type')
     const platform  = searchParams.get('platform')
 
-    // Caller identity (sent by the client)
-    const userEmail = searchParams.get('email') || ''
-    const userRole  = searchParams.get('role')  || ''
     // Optional: admin filtering by a specific recorder
     const filterBy  = searchParams.get('recorded_by') || ''
 
@@ -114,15 +128,10 @@ export async function GET(req: NextRequest) {
     const params: any[]        = []
 
     // ── Visibility enforcement (server-side) ────────────────────────────────
-    const isAdmin = ADMIN_ROLES.includes(userRole)
-    if (!isAdmin) {
+    if (!session.isAdmin) {
       // Regular users: ONLY their own recordings
-      if (!userEmail) {
-        // No identity → return nothing rather than leaking everyone's data
-        return NextResponse.json({ meetings: [], total: 0, page, limit })
-      }
       conditions.push('recorded_by = ?')
-      params.push(userEmail)
+      params.push(session.email)
     } else if (filterBy) {
       // Admin optionally narrowing to one person
       conditions.push('recorded_by = ?')
@@ -160,7 +169,7 @@ export async function GET(req: NextRequest) {
       follow_ups:    m.follow_ups    ? JSON.parse(m.follow_ups)    : [],
     }))
 
-    return NextResponse.json({ meetings, total, page, limit, isAdmin })
+    return NextResponse.json({ meetings, total, page, limit, isAdmin: session.isAdmin })
 
   } catch (err: any) {
     console.error('[/api/meetings/save GET]', err)
@@ -171,11 +180,23 @@ export async function GET(req: NextRequest) {
 // ── PATCH: update specific fields (participant retry) ─────────────────────────
 export async function PATCH(req: NextRequest) {
   try {
+    const session = getMeetingSession(req)
+    if (!session) return meetingUnauthorized()
+
     const pool = await getPool()
     const body = await req.json()
     const { id, participants } = body
 
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
+
+    const [[meeting]]: any = await pool.execute(
+      'SELECT id, recorded_by FROM meetings WHERE id = ?',
+      [id]
+    )
+    if (!meeting) return NextResponse.json({ error: 'Meeting not found' }, { status: 404 })
+    if (!canAccessMeetingOwner(session, meeting.recorded_by)) {
+      return meetingForbidden('You do not have permission to update this meeting.')
+    }
 
     const updates: string[] = []
     const params:  any[]    = []

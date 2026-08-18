@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import React from "react"
-import { useLeadQualityReport } from "@/hooks/useLeadQualityReport"
+import { useLeadQualityReport, type LeadQualityData } from "@/hooks/useLeadQualityReport"
 import { BarChart3, Table2, ChevronDown, ChevronRight, Calendar } from "lucide-react"
 import {
   Bar,
@@ -20,24 +20,6 @@ import {
   PieChart,
   Cell,
 } from "recharts"
-
-interface LeadQualityData {
-  date: string
-  source: string
-  totalTraffic: number
-  totalLead: number
-  conversionCountActual: number
-  convertPercent: number
-  conversionAmount: number
-  highQuality: number
-  highQualityPercent: number
-  mediumQuality: number
-  mediumQualityPercent: number
-  lowQuality: number
-  lowQualityPercent: number
-  spend: number
-  cac: number
-}
 
 export function LeadQualitySection() {
   const { data: leadQualityData, loading, error } = useLeadQualityReport()
@@ -69,7 +51,7 @@ export function LeadQualitySection() {
   }, {} as Record<string, LeadQualityData[]>)
 
   // Calculate totals for each date
-  const dateTotals = Object.entries(groupedData).map(([date, sources]) => {
+  const dateTotals = (Object.entries(groupedData) as Array<[string, LeadQualityData[]]>).map(([date, sources]) => {
     const totalLead = sources.reduce((sum, s) => sum + s.totalLead, 0)
     const highQuality = sources.reduce((sum, s) => sum + s.highQuality, 0)
     const mediumQuality = sources.reduce((sum, s) => sum + s.mediumQuality, 0)

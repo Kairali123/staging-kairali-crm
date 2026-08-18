@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
+import { getSessionUser } from '@/lib/authz'
 
 type Source = 'lead' | 'ktahv' | 'order' | 'villa' | 'unknown'
 
@@ -59,6 +60,11 @@ function cleanSearchQuery(q: string): string {
 }
 
 export async function GET(req: NextRequest) {
+    const user = getSessionUser(req)
+    if (!user) {
+        return NextResponse.json({ error: 'Unauthorized', source: 'unknown' }, { status: 401 })
+    }
+
     const id = req.nextUrl.searchParams.get('id')?.trim()
     const q = req.nextUrl.searchParams.get('q')?.trim()
 

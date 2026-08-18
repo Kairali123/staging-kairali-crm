@@ -311,7 +311,7 @@ interface PendingActionsApiData {
     accountagent: Record<string, { newBookings: PaBookingEntry[]; accountsVerify: PaBookingEntry[]; finalTransfer: PaBookingEntry[]; deleteComplete: PaBookingEntry[] }>;
 }
 
-const getAgentColor = (index, total) => {
+const getAgentColor = (index: number, total: number) => {
     const hue = (index * (360 / total)) % 360;
     return `hsl(${hue}, 65%, 50%)`;
 };
@@ -722,7 +722,7 @@ function AnalyticsDashboardInline({
                 let valB: any = '';
                 switch (piSortConfig.key) {
                     case 'id': valA = a.id; valB = b.id; break;
-                    case 'agent': valA = a.salesVerify.salesAgent; valB = b.salesVerify.salesAgent; break;
+                    case 'agent': valA = a.bookingTakenBy; valB = b.bookingTakenBy; break;
                     case 'checkin': valA = new Date(a.arrivalDate).getTime(); valB = new Date(b.arrivalDate).getTime(); break;
                     case 'checkout': valA = new Date(a.departureDate).getTime(); valB = new Date(b.departureDate).getTime(); break;
                     case 'amount': valA = a.paymentVerify.piAmountSales || 0; valB = b.paymentVerify.piAmountSales || 0; break;
@@ -1584,7 +1584,8 @@ function AnalyticsDashboardInline({
                                                                 const varBank = Number(b.paymentVerify.differenceAmount) || 0;
                                                                 const varPct = Number(b.paymentVerify.differencePercentage) || 0;
                                                                 const rcv = Number(b.paymentVerify.amountReceived) || 0;
-                                                                const status = Math.round(rcv) === Math.round(pi) ? 'Matched' : 'Unmatched';
+                                                                const status: 'Matched' | 'Partial' | 'Unmatched' =
+                                                                    Math.round(rcv) === Math.round(pi) ? 'Matched' : rcv > 0 ? 'Partial' : 'Unmatched';
                                                                 return (
                                                                     <tr key={idx} className="hover:bg-slate-50/80 transition-colors duration-100">
                                                                         <td className="px-4 py-2.5 font-mono text-[12px] text-blue-600 whitespace-nowrap">{b.id}</td>
@@ -2233,7 +2234,7 @@ function AnalyticsDashboardInline({
                                             const variance = payload[0]?.payload?.varience;
 
                                             const sortedPayload = [...payload].sort((a, b) => {
-                                                const order = {
+                                                const order: Record<string, number> = {
                                                     pi: 1,
                                                     invoice: 2,
                                                     received: 3,

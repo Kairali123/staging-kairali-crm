@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useAuth, type UserRole } from "@/hooks/use-auth";
 import { useCrrBookings, isStageLocked, getStagePlannedDate, getStageSavedData, getStageDoer, isBookingCancelled, saveStage } from "@/hooks/use-crr-bookings";
 import type {
@@ -256,7 +256,7 @@ function useIsMobile(breakpoint = 640) {
 function frozenCellClass(baseClass: string, sticky: boolean, extraZ = "z-10") {
     return sticky ? `sticky ${extraZ} ${baseClass}` : baseClass;
 }
-function frozenCellStyle(left: number, width: number, sticky: boolean, withEdgeShadow = false) {
+function frozenCellStyle(left: number, width: number, sticky: boolean, withEdgeShadow = false): CSSProperties {
     if (!sticky) {
         return { width, minWidth: width, maxWidth: width };
     }

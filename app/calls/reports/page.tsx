@@ -1420,7 +1420,7 @@ export default function CallReportPage() {
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex items-center justify-center sm:justify-start gap-2 text-sm text-slate-600">
                           <span className="font-medium">Rows</span>
-                          <select value={itemsPerPage} onChange={e => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1) }} className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500">
+                          <select aria-label="Rows per page" value={itemsPerPage} onChange={e => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1) }} className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500">
                             <option value={5}>5</option><option value={10}>10</option><option value={20}>20</option><option value={50}>50</option>
                           </select>
                           <span className="text-xs text-slate-500">
@@ -1430,7 +1430,7 @@ export default function CallReportPage() {
                         <div className="flex flex-wrap items-center justify-center gap-2 text-sm text-slate-600">
                           <span>Page <span className="font-semibold">{currentPage}</span> of <span className="font-semibold">{totalDatePages}</span></span>
                           <div className="flex items-center gap-1">
-                            <input type="number" min={1} max={totalDatePages} value={goToPage} onChange={e => setGoToPage(e.target.value)} placeholder="Go" className="w-16 h-9 rounded-md border border-slate-300 px-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                            <input aria-label="Go to page" type="number" min={1} max={totalDatePages} value={goToPage} onChange={e => setGoToPage(e.target.value)} placeholder="Go" className="w-16 h-9 rounded-md border border-slate-300 px-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500" />
                             <button onClick={() => { const p = Number(goToPage); if (p >= 1 && p <= totalDatePages) { setCurrentPage(p); setGoToPage("") } }} className="h-9 px-3 rounded-md bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition">Go</button>
                           </div>
                         </div>
@@ -1630,7 +1630,7 @@ export default function CallReportPage() {
                               <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'rgba(148,163,184,0.08)' }} />
                               <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="3 3" />
                               <Bar dataKey="planned" fill="url(#bg1)" name="Planned Calls" radius={[6, 6, 0, 0]} maxBarSize={60}
-                                label={{ position: "top", formatter: (v: any, e: any, i: number) => { const dp = monthlyChartData[i]; const vp = dp?.variancePercent ? Number(dp.variancePercent) : 0; return vp !== 0 ? `${vp > 0 ? "+" : ""}${vp.toFixed(1)}%` : "" }, fill: "#64748b", fontSize: 11, fontWeight: "600", offset: 8 }} />
+                                label={{ position: "top", formatter: ((v: any, e: any, i: number) => { const dp = monthlyChartData[i]; const vp = dp?.variancePercent ? Number(dp.variancePercent) : 0; return vp !== 0 ? `${vp > 0 ? "+" : ""}${vp.toFixed(1)}%` : "" }) as any, fill: "#64748b", fontSize: 11, fontWeight: "600", offset: 8 }} />
                               <Bar dataKey="actual" fill="url(#bg2)" name="Actual Calls" radius={[6, 6, 0, 0]} maxBarSize={60} />
                               <Bar dataKey="newClients" fill="url(#bg3)" name="NBD Clients" radius={[6, 6, 0, 0]} maxBarSize={60} />
                               <Bar dataKey="oldClients" fill="url(#bg4)" name="CRR Clients" radius={[6, 6, 0, 0]} maxBarSize={60} />

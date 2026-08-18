@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, type ReactNode } from "react";
 import { ClipboardCheck, X, FileText, Send } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import type { Guest } from "@/types/crr";
 
 const DOCTORS = ["Dr Deepu John", "Ashikha Raj", "Dr. Rahul R", "Dr. Akhila Oommen", "ANAGHA S"];
 
@@ -18,7 +19,7 @@ const LOCKED_DETAILS = {
 
 const SECTION_THEME = { bg: "#eef4ff", border: "#cddcfb", head: "#1d4ed8" };
 
-function Label({ required, children }) {
+function Label({ required, children }: { required?: boolean; children: ReactNode }) {
     return (
         <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>
             {children} {required && <span style={{ color: "#ef4444" }}>*</span>}
@@ -26,7 +27,7 @@ function Label({ required, children }) {
     );
 }
 
-const selectStyle = {
+const selectStyle: React.CSSProperties = {
     width: "100%",
     padding: "10px 12px",
     borderRadius: 10,
@@ -39,7 +40,7 @@ const selectStyle = {
 
 const inputStyle = { ...selectStyle };
 
-const textareaStyle = {
+const textareaStyle: React.CSSProperties = {
     ...selectStyle,
     minHeight: 70,
     resize: "vertical",
@@ -69,7 +70,15 @@ function getTimestamp() {
     });
 }
 
-export default function GuestRequirementVerificationModal({ open = true, onClose = () => { }, onSubmit = () => { }, guest = null, disabled = false }) {
+interface GuestRequirementVerificationModalProps {
+    open?: boolean;
+    onClose?: () => void;
+    onSubmit?: (data: Record<string, string>) => void | Promise<void>;
+    guest?: Guest | null;
+    disabled?: boolean;
+}
+
+export default function GuestRequirementVerificationModal({ open = true, onClose = () => { }, onSubmit = () => { }, guest = null, disabled = false }: GuestRequirementVerificationModalProps) {
     const { user } = useAuth();
     const details = guest ? {
         bookingId: guest.bookingId,

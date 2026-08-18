@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
+import { getSessionUser } from '@/lib/authz'
 
 export async function GET(req: NextRequest) {
     try {
-        const { searchParams } = new URL(req.url)
-        const userId = searchParams.get('userId')
+        const user = getSessionUser(req)
+        if (!user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
 
+        const userId = String(user?.id || user?.employeeId || user?.email || '').trim()
         if (!userId) {
-            return NextResponse.json({ error: 'User ID is required' }, { status: 400 })
+            return NextResponse.json({ error: 'Authenticated user ID is required' }, { status: 400 })
         }
 
         const pool = await getPool()

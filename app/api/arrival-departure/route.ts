@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { authorizeKtahvBookingAction } from "@/lib/ktahv-booking-auth";
 
 const GAS_URL =
   "https://script.google.com/macros/s/AKfycby3a04v18kDlIb0EvTN9mT6QzYVetoej4fi7W5rzq_Fh5HgE0M2k2BldBiAJmxebHUQnQ/exec";
@@ -37,10 +38,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const bookingId = String(body?.bookingid || "").trim();
+    if (!bookingId) {
+      return NextResponse.json(
+        { success: false, message: "bookingid is required" },
+        { status: 400 }
+      );
+    }
+
+    const requiredAction = action === "arrival" ? "arrivalFlightSelf" : "departureFlightSelf";
+    const requiredAllAction = action === "arrival" ? "arrivalFlightAll" : "departureFlightAll";
+    const access = await authorizeKtahvBookingAction(req, bookingId, requiredAction, requiredAllAction);
+    if (!access.ok) {
+      return access.response;
+    }
+
+    const safeBody = {
+      ...body,
+      uploadedby: access.actorName,
+    };
+
     const gasResponse = await fetch(GAS_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(body),
+      body: JSON.stringify(safeBody),
       cache: "no-store",
     });
 

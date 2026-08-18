@@ -1,7 +1,16 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
+import { getSessionUser, hasDoctorConsultationAccess } from "@/lib/authz"
 
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
-  const consultationId = params.id
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const user = getSessionUser(request)
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+  if (!hasDoctorConsultationAccess(user)) {
+    return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+  }
+
+  const { id: consultationId } = await params
   const body = await request.json()
 
   // Mock update logic

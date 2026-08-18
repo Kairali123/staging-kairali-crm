@@ -4,6 +4,17 @@
 // Supports files up to 5TB
 
 import { NextRequest, NextResponse } from 'next/server'
+import {
+  getMeetingSession,
+  MAX_MEETING_AUDIO_BYTES,
+  meetingAudioExtension,
+  meetingUnauthorized,
+  normalizeMeetingAudioMime,
+  parsePositiveInteger,
+  sanitizeMeetingFileName,
+} from '@/lib/meetings-auth'
+import { registerMeetingUploadSession } from '@/lib/meeting-upload-sessions'
+import { checkApiRateLimit, rateLimitResponse } from '@/lib/api-rate-limit'
 
 function getServiceAccountAuth() {
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
@@ -68,10 +79,30 @@ async function getAccessToken(clientEmail: string, privateKey: string): Promise<
 
 export async function POST(req: NextRequest) {
   try {
+    const session = getMeetingSession(req)
+    if (!session) return meetingUnauthorized()
+    const limit = await checkApiRateLimit(req, 'meetings.create_upload_session', session.email, 20, 60 * 60 * 1000)
+    if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds)
+
     const { fileName, mimeType, fileSize } = await req.json()
 
-    if (!fileName) {
-      return NextResponse.json({ error: 'fileName required' }, { status: 400 })
+    const normalizedMimeType = normalizeMeetingAudioMime(mimeType || 'audio/webm')
+    if (!normalizedMimeType) {
+      return NextResponse.json({ error: 'Unsupported meeting audio type' }, { status: 415 })
+    }
+
+    const parsedFileSize = parsePositiveInteger(fileSize, MAX_MEETING_AUDIO_BYTES)
+    if (!parsedFileSize) {
+      return NextResponse.json({ error: 'Valid fileSize required' }, { status: 400 })
+    }
+
+    const safeFileName = sanitizeMeetingFileName(fileName, meetingAudioExtension(normalizedMimeType))
+    if (!safeFileName) {
+      return NextResponse.json({ error: 'Valid fileName required' }, { status: 400 })
+    }
+
+    if (parsedFileSize > MAX_MEETING_AUDIO_BYTES) {
+      return NextResponse.json({ error: 'Audio file too large (max 200MB)' }, { status: 413 })
     }
 
     const { clientEmail, privateKey } = getServiceAccountAuth()
@@ -79,8 +110,12 @@ export async function POST(req: NextRequest) {
 
     const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID
     const metadata = {
-      name:    fileName,
+      name:    safeFileName,
       parents: folderId ? [folderId] : [],
+      appProperties: {
+        crmOwnerEmail: session.email,
+        crmUploadPurpose: 'meeting-audio',
+      },
     }
 
     // Initiate resumable upload session
@@ -91,8 +126,8 @@ export async function POST(req: NextRequest) {
         headers: {
           Authorization:             `Bearer ${accessToken}`,
           'Content-Type':            'application/json',
-          'X-Upload-Content-Type':   mimeType || 'audio/webm',
-          ...(fileSize ? { 'X-Upload-Content-Length': String(fileSize) } : {}),
+          'X-Upload-Content-Type':   normalizedMimeType,
+          'X-Upload-Content-Length': String(parsedFileSize),
         },
         body: JSON.stringify(metadata),
       }
@@ -105,6 +140,8 @@ export async function POST(req: NextRequest) {
 
     const uploadUrl = initRes.headers.get('location')
     if (!uploadUrl) throw new Error('No upload URL returned from Drive')
+
+    registerMeetingUploadSession(uploadUrl, session.email)
 
     return NextResponse.json({ uploadUrl })
 

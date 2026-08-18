@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef, Suspense } from "react";
-import { useReceivedLeads } from "@/hooks/useReceivedLeads";
+import { useReceivedLeads, type ReceivedLead } from "@/hooks/useReceivedLeads";
 import { useSentLeads } from "@/hooks/useSentLeads";
 import { useAuth } from "@/hooks/use-auth";
 import { LEADS_CACHE_CLEARED_EVENT } from "@/lib/leads-cache-control";
@@ -93,6 +93,48 @@ interface ReceivedRow {
 
 type PillColor = "green" | "blue" | "purple" | "orange" | "red" | "yellow" | "gray" | "teal" | "indigo" | "pink";
 type DotColor = "g" | "o" | "r" | "b" | "x";
+
+// ─── Normalization for Non-Qualified Outcomes ───────────────────────────────
+
+const CANONICAL_NON_QUALIFIED_OUTCOMES = [
+    "Cold",
+    "Did Not Enquire",
+    "DNC Client: Don't Call Further",
+    "Do Not Call Back",
+    "Duplicate Lead",
+    "Junk",
+    "Max Auto Dial Attempts Completed",
+    "Not Interested",
+    "Not Interested AHV",
+    "Outreach Stopped"
+];
+
+function normalizeOutcome(val: string): string {
+    if (!val || val === "—") return "";
+    return val
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .replace(/\s*:\s*/g, ":");
+}
+
+const CANONICAL_OUTCOME_MAP: Record<string, string> = {};
+CANONICAL_NON_QUALIFIED_OUTCOMES.forEach(o => {
+    CANONICAL_OUTCOME_MAP[normalizeOutcome(o)] = o;
+});
+
+const CANONICAL_ALIASES: Record<string, string> = {
+    "dnc client:don't call furthur": "DNC Client: Don't Call Further",
+    "dnc client: don't call furthur": "DNC Client: Don't Call Further"
+};
+
+function getCanonicalOutcome(rawVal: string): string | null {
+    const norm = normalizeOutcome(rawVal);
+    if (!norm) return null;
+    if (CANONICAL_ALIASES[norm]) return CANONICAL_ALIASES[norm];
+    if (CANONICAL_OUTCOME_MAP[norm]) return CANONICAL_OUTCOME_MAP[norm];
+    return null;
+}
 
 // ─── Mock / Fallback Data ─────────────────────────────────────────────────────
 
@@ -265,13 +307,13 @@ function Pagination({ total, page, perPage, onPage, onPerPage }: { total: number
             <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12.5, color: "#64748b" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <span>Rows/page</span>
-                    <select value={perPage} onChange={e => { onPerPage(Number(e.target.value)); onPage(1); }} style={{ height: 30, padding: "0 6px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12.5, fontFamily: "inherit", background: "#fff", color: "#374151", cursor: "pointer" }}>
+                    <select aria-label="Rows per page" value={perPage} onChange={e => { onPerPage(Number(e.target.value)); onPage(1); }} style={{ height: 30, padding: "0 6px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12.5, fontFamily: "inherit", background: "#fff", color: "#374151", cursor: "pointer" }}>
                         {[10, 25, 50, 100, 500].map(n => <option key={n} value={n}>{n}</option>)}
                     </select>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <span>Go to</span>
-                    <input type="number" min={1} max={totalPages} value={goInput} onChange={e => setGoInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleGo()} placeholder="Page" style={{ height: 30, width: 56, padding: "0 8px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12.5, fontFamily: "inherit", background: "#fff", color: "#374151", textAlign: "center", outline: "none" }} />
+                    <input aria-label="Go to page" type="number" min={1} max={totalPages} value={goInput} onChange={e => setGoInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleGo()} placeholder="Page" style={{ height: 30, width: 56, padding: "0 8px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12.5, fontFamily: "inherit", background: "#fff", color: "#374151", textAlign: "center", outline: "none" }} />
                     <button onClick={handleGo} style={{ height: 30, padding: "0 14px", borderRadius: 6, border: "none", background: "#4f46e5", color: "#fff", fontSize: 12.5, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}>Go</button>
                 </div>
             </div>
@@ -1710,11 +1752,19 @@ function ReceivedDataPageInner() {
     const [status, setStatus] = useState("all");
     const [intent, setIntent] = useState("all");
     const [leadStatus, setLeadStatus] = useState("all");
+    const [nonQualifiedOutcome, setNonQualifiedOutcome] = useState("all");
     const [customDate, setCustomDate] = useState({ start: "", end: "" });
+
+    useEffect(() => {
+        if (leadStatus !== "Non-Qualified") {
+            setNonQualifiedOutcome("all");
+        }
+    }, [leadStatus]);
 
     const clearFilters = () => {
         setSearch(""); setDateFilter("all"); setCompany("all");
         setDataSource("all"); setStatus("all"); setIntent("all"); setLeadStatus("all");
+        setNonQualifiedOutcome("all");
         setCustomDate({ start: "", end: "" });
     };
 
@@ -1735,7 +1785,7 @@ function ReceivedDataPageInner() {
     // ── Transform ─────────────────────────────────────────────────────────────
     const transformedReceived: ReceivedRow[] = useMemo(() => {
         if (!receivedApiData?.length) return receivedLoading ? RECEIVED_DATA : [];
-        return receivedApiData.map((r: ReceivedRow) => ({
+        return receivedApiData.map((r: ReceivedLead): ReceivedRow => ({
             ...r,
             // _ts_num/_dt_num already computed in hook from ISO strings — use directly
             _ts_num: r._ts_num ?? 0,
@@ -1787,6 +1837,18 @@ function ReceivedDataPageInner() {
         return STATUS_CFG.filter(c => keys.has(c.key)).map(c => c.label);
     }, [processedReceived]);
     const leadStatusOptions = useMemo(() => Array.from(new Set(processedReceived.map(r => r.leadstatus))).filter(v => v && v !== "—").sort(), [processedReceived]);
+    const nonQualifiedOutcomeOptions = useMemo(() => {
+        const presentOutcomes = new Set<string>();
+        processedReceived.forEach(r => {
+            if (r.leadstatus === "Non-Qualified") {
+                const canonical = getCanonicalOutcome(r.finalleadoutcome);
+                if (canonical) {
+                    presentOutcomes.add(canonical);
+                }
+            }
+        });
+        return CANONICAL_NON_QUALIFIED_OUTCOMES.filter(o => presentOutcomes.has(o));
+    }, [processedReceived]);
 
     // ── Filtered Data ─────────────────────────────────────────────────────────
     const filteredReceived = useMemo(() => {
@@ -1816,10 +1878,16 @@ function ReceivedDataPageInner() {
                 if (cfg && getRowStatus(r) !== cfg.key) return false;
             }
             if (intent !== "all" && !r.cutomerintent.toLowerCase().includes(intent.toLowerCase())) return false;
-            if (leadStatus !== "all" && r.leadstatus !== leadStatus) return false;
+            if (nonQualifiedOutcome !== "all") {
+                if (r.leadstatus !== "Non-Qualified") return false;
+                const canonicalVal = getCanonicalOutcome(r.finalleadoutcome);
+                if (canonicalVal !== nonQualifiedOutcome) return false;
+            } else {
+                if (leadStatus !== "all" && r.leadstatus !== leadStatus) return false;
+            }
             return true;
         });
-    }, [debouncedSearch, dateWindow, company, dataSource, status, intent, leadStatus, processedReceived]);
+    }, [debouncedSearch, dateWindow, company, dataSource, status, intent, leadStatus, nonQualifiedOutcome, processedReceived]);
 
     const receivedCounts = useMemo(() => buildConsistentReceivedCounts(filteredReceived), [filteredReceived]);
 
@@ -2000,6 +2068,21 @@ function ReceivedDataPageInner() {
                                     <SelectContent>
                                         <SelectItem value="all">All Status</SelectItem>
                                         {leadStatusOptions.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Non Qualified Outcome</label>
+                                <Select value={nonQualifiedOutcome} onValueChange={(val) => {
+                                    setNonQualifiedOutcome(val);
+                                    if (val !== "all") {
+                                        setLeadStatus("Non-Qualified");
+                                    }
+                                }}>
+                                    <SelectTrigger className="h-10 w-full rounded-md border-gray-300"><SelectValue placeholder="All Outcomes" /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Outcomes</SelectItem>
+                                        {nonQualifiedOutcomeOptions.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>

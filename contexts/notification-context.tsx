@@ -37,8 +37,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [readIds, setReadIds] = useState<string[]>([])
   const lastCheckRef = useRef<string>(new Date().toISOString())
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const tickAudioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
     const stored = localStorage.getItem("read_notifications")
@@ -49,10 +47,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         console.error("Failed to parse read notifications", e)
       }
     }
-    // Main alert ONLY for system updates
-    audioRef.current = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3")
-    // Soft tick for dynamic notifications
-    tickAudioRef.current = new Audio("https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3")
   }, [])
 
   useEffect(() => {
@@ -144,8 +138,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     try {
       const response = await fetch("/data/notifications.json")
       if (response.ok) {
-        const data = await response.json()
-        return data.map((n: any) => ({ 
+        const data: Notification[] = await response.json()
+        return data.map((n) => ({
           ...n, 
           arrivalDate: n.arrivalDate || n.time || new Date().toISOString(),
           read: readIds.includes(n.id) 
@@ -181,20 +175,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         return (now - arrivalTime) < CLEANUP_THRESHOLD
       })
 
-      // 2. Sound & Pop-up Logic
-      const newSysNotifs = sysNotifs.filter(n => !prevIds.includes(n.id))
-      const trulyNewDynamic = dynamicItems.filter(n => !prevIds.includes(n.id))
-
-      // Trigger System Alerts (With Sound, no popup)
-      if (newSysNotifs.length > 0) {
-        if (audioRef.current) audioRef.current.play().catch(() => {})
-      }
-
-      // Trigger Dynamic Alerts (Soft Tick Sound, no popup)
-      if (trulyNewDynamic.length > 0) {
-        if (tickAudioRef.current) tickAudioRef.current.play().catch(() => {})
-      }
-
       // Merge and deduplicate
       const combined = [...dynamicItems, ...filteredPrev, ...sysNotifs]
       const unique = Array.from(new Map(combined.map(item => [item.id, item])).values())
@@ -205,10 +185,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     })
 
     lastCheckRef.current = new Date().toISOString()
-  }
-
-  const playNotificationSound = () => {
-    if (audioRef.current) audioRef.current.play().catch(e => console.warn("Sound play failed:", e))
   }
 
   useEffect(() => {
@@ -258,7 +234,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       read: false
     }
     
-    if (tickAudioRef.current) tickAudioRef.current.play().catch(() => {})
     setNotifications(prev => [demoNotif, ...prev])
   }
 

@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Card } from "@/components/ui/card";
-import useGooglePPCData from "@/hooks/useGooglePPCData.tsx";
+import useGooglePPCData from "@/hooks/useGooglePPCData";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -73,18 +73,6 @@ const AllTimeBadge = () => (
 
 
 
-// fallback sample data so UI works even without API
-const samplePPCData: PPCData[] = [
-  { campaign: "Ayurveda Wellness Retreat", company: "KTAHV", totalLeads: 450, conversions: 85, conversionAmount: 850000, expense: 125000, conversionRate: 18.89, roas: 6.8 },
-  { campaign: "Panchakarma Treatment", company: "KTAHV", totalLeads: 380, conversions: 72, conversionAmount: 720000, expense: 110000, conversionRate: 18.95, roas: 6.55 },
-  { campaign: "Health and Wellness Package", company: "KAPPL", totalLeads: 520, conversions: 95, conversionAmount: 950000, expense: 145000, conversionRate: 18.27, roas: 6.55 },
-  { campaign: "Rejuvenation Therapy", company: "KAPPL", totalLeads: 410, conversions: 68, conversionAmount: 680000, expense: 98000, conversionRate: 16.59, roas: 6.94 },
-  { campaign: "Villa Luxury Stay", company: "VILLARAAG", totalLeads: 320, conversions: 58, conversionAmount: 1160000, expense: 145000, conversionRate: 18.13, roas: 8.0 },
-  { campaign: "Detox and Cleanse Program", company: "KTAHV", totalLeads: 290, conversions: 52, conversionAmount: 520000, expense: 85000, conversionRate: 17.93, roas: 6.12 },
-  { campaign: "Yoga and Meditation Retreat", company: "KAPPL", totalLeads: 350, conversions: 62, conversionAmount: 620000, expense: 95000, conversionRate: 17.71, roas: 6.53 },
-  { campaign: "Ayurvedic Beauty Treatment", company: "VILLARAAG", totalLeads: 280, conversions: 48, conversionAmount: 480000, expense: 72000, conversionRate: 17.14, roas: 6.67 },
-];
-
 export default function GooglePPCPage(): JSX.Element {
   // UI state
   const [selectedCampaign, setSelectedCampaign] = useState<string>("ALL");
@@ -98,6 +86,7 @@ export default function GooglePPCPage(): JSX.Element {
   const [customEndDate, setCustomEndDate] = useState<string>("");
   const resetFilters = () => {
     setSelectedCampaign("ALL");
+    setSelectedCompany("ALL");
     setSearchTerm("");
     setDateFilter("all");
     setCustomStartDate("");
@@ -121,7 +110,7 @@ export default function GooglePPCPage(): JSX.Element {
   }, [selectedCompany, selectedCampaign, searchTerm, dateFilter, pageSize]);
 
   // const { aggregatedData, loading } = useGooglePPCData();
-  const { rawData, loading } = useGooglePPCData();
+  const { rawData, loading, error } = useGooglePPCData();
 
   // // STEP 3: Date filter RAW DATA pe
   // const dateFilteredRawData = useMemo(() => {
@@ -403,7 +392,6 @@ export default function GooglePPCPage(): JSX.Element {
 
 
 
-  // const apiData: PPCData[] = aggregatedData.length > 0 ? aggregatedData : samplePPCData;
   const apiData: PPCData[] = useMemo(() => {
     const map = new Map<string, any>();
 
@@ -510,12 +498,12 @@ export default function GooglePPCPage(): JSX.Element {
   //       const res = await fetch("/api/google-ppc");
   //       if (!res.ok) throw new Error("API not ok");
   //       const json = await res.json();
-  //       const data = json?.data ?? samplePPCData;
-  //       setApiData(Array.isArray(data) ? data : samplePPCData);
-  //     } catch (err) {
-  //       console.error("Failed to fetch API, falling back to sample data", err);
-  //       setApiData(samplePPCData);
-  //     } finally {
+      //       const data = json?.data ?? [];
+      //       setApiData(Array.isArray(data) ? data : []);
+      //     } catch (err) {
+      //       console.error("Failed to fetch API", err);
+      //       setApiData([]);
+      //     } finally {
   //       setLoading(false);
   //     }
   //   };
@@ -673,6 +661,23 @@ export default function GooglePPCPage(): JSX.Element {
     const end = start + pageSize;
     return sortedData.slice(start, end);
   }, [sortedData, currentPage, pageSize]);
+
+  if (!loading && error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-6">
+        <Card className="mx-auto mt-16 max-w-xl border-red-200 bg-white p-8 text-center shadow-lg">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50">
+            <BarChart3 className="h-6 w-6 text-red-600" />
+          </div>
+          <h1 className="text-xl font-bold text-slate-900">Unable to load Google PPC data</h1>
+          <p className="mt-2 text-sm text-slate-600">{error}</p>
+          <Button className="mt-6" onClick={() => window.location.reload()}>
+            Retry
+          </Button>
+        </Card>
+      </div>
+    );
+  }
 
   const renderSortIcon = (column: keyof PPCData) => {
     if (sortColumn !== column) {

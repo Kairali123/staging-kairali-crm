@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getPool } from "@/lib/db";
+import { getSessionUserResult, hasReceivedLeadsAccess } from "@/lib/authz";
 
 const noStoreHeaders = {
     "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
@@ -7,8 +8,28 @@ const noStoreHeaders = {
     "Expires": "0",
 };
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
     try {
+        const session = getSessionUserResult(request);
+        if (session.state === "missing") {
+            return NextResponse.json(
+                { success: false, error: "Access denied: Not logged in" },
+                { status: 401, headers: noStoreHeaders }
+            );
+        }
+        if (session.state === "invalid") {
+            return NextResponse.json(
+                { success: false, error: "Access denied: Invalid session" },
+                { status: 401, headers: noStoreHeaders }
+            );
+        }
+        if (!hasReceivedLeadsAccess(session.user)) {
+            return NextResponse.json(
+                { success: false, error: "Access denied: Insufficient permissions" },
+                { status: 403, headers: noStoreHeaders }
+            );
+        }
+
         const body = await request.json();
         const { leadId, status, assignee, remarks } = body;
 

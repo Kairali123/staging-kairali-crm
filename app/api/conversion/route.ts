@@ -3,7 +3,7 @@ import { getPool } from '@/lib/db'
 import { authorizeApiRequest, unauthorizedResponse } from '@/lib/api-auth'
 
 export async function GET(req: NextRequest) {
-    if (!authorizeApiRequest(req)) {
+    if (!(await authorizeApiRequest(req))) {
         return unauthorizedResponse(req)
     }
 

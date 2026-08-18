@@ -554,7 +554,7 @@ function applyStageData(order: Order, item: any, stageIdx: number): void {
         base.state = s(item.packing_slip_fillup_generate_state ?? item.state ?? existing.state);
         base.updateleadstatus = s(item.packing_slip_fillup_generate_lead_status_update ?? item.updateleadstatus ?? existing.updateleadstatus);
         base.dipatachremarks = s(item.packing_slip_fillup_generate_address_address_verify_remarks ?? item.dipatachremarks ?? existing.dipatachremarks);
-        base.packingstatus = s(item.packing_slip_fillup_generate_post_data_to_dialer_status ?? item.packingstatus ?? (actual !== '—' ? 'Completed' : '') ?? existing.packingstatus);
+        base.packingstatus = s(item.packing_slip_fillup_generate_post_data_to_dialer_status ?? item.packingstatus ?? existing.packingstatus ?? (actual !== '—' ? 'Completed' : ''));
         base.planned = formatDate(item.packing_slip_fillup_generate_actual ?? item.planned) !== '—' ? formatDate(item.packing_slip_fillup_generate_actual ?? item.planned) : existing.planned ?? '—';
         base.actual = formatDate(item.packing_slip_fillup_generate_actual ?? item.actual) !== '—' ? formatDate(item.packing_slip_fillup_generate_actual ?? item.actual) : existing.actual ?? '—';
         base.delay = s(item.packing_slip_fillup_generate_time_delay ?? item.timedelay ?? existing.delay);

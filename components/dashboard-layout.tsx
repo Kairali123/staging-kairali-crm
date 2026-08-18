@@ -107,8 +107,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     markAllAsRead,
     removeNotification,
     clearAllNotifications,
-    checkForUpdates,
-    triggerDemoNotification
+    checkForUpdates
   } = useNotifications()
 
   useEffect(() => {
@@ -243,7 +242,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   if (hasPermission("marketing.view")) marketingSubMenu.filter((s) => !("permission" in s) || hasPermission(s.permission)).forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
   if (hasPermission("employee.tools")) employeeSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
   if (hasPermission("doctor.consultation.view")) doctorConsultationSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
-  if (hasPermission("dashboard.view") && user?.role !== "villa_raag_manager") salesSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
+  // Sales submenu entries currently point to pages that are not implemented.
+  // Keep them out of the active search surface until real routes exist.
   // if (hasPermission("meetings.view")) meetingsSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
 
   const searchResults = debouncedQuery.length > 0
@@ -466,7 +466,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               <img src="/kairali-logo-green-leaf-ayurveda.png" alt="Kairali Logo" className="w-10 h-10 p-1 bg-white rounded-full shadow" />
               <h1 className="text-xl font-bold text-white">Kairali Group</h1>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => setSidebarOpen(false)} className="text-white hover:bg-white/20">
+            <Button variant="ghost" size="sm" onClick={() => setSidebarOpen(false)} aria-label="Close navigation menu" className="text-white hover:bg-white/20">
               <X className="h-4 w-4" />
             </Button>
           </div>
@@ -480,7 +480,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 <p className="text-xs text-gray-500 capitalize">{user?.role.replace("_", " ")}</p>
                 <p className="text-xs text-gray-400">{user?.employeeId}</p>
               </div>
-              <Button variant="ghost" size="sm" onClick={handleLogout} className="hover:bg-red-50 hover:text-red-600">
+              <Button variant="ghost" size="sm" onClick={handleLogout} aria-label="Log out" className="hover:bg-red-50 hover:text-red-600">
                 <LogOut className="h-4 w-4" />
               </Button>
             </div>
@@ -507,7 +507,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 <p className="text-xs text-gray-500 capitalize">{user?.role.replace("_", " ")}</p>
                 <p className="text-xs text-gray-400">{user?.employeeId}</p>
               </div>
-              <Button variant="ghost" size="sm" onClick={handleLogout} className="hover:bg-red-50 hover:text-red-600">
+              <Button variant="ghost" size="sm" onClick={handleLogout} aria-label="Log out" className="hover:bg-red-50 hover:text-red-600">
                 <LogOut className="h-4 w-4" />
               </Button>
             </div>
@@ -518,7 +518,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Main content */}
       <div className="lg:pl-64">
         <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
-          <Button variant="ghost" size="sm" className="lg:hidden" onClick={() => setSidebarOpen(true)}>
+          <Button variant="ghost" size="sm" className="lg:hidden" onClick={() => setSidebarOpen(true)} aria-label="Open navigation menu">
             <Menu className="h-5 w-5" />
           </Button>
           <img src="/kairali-logo-green-leaf-ayurveda.png" alt="Kairali Logo" className="lg:hidden w-8 h-8 p-0.5 bg-white rounded-full shadow flex-shrink-0" />
@@ -528,7 +528,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               <div className="hidden md:flex flex-1 max-w-md relative">
                 <div className="relative w-full">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input type="text" placeholder="Search modules, reports..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  <input type="text" aria-label="Search modules and reports" placeholder="Search modules, reports..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                   {searchQuery.length > 0 && (
                     <div className="absolute left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
                       {searchResults.length === 0 ? (
@@ -556,7 +556,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             </div>
             <div className="flex items-center gap-3">
               <div className="relative" ref={notifRef}>
-                <Button variant="outline" size="sm" onClick={() => setNotifOpen((v) => !v)} className="relative hover:bg-yellow-50 hover:text-yellow-600 hover:border-yellow-300 transition-all duration-200 bg-transparent">
+                <Button variant="outline" size="sm" onClick={() => setNotifOpen((v) => !v)} aria-label="Toggle notifications" aria-expanded={notifOpen} aria-controls="dashboard-notifications-panel" className="relative hover:bg-yellow-50 hover:text-yellow-600 hover:border-yellow-300 transition-all duration-200 bg-transparent">
                   <Bell className={`h-4 w-4 ${unreadCount > 0 ? "text-yellow-500" : "text-gray-500"} sm:mr-2`} />
                   <span className="hidden sm:inline">Notifications</span>
                   {unreadCount > 0 && (
@@ -566,7 +566,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   )}
                 </Button>
                 {notifOpen && (
-                  <div className="fixed sm:absolute top-16 sm:top-[calc(100%+12px)] left-2 right-2 sm:left-auto sm:right-0 sm:w-[400px] bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-slate-200 z-[100] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-right">
+                  <div id="dashboard-notifications-panel" className="fixed sm:absolute top-16 sm:top-[calc(100%+12px)] left-2 right-2 sm:left-auto sm:right-0 sm:w-[400px] bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-slate-200 z-[100] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-right">
                     <div className="px-5 py-4 flex items-center justify-between border-b border-slate-100 bg-slate-50/50">
                       <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                         Notifications
@@ -611,7 +611,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                                 {n.notifId && <span className="text-[10px] font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">#{n.notifId}</span>}
                               </div>
                             </div>
-                            <button onClick={(e) => { e.stopPropagation(); removeNotification(n.id) }} className="text-slate-300 hover:text-slate-500 transition-colors p-1 -mt-1 -mr-1">
+                            <button onClick={(e) => { e.stopPropagation(); removeNotification(n.id) }} aria-label={`Remove notification: ${n.title}`} className="text-slate-300 hover:text-slate-500 transition-colors p-1 -mt-1 -mr-1">
                               <X className="h-4 w-4" />
                             </button>
                           </div>
@@ -626,11 +626,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   </div>
                 )}
               </div>
-              <Button variant="outline" size="sm" onClick={handleClearCache} disabled={isClearingCache} className="hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300 transition-all duration-200 bg-transparent">
+              <Button variant="outline" size="sm" onClick={handleClearCache} disabled={isClearingCache} aria-label="Clear cache and refresh data" className="hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300 transition-all duration-200 bg-transparent">
                 <div className={`h-4 w-4 mr-2 ${isClearingCache ? "animate-spin" : ""}`}>🧹</div>
                 <span className="hidden sm:inline">{isClearingCache ? "Clearing cache & refreshing..." : "Clear Cache"}</span>
               </Button>
-              <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing} className="hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 transition-all duration-200 bg-transparent">
+              <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing} aria-label="Refresh page" className="hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 transition-all duration-200 bg-transparent">
                 <div className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`}>🔄</div>
                 <span className="hidden sm:inline">Refresh</span>
               </Button>

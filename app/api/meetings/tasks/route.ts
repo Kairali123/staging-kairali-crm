@@ -147,9 +147,37 @@
 // src/app/api/meetings/tasks/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
+import {
+  canAccessMeetingOwner,
+  getMeetingSession,
+  meetingForbidden,
+  meetingUnauthorized,
+} from '@/lib/meetings-auth'
+
+async function loadMeetingForAccess(db: any, meetingId: unknown) {
+  const [[meeting]]: any = await db.execute(
+    'SELECT id, recorded_by FROM meetings WHERE id = ?',
+    [meetingId]
+  )
+  return meeting || null
+}
+
+async function loadTaskForAccess(db: any, taskId: unknown) {
+  const [[row]]: any = await db.execute(
+    `SELECT t.id, t.meeting_id, m.recorded_by
+     FROM meeting_tasks t
+     LEFT JOIN meetings m ON m.id = t.meeting_id
+     WHERE t.id = ?`,
+    [taskId]
+  )
+  return row || null
+}
 
 export async function GET(req: NextRequest) {
   try {
+    const session = getMeetingSession(req)
+    if (!session) return meetingUnauthorized()
+
     const { searchParams } = new URL(req.url)
     const meeting_id = searchParams.get('meeting_id')
     const status     = searchParams.get('status')
@@ -162,8 +190,20 @@ export async function GET(req: NextRequest) {
 
     const conditions: string[] = []
     const params:     any[]    = []
+    const db = await getPool()
 
-    if (meeting_id) { conditions.push('meeting_id = ?');  params.push(meeting_id) }
+    if (meeting_id) {
+      const meeting = await loadMeetingForAccess(db, meeting_id)
+      if (!meeting) return NextResponse.json({ error: 'Meeting not found' }, { status: 404 })
+      if (!canAccessMeetingOwner(session, meeting.recorded_by)) {
+        return meetingForbidden('You do not have access to this meeting.')
+      }
+      conditions.push('meeting_id = ?')
+      params.push(meeting_id)
+    } else if (!session.isAdmin) {
+      conditions.push('meeting_id IN (SELECT id FROM meetings WHERE LOWER(recorded_by) = ?)')
+      params.push(session.email)
+    }
     if (status)     { conditions.push('status = ?');      params.push(status) }
     if (priority)   { conditions.push('priority = ?');    params.push(priority) }
     if (assignee)   { conditions.push('assignee LIKE ?'); params.push(`%${assignee}%`) }
@@ -171,7 +211,6 @@ export async function GET(req: NextRequest) {
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
 
-    const db = await getPool()
     const [tasks]: any = await db.execute(
       `SELECT * FROM meeting_tasks
        ${where}
@@ -184,9 +223,19 @@ export async function GET(req: NextRequest) {
       `SELECT COUNT(*) as total FROM meeting_tasks ${where}`, params
     )
 
+    const flaggedConditions = ['flagged = 1', 'reviewed = 0']
+    const flaggedParams: any[] = []
+    if (meeting_id) {
+      flaggedConditions.push('meeting_id = ?')
+      flaggedParams.push(meeting_id)
+    } else if (!session.isAdmin) {
+      flaggedConditions.push('meeting_id IN (SELECT id FROM meetings WHERE LOWER(recorded_by) = ?)')
+      flaggedParams.push(session.email)
+    }
+
     const [[{ flagged_count }]]: any = await db.execute(
-      `SELECT COUNT(*) as flagged_count FROM meeting_tasks WHERE flagged = 1 AND reviewed = 0${meeting_id ? ' AND meeting_id = ?' : ''}`,
-      meeting_id ? [meeting_id] : []
+      `SELECT COUNT(*) as flagged_count FROM meeting_tasks WHERE ${flaggedConditions.join(' AND ')}`,
+      flaggedParams
     )
 
     return NextResponse.json({ tasks, total, page, limit, flagged_count })
@@ -199,6 +248,9 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const session = getMeetingSession(req)
+    if (!session) return meetingUnauthorized()
+
     const body = await req.json()
     const {
       meeting_id, meeting_title, task, priority,
@@ -210,6 +262,12 @@ export async function POST(req: NextRequest) {
     }
 
     const db = await getPool()
+    const meeting = await loadMeetingForAccess(db, meeting_id)
+    if (!meeting) return NextResponse.json({ error: 'Meeting not found' }, { status: 404 })
+    if (!canAccessMeetingOwner(session, meeting.recorded_by)) {
+      return meetingForbidden('You do not have permission to add tasks to this meeting.')
+    }
+
     const today = new Date().toISOString().split('T')[0]
 
     const [result]: any = await db.execute(
@@ -224,8 +282,8 @@ export async function POST(req: NextRequest) {
         task,
         ['high','medium','low'].includes(priority) ? priority : 'medium',
         assignee || null,
-        assigned_by || null,
-        assigned_by || null,
+        session.email,
+        session.name || assigned_by || null,
         deadline   || null,
         today,
       ]
@@ -245,10 +303,20 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
+    const session = getMeetingSession(req)
+    if (!session) return meetingUnauthorized()
+
     const body = await req.json()
     const { id, status, priority, assignee, deadline, task, reviewed, flagged, delegated, ht_raised, emailed } = body
 
     if (!id) return NextResponse.json({ error: 'Task id is required' }, { status: 400 })
+
+    const db = await getPool()
+    const taskRow = await loadTaskForAccess(db, id)
+    if (!taskRow) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
+    if (!canAccessMeetingOwner(session, taskRow.recorded_by)) {
+      return meetingForbidden('You do not have permission to update this task.')
+    }
 
     const updates: string[] = []
     const params:  any[]    = []
@@ -267,7 +335,6 @@ export async function PATCH(req: NextRequest) {
     if (updates.length === 0) return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
 
     params.push(id)
-    const db = await getPool()
     await db.execute(`UPDATE meeting_tasks SET ${updates.join(', ')} WHERE id = ?`, params)
 
     const [[updated]]: any = await db.execute('SELECT * FROM meeting_tasks WHERE id = ?', [id])
@@ -281,10 +348,19 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    const session = getMeetingSession(req)
+    if (!session) return meetingUnauthorized()
+
     const body = await req.json()
     const { id } = body
     if (!id) return NextResponse.json({ error: 'Task id is required' }, { status: 400 })
     const db = await getPool()
+    const taskRow = await loadTaskForAccess(db, id)
+    if (!taskRow) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
+    if (!canAccessMeetingOwner(session, taskRow.recorded_by)) {
+      return meetingForbidden('You do not have permission to delete this task.')
+    }
+
     await db.execute('DELETE FROM meeting_tasks WHERE id = ?', [id])
     return NextResponse.json({ success: true, deleted_id: id })
   } catch (err: any) {

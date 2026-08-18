@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
+import { getSessionUser, hasDoctorConsultationAccess } from "@/lib/authz"
 
 // Mock historical data
 const mockHistoryData = {
@@ -34,7 +35,15 @@ const mockHistoryData = {
   ],
 }
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
+  const user = getSessionUser(request)
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+  if (!hasDoctorConsultationAccess(user)) {
+    return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+  }
+
   const { searchParams } = new URL(request.url)
 
   // Extract optional filters

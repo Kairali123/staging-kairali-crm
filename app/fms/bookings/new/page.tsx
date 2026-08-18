@@ -93,6 +93,8 @@ export default function NewBookingPage() {
     // Create booking object
     const newBooking: Partial<Booking> = {
       ...formData,
+      gender: formData.gender ? (formData.gender as NonNullable<Booking["gender"]>) : undefined,
+      bookingStatus: formData.bookingStatus as Booking["bookingStatus"],
       daysOfStay,
       reservationId: `RES${Date.now()}`,
       guestId: `G${Date.now()}`,

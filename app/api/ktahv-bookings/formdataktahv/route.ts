@@ -5,6 +5,8 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const CONVERSION_RATES: Record<string, number> = { INR: 1, USD: 85.74, EURO: 89.26, EUR: 89.26 };
+type LooseRecord = Record<string, unknown>;
+type LookupTuple = [key: string, value: LooseRecord];
 
 function convertCurrency(amount: number, from: string, to: string): number {
     const fromRate = CONVERSION_RATES[(from || "INR").toUpperCase()] ?? 1;
@@ -68,30 +70,24 @@ async function getAllData(pool: any) {
     var data = {
         success: true,
         timestamp: new Date().toISOString(),
-        data: {}
+        data: {} as LooseRecord
     };
-    var roomMaxPaxMap = await getRoomMaxPaxes(pool);
-    data.data[roomMaxPaxMap[0]] = roomMaxPaxMap[1];
-    var servicesData = await getServices(pool);
-    data.data[servicesData[0]] = servicesData[1];
-    var rackPackagesData = await getRackPackages(pool);
-    data.data[rackPackagesData[0]] = rackPackagesData[1];
-    var roomPricesData = await getRoomPrices(pool);
-    data.data[roomPricesData[0]] = roomPricesData[1];
-    var mealPricesData = await getMealPrices(pool);
-    data.data[mealPricesData[0]] = mealPricesData[1];
-    var dataSourceData = await getDataSource(pool);
-    data.data[dataSourceData[0]] = dataSourceData[1];
-    var clientTypeData = await getClientType(pool);
-    data.data[clientTypeData[0]] = clientTypeData[1];
-    var clientCategoryData = await getClientCategory(pool);
-    data.data[clientCategoryData[0]] = clientCategoryData[1];
-    var paymentTermsData = await getPaymentTerms(pool);
-    data.data[paymentTermsData[0]] = paymentTermsData[1];
-    var childRateData = await getChildRate(pool);
-    data.data[childRateData[0]] = childRateData[1];
-    var taAcitveData = await getTravelAgentData(pool);
-    data.data[taAcitveData[0]] = taAcitveData[1];
+    const lookups: LookupTuple[] = [
+        await getRoomMaxPaxes(pool),
+        await getServices(pool),
+        await getRackPackages(pool),
+        await getRoomPrices(pool),
+        await getMealPrices(pool),
+        await getDataSource(pool),
+        await getClientType(pool),
+        await getClientCategory(pool),
+        await getPaymentTerms(pool),
+        await getChildRate(pool),
+        await getTravelAgentData(pool),
+    ];
+    for (const [key, value] of lookups) {
+        data.data[key] = value;
+    }
 
     return data;
 }
@@ -166,7 +162,7 @@ async function getDataById_NewXXXX(currentTextId: any, formType: any, pool: any)
                 where p1.edit_id = ?
             `, [currentTextId]
         );
-        var mappeddata = {};
+        var mappeddata: LooseRecord = {};
         for (let i = 0; i < rows.length; i++) {
             let r = rows[i];
             if (!r.timestamp || !r.booking_id) continue;
@@ -193,7 +189,7 @@ async function getDataById_NewXXXX(currentTextId: any, formType: any, pool: any)
                 : null;
 
             let numOfPax = r.number_of_adults || 0;
-            let secondaryGuests = {};
+            let secondaryGuests: LooseRecord = {};
             if (numOfPax == 2) {
                 let sg1constr = r.txt_Code2 ? getCountryCode(String(r.txt_Code2)) : null;
                 secondaryGuests["secondaryguest1"] = {
@@ -508,7 +504,7 @@ async function getDataById_NewXXXX(currentTextId: any, formType: any, pool: any)
             }
         }
         let rowdata = Object.values(latestPerGuest);
-        var secondaryGuests = {};
+        var secondaryGuests: LooseRecord = {};
         var grpName = "", grpPhone = "", grpEmail = "", grpPax = "", notes = "", grpedID = "", grpPatientId = "", grpUniqueId = "", grpCountry = "", grpTransportation = "", grpAgentName = "";
         var guestIndex = 1;
         for (var i = 0; i < rowdata.length; i++) {
@@ -693,8 +689,8 @@ function getCountryCode(str: any) {
     return "";
 }
 
-async function getRoomMaxPaxes(pool: any) {
-    var codesMap = {};
+async function getRoomMaxPaxes(pool: any): Promise<LookupTuple> {
+    var codesMap: LooseRecord = {};
     let [data]: any[] = await pool.execute(`SELECT 
         room_number,
         short_form,
@@ -717,8 +713,8 @@ async function getRoomMaxPaxes(pool: any) {
     return ["roomMaxPaxMap", codesMap];
 }
 
-async function getServices(pool: any) {
-    var codesMap = {};
+async function getServices(pool: any): Promise<LookupTuple> {
+    var codesMap: LooseRecord = {};
     let [data]: any[] = await pool.execute(`SELECT 
         name,
         inr,
@@ -737,8 +733,8 @@ async function getServices(pool: any) {
     return ["AllServices", codesMap];
 }
 
-async function getRackPackages(pool: any) {
-    var codesMap = {};
+async function getRackPackages(pool: any): Promise<LookupTuple> {
+    var codesMap: LooseRecord = {};
     let [data]: any[] = await pool.execute(`SELECT 
         name,
         type,
@@ -759,8 +755,8 @@ async function getRackPackages(pool: any) {
     return ["AllRackPackages", codesMap];
 }
 
-async function getRoomPrices(pool: any) {
-    var codesMap = {};
+async function getRoomPrices(pool: any): Promise<LookupTuple> {
+    var codesMap: LooseRecord = {};
     let [data]: any[] = await pool.execute(`SELECT 
         room_type,
         category,
@@ -780,8 +776,8 @@ async function getRoomPrices(pool: any) {
     return ["RoomTypePrice", codesMap];
 }
 
-async function getMealPrices(pool: any) {
-    var codesMap = {};
+async function getMealPrices(pool: any): Promise<LookupTuple> {
+    var codesMap: LooseRecord = {};
     let [data]: any[] = await pool.execute(`SELECT 
         category,
         inr,
@@ -800,8 +796,8 @@ async function getMealPrices(pool: any) {
     return ["MealTypePrice", codesMap];
 }
 
-async function getDataSource(pool: any) {
-    var codesMap = {};
+async function getDataSource(pool: any): Promise<LookupTuple> {
+    var codesMap: LooseRecord = {};
     let [data]: any[] = await pool.execute(`SELECT 
         data_source
         FROM KTAHV_require_details`
@@ -814,8 +810,8 @@ async function getDataSource(pool: any) {
     return ["DataSource", codesMap];
 }
 
-async function getClientType(pool: any) {
-    var codesMap = {};
+async function getClientType(pool: any): Promise<LookupTuple> {
+    var codesMap: LooseRecord = {};
     let [data]: any[] = await pool.execute(`SELECT 
         client_type
         FROM KTAHV_require_details`
@@ -828,8 +824,8 @@ async function getClientType(pool: any) {
     return ["ClientType", codesMap];
 }
 
-async function getClientCategory(pool: any) {
-    var codesMap = {};
+async function getClientCategory(pool: any): Promise<LookupTuple> {
+    var codesMap: LooseRecord = {};
     let [data]: any[] = await pool.execute(`SELECT 
         client_category
         FROM KTAHV_require_details`
@@ -844,8 +840,8 @@ async function getClientCategory(pool: any) {
     return ["ClientCategory", codesMap];
 }
 
-async function getPaymentTerms(pool: any) {
-    var codesMap = {};
+async function getPaymentTerms(pool: any): Promise<LookupTuple> {
+    var codesMap: LooseRecord = {};
     let [data]: any[] = await pool.execute(`SELECT 
         payment_terms
         FROM KTAHV_require_details`
@@ -860,8 +856,8 @@ async function getPaymentTerms(pool: any) {
     return ["PaymentTerms", codesMap];
 }
 
-async function getChildRate(pool: any) {
-    var codesMap = {};
+async function getChildRate(pool: any): Promise<LookupTuple> {
+    var codesMap: LooseRecord = {};
     let [data]: any[] = await pool.execute(`SELECT 
         age_diff,
         rate_include,
@@ -879,8 +875,8 @@ async function getChildRate(pool: any) {
     return ["ChildRate", codesMap];
 }
 
-async function getTravelAgentData(pool: any) {
-    var codesMap = {};
+async function getTravelAgentData(pool: any): Promise<LookupTuple> {
+    var codesMap: LooseRecord = {};
     let [data]: any[] = await pool.execute(`SELECT 
         agency_id,
         travel_agent_agency_name,
@@ -895,7 +891,8 @@ async function getTravelAgentData(pool: any) {
     for (let i = 0; i < data.length; i++) {
         let r = data[i];
         if (r.agency_id) {
-            codesMap[String(r.agency_id)] = [r.travel_agent_agency_name, r.contact_person_mobile_number, r.email_id, r.stage2_commission_percent, r.category, String(r.country_code).match(/[+-]?\d+/) ? String(r.country_code).match(/[+-]?\d+/)[0] : ""]
+            const countryCodeMatch = String(r.country_code).match(/[+-]?\d+/);
+            codesMap[String(r.agency_id)] = [r.travel_agent_agency_name, r.contact_person_mobile_number, r.email_id, r.stage2_commission_percent, r.category, countryCodeMatch ? countryCodeMatch[0] : ""]
         }
 
     }

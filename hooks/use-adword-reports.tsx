@@ -8,6 +8,14 @@ import { useState, useEffect, useCallback, useMemo } from "react"
 
 export type Company = "KTAHV" | "KAPPL" | "VILLARAAG"
 
+function isCompany(value: unknown): value is Company {
+    return value === "KTAHV" || value === "KAPPL" || value === "VILLARAAG"
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null
+}
+
 export type SortKey =
     | "date" | "budget" | "impressions" | "clicks" | "ctr"
     | "avgCpc" | "cost" | "conversions" | "conversionValue"
@@ -202,9 +210,9 @@ export function useAdwordReports() {
 
         try {
             const res = await fetch("/api/adword-reports", { cache: "no-store" })
-            const json = await res.json()
+            const json: unknown = await res.json()
 
-            if (json.success && Array.isArray(json.data)) {
+            if (isRecord(json) && json.success === true && Array.isArray(json.data)) {
                 const newData: Record<Company, CampaignRow[]> = {
                     KTAHV: [],
                     KAPPL: [],
@@ -212,7 +220,10 @@ export function useAdwordReports() {
                 }
 
                 for (const item of json.data) {
-                    newData[item.company] = parseRows(item.data)
+                    if (!isRecord(item)) continue
+                    if (isCompany(item.company) && Array.isArray(item.data)) {
+                        newData[item.company] = parseRows(item.data)
+                    }
                 }
 
                 setAllData(newData)

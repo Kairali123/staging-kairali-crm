@@ -40,6 +40,19 @@ type ApiResponse = {
     };
 };
 
+type ApiData = NonNullable<ApiResponse["data"]>;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null;
+
+const extractApiData = (json: unknown): ApiData => {
+    const payload = isRecord(json) && isRecord(json.data) ? json.data : json;
+    if (!isRecord(payload)) {
+        throw new Error("Facebook PPC API returned an invalid payload");
+    }
+    return payload as ApiData;
+};
+
 const num = (v: unknown): number => {
     if (v === null || v === undefined) return 0;
     const n = Number(String(v).replace(/,/g, ""));
@@ -59,9 +72,8 @@ export default function useFacebookPPCData() {
                 const res = await fetch("https://script.google.com/macros/s/AKfycbxdh66fFhos61D7ymM-6zIuBcwE4rCgNuzpJqUczqn3do4sk86SKkndgVgTXsuxKBAu/exec");
                 if (!res.ok) throw new Error("API failed");
 
-                const json: ApiResponse = await res.json();
-                // const json: any = await res.json();
-                const apiData = json?.data ?? json;
+                const json: unknown = await res.json();
+                const apiData = extractApiData(json);
 
 
                 const rows: PPCRawRow[] = [];
@@ -83,8 +95,8 @@ export default function useFacebookPPCData() {
                 });
 
                 setRawData(rows);
-            } catch (e: any) {
-                setError(e.message || "Something went wrong");
+            } catch (e: unknown) {
+                setError(e instanceof Error ? e.message : "Something went wrong");
                 setRawData([]);
             } finally {
                 setLoading(false);

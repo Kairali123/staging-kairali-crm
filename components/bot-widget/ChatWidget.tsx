@@ -37,7 +37,7 @@ function AuthenticatedChatWidget() {
         pushMessage({ id: typingId, role: 'bot', type: 'typing' })
         setLoading(true)
         try {
-            const res = await fetch(`/api/support-tickets/my-tickets?userId=${user.id || user.employeeId}`)
+            const res = await fetch('/api/support-tickets/my-tickets')
             if (!res.ok) throw new Error()
             const data = await res.json()
             removeMessage(typingId)

@@ -473,7 +473,10 @@ export default function EnquiryReverificationPage() {
                                     <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
                                         Date Range
                                     </label>
-                                    <Select value={dateFilter} onValueChange={setDateFilter}>
+                                    <Select
+                                        value={dateFilter}
+                                        onValueChange={(value) => setDateFilter(value as typeof dateFilter)}
+                                    >
                                         <SelectTrigger className="h-10 w-full rounded-md border-gray-300">
                                             <SelectValue placeholder="All Dates" />
                                         </SelectTrigger>

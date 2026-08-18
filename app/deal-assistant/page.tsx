@@ -11,6 +11,7 @@ import { useAuth } from "@/hooks/use-auth"
 import Loader from "@/components/Loader"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
+import { toast } from "sonner"
 import {
   Dialog,
   DialogContent,
@@ -386,10 +387,10 @@ export default function AIDealClosingAssistantPage() {
         draftCacheRef.current.clear()
         await fetchStalledDeals(startDate, endDate, selectedCompany, true)
       } else {
-        alert(json.error || "Failed to log follow-up action.")
+        toast.error(json.error || "Failed to log follow-up action.")
       }
     } catch (err: any) {
-      alert("Error logging follow-up: " + err.message)
+      toast.error("Error logging follow-up: " + err.message)
     } finally {
       setMarkingLeadId(null)
     }

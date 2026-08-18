@@ -1,7 +1,7 @@
 import { DashboardLayout } from "@/components/dashboard-layout"
+import type React from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { StatusBadge } from "@/components/status-badge"
 import { Badge } from "@/components/ui/badge"
 import {
   Calendar,
@@ -36,6 +36,23 @@ import {
   AreaChart,
   Pie, // Import Pie from recharts
 } from "recharts"
+
+function StatusBadge({
+  status,
+  children,
+}: {
+  status: "success" | "warning" | "danger"
+  children: React.ReactNode
+}) {
+  const className =
+    status === "success"
+      ? "bg-green-100 text-green-800 border-green-200"
+      : status === "warning"
+        ? "bg-amber-100 text-amber-800 border-amber-200"
+        : "bg-red-100 text-red-800 border-red-200"
+
+  return <Badge className={className}>{children}</Badge>
+}
 
 export default function BookingFMSPage() {
   const leadSourceData = [
@@ -239,7 +256,9 @@ export default function BookingFMSPage() {
                         cy="50%"
                         outerRadius={80}
                         dataKey="value"
-                        label={({ name, value, bookings }) => `${name}: ${value}% (${bookings})`}
+                        label={({ name, value, payload }) =>
+                          `${name}: ${value}% (${payload?.bookings ?? 0})`
+                        }
                       >
                         {leadSourceData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
@@ -283,7 +302,7 @@ export default function BookingFMSPage() {
                       <YAxis />
                       <Tooltip
                         formatter={(value, name) => [
-                          name === "bookings" ? `${value} bookings` : `₹${(value / 1000).toFixed(0)}K`,
+                          name === "bookings" ? `${value} bookings` : `₹${(Number(value) / 1000).toFixed(0)}K`,
                           name === "bookings" ? "Bookings" : "Revenue",
                         ]}
                       />
@@ -348,7 +367,7 @@ export default function BookingFMSPage() {
                       <Tooltip
                         formatter={(value, name) => [
                           name === "refunds"
-                            ? `₹${(value / 1000).toFixed(0)}K`
+                            ? `₹${(Number(value) / 1000).toFixed(0)}K`
                             : name === "refund_rate"
                               ? `${value}%`
                               : value,
@@ -405,7 +424,7 @@ export default function BookingFMSPage() {
                           name === "conversion"
                             ? `${value}%`
                             : name === "revenue"
-                              ? `₹${(value / 1000).toFixed(0)}K`
+                              ? `₹${(Number(value) / 1000).toFixed(0)}K`
                               : value,
                           name === "bookings" ? "Bookings" : name === "conversion" ? "Conversion Rate" : "Revenue",
                         ]}
@@ -441,7 +460,7 @@ export default function BookingFMSPage() {
                           name === "commission"
                             ? `${value}%`
                             : name === "revenue"
-                              ? `₹${(value / 1000).toFixed(0)}K`
+                              ? `₹${(Number(value) / 1000).toFixed(0)}K`
                               : value,
                           name === "bookings" ? "Bookings" : name === "commission" ? "Commission Rate" : "Revenue",
                         ]}

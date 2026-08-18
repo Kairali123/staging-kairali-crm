@@ -292,12 +292,12 @@ export async function POST(req: NextRequest) {
       const query = `
         UPDATE fms_enquiry_cold_reverification_v2
         SET 
-          actual_executive_verifier = CONVERT_TZ(NOW(), @@session.time_zone, '+05:30'),
+          actual_executive_verifier = NOW(),
           time_delay_executive_verifier = CASE 
             WHEN planned_executive_verifier IS NOT NULL THEN 
               CONCAT(
-                FLOOR(HOUR(TIMEDIFF(CONVERT_TZ(NOW(), @@session.time_zone, '+05:30'), planned_executive_verifier))), 'h ',
-                ABS(MINUTE(TIMEDIFF(CONVERT_TZ(NOW(), @@session.time_zone, '+05:30'), planned_executive_verifier))), 'm'
+                FLOOR(HOUR(TIMEDIFF(NOW(), planned_executive_verifier))), 'h ',
+                ABS(MINUTE(TIMEDIFF(NOW(), planned_executive_verifier))), 'm'
               )
             ELSE '0h 0m'
           END,
@@ -359,12 +359,12 @@ export async function POST(req: NextRequest) {
       const query = `
         UPDATE fms_enquiry_cold_reverification_v2
         SET 
-          actual_senior_verifier = CONVERT_TZ(NOW(), @@session.time_zone, '+05:30'),
+          actual_senior_verifier = NOW(),
           time_delay_senior_verifier = CASE 
             WHEN planned_senior_verifier IS NOT NULL THEN 
               CONCAT(
-                FLOOR(HOUR(TIMEDIFF(CONVERT_TZ(NOW(), @@session.time_zone, '+05:30'), planned_senior_verifier))), 'h ',
-                ABS(MINUTE(TIMEDIFF(CONVERT_TZ(NOW(), @@session.time_zone, '+05:30'), planned_senior_verifier))), 'm'
+                FLOOR(HOUR(TIMEDIFF(NOW(), planned_senior_verifier))), 'h ',
+                ABS(MINUTE(TIMEDIFF(NOW(), planned_senior_verifier))), 'm'
               )
             ELSE '0h 0m'
           END,
@@ -409,9 +409,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: false, error: "Invalid action. Only Executive and Senior verification updates are allowed." }, { status: 400 })
 
-  } catch {
-    console.error("[enquiry-reverification API POST] request failed")
-    return NextResponse.json({ success: false, error: "Failed to update enquiry reverification data" }, { status: 500 })
+  } catch (error: any) {
+    console.error("[enquiry-reverification API POST] request failed:", error)
+    return NextResponse.json({ success: false, error: "Failed to update: " + (error?.message || String(error)) }, { status: 500 })
   } finally {
     if (connection) connection.release()
   }

@@ -279,3 +279,81 @@ export function hasAnyPermission(
   if (granted.includes(PERMISSION_WILDCARD)) return true
   return permissions.some((permission) => granted.includes(permission))
 }
+
+export function hasReceivedLeadsAccess(user: unknown): boolean {
+  return (
+    hasAnyPermission(user, ['ai_voice_received.view']) ||
+    hasAdminRole(user, 'lower')
+  )
+}
+
+export function hasDealAssistantAccess(user: unknown): boolean {
+  return (
+    hasAnyPermission(user, ['deal_assistant.view']) ||
+    hasAdminRole(user, 'lower')
+  )
+}
+
+export function hasPartnerAccess(user: unknown): boolean {
+  return (
+    hasAnyPermission(user, ['partners.view']) ||
+    hasAdminRole(user, 'lower')
+  )
+}
+
+export function hasDoctorConsultationAccess(user: unknown): boolean {
+  return (
+    hasAnyPermission(user, ['doctor.consultation.view', 'prescriptions.create']) ||
+    hasAdminRole(user, 'lower')
+  )
+}
+
+export function hasAccountsTrackerAccess(user: unknown): boolean {
+  return (
+    hasAnyPermission(user, ['accounts_tracker.view']) ||
+    hasAdminRole(user, 'lower')
+  )
+}
+
+const SERVER_ACTION_PERMISSIONS: Record<string, Record<string, readonly string[]>> = {
+  ktahvPage: {
+    sales_agent: ['viewSelf', 'editSelf', 'cancelSelf', 'approvalSelf', 'collectionSelf', 'arrivalFlightSelf', 'departureFlightSelf'],
+    sales_manager: ['viewSelf', 'editSelf', 'cancelSelf', 'approvalSelf', 'collectionSelf', 'arrivalFlightSelf', 'departureFlightSelf'],
+    account_manager: ['viewAll', 'accountsVerify'],
+    operation_manager: ['viewAll', 'approvalAll', 'collectionAll', 'foVerify'],
+    fo_manager: ['viewAll', 'collectionAll', 'checkOutVerify'],
+    superVisor: ['viewAll'],
+  },
+  villaRaagPage: {
+    sales_agent: ['viewSelf', 'editSelf', 'cancelSelf', 'approvalSelf', 'collectionSelf'],
+    sales_manager: ['viewSelf', 'editSelf', 'cancelSelf', 'approvalSelf', 'collectionSelf'],
+    account_manager: ['viewAll', 'accountsVerify'],
+    operation_manager: ['viewAll', 'approvalAll', 'collectionAll', 'foVerify'],
+    villa_raag_manager: ['viewAll', 'editAll', 'manageAll'],
+  },
+  kapplPage: {
+    sales_agent: ['viewSelf', 'editSelf', 'cancelSelf', 'approvalSelf', 'collectionSelf'],
+    sales_manager: ['viewSelf', 'editSelf', 'cancelSelf', 'approvalSelf', 'collectionSelf'],
+    account_manager: ['viewAll', 'accountsVerify'],
+    operation_manager: ['viewAll', 'approvalAll', 'collectionAll', 'foVerify'],
+  },
+}
+
+export function hasServerActionPermission(
+  user: unknown,
+  page: string,
+  action: string,
+): boolean {
+  if (!isRecord(user) || !isRecord(user.action)) return false
+  const pageRolesValue = user.action[page]
+  if (typeof pageRolesValue !== 'string' || !pageRolesValue.trim()) return false
+
+  const pagePermissions = SERVER_ACTION_PERMISSIONS[page]
+  if (!pagePermissions) return false
+
+  const pageRoles = pageRolesValue.includes(',')
+    ? pageRolesValue.split(',').map(role => role.trim()).filter(Boolean)
+    : [pageRolesValue.trim()]
+
+  return pageRoles.some(role => pagePermissions[role]?.includes(action))
+}

@@ -1,9 +1,26 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import type React from "react";
 import { toast } from "sonner";
 
-export default function VerifyTransferLeadModal({ isOpen = true, onClose, row, onRefresh }) {
+interface VerifyTransferLeadRow {
+    id?: string | number;
+    vtlStatus?: string;
+    vtlAssignee?: string;
+    vtlRemarks?: string;
+}
+
+type TransferField = "status" | "assignee" | "remarks";
+
+interface VerifyTransferLeadModalProps {
+    isOpen?: boolean;
+    onClose?: () => void;
+    row?: VerifyTransferLeadRow | null;
+    onRefresh?: (data: { status: string; assignee: string; remarks: string }) => void;
+}
+
+export default function VerifyTransferLeadModal({ isOpen = true, onClose, row, onRefresh }: VerifyTransferLeadModalProps) {
     const [status, setStatus] = useState("");
     const [assignee, setAssignee] = useState("");
     const [remarks, setRemarks] = useState("");
@@ -80,7 +97,7 @@ export default function VerifyTransferLeadModal({ isOpen = true, onClose, row, o
         onClose?.();
     };
 
-    const showError = (field, value) =>
+    const showError = (field: TransferField, value: string) =>
         touched[field] && !value.trim();
 
     if (!isOpen) return null;
@@ -336,7 +353,7 @@ export default function VerifyTransferLeadModal({ isOpen = true, onClose, row, o
     );
 }
 
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
     overlay: {
         position: "fixed",
         inset: 0,

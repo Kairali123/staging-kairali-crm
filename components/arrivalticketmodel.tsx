@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, type ReactNode } from "react";
 import { Repeat, X, Upload, Check, Send } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -21,7 +21,13 @@ const SECTION_THEMES = {
     boarding: { bg: "#e9fbf5", border: "#c3f0e1", head: "#0f766e" },
 };
 
-function SummaryField({ label, value, accent }) {
+interface SummaryFieldProps {
+    label: string;
+    value: ReactNode;
+    accent?: boolean;
+}
+
+function SummaryField({ label, value, accent = false }: SummaryFieldProps) {
     return (
         <div>
             <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>{label}</p>
@@ -39,7 +45,7 @@ function SummaryField({ label, value, accent }) {
     );
 }
 
-function LinkSummaryField({ label, href }) {
+function LinkSummaryField({ label, href }: { label: string; href?: string }) {
     const hasLink = href && href !== "N/A" && href.trim() !== "";
     return (
         <div>
@@ -74,7 +80,9 @@ function LinkSummaryField({ label, href }) {
     );
 }
 
-function SectionWrapper({ theme, children }) {
+type SectionTheme = (typeof SECTION_THEMES)[keyof typeof SECTION_THEMES];
+
+function SectionWrapper({ theme, children }: { theme: SectionTheme; children: ReactNode }) {
     return (
         <div
             style={{
@@ -90,13 +98,13 @@ function SectionWrapper({ theme, children }) {
     );
 }
 
-function SectionHeader({ title, color }) {
+function SectionHeader({ title, color }: { title: string; color: string }) {
     return (
         <h3 style={{ fontSize: 14, fontWeight: 700, color, margin: "0 0 14px" }}>{title}</h3>
     );
 }
 
-function Label({ children }) {
+function Label({ children }: { children: ReactNode }) {
     return (
         <label
             style={{
@@ -112,7 +120,7 @@ function Label({ children }) {
     );
 }
 
-const selectStyle = {
+const selectStyle: React.CSSProperties = {
     width: "100%",
     padding: "10px 12px",
     borderRadius: 10,
@@ -124,7 +132,7 @@ const selectStyle = {
     appearance: "none",
 };
 
-const textareaStyle = {
+const textareaStyle: React.CSSProperties = {
     width: "100%",
     minHeight: 60,
     padding: "10px 12px",
@@ -149,7 +157,15 @@ const readonlyBoxStyle = {
     color: "#6b7280",
 };
 
-function UploadBox({ file, onChange, id }) {
+function UploadBox({
+    file,
+    onChange,
+    id,
+}: {
+    file: File | null;
+    onChange: (file: File | null) => void;
+    id: string;
+}) {
     return (
         <label
             htmlFor={id}
@@ -181,9 +197,35 @@ function UploadBox({ file, onChange, id }) {
     );
 }
 
-const row2 = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 };
+const row2: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 };
 
-export default function ArrivalTicketsModal({ open = true, booking = null as any, guestTrackerData = null as any, onClose = () => { }, onSubmit = () => { } }) {
+interface ArrivalBooking {
+    guestName?: string;
+    bookingId?: string;
+    mobile?: string;
+    countryCode?: string;
+    piHistoryLink?: string;
+    checkIn?: string;
+    checkOut?: string;
+    amount?: string | number;
+    programmeName?: string;
+}
+
+interface ArrivalGuestTrackerData {
+    arrivalstage?: {
+        arrival_planned?: string | null;
+    } | null;
+}
+
+interface ArrivalTicketsModalProps {
+    open?: boolean;
+    booking?: ArrivalBooking | null;
+    guestTrackerData?: ArrivalGuestTrackerData | null;
+    onClose?: () => void;
+    onSubmit?: (data: Record<string, unknown>) => void | Promise<void>;
+}
+
+export default function ArrivalTicketsModal({ open = true, booking = null, guestTrackerData = null, onClose = () => { }, onSubmit = () => { } }: ArrivalTicketsModalProps) {
     const { user } = useAuth();
     const currentUser = user?.name || "";
 
@@ -268,7 +310,7 @@ export default function ArrivalTicketsModal({ open = true, booking = null as any
         setSubmitError(null);
 
         try {
-            const payload: Record<string, any> = {
+            const payload: Record<string, unknown> = {
                 action: "arrival",
                 bookingid: booking?.bookingId || "",
                 name: booking?.guestName || "",
@@ -303,12 +345,12 @@ export default function ArrivalTicketsModal({ open = true, booking = null as any
                 }
 
                 onSubmit({ ...payload, responseMessage: data?.message || "Form Submitted Successfully!" });
-            } catch (networkErr: any) {
-                throw new Error(networkErr?.message || "Network error");
+            } catch (networkErr: unknown) {
+                throw new Error(networkErr instanceof Error ? networkErr.message : "Network error");
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Arrival submission error:", err);
-            setSubmitError(err?.message || "Submission failed. Please try again.");
+            setSubmitError(err instanceof Error ? err.message : "Submission failed. Please try again.");
         } finally {
             setIsSubmitting(false);
         }

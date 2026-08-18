@@ -24,5 +24,7 @@ export const getPriorityColor = (priority: string) => {
     medium: "bg-yellow-100 text-yellow-800",
     low: "bg-green-100 text-green-800",
   }
-  return colors[priority] || "bg-gray-100 text-gray-800"
+  return priority in colors
+    ? colors[priority as keyof typeof colors]
+    : "bg-gray-100 text-gray-800"
 }

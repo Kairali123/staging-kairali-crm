@@ -276,20 +276,6 @@ function CursorIcon() {
 }
 
 // ─── LiveBadge ────────────────────────────────────────────────────────────────
-function LiveBadge() {
-  return (
-    <span className="inline-flex items-center gap-[5px]">
-      <span className="text-[0.75rem] font-bold text-[#5a5858] group-hover:text-white/60 transition-colors">
-        Live
-      </span>
-      <span className="relative flex h-[7px] w-[7px]">
-        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 " />
-        <span className="relative inline-flex rounded-full h-[7px] w-[7px] bg-green-500" />
-      </span>
-    </span>
-  )
-}
-
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -508,11 +494,10 @@ export default function DashboardPage() {
                 <hr className="mx-4 border-0 border-t border-gray-100 group-hover:border-white/10 transition-colors" />
 
                 {/* ── Card Footer ── */}
-                <div className="px-4 py-[10px] pb-[14px] flex items-center justify-between gap-[10px] mt-auto">
-                  <button className="inline-flex items-center gap-[6px] bg-[#467a9a] text-white text-[0.76rem] font-semibold px-[14px] py-[7px] rounded-[7px] border border-transparent whitespace-nowrap transition-all group-hover:bg-white/[0.12] group-hover:border-white/[0.22]">
+                <div className="px-4 py-[10px] pb-[14px] flex items-center justify-start gap-[10px] mt-auto">
+                  <span className="inline-flex items-center gap-[6px] bg-[#467a9a] text-white text-[0.76rem] font-semibold px-[14px] py-[7px] rounded-[7px] border border-transparent whitespace-nowrap transition-all group-hover:bg-white/[0.12] group-hover:border-white/[0.22]">
                     Open <CursorIcon />
-                  </button>
-                  <LiveBadge />
+                  </span>
                 </div>
 
               </Link>

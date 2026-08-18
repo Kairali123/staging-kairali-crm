@@ -1,5 +1,23 @@
 import { useEffect, useState } from "react"
 
+export interface LeadQualityData {
+    date: string
+    source: string
+    totalTraffic: number
+    totalLead: number
+    conversionCountActual: number
+    convertPercent: number
+    conversionAmount: number
+    highQuality: number
+    highQualityPercent: number
+    mediumQuality: number
+    mediumQualityPercent: number
+    lowQuality: number
+    lowQualityPercent: number
+    spend: number
+    cac: number
+}
+
 export function useLeadQualityReport() {
     const [data, setData] = useState<LeadQualityData[]>([])
     const [loading, setLoading] = useState(true)

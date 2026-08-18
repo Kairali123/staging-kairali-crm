@@ -508,7 +508,7 @@ export default function BookingsPage() {
       growth: 4.1,
       icon: Activity,
     },
-  }
+  } as const
 
   const detailedReports = [
     {

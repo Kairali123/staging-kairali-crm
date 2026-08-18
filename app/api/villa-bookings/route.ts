@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getPool } from "@/lib/db"
-import { getSessionUser } from "@/lib/authz"
+import { getSessionUser, hasAdminRole, hasAnyPermission, hasServerActionPermission } from "@/lib/authz"
 
 export const dynamic = "force-dynamic"
 export const revalidate = 0
@@ -11,9 +11,52 @@ function formatMysqlDateTime(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
 }
 
+function canViewVillaBookings(user: unknown): boolean {
+  return hasAnyPermission(user, ["villa_raag.view"]) || hasAdminRole(user, "lower")
+}
+
+function normalizePersonName(value: unknown): string {
+  return typeof value === "string"
+    ? value.trim().toLowerCase().replace(/\s+/g, " ")
+    : ""
+}
+
+function isOwnVillaBooking(user: any, booking: any): boolean {
+  const actor = normalizePersonName(user?.name)
+  const bookingOwner = normalizePersonName(booking?.booking_taken_by)
+  return !!actor && !!bookingOwner && actor === bookingOwner
+}
+
+function canCollectVillaPayment(user: any, booking: any): boolean {
+  if (hasAdminRole(user, "lower")) return true
+  if (hasServerActionPermission(user, "villaRaagPage", "manageAll")) return true
+  if (hasServerActionPermission(user, "villaRaagPage", "collectionAll")) return true
+  return (
+    hasServerActionPermission(user, "villaRaagPage", "collectionSelf") &&
+    isOwnVillaBooking(user, booking)
+  )
+}
+
+function canCancelVillaBooking(user: any, booking: any): boolean {
+  if (hasAdminRole(user, "lower")) return true
+  if (hasServerActionPermission(user, "villaRaagPage", "manageAll")) return true
+  return (
+    hasServerActionPermission(user, "villaRaagPage", "cancelSelf") &&
+    isOwnVillaBooking(user, booking)
+  )
+}
+
 export async function GET(request: NextRequest) {
   let connection
   try {
+    const user = getSessionUser(request)
+    if (!user) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
+    }
+    if (!canViewVillaBookings(user)) {
+      return NextResponse.json({ success: false, error: "Insufficient permissions" }, { status: 403 })
+    }
+
     const { searchParams } = new URL(request.url)
 
     if (searchParams.get("action") === "collection") {
@@ -46,11 +89,11 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       whereClause += ` AND (
-        name_of_client LIKE ? OR 
-        name_of_the_booker LIKE ? OR 
-        booking_id LIKE ? OR 
-        reservation_number LIKE ? OR 
-        guest_email LIKE ? OR 
+        name_of_client LIKE ? OR
+        name_of_the_booker LIKE ? OR
+        booking_id LIKE ? OR
+        reservation_number LIKE ? OR
+        guest_email LIKE ? OR
         mobile LIKE ?
       )`
       const searchPattern = `%${search}%`
@@ -132,32 +175,40 @@ export async function POST(request: NextRequest) {
     }
 
     const currentBooking = existingBookings[0]
-    const modifier = user.email || user.name || "System"
+    const modifier = user.name || user.email || "System"
 
     // 4. Handle mutations
     if (action === "cancel") {
+      if (!canCancelVillaBooking(user, currentBooking)) {
+        return NextResponse.json({ success: false, error: "Insufficient permissions" }, { status: 403 })
+      }
+
       const { cancelReason, cancellationRemarks } = body
       if (!cancelReason) {
         return NextResponse.json({ success: false, error: "Cancellation reason is required" }, { status: 400 })
       }
 
-      const remarks = cancellationRemarks 
-        ? `[Reason: ${cancelReason}] ${cancellationRemarks}` 
+      const remarks = cancellationRemarks
+        ? `[Reason: ${cancelReason}] ${cancellationRemarks}`
         : `[Reason: ${cancelReason}]`
 
       await connection.execute(
-        `UPDATE villa_raag_client_booking_fms 
-         SET booking_status = 'Cancelled', 
-             cancellation_remarks = ?, 
-             last_edit_date = ?, 
-             last_modified_by = ? 
+        `UPDATE villa_raag_client_booking_fms
+         SET booking_status = 'Cancelled',
+             cancellation_remarks = ?,
+             last_edit_date = ?,
+             last_modified_by = ?
          WHERE booking_id = ?`,
         [remarks, formatMysqlDateTime(new Date()), modifier, bookingId]
       )
 
       return NextResponse.json({ success: true, message: "Booking cancelled successfully" })
     } else if (action === "payment") {
-      const { receivedAmount, paymentMode, receivedDate, receiptNumber, paymentCollectedBy } = body
+      if (!canCollectVillaPayment(user, currentBooking)) {
+        return NextResponse.json({ success: false, error: "Insufficient permissions" }, { status: 403 })
+      }
+
+      const { receivedAmount, paymentMode, receivedDate, receiptNumber } = body
 
       // Validate inputs
       const amount = parseFloat(receivedAmount)
@@ -177,7 +228,7 @@ export async function POST(request: NextRequest) {
       // Check current financial state
       const currentTotalReceived = parseFloat(currentBooking.total_received_amount || "0")
       const invoiceAmount = parseFloat(currentBooking.invoice_amount || "0")
-      
+
       const newTotalReceived = currentTotalReceived + amount
 
       // Overpayment check (business rule check)
@@ -193,14 +244,14 @@ export async function POST(request: NextRequest) {
       const paymentSettlementStatus = paymentStatus === "paid" ? "full_payment_received" : "partial_payment"
 
       await connection.execute(
-        `UPDATE villa_raag_client_booking_fms 
-         SET total_received_amount = ?, 
-             received_amount = ?, 
-             payment_mode = ?, 
-             payment_received_datetime = ?, 
-             receipt_transaction_number = ?, 
-             payment_collection_by = ?, 
-             last_edit_date = ?, 
+        `UPDATE villa_raag_client_booking_fms
+         SET total_received_amount = ?,
+             received_amount = ?,
+             payment_mode = ?,
+             payment_received_datetime = ?,
+             receipt_transaction_number = ?,
+             payment_collection_by = ?,
+             last_edit_date = ?,
              last_modified_by = ?,
              accounts_verify_status = ?,
              payment_settlement_status = ?
@@ -211,7 +262,7 @@ export async function POST(request: NextRequest) {
           paymentMode,
           receivedDate,
           receiptNumber,
-          paymentCollectedBy || modifier,
+          modifier,
           formatMysqlDateTime(new Date()),
           modifier,
           accountsVerifyStatus,

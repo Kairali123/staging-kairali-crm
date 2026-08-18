@@ -44,6 +44,11 @@ interface ActiveModalState {
     rcvdMeta: KServeRcvdModalMeta | null;
 }
 
+type SummaryReceivedLeadRow = KServeRcvdLeadRow & {
+    calculatedstatus?: string;
+    calculated_qualification_status?: string;
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  Types
 // ─────────────────────────────────────────────────────────────────────────────
@@ -91,7 +96,7 @@ interface SourceDayRow {
     tatPendingMedium: number;
     tatPendingLow: number;
     sentLeads?: KServeSentLeadRow[];
-    receivedLeads?: KServeRcvdLeadRow[];
+    receivedLeads?: SummaryReceivedLeadRow[];
 }
 
 interface DateGroup {
@@ -337,7 +342,26 @@ const CELL = {
     L: { bg: "#fef2f2", count: "#991b1b", pct: "#b91c1c" },
 };
 
-const GROUPS = [
+type SummaryTotals = typeof ZERO_SUM;
+type SummaryGroup = {
+    key: string;
+    label: string;
+    hdrBg: string;
+    hdrText: string;
+    getTotal: (t: SummaryTotals) => number;
+    getH: (t: SummaryTotals) => number;
+    getM: (t: SummaryTotals) => number;
+    getL: (t: SummaryTotals) => number;
+    getDenominator: (t: SummaryTotals, grand: SummaryTotals) => number;
+    showTAT?: boolean;
+    getTAT?: (t: SummaryTotals) => number;
+    getTATH?: (t: SummaryTotals) => number;
+    getTATM?: (t: SummaryTotals) => number;
+    getTATL?: (t: SummaryTotals) => number;
+    modalStatus: ModalStatusType;
+};
+
+const GROUPS: SummaryGroup[] = [
     {
         key: "sent", label: "Leads Sent",
         hdrBg: "#ebfffd", hdrText: "#013b37",
@@ -408,7 +432,7 @@ const GROUPS = [
         getTATL: (t: typeof ZERO_SUM) => t.pendingLow > 0 ? t.tatPendingLow / t.pendingLow : 0,
         modalStatus: "PENDING" as ModalStatusType,
     },
-] as const;
+];
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  GroupCells  (with onCellClick that now carries the modal status)
@@ -863,14 +887,14 @@ function CompanyBreakdownTable({
                 <div className="flex items-center gap-3">
                     <div className="flex items-center gap-1.5">
                         <span className="text-slate-500 whitespace-nowrap">Rows/page</span>
-                        <select value={rowsPerPage} onChange={e => handleRowsChange(Number(e.target.value))}
+                        <select aria-label="Rows per page" value={rowsPerPage} onChange={e => handleRowsChange(Number(e.target.value))}
                             className="h-7 rounded border border-slate-300 bg-white text-slate-700 text-[11px] font-semibold px-1 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer">
                             {[5, 10, 25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
                         </select>
                     </div>
                     <div className="flex items-center gap-1.5">
                         <span className="text-slate-500 whitespace-nowrap">Go to</span>
-                        <input type="number" min={1} max={totalPages} value={gotoInput}
+                        <input aria-label="Go to page" type="number" min={1} max={totalPages} value={gotoInput}
                             onChange={e => setGotoInput(e.target.value)}
                             onKeyDown={e => e.key === "Enter" && handleGoto()}
                             placeholder="#"
@@ -1047,7 +1071,7 @@ export default function AIVoiceSummaryReportPage() {
         try {
             const matchedDay = rawDateGroups.find(dg => dg.date === params.date);
             let sentRows: KServeSentLeadRow[] = [];
-            let rcvdRows: KServeRcvdLeadRow[] = [];
+            let rcvdRows: SummaryReceivedLeadRow[] = [];
 
             if (matchedDay) {
                 const matchedSources = matchedDay.sources.filter(s => {
@@ -1075,7 +1099,7 @@ export default function AIVoiceSummaryReportPage() {
                 }
             } else {
                 rcvdRows = rcvdRows.filter(r => {
-                    const qStatus = (r.calculatedstatus || "").trim().toLowerCase();;
+                    const qStatus = (r.calculatedstatus || r.calculated_qualification_status || r.finalLeadOutcome || "").trim().toLowerCase();
                     const cIntent = (r.customerIntent || "").toLowerCase();
 
                     if (params.statusParam === "QUALIFIED" && qStatus !== "qualified") return false;

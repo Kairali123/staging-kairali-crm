@@ -149,9 +149,13 @@
 // src/app/api/meetings/meet-participants/route.ts
 
 import { NextRequest, NextResponse } from 'next/server'
+import { getMeetingSession, meetingUnauthorized } from '@/lib/meetings-auth'
 
 export async function POST(req: NextRequest) {
   try {
+    const session = getMeetingSession(req)
+    if (!session) return meetingUnauthorized()
+
     const body = await req.json()
     const { meetCode, accessToken } = body
 

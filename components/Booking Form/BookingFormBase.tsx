@@ -593,7 +593,7 @@ export const COUNTRY_CODES = [
 ];
 
 // Main BookingForm component export split into Part 2 below
-export { Field, KInput, KSelect, KTextarea, CardHeader, COUNTRY_CODES, ROOM_MAX_PAX, DATA_API, SUBMIT_API };
+export { Field, KInput, KSelect, KTextarea, CardHeader, ROOM_MAX_PAX, DATA_API, SUBMIT_API };
 export { emptyGuest, emptyGroupGuest, emptyTravelAgent, emptyAdvancePayment, emptyApproval };
 export { IND_STEPS, GRP_STEPS };
 // Validators/constants above (MAX_NAME_LEN, validateNameField, validateDOB, etc.)

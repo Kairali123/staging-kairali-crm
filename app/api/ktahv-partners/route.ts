@@ -1,8 +1,23 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
+import { getSessionUser, hasPartnerAccess } from "@/lib/authz"
 
 const UPSTREAM_TIMEOUT_MS = 20_000
 
-export async function GET() {
+function requirePartnerAccess(req: NextRequest) {
+    const user = getSessionUser(req)
+    if (!user) {
+        return NextResponse.json({ status: "error", message: "Unauthorized" }, { status: 401 })
+    }
+    if (!hasPartnerAccess(user)) {
+        return NextResponse.json({ status: "error", message: "Forbidden" }, { status: 403 })
+    }
+    return null
+}
+
+export async function GET(req: NextRequest) {
+    const accessError = requirePartnerAccess(req)
+    if (accessError) return accessError
+
     const gasUrl = process.env.GAS_URL?.trim()
 
     if (!gasUrl) {

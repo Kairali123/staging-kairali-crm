@@ -216,8 +216,8 @@ export function LeadTargetReport({
                 </h3>
                 <p className="text-xs text-slate-600">
                   {companies.length === 1
-                    ? `Company: ${companies[0] === "VILLA RAAG" ? "VILLARAAG" : companies[0]}`
-                    : `Companies: ${companies.map(c => c === "VILLA RAAG" ? "VILLARAAG" : c).join(", ")}`
+                    ? `Company: ${companies[0]}`
+                    : `Companies: ${companies.join(", ")}`
                   }
                 </p>
               </div>

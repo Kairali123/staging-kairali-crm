@@ -211,11 +211,6 @@ export function KPISection({ filters }: { filters: any }) {
                 </div>
               </div>
 
-              {/* Right */}
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-full text-xs font-medium text-slate-600">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                Live
-              </div>
             </div>
           </div>
 

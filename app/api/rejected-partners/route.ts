@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
+import { getSessionUser, hasPartnerAccess } from "@/lib/authz"
 import { promises as fs } from "fs"
 import path from "path"
 
@@ -21,6 +22,23 @@ const GAS_WRITE_URL =
     process.env.NEXT_PUBLIC_GAS_WRITE_URL?.trim() ||
     DEFAULT_GAS_READ_URL
 
+function requirePartnerAccess(request: NextRequest) {
+    const user = getSessionUser(request)
+    if (!user) {
+        return {
+            error: NextResponse.json({ status: "error", message: "Unauthorized" }, { status: 401 }),
+            user: null,
+        }
+    }
+    if (!hasPartnerAccess(user)) {
+        return {
+            error: NextResponse.json({ status: "error", message: "Forbidden" }, { status: 403 }),
+            user: null,
+        }
+    }
+    return { error: null, user }
+}
+
 type RejectedPartner = {
     _rowIndex?: number
     Timestamp?: string
@@ -38,6 +56,7 @@ type RejectedPartner = {
     Rejection_Category: string
     Rejection_Remarks?: string
     Rejected_By_Name?: string
+    Rejected_At?: string
 }
 
 async function parseGASResponse(res: Response) {
@@ -159,7 +178,10 @@ async function writeLocalRejected(items: RejectedPartner[]) {
 }
 
 // GET - fetch all rejected partners
-export async function GET() {
+export async function GET(request: NextRequest) {
+    const access = requirePartnerAccess(request)
+    if (access.error) return access.error
+
     try {
         const localData = await readLocalRejected()
         const result = await fetchGASWithDeadline(`${GAS_READ_URL}?action=rejected`, { cache: "no-store" })
@@ -186,7 +208,10 @@ export async function GET() {
 }
 
 // POST - reject a partner
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+    const access = requirePartnerAccess(request)
+    if (access.error) return access.error
+
     let normalized: RejectedPartner | null = null
     try {
         const body = await request.json()
@@ -198,7 +223,8 @@ export async function POST(request: Request) {
             )
         }
 
-        normalized = normalizeRejected(body)
+        const rejectedBy = String(access.user?.name || access.user?.email || "Unknown").trim() || "Unknown"
+        normalized = normalizeRejected({ ...body, Rejected_By_Name: rejectedBy })
         const payload = JSON.stringify({ action: "reject", ...normalized })
         const tried = new Set<string>()
         const candidates = [GAS_WRITE_URL, GAS_READ_URL].filter((u): u is string => Boolean(u && !tried.has(u) && tried.add(u)))

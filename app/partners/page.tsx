@@ -1454,7 +1454,7 @@ export default function PartnersPage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center justify-center sm:justify-start gap-2 text-sm text-slate-600">
                     <span className="font-medium">Rows</span>
-                    <select value={pp} onChange={e => { setPP(Number(e.target.value)); setP(1) }}
+                    <select aria-label="Rows per page" value={pp} onChange={e => { setPP(Number(e.target.value)); setP(1) }}
                         className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500">
                         {[5, 10, 20, 50].map(n => <option key={n} value={n}>{n}</option>)}
                     </select>
@@ -1465,7 +1465,7 @@ export default function PartnersPage() {
                 <div className="flex flex-wrap items-center justify-center gap-2 text-sm text-slate-600">
                     <span>Page <span className="font-semibold">{cur}</span> of <span className="font-semibold">{tot}</span></span>
                     <div className="flex items-center gap-1">
-                        <input type="number" min={1} max={tot} value={goTo} onChange={e => setGoTo(e.target.value)} placeholder="Go"
+                        <input aria-label="Go to page" type="number" min={1} max={tot} value={goTo} onChange={e => setGoTo(e.target.value)} placeholder="Go"
                             className="w-16 h-9 rounded-md border border-slate-300 px-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500" />
                         <button onClick={() => { const p = Number(goTo); if (p >= 1 && p <= tot) { setP(p); setGoTo("") } }}
                             className="h-9 px-3 rounded-md bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition cursor-pointer">Go</button>

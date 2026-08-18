@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 
 // Types matching the API response
 interface APICallHistoryResponse {
+    error?: string
     sheet: string
     data: {
         "SQV Lead Intent": string

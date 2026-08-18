@@ -5,6 +5,8 @@ import { LEADS_CACHE_CLEARED_EVENT } from "@/lib/leads-cache-control";
 export interface SentLead {
     genTimestamp: string;
     enqDateTime: string;
+    _ts_num: number;
+    _dt_num: number;
     enquiryId: string;
     clientName: string;
     mobile: string;
@@ -142,9 +144,11 @@ export function useSentLeads() {
     const [data, setData] = useState<SentLead[]>([]);
     const [loading, setLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const fetchData = useCallback(async (force = false) => {
         try {
+            setError(null);
             if (data.length === 0) setLoading(true);
             else setIsRefreshing(true);
 
@@ -174,11 +178,20 @@ export function useSentLeads() {
                 cache: force ? "no-store" : "default",
                 headers: force ? { "Cache-Control": "no-cache" } : undefined,
             });
+            if (!res.ok) {
+                let message = `Request failed with HTTP ${res.status}`;
+                try {
+                    const payload = await res.json();
+                    if (payload?.error) message = String(payload.error);
+                } catch {
+                    // Keep the HTTP status message if the response body is not JSON.
+                }
+                throw new Error(message);
+            }
             const raw = await res.json();
 
             if (!Array.isArray(raw)) {
-                console.error("Expected array from API proxy");
-                return;
+                throw new Error("Expected array from sent leads API");
             }
 
             const parseDT = (val: string) => {
@@ -249,9 +262,12 @@ export function useSentLeads() {
 
             await setIDBCache(CACHE_KEY, mapped);
             localStorage.setItem(CACHE_TIME_KEY, Date.now().toString());
+            setError(null);
 
         } catch (err) {
+            const message = err instanceof Error ? err.message : "Failed to load sent leads";
             console.error("Sent API Error:", err);
+            setError(message);
         } finally {
             setLoading(false);
             setIsRefreshing(false);
@@ -270,5 +286,5 @@ export function useSentLeads() {
         return () => window.removeEventListener(LEADS_CACHE_CLEARED_EVENT, handleClear);
     }, [fetchData]);
 
-    return { data, loading, isRefreshing, refetch: () => fetchData(true) };
+    return { data, loading, isRefreshing, error, refetch: () => fetchData(true) };
 }

@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, type ReactNode } from "react";
 import { Repeat, X, FileText, Send, Check } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import type { Guest } from "@/types/crr";
 
 const DRIVERS = ["SUJITH", "Babu", "SHIV DAS", "Anil"];
 const PICKUP_LOCATIONS = ["Airport - Coimbatore", "Airport - Cochin", "Rail"];
@@ -18,7 +19,7 @@ const LOCKED_DETAILS = {
 
 const SECTION_THEME = { bg: "#eef4ff", border: "#cddcfb", head: "#1d4ed8" };
 
-function Label({ required, children }) {
+function Label({ required, children }: { required?: boolean; children: ReactNode }) {
     return (
         <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>
             {children} {required && <span style={{ color: "#ef4444" }}>*</span>}
@@ -26,7 +27,7 @@ function Label({ required, children }) {
     );
 }
 
-const selectStyle = {
+const selectStyle: React.CSSProperties = {
     width: "100%",
     padding: "10px 12px",
     borderRadius: 10,
@@ -39,7 +40,7 @@ const selectStyle = {
 
 const inputStyle = { ...selectStyle };
 
-const textareaStyle = {
+const textareaStyle: React.CSSProperties = {
     ...selectStyle,
     minHeight: 60,
     resize: "vertical",
@@ -61,7 +62,15 @@ const row3 = { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 };
 
 const MOBILE_REGEX = /^[6-9]\d{9}$/;
 
-export default function DriverAssignmentArrivalModal({ open = true, onClose = () => { }, onSubmit = () => { }, guest = null, disabled = false }) {
+interface DriverAssignmentArrivalModalProps {
+    open?: boolean;
+    onClose?: () => void;
+    onSubmit?: (data: Record<string, string>) => void | Promise<void>;
+    guest?: Guest | null;
+    disabled?: boolean;
+}
+
+export default function DriverAssignmentArrivalModal({ open = true, onClose = () => { }, onSubmit = () => { }, guest = null, disabled = false }: DriverAssignmentArrivalModalProps) {
     const { user } = useAuth();
     const details = guest ? {
         bookingId: guest.bookingId,

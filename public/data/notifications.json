@@ -1,0 +1,18 @@
+[
+  {
+    "id": "sys-1",
+    "type": "system",
+    "title": "New Page Added",
+    "body": "The Riya Sharma dashboard has been updated with new KPI cards and charts.",
+    "time": "2026-05-04T10:00:00Z",
+    "link": "/riya-sharma"
+  },
+  {
+    "id": "sys-2",
+    "type": "system",
+    "title": "Partner System Update",
+    "body": "New filtering options added to the Partner Onboarding System.",
+    "time": "2026-05-04T11:00:00Z",
+    "link": "/partners"
+  }
+]

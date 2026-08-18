@@ -60,18 +60,6 @@ const AllTimeBadge = () => (
   </span>
 );
 
-// fallback sample data so UI works even without API
-const samplePPCData: PPCData[] = [
-  { campaign: "Ayurveda Wellness Retreat", company: "KTAHV", totalLeads: 450, conversions: 85, conversionAmount: 850000, expense: 125000, conversionRate: 18.89, roas: 6.8 },
-  { campaign: "Panchakarma Treatment", company: "KTAHV", totalLeads: 380, conversions: 72, conversionAmount: 720000, expense: 110000, conversionRate: 18.95, roas: 6.55 },
-  { campaign: "Health and Wellness Package", company: "KAPPL", totalLeads: 520, conversions: 95, conversionAmount: 950000, expense: 145000, conversionRate: 18.27, roas: 6.55 },
-  { campaign: "Rejuvenation Therapy", company: "KAPPL", totalLeads: 410, conversions: 68, conversionAmount: 680000, expense: 98000, conversionRate: 16.59, roas: 6.94 },
-  { campaign: "Villa Luxury Stay", company: "VILLARAAG", totalLeads: 320, conversions: 58, conversionAmount: 1160000, expense: 145000, conversionRate: 18.13, roas: 8.0 },
-  { campaign: "Detox and Cleanse Program", company: "KTAHV", totalLeads: 290, conversions: 52, conversionAmount: 520000, expense: 85000, conversionRate: 17.93, roas: 6.12 },
-  { campaign: "Yoga and Meditation Retreat", company: "KAPPL", totalLeads: 350, conversions: 62, conversionAmount: 620000, expense: 95000, conversionRate: 17.71, roas: 6.53 },
-  { campaign: "Ayurvedic Beauty Treatment", company: "VILLARAAG", totalLeads: 280, conversions: 48, conversionAmount: 480000, expense: 72000, conversionRate: 17.14, roas: 6.67 },
-];
-
 export default function FacebookPPCPage(): JSX.Element {
   // UI state
   const [selectedCampaign, setSelectedCampaign] = useState<string>("ALL");
@@ -90,11 +78,12 @@ export default function FacebookPPCPage(): JSX.Element {
 
   const tableRef = useRef<HTMLDivElement | null>(null);
 
-  const { rawData, loading } = useFacebookPPCData();
+  const { rawData, loading, error } = useFacebookPPCData();
 
   // Reset filters function
   const resetFilters = () => {
     setSelectedCampaign("ALL");
+    setSelectedCompany("ALL");
     setSearchTerm("");
     setDateFilter("all");
     setCustomStartDate("");
@@ -577,6 +566,20 @@ export default function FacebookPPCPage(): JSX.Element {
       .sort((a, b) => b.totalLeads - a.totalLeads) // Top 10 by leads
       .slice(0, 10);
   }, [filteredData]);
+
+  if (!loading && error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 px-4">
+        <Card className="max-w-md p-6 text-center shadow-lg">
+          <p className="text-lg font-semibold text-slate-900">Unable to load Facebook PPC data</p>
+          <p className="mt-2 text-sm text-slate-600">{error}</p>
+          <Button className="mt-6" onClick={() => window.location.reload()}>
+            Retry
+          </Button>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">

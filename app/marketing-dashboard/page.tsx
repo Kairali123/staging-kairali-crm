@@ -76,6 +76,14 @@ export default function MarketingDashboard() {
     setDateRange({})
   }
 
+  const dashboardFilters = {
+    year: selectedYear,
+    months: selectedMonths,
+    dateRange,
+    properties: selectedProperties,
+    channels: selectedChannels,
+  }
+
   const getActiveFilters = () => {
     const filters = []
     if (selectedYear !== new Date().getFullYear().toString()) {
@@ -148,7 +156,7 @@ export default function MarketingDashboard() {
               variant={selectedMonths.includes(month) ? "default" : "outline"}
               size="sm"
               onClick={() => toggleMonth(month)}
-              disabled={dateRange.from || dateRange.to}
+              disabled={Boolean(dateRange.from || dateRange.to)}
               className={cn(
                 "h-10 text-xs font-medium transition-all",
                 selectedMonths.includes(month)
@@ -372,7 +380,7 @@ export default function MarketingDashboard() {
                     variant={selectedMonths.includes(month) ? "default" : "outline"}
                     size="sm"
                     onClick={() => toggleMonth(month)}
-                    disabled={dateRange.from || dateRange.to}
+                    disabled={Boolean(dateRange.from || dateRange.to)}
                     className={cn(
                       "h-8 px-3 text-xs font-medium rounded-md transition-all",
                       selectedMonths.includes(month)
@@ -572,7 +580,7 @@ export default function MarketingDashboard() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
         <div className="space-y-6 sm:space-y-8">
           {/* KPI Section */}
-          <KPISection />
+          <KPISection filters={dashboardFilters} />
 
           {/* Channel Performance Section */}
           <ChannelPerformanceSection />

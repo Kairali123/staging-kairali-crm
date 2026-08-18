@@ -262,7 +262,10 @@ export default function DoctorConsultationOverview() {
           delayHours: calculateDelayTime(c, stage.slaHours),
         }))
 
-        const totalDelayHours = consultationsWithDelay.reduce((sum, c) => sum + (c.delayHours || 0), 0)
+        const totalDelayHours = consultationsWithDelay.reduce(
+          (sum: number, c: Consultation & { delayHours?: number }) => sum + (c.delayHours || 0),
+          0,
+        )
         const avgDelayHours =
           pendingConsultations.length > 0 ? Math.round(totalDelayHours / pendingConsultations.length) : 0
 
@@ -1168,9 +1171,9 @@ function ConsultationDrawer({ consultation }: { consultation: Consultation | nul
                       <div />
                     </div>
                     <div>
-                      <div value="Dr. Smith">Dr. Smith</div>
-                      <div value="Dr. Johnson">Dr. Johnson</div>
-                      <div value="Dr. Williams">Dr. Williams</div>
+                      <div>Dr. Smith</div>
+                      <div>Dr. Johnson</div>
+                      <div>Dr. Williams</div>
                     </div>
                   </div>
                 </div>

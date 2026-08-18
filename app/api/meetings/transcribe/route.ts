@@ -4,6 +4,12 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
+import {
+  getMeetingSession,
+  meetingUnauthorized,
+  parseMeetingAudioUrl,
+} from '@/lib/meetings-auth'
+import { checkApiRateLimit, rateLimitResponse } from '@/lib/api-rate-limit'
 
 const openai          = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || 'dummy-key-for-build' })
 const OPENAI_MAX_BYTES = 24 * 1024 * 1024
@@ -383,6 +389,11 @@ Expected Output:
 // ── Main handler ──────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
+    const session = getMeetingSession(req)
+    if (!session) return meetingUnauthorized()
+    const limit = await checkApiRateLimit(req, 'meetings.transcribe', session.email, 12, 60 * 60 * 1000)
+    if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds)
+
     const body = await req.json()
     const { audioUrl, participants = [], meetingTitle = '' } = body
 
@@ -390,14 +401,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No audioUrl provided' }, { status: 400 })
     }
 
-    // Resolve relative URL for server-side fetch
-    const resolvedUrl = audioUrl.startsWith('http')
-      ? audioUrl
-      : `${req.nextUrl.origin}${audioUrl}`
+    const parsedAudioUrl = parseMeetingAudioUrl(audioUrl, req.nextUrl.origin)
+    if (!parsedAudioUrl) {
+      return NextResponse.json(
+        { error: 'audioUrl must be a CRM meeting audio URL' },
+        { status: 400 },
+      )
+    }
+    const resolvedUrl = parsedAudioUrl.toString()
 
     console.log(`[Transcribe] Fetching: ${resolvedUrl}`)
 
-    const audioRes = await fetch(resolvedUrl)
+    const audioRes = await fetch(resolvedUrl, {
+      headers: {
+        cookie: req.headers.get('cookie') || '',
+      },
+    })
     if (!audioRes.ok) {
       return NextResponse.json(
         { error: `Failed to fetch audio: ${audioRes.status} ${audioRes.statusText}` },

@@ -134,7 +134,7 @@ export default function DoctorConsultationPage() {
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <p className="font-medium">{consultation.patientName}</p>
-                    <Badge variant="outline" size="sm">
+                    <Badge variant="outline">
                       {consultation.id}
                     </Badge>
                   </div>
