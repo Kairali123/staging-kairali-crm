@@ -8,6 +8,7 @@ import RouteGuard from "@/components/route-guard"
 import ContentProtectionProvider from "@/components/content-protection-provider"
 import { NotificationProvider } from "@/contexts/notification-context"
 import { NextAuthSessionProvider } from "@/components/session-provider"
+import { SessionGuard } from "@/components/session-guard"
 import { Suspense } from "react"
 import { Toaster } from "sonner"
 import ChatWidget from "@/components/bot-widget/ChatWidget"
@@ -37,6 +38,7 @@ export default function RootLayout({
           }
         >
           <AuthProvider>
+            <SessionGuard />
             <RouteGuard>
               <LeadsProvider>
                 <NotificationProvider>

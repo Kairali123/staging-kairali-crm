@@ -687,10 +687,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string, company: string) => {
     try {
+      const deviceId =
+        typeof window !== "undefined"
+          ? localStorage.getItem("crm_device_id") ||
+            ("dev_" + Math.random().toString(36).substring(2, 11) + "_" + Date.now().toString(36))
+          : "dev_client"
+      if (typeof window !== "undefined") localStorage.setItem("crm_device_id", deviceId)
+
+      const ua = typeof navigator !== "undefined" ? navigator.userAgent : ""
+      const deviceName = ua.includes("Mac")
+        ? "Apple Mac"
+        : ua.includes("Windows")
+        ? "Windows PC"
+        : ua.includes("Android")
+        ? "Android Phone"
+        : ua.includes("iPhone")
+        ? "iPhone"
+        : "Desktop Device"
+
+      const platform = typeof navigator !== "undefined" ? navigator.platform || "Web" : "Web"
+      const browser = ua.includes("Chrome")
+        ? "Chrome"
+        : ua.includes("Firefox")
+        ? "Firefox"
+        : ua.includes("Safari")
+        ? "Safari"
+        : ua.includes("Edge")
+        ? "Edge"
+        : "Browser"
+
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, company }),
+        body: JSON.stringify({
+          email,
+          password,
+          company,
+          deviceId,
+          deviceName,
+          platform,
+          browser,
+        }),
       })
 
       const contentType = response.headers.get("content-type") || ""
@@ -699,6 +736,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         : null
 
       if (!response.ok) {
+        if (data?.code === "DEVICE_LIMIT_REACHED") {
+          throw new Error(data.message || "Device limit reached (max 2 devices).")
+        }
         throw new Error(data?.message || "Login service unavailable")
       }
 
@@ -715,7 +755,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         toast.success("Login successful")
       } else {
-        throw new Error(data.message || "Invalid credentials or inactive account")
+        throw new Error(data?.message || "Invalid credentials or inactive account")
       }
     } catch (error: any) {
       console.error("Login error:", error)
@@ -729,7 +769,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       throw error
     }
-
   }
 
   const logout = async () => {

@@ -1,48 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
-import { createSessionCookieValue } from '@/lib/session'
-import { AUTH_SCRIPT_URL } from '@/lib/role-permissions'
+import { createSessionCookieWithMetadata } from '@/lib/session'
+import { authenticateUserFromDb } from '@/lib/db-auth'
 import { checkLoginRateLimit, clearLoginRateLimit } from '@/lib/login-rate-limit'
 import { getRequestSourceIp, recordSecurityEvent } from '@/lib/security-audit'
 import { isMfaRequired, isMfaSatisfied } from '@/lib/mfa-policy'
+import { registerOrValidateDevice, createActiveSession } from '@/lib/user-devices'
 
-// Same GAS endpoint hooks/use-auth.tsx used to call directly from the browser.
-// Moved server-side so credentials never sit in a client-visible URL, and so this
-// route is the one place that verifies identity before minting a session cookie.
-// One budget for the whole upstream exchange. The signal stays armed through
-// response.json(), so a stalled body is cut off just like stalled headers —
-// without it a half-open GAS response would pin the request until the platform
-// killed it.
-const UPSTREAM_TIMEOUT_MS = 20_000
-
-// A login reply carries the session cookie and the user record: never cacheable,
-// never shared. Applied to every response this route can return.
 const NO_STORE = 'private, no-store'
 
-// Fixed user-facing strings. Nothing from the upstream payload, the request, or
-// an exception is ever folded into a reply.
-// MSG_MISSING_FIELDS answers every malformed request — absent, empty, wrongly
-// typed, or unparseable — so a client learns that its credentials payload was
-// unusable without learning which part of it we rejected.
 const MSG_MISSING_FIELDS = 'Missing email, password, or company'
 const MSG_INVALID_CREDENTIALS = 'Invalid credentials or inactive account'
 const MSG_MFA_REQUIRED = 'Additional verification required'
-const MSG_TIMEOUT = 'Login service timed out'
 const MSG_FAILED = 'Login failed'
 
 function jsonNoStore(body: Record<string, unknown>, status: number) {
   return NextResponse.json(body, { status, headers: { 'Cache-Control': NO_STORE } })
 }
 
-// A JSON value that can carry named fields: excludes null (typeof 'object') and
-// arrays, both of which would otherwise index without error and read undefined.
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-// Credentials go upstream verbatim, so the only accepted form is a string that
-// already has content. No trimming or coercion: a value that reaches the Apps
-// Script must be exactly what the client sent.
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0
 }
@@ -53,15 +32,13 @@ export async function POST(req: NextRequest) {
   const elapsed = () => Date.now() - startedAt
   const sourceIp = getRequestSourceIp(req)
 
-  console.info(`[login:${requestId}] request started`)
+  console.info(`[login:${requestId}] database login request started`)
 
   let payload: unknown
 
   try {
     payload = await req.json()
   } catch {
-    // A body we cannot parse is a malformed client request, not a server fault.
-    // The log line is fixed: neither the body nor the parse error is recorded.
     console.error(`[login:${requestId}] request body could not be parsed (${elapsed()}ms)`)
     recordSecurityEvent({
       action: 'auth.login',
@@ -73,8 +50,6 @@ export async function POST(req: NextRequest) {
     return jsonNoStore({ success: false, message: MSG_MISSING_FIELDS }, 400)
   }
 
-  // A primitive, array, or null body has no credentials to read, and every
-  // field lookup on it would silently yield undefined.
   if (!isRecord(payload)) {
     recordSecurityEvent({
       action: 'auth.login',
@@ -86,11 +61,8 @@ export async function POST(req: NextRequest) {
     return jsonNoStore({ success: false, message: MSG_MISSING_FIELDS }, 400)
   }
 
-  const { email, password, company } = payload
+  const { email, password, company, deviceId, deviceName, platform, browser } = payload as Record<string, any>
 
-  // Typed before the URL is built. Previously any truthy value was accepted and
-  // String()-coerced, so a number or object became a credential like "[object
-  // Object]" in the upstream query.
   if (!isNonEmptyString(email) || !isNonEmptyString(password) || !isNonEmptyString(company)) {
     recordSecurityEvent({
       action: 'auth.login',
@@ -124,117 +96,10 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const sharedSecret = process.env.GAS_SHARED_SECRET?.trim()
-  if (!sharedSecret) {
-    console.error(`[login:${requestId}] GAS_SHARED_SECRET is not configured (${elapsed()}ms)`)
-    recordSecurityEvent({
-      action: 'auth.login',
-      outcome: 'failure',
-      actor: email,
-      sourceIp,
-      correlationId: requestId,
-      context: { reason: 'auth_service_not_configured' },
-    })
-    return jsonNoStore({ success: false, message: MSG_FAILED }, 503)
-  }
+  const authResult = await authenticateUserFromDb(email, password, company)
 
-  const controller = new AbortController()
-  // Distinguishes our own deadline from an unrelated abort or transport error:
-  // reading err.name is unreliable once undici wraps the body-stream failure.
-  let timedOut = false
-  const timer = setTimeout(() => {
-    timedOut = true
-    controller.abort()
-  }, UPSTREAM_TIMEOUT_MS)
-
-  let data: unknown
-  try {
-    const upstreamStartedAt = Date.now()
-    const gasResponse = await fetch(AUTH_SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'login',
-        email,
-        password,
-        company,
-        sharedSecret,
-      }),
-      signal: controller.signal,
-      cache: 'no-store',
-    })
-    console.info(`[login:${requestId}] upstream responded status=${gasResponse.status} in ${Date.now() - upstreamStartedAt}ms`)
-
-    if (!gasResponse.ok) {
-      // GAS answers failures with an HTML error page that can name the script,
-      // the deployment, and the executing account. Status and body stay here.
-      console.error(`[login:${requestId}] upstream returned a non-success status (${elapsed()}ms)`)
-      recordSecurityEvent({
-        action: 'auth.login',
-        outcome: 'failure',
-        actor: email,
-        sourceIp,
-        correlationId: requestId,
-        context: { reason: 'auth_service_status', status: gasResponse.status },
-      })
-      return jsonNoStore({ success: false, message: MSG_FAILED }, 502)
-    }
-
-    // Still inside the timeout window, so a body that never finishes trips it.
-    // Non-JSON (an interstitial or error page) throws and is handled below.
-    data = await gasResponse.json()
-    console.info(`[login:${requestId}] upstream JSON parsed (${elapsed()}ms)`)
-  } catch {
-    if (timedOut) {
-      console.error(`[login:${requestId}] upstream request timed out after ${elapsed()}ms`)
-      recordSecurityEvent({
-        action: 'auth.login',
-        outcome: 'failure',
-        actor: email,
-        sourceIp,
-        correlationId: requestId,
-        context: { reason: 'auth_service_timeout' },
-      })
-      return jsonNoStore({ success: false, message: MSG_TIMEOUT }, 504)
-    }
-    // Transport failure or malformed upstream payload. The exception object is
-    // deliberately not logged: transport errors can still contain sensitive
-    // request metadata.
-    console.error(`[login:${requestId}] upstream request failed (${elapsed()}ms)`)
-    recordSecurityEvent({
-      action: 'auth.login',
-      outcome: 'failure',
-      actor: email,
-      sourceIp,
-      correlationId: requestId,
-      context: { reason: 'auth_service_transport' },
-    })
-    return jsonNoStore({ success: false, message: MSG_FAILED }, 502)
-  } finally {
-    clearTimeout(timer)
-  }
-
-  // Well-formed JSON that isn't a result object is an upstream fault, not a
-  // rejected login — reporting it as 401 would blame the user for an outage.
-  if (!isRecord(data)) {
-    console.error(`[login:${requestId}] upstream returned an unexpected payload (${elapsed()}ms)`)
-    recordSecurityEvent({
-      action: 'auth.login',
-      outcome: 'failure',
-      actor: email,
-      sourceIp,
-      correlationId: requestId,
-      context: { reason: 'auth_service_unexpected_payload' },
-    })
-    return jsonNoStore({ success: false, message: MSG_FAILED }, 502)
-  }
-
-  // Only a literal false is a rejection. Fixed message: upstream diagnostics
-  // ("no such sheet row", account state) are not for the login form.
-  // use-auth.tsx matches this exact string to show "You have entered wrong Id /
-  // Password".
-  if (data.success === false) {
-    console.info(`[login:${requestId}] upstream rejected credentials (${elapsed()}ms)`)
+  if (!authResult.success || !authResult.user) {
+    console.info(`[login:${requestId}] database authentication failed for ${email} (${elapsed()}ms)`)
     recordSecurityEvent({
       action: 'auth.login',
       outcome: 'failure',
@@ -243,39 +108,10 @@ export async function POST(req: NextRequest) {
       correlationId: requestId,
       context: { reason: 'invalid_credentials' },
     })
-    return jsonNoStore({ success: false, message: MSG_INVALID_CREDENTIALS }, 401)
+    return jsonNoStore({ success: false, message: authResult.message || MSG_INVALID_CREDENTIALS }, 401)
   }
 
-  const user = data.user
-
-  // The gate on the session cookie. Both halves are exact: a truthy-but-not-true
-  // success (the string "false", 1) or a user that is a string, array, or null
-  // is a payload this route does not understand, and an unrecognised payload
-  // must never be read as a granted login. Anything short of the full contract
-  // is reported as the upstream fault it is, under the same fixed log category.
-  if (data.success !== true || !isRecord(user)) {
-    console.error(`[login:${requestId}] upstream returned an unexpected payload (${elapsed()}ms)`)
-    recordSecurityEvent({
-      action: 'auth.login',
-      outcome: 'failure',
-      actor: email,
-      sourceIp,
-      correlationId: requestId,
-      context: { reason: 'auth_service_unexpected_payload' },
-    })
-    return jsonNoStore({ success: false, message: MSG_FAILED }, 502)
-  }
-
-  // GAS login already returns the authenticated user's final permissions. Keep
-  // login to one upstream call and sign exactly the user the login action
-  // returned. A malformed permission value grants nothing instead of breaking
-  // client permission checks.
-  const finalUser = {
-    ...user,
-    permissions: Array.isArray(user.permissions) && user.permissions.every(p => typeof p === 'string')
-      ? user.permissions
-      : [],
-  }
+  const finalUser = authResult.user
 
   if (isMfaRequired() && !isMfaSatisfied(finalUser)) {
     recordSecurityEvent({
@@ -289,10 +125,63 @@ export async function POST(req: NextRequest) {
     return jsonNoStore({ success: false, message: MSG_MFA_REQUIRED }, 403)
   }
 
+  // 1. Device Identification & Registration (Max 2 devices)
+  const userAgent = req.headers.get('user-agent') || ''
+  const effectiveDeviceId = (typeof deviceId === 'string' && deviceId.trim())
+    ? deviceId.trim()
+    : (req.headers.get('x-device-id') || randomUUID())
+
+  const effectiveDeviceName = (typeof deviceName === 'string' && deviceName.trim())
+    ? deviceName.trim()
+    : 'Web Browser'
+
+  const effectivePlatform = (typeof platform === 'string' && platform.trim())
+    ? platform.trim()
+    : (userAgent.includes('Windows') ? 'Windows' : userAgent.includes('Mac') ? 'macOS' : userAgent.includes('Android') ? 'Android' : userAgent.includes('iPhone') ? 'iOS' : 'Web')
+
+  const effectiveBrowser = (typeof browser === 'string' && browser.trim())
+    ? browser.trim()
+    : (userAgent.includes('Chrome') ? 'Chrome' : userAgent.includes('Firefox') ? 'Firefox' : userAgent.includes('Safari') ? 'Safari' : 'Browser')
+
+  const deviceCheck = await registerOrValidateDevice(finalUser.id, effectiveDeviceId, {
+    deviceName: effectiveDeviceName,
+    platform: effectivePlatform,
+    browser: effectiveBrowser,
+    ipAddress: sourceIp,
+  })
+
+  if (!deviceCheck.allowed) {
+    recordSecurityEvent({
+      action: 'auth.login.device_limit_exceeded',
+      outcome: 'denied',
+      actor: email,
+      sourceIp,
+      correlationId: requestId,
+      context: { registeredCount: deviceCheck.registeredCount ?? 0 },
+    })
+
+    return jsonNoStore(
+      {
+        success: false,
+        code: 'DEVICE_LIMIT_REACHED',
+        message:
+          'Device limit reached (maximum 2 registered devices). Please ask an administrator to remove an old device or log out from another device.',
+        devices: deviceCheck.devices || [],
+      },
+      403
+    )
+  }
+
+  // 2. Mint session cookie with sid, deviceId, and tokenVersion
   let sessionCookie: string
+  let sid: string
   try {
-    // Throws when NEXTAUTH_SECRET is unset — a deployment fault, not upstream.
-    sessionCookie = createSessionCookieValue(finalUser)
+    const meta = createSessionCookieWithMetadata(finalUser, {
+      deviceId: effectiveDeviceId,
+      tokenVersion: authResult.tokenVersion || 1,
+    })
+    sessionCookie = meta.cookieValue
+    sid = meta.sid
   } catch {
     console.error(`[login:${requestId}] session cookie could not be signed (${elapsed()}ms)`)
     recordSecurityEvent({
@@ -306,9 +195,22 @@ export async function POST(req: NextRequest) {
     return jsonNoStore({ success: false, message: MSG_FAILED }, 500)
   }
 
-  // The same object that was signed. The reply and the cookie cannot disagree,
-  // so /api/auth/me on the next reload returns the set the UI received here.
-  const response = jsonNoStore({ success: true, user: finalUser }, 200)
+  // 3. Enforce Single Active Device Concurrency (Hotstar Model)
+  // This automatically marks previous active sessions as kicked and notifies them via real-time SSE
+  await createActiveSession(sid, finalUser.id, effectiveDeviceId, {
+    deviceName: effectiveDeviceName,
+    platform: effectivePlatform,
+    ipAddress: sourceIp,
+  })
+
+  const response = jsonNoStore(
+    {
+      success: true,
+      user: finalUser,
+      deviceId: effectiveDeviceId,
+    },
+    200
+  )
 
   response.cookies.set('kairali_user', sessionCookie, {
     httpOnly: true,
@@ -318,7 +220,7 @@ export async function POST(req: NextRequest) {
     maxAge: 60 * 60 * 24 * 7, // 7 days
   })
 
-  console.info(`[login:${requestId}] login succeeded (${elapsed()}ms)`)
+  console.info(`[login:${requestId}] database login succeeded in ${elapsed()}ms for ${email} on device ${effectiveDeviceId}`)
   clearLoginRateLimit(email)
   recordSecurityEvent({
     action: 'auth.login',

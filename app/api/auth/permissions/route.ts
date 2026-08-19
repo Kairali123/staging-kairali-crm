@@ -62,11 +62,7 @@
 
 
 import { NextRequest, NextResponse } from 'next/server'
-import {
-  fetchRolePermissions,
-  permissionsForEmail,
-  type RolePermissionsFailure,
-} from '@/lib/role-permissions'
+import { getUserPermissionsFromDb } from '@/lib/db-auth'
 import { createSessionCookieValue, verifySessionCookieValue } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
@@ -74,14 +70,6 @@ export const dynamic = 'force-dynamic'
 const NO_STORE = 'private, no-store'
 const MSG_UNAUTHORIZED = 'Unauthorized'
 const MSG_UNAVAILABLE = 'Permissions unavailable'
-
-const FAILURE_STATUS: Record<RolePermissionsFailure, number> = {
-  configuration: 503,
-  'upstream-status': 502,
-  timeout: 504,
-  transport: 502,
-  payload: 502,
-}
 
 function jsonNoStore(body: Record<string, unknown>, status: number) {
   return NextResponse.json(body, { status, headers: { 'Cache-Control': NO_STORE } })
@@ -91,9 +79,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-// Refreshes only the authenticated user's permissions. The complete permission
-// table stays server-side, and the updated user is signed into a replacement
-// session cookie before it is returned to the client.
+// Refreshes only the authenticated user's permissions directly from MySQL.
+// The updated user is signed into a replacement session cookie before it is returned to the client.
 export async function POST(req: NextRequest) {
   const rawSession = req.cookies.get('kairali_user')?.value
   const sessionUser = rawSession ? verifySessionCookieValue(rawSession) : null
@@ -102,36 +89,34 @@ export async function POST(req: NextRequest) {
     return jsonNoStore({ success: false, error: MSG_UNAUTHORIZED }, 401)
   }
 
-  const result = await fetchRolePermissions()
-  if (!result.ok) {
-    console.error(`[permissions] refresh failed (${result.reason})`)
-    return jsonNoStore({ success: false, error: MSG_UNAVAILABLE }, FAILURE_STATUS[result.reason])
-  }
-
-  const permissions = permissionsForEmail(result.rolePermissions, sessionUser.email)
-  if (!permissions) {
-    console.warn('[permissions] no usable entry for authenticated account')
-    return jsonNoStore({ success: false, error: MSG_UNAVAILABLE }, 404)
-  }
-
-  const updatedUser = { ...sessionUser, permissions }
-
-  let sessionCookie: string
   try {
-    sessionCookie = createSessionCookieValue(updatedUser)
-  } catch {
-    console.error('[permissions] session cookie could not be signed')
+    const permissions = await getUserPermissionsFromDb(sessionUser.email, sessionUser.role as string | undefined)
+
+    const updatedUser = {
+      ...sessionUser,
+      permissions: permissions.length > 0 ? permissions : (Array.isArray(sessionUser.permissions) ? sessionUser.permissions : []),
+    }
+
+    let sessionCookie: string
+    try {
+      sessionCookie = createSessionCookieValue(updatedUser)
+    } catch {
+      console.error('[permissions] session cookie could not be signed')
+      return jsonNoStore({ success: false, error: MSG_UNAVAILABLE }, 500)
+    }
+
+    const response = jsonNoStore({ success: true, user: updatedUser }, 200)
+    response.cookies.set('kairali_user', sessionCookie, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 7,
+    })
+
+    return response
+  } catch (err) {
+    console.error('[permissions] refresh from database failed:', err)
     return jsonNoStore({ success: false, error: MSG_UNAVAILABLE }, 500)
   }
-
-  const response = jsonNoStore({ success: true, user: updatedUser }, 200)
-  response.cookies.set('kairali_user', sessionCookie, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 60 * 60 * 24 * 7,
-  })
-
-  return response
 }

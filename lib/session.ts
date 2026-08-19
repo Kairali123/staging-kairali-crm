@@ -55,21 +55,46 @@ export function readVerifiedSessionPayload(raw: string | undefined | null): any 
 }
 
 // Signed session cookie value: "<base64url payload>.<hmac signature>"
-// The payload embeds its own expiry so a captured cookie can't be replayed
-// past its lifetime even if the Set-Cookie Max-Age is stripped or edited.
-// Every newly minted cookie also carries a session id (`sid`) so logout can
-// revoke that exact session. Legacy cookies without sid are rejected by default;
-// set CRM_ALLOW_LEGACY_SESSION_COOKIES=true only for a short migration window.
-export function createSessionCookieValue(user: unknown): string {
+// Embeds user object, expiry, issuance timestamp, unique session ID (`sid`),
+// optional `deviceId`, and `tokenVersion` for real-time invalidation.
+export function createSessionCookieValue(
+  user: unknown,
+  options?: {
+    sid?: string
+    deviceId?: string
+    tokenVersion?: number
+  }
+): string {
   const now = Date.now()
+  const sid = options?.sid || randomUUID()
   const payload = JSON.stringify({
     user,
     exp: now + SESSION_TTL_MS,
     iat: now,
-    sid: randomUUID(),
+    sid,
+    deviceId: options?.deviceId,
+    tokenVersion: options?.tokenVersion ?? 1,
   })
   const encoded = Buffer.from(payload, 'utf8').toString('base64url')
   return `${encoded}.${sign(encoded)}`
+}
+
+export function createSessionCookieWithMetadata(
+  user: unknown,
+  options?: {
+    sid?: string
+    deviceId?: string
+    tokenVersion?: number
+  }
+): { cookieValue: string; sid: string; deviceId?: string; tokenVersion: number } {
+  const sid = options?.sid || randomUUID()
+  const tokenVersion = options?.tokenVersion ?? 1
+  const cookieValue = createSessionCookieValue(user, {
+    sid,
+    deviceId: options?.deviceId,
+    tokenVersion,
+  })
+  return { cookieValue, sid, deviceId: options?.deviceId, tokenVersion }
 }
 
 export function verifySessionCookieValue(raw: string): any | null {
@@ -100,4 +125,9 @@ export function revokeSessionCookieValue(raw: string | undefined | null): boolea
   const expiresAt = typeof payload.exp === 'number' ? payload.exp : Date.now() + SESSION_TTL_MS
   revokedSessionIds().set(payload.sid, expiresAt)
   return true
+}
+
+export function manuallyRevokeSid(sid: string, ttlMs = SESSION_TTL_MS): void {
+  pruneRevokedSessionIds()
+  revokedSessionIds().set(sid, Date.now() + ttlMs)
 }

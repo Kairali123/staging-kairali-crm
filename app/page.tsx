@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -35,6 +35,11 @@ export default function LoginPage() {
   const [error, setError] = useState("")
   const router = useRouter()
   const { login } = useAuth()
+
+  useEffect(() => {
+    // Preload dashboard code in background for instant navigation
+    router.prefetch("/dashboard")
+  }, [router])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()

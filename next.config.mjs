@@ -4,6 +4,12 @@ const nextConfig = {
     unoptimized: true,
   },
 
+  allowedDevOrigins: [
+    'localhost',
+    '127.0.0.1',
+    '192.168.3.58',
+  ],
+
   // ── Increase body size limit for all API routes (App Router) ──────────────
   // Note: config.api.bodyParser only works in Pages Router (/pages/api)
   // For App Router, use this experimental config for Server Actions,

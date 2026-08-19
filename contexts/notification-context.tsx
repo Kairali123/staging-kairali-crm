@@ -82,11 +82,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (!user.permissions.includes("all") && user.company !== company) return []
     try {
       const response = await fetch(url)
-      const data = await response.json()
+      if (!response.ok) return []
+      const text = await response.text()
+      if (!text || text.trim().startsWith("<")) return []
+      const data = JSON.parse(text)
       const bookings = data.bookings || data || []
       const lastCheckTime = new Date(lastCheckRef.current).getTime()
 
-      return bookings
+      return (Array.isArray(bookings) ? bookings : [])
         .filter((b: any) => {
           const bTime = new Date(b.timestamp || b["Booking Date and Time"] || b.bookingDate).getTime()
           return bTime > lastCheckTime
@@ -110,10 +113,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (!user) return []
     try {
       const response = await fetch(`/api/${type}-leads`)
+      if (!response.ok) return []
       const data = await response.json()
       const lastCheckTime = new Date(lastCheckRef.current).getTime()
 
-      return data
+      return (Array.isArray(data) ? data : [])
         .filter((l: any) => {
           if (!user.permissions.includes("all") && l.company !== user.company) return false
           const lTime = new Date(l.timestamp || l.dateTime).getTime()
@@ -189,9 +193,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     if (user) {
-      checkForUpdates()
+      // Defer initial check by 5 seconds so it doesn't block dashboard initial rendering
+      const initialTimer = setTimeout(() => {
+        checkForUpdates()
+      }, 5000)
       const interval = setInterval(checkForUpdates, POLL_INTERVAL)
-      return () => clearInterval(interval)
+      return () => {
+        clearTimeout(initialTimer)
+        clearInterval(interval)
+      }
     }
   }, [user])
 

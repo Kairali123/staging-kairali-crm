@@ -160,8 +160,15 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const getUserInitials = (name: string) =>
     name.split(" ").map((word) => word.charAt(0)).join("").toUpperCase().slice(0, 2)
 
+  const isSuperAdmin = Boolean(
+    user?.role === "super_admin" ||
+    String(user?.role || "").trim().toLowerCase() === "super_admin" ||
+    String(user?.role || "").trim().toLowerCase() === "super admin"
+  )
+
   const navigation = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, permission: "dashboard.view" },
+    { name: "User Management", href: "/users", icon: UserCog, superAdminOnly: true },
     { name: "Marketing Reports", icon: TrendingUp, permission: "marketing.view" },
     { name: "Riya Sharma", href: "/riya-sharma", icon: LayoutGrid, permission: "riya_sharma.view" },
     { name: "FMS Systems", icon: FileText, permission: "fms.view" },
@@ -182,8 +189,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "Meetings", href: "/meetings", icon: StickyNote, permission: "meetings.view" },
     { name: "FMS Pending Bottleneck Tracker", href: "/fms/pending-tasks", icon: FileText, permission: "task_fms.view" },
     { name: "Cold Enquiry Reverification", href: "/fms/enquiry-reverification", icon: FileText, permission: "cold_enquiry_reverification.view" },
-
-
   ]
 
   const marketingSubMenu = [
@@ -232,9 +237,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   //   { name: "Record Meeting", href: "/meetings/record", icon: Phone, description: "Record new meeting" },
   //   { name: "Tasks", href: "/meetings/tasks", icon: List, description: "View meeting tasks" },
   // ]
-  const filteredNavigation = navigation.filter(
-    (item) => user?.permissions.includes("all") || hasPermission(item.permission),
-  )
+  const filteredNavigation = navigation.filter((item: any) => {
+    if (item.superAdminOnly) {
+      return isSuperAdmin
+    }
+    return user?.permissions?.includes("all") || (item.permission && hasPermission(item.permission))
+  })
 
   const searchableItems: any[] = []
   filteredNavigation.forEach((item) => { if (item.href) searchableItems.push({ name: item.name, href: item.href, description: item.name, icon: item.icon }) })
