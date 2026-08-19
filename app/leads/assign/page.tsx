@@ -4104,12 +4104,6 @@ Cancelled Amt:
                   <h4 className="text-sm font-bold text-slate-700 uppercase tracking-wide">
                     Lead Distribution
                   </h4>
-
-                  {isAllDataLoaded && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-100 border border-green-300 px-2 py-1 rounded-full">
-                      ✓ All data loaded
-                    </span>
-                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
