@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPool } from "@/lib/db";
-import { getSessionUser, hasAdminRole } from "@/lib/authz";
-import { ensureAccountTrackerManagementColumns } from "../db-init";
+import { getSessionUser, hasPermission, hasAdminRole } from "@/lib/authz";
+
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+const MANAGEMENT_PERMISSION = "management.authority";
 
 function isTruthyVerify(value: unknown): boolean {
   return value === true || value === 1 || value === "1" || value === "true";
@@ -42,7 +44,6 @@ export async function POST(req: NextRequest) {
   const pool = await getPool();
   const connection = await pool.getConnection();
   try {
-    await ensureAccountTrackerManagementColumns();
     await connection.beginTransaction();
 
     const [existingResult]: any = await connection.execute(
