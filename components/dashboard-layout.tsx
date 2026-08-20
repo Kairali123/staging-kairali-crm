@@ -532,7 +532,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <img src="/kairali-logo-green-leaf-ayurveda.png" alt="Kairali Logo" className="lg:hidden w-8 h-8 p-0.5 bg-white rounded-full shadow flex-shrink-0" />
           <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
             <div className="flex flex-1 items-center gap-4">
-              <h2 className="text-[0.75rem] leading-tight sm:text-lg font-semibold text-gray-900 max-w-[110px] sm:max-w-none">{user?.company}<br className="sm:hidden" /><span className="sm:hidden"> </span> Kairali CRM System</h2>
+              <h2 className="text-[0.75rem] leading-tight sm:text-lg font-semibold text-gray-900 max-w-[110px] sm:max-w-none"><br className="sm:hidden" /><span className="sm:hidden"> </span> Kairali CRM System</h2>
               <div className="hidden md:flex flex-1 max-w-md relative">
                 <div className="relative w-full">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
