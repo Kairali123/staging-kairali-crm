@@ -111,8 +111,8 @@ export default function GuestRequirementVerificationModal({ open = true, onClose
         setIsSubmitting(true);
         const timestamp = saved?.timestamp || getTimestamp(); // captured at click time or use existing
         onSubmit({
-            doctorAssignedToClient: saved?.doctorAssignedToClient || user?.name || ASSIGNED_DOCTOR,
-            email: saved?.email || user?.email || AUTO_EMAIL,
+            doctorAssignedToClient: saved?.doctorAssignedToClient || ASSIGNED_DOCTOR,
+            email: saved?.email || AUTO_EMAIL,
             timestamp,
             doctorAssignStatus,
             changedDoctor: doctorAssignStatus === "change" ? changedDoctor : "",
@@ -207,32 +207,33 @@ export default function GuestRequirementVerificationModal({ open = true, onClose
                     </button>
                 </div>
 
+                {/* Body */}
                 <div style={{ padding: "20px 24px 24px", overflowY: "auto", flex: 1 }}>
-                    {/* Locked Guest & Booking Details - always grey, never editable */}
+                    {/* Readonly: Guest & Booking Details */}
                     <div
                         style={{
                             background: "#f9fafb",
                             border: "1px solid #e5e7eb",
                             borderRadius: 14,
-                            padding: "16px 18px",
-                            marginBottom: 20,
+                            padding: "16px 18px 18px",
+                            marginBottom: 16,
                         }}
                     >
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <FileText size={15} color="#374151" />
-                                <p style={{ fontSize: 13, fontWeight: 700, color: "#374151", margin: 0, letterSpacing: 0.3 }}>
+                                <FileText size={15} color="#4b5563" />
+                                <span style={{ fontSize: 13, fontWeight: 700, color: "#374151", letterSpacing: 0.3 }}>
                                     GUEST & BOOKING DETAILS
-                                </p>
+                                </span>
                             </div>
                             <span
                                 style={{
                                     fontSize: 11,
-                                    fontWeight: 700,
+                                    fontWeight: 600,
                                     color: "#6b7280",
-                                    background: "#eef2f7",
-                                    borderRadius: 20,
-                                    padding: "3px 10px",
+                                    background: "#e5e7eb",
+                                    padding: "2px 8px",
+                                    borderRadius: 6,
                                 }}
                             >
                                 Read Only
@@ -293,11 +294,11 @@ export default function GuestRequirementVerificationModal({ open = true, onClose
                         <div style={{ ...row2, marginBottom: 16 }}>
                             <div>
                                 <Label required>Doctor Assigned to the Client</Label>
-                                <div style={readonlyBoxStyle}>{saved?.doctorAssignedToClient || user?.name || ASSIGNED_DOCTOR}</div>
+                                <div style={readonlyBoxStyle}>{saved?.doctorAssignedToClient || ASSIGNED_DOCTOR}</div>
                             </div>
                             <div>
                                 <Label required>E-Mail</Label>
-                                <div style={readonlyBoxStyle}>{saved?.email || user?.email || AUTO_EMAIL}</div>
+                                <div style={readonlyBoxStyle}>{saved?.email || AUTO_EMAIL}</div>
                             </div>
                         </div>
 

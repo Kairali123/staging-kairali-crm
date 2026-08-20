@@ -1221,9 +1221,11 @@ export default function UsersPage() {
             open={isCreateDialogOpen}
             onClose={() => setIsCreateDialogOpen(false)}
             onSubmit={async (d) => {
-              await createUser(d)
-              fetchUsersFromDb()
-              setIsCreateDialogOpen(false)
+              try {
+                await createUser(d)
+                await fetchUsersFromDb()
+                setIsCreateDialogOpen(false)
+              } catch {}
             }}
           />
         )}
@@ -1235,9 +1237,11 @@ export default function UsersPage() {
             open={!!editingUser}
             onClose={() => setEditingUser(null)}
             onSubmit={async (d) => {
-              await updateUser(editingUser.id, d)
-              fetchUsersFromDb()
-              setEditingUser(null)
+              try {
+                await updateUser(editingUser.id, d)
+                await fetchUsersFromDb()
+                setEditingUser(null)
+              } catch {}
             }}
           />
         )}
@@ -2019,8 +2023,8 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
               </div>
             </div>
 
-            {/* ROW 2: 4-Columns Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* ROW 2: 5-Columns Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
               <div className="space-y-1.5">
                 <Label className={L}>
                   Division / Company <span className="text-rose-500">*</span>
@@ -2098,6 +2102,20 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
                     <SelectItem value="morning">Morning Shift</SelectItem>
                     <SelectItem value="evening">Evening Shift</SelectItem>
                     <SelectItem value="night">Night Shift</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className={L}>Account Status <span className="text-rose-500">*</span></Label>
+                <Select
+                  value={formData.isActive ? "active" : "inactive"}
+                  onValueChange={(v: string) => setFormData(p => ({ ...p, isActive: v === "active" }))}
+                >
+                  <SelectTrigger className={F}><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active" className="text-emerald-700 font-semibold">● Active Account</SelectItem>
+                    <SelectItem value="inactive" className="text-rose-700 font-semibold">● Inactive Account</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

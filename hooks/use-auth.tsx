@@ -822,33 +822,73 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const createUser = async (userData: Omit<User, "id">) => {
-    const newUser: User = {
-      ...userData,
-      id: Date.now().toString(),
-      permissions: Array.isArray(userData.permissions) ? userData.permissions : [],
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(userData),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to create user in database")
+      }
+      const newUser: User = {
+        ...userData,
+        id: String(data.id || Date.now().toString()),
+        permissions: Array.isArray(userData.permissions) ? userData.permissions : [],
+      }
+      setUsers((prev) => [...prev, newUser])
+      toast.success(data.message || "User created and saved to database successfully")
+    } catch (err: any) {
+      toast.error(err.message || "Failed to create user")
+      throw err
     }
-    setUsers((prev) => [...prev, newUser])
-    toast.success("User created successfully")
   }
 
   const updateUser = async (id: string, userData: Partial<User>) => {
-    setUsers((prev) =>
-      prev.map((u) =>
-        u.id === id
-          ? {
-            ...u,
-            ...userData,
-            permissions: Array.isArray(userData.permissions) ? userData.permissions : u.permissions
-          }
-          : u,
-      ),
-    )
-    toast.success("User updated successfully")
+    try {
+      const res = await fetch(`/api/admin/users/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(userData),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to update user in database")
+      }
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === id
+            ? {
+                ...u,
+                ...userData,
+                permissions: Array.isArray(userData.permissions) ? userData.permissions : u.permissions,
+              }
+            : u,
+        ),
+      )
+      toast.success(data.message || "User updated and saved to database successfully")
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update user in database")
+      throw err
+    }
   }
 
   const deleteUser = async (id: string) => {
-    setUsers((prev) => prev.filter((u) => u.id !== id))
-    toast.success("User deleted successfully")
+    try {
+      const res = await fetch(`/api/admin/users/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to delete user from database")
+      }
+      setUsers((prev) => prev.filter((u) => u.id !== id))
+      toast.success(data.message || "User deleted successfully from database")
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete user")
+      throw err
+    }
   }
 
   return (

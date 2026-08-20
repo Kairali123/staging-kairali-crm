@@ -7,20 +7,50 @@ import {
     hasPermission,
 } from "@/lib/authz";
 
+import { getPool } from "@/lib/db";
+
 const GAS_BOOKINGS_URL =
     "https://script.google.com/macros/s/AKfycbzG_1Y18INn0l0mNXoPtNH50s24WjpGq_WIGeKkUcWcMWELSvcK7cHmxtS4iUmiel6eqA/exec";
 
 const UPSTREAM_TIMEOUT_MS = 20_000;
 
-// Always hit GAS fresh — this data changes as new bookings/checkouts happen.
+// Force dynamic execution — bookings/calls change frequently
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
-    let timeout: ReturnType<typeof setTimeout> | undefined;
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+function formatDMYDate(val: any): string {
+    if (!val) return "";
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return String(val);
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = MONTH_NAMES[d.getMonth()];
+    const year = d.getFullYear();
+    return `${day}-${month}-${year}`;
+}
+
+function formatTimestamp(val: any): string {
+    if (!val) return "";
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return String(val);
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = MONTH_NAMES[d.getMonth()];
+    const year = d.getFullYear();
+    return `${day}-${month}-${year}`;
+}
+
+function isLockedDate(plannedVal: any): boolean {
+    if (!plannedVal) return true;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const planned = new Date(plannedVal);
+    planned.setHours(0, 0, 0, 0);
+    if (isNaN(planned.getTime())) return true;
+    return today < planned;
+}
+
+export async function GET(req: NextRequest) {
     try {
-        // Same cookie, same verifier as before; the result keeps "no cookie" and
-        // "cookie did not verify" apart so the two 401 bodies below stay distinct.
         const session = getSessionUserResult(req);
 
         if (session.state === "missing") {
@@ -38,21 +68,6 @@ export async function GET(req: NextRequest) {
         }
 
         const user = session.user;
-
-        // Determine if user is admin or has explicit read access.
-        //
-        // Same rule as before, now read through `lib/authz.ts`. `hasAnyPermission`
-        // honours the `all` wildcard, so it covers the `includes("all")` test it
-        // replaces, and `'raw'` is this route's own uncoerced
-        // `["super_admin","admin"].includes(user.role)` — plain `Admin` is still
-        // rejected here exactly as it always was. Nothing folds (matrix M9, D1).
-        //
-        // HARDENING, intentional: `getPermissions` returns `[]` for a session whose
-        // `permissions` field is missing or not an array, and drops non-string
-        // elements. The old direct `user.permissions.includes(...)` /
-        // `.some(p => p.startsWith(...))` threw on those payloads and the catch below
-        // turned them into a 500 "Could not reach the booking source". They now take
-        // the deterministic 403 an unusable permission set deserves.
         const permissions = getPermissions(user);
 
         const isAdmin =
@@ -71,55 +86,277 @@ export async function GET(req: NextRequest) {
             );
         }
 
-        // One controller/timer spans the fetch AND the full JSON body read, so a
-        // slow upstream can't stall the response past the 20s budget after
-        // headers arrive.
-        const controller = new AbortController();
-        timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+        const pool = await getPool();
 
-        const res = await fetch(GAS_BOOKINGS_URL, {
-            method: "GET",
-            cache: "no-store",
-            signal: controller.signal,
+        // 1. Fetch all master bookings from KTAHV_CRR_Process_FMS
+        const [processRows] = await pool.query<any[]>(
+            `SELECT * FROM KTAHV_CRR_Process_FMS ORDER BY id DESC`
+        );
+
+        if (!processRows || processRows.length === 0) {
+            return NextResponse.json({ success: true, count: 0, data: [] });
+        }
+
+        // 2. Collect UIDs and booking_ids
+        const uids = processRows.map((r) => r.uid).filter(Boolean);
+        const bookingIds = processRows.map((r) => r.booking_id).filter(Boolean);
+
+        // 3. Batch fetch CrrCalling records
+        let callingRows: any[] = [];
+        if (uids.length > 0) {
+            const [cRows] = await pool.query<any[]>(
+                `SELECT * FROM KTAHV_CRR_Calling_FMS WHERE uid IN (?) ORDER BY id ASC`,
+                [uids]
+            );
+            callingRows = cRows || [];
+        }
+
+        // 4. Batch fetch GuestTracker records
+        let trackerMap = new Map<string, any>();
+        if (bookingIds.length > 0) {
+            const [tRows] = await pool.query<any[]>(
+                `SELECT * FROM ktahv_guest_tracker WHERE booking_id IN (?)`,
+                [bookingIds]
+            );
+            if (tRows) {
+                for (const tr of tRows) {
+                    if (tr.booking_id) trackerMap.set(String(tr.booking_id).trim(), tr);
+                }
+            }
+        }
+
+        // 5. Batch fetch CheckinMaster records
+        let checkinMap = new Map<string, any>();
+        if (bookingIds.length > 0) {
+            const [chkRows] = await pool.query<any[]>(
+                `SELECT * FROM ktahv_checkinmasterfms WHERE reservation_id IN (?)`,
+                [bookingIds]
+            );
+            if (chkRows) {
+                for (const chk of chkRows) {
+                    if (chk.reservation_id) checkinMap.set(String(chk.reservation_id).trim(), chk);
+                }
+            }
+        }
+
+        // Build CrrCalling index by UID -> list of calling rows
+        const callingIndex = new Map<string, any[]>();
+        for (const row of callingRows) {
+            if (!row.uid) continue;
+            const k = String(row.uid).trim();
+            if (!callingIndex.has(k)) {
+                callingIndex.set(k, []);
+            }
+            callingIndex.get(k)!.push(row);
+        }
+
+        // Helper to find latest CrrCalling row matching a purpose keyword
+        const findCallingRow = (uid: string, keyword: string) => {
+            const list = callingIndex.get(String(uid).trim());
+            if (!list) return null;
+            const kw = keyword.toLowerCase();
+            let found: any = null;
+            for (const item of list) {
+                if (String(item.call_purpose || "").toLowerCase().includes(kw)) {
+                    found = item; // last match wins
+                }
+            }
+            return found;
+        };
+
+        // 6. Map each processRow into the standard GasBookingRow payload
+        const data = processRows.map((row: any, idx: number) => {
+            const uid = String(row.uid || "").trim();
+            const bookingId = String(row.booking_id || "").trim();
+            const tracker = trackerMap.get(bookingId);
+            const checkin = checkinMap.get(bookingId);
+
+            // Stage 1: Arrival Welcome on Pickup (CrrCalling / CrrProcess)
+            const c1 = findCallingRow(uid, "Welcome Call");
+            const s1Planned = row.stage1_call_date_planned || c1?.planned || null;
+            const s1Actual = c1?.actual || row.stage1_task_done_actual || null;
+            const s1Saved = c1 ? {
+                outcomeAchieved: c1.did_they_achieve_the_outcomes_planned_for || "",
+                outcomeRemarks: c1.outcome_remarks || "",
+                status: c1.status || "",
+                notDoneRemarks: c1.remarks_why_not_done_or_close || "",
+                followupDate: c1.followup_date_for_the_welcome_call ? formatDMYDate(c1.followup_date_for_the_welcome_call) : "",
+                doer: c1.doer || "",
+            } : null;
+
+            // Stage 2: Guest Request & Complaint Mgmt
+            const s2Planned = row.stage2_planned || null;
+            const s2Actual = row.stage2_actual || null;
+            const s2Saved = (row.stage2_remarks || row.stage2_status) ? {
+                doerRemarks: row.stage2_remarks || "",
+                doer: "",
+            } : null;
+
+            // Stage 3: Next Visit Planning & Confirmation (Doctor: Dr. Rahul R from stage9_doer)
+            const s3Planned = row.stage2_planned || row.stage1_actual_for_next_visit_date || null;
+            const s3Actual = row.stage2_actual || null;
+            const s3Saved = row.stage2_next_visit_date ? {
+                nextVisitDate: formatDMYDate(row.stage2_next_visit_date),
+                remarks: row.stage2_remarks || "",
+                followupDate: "",
+                doer: row.stage9_doer || "",
+            } : null;
+
+            // Stage 4: Guest Feedback & Outcome Confirmation
+            const s4Planned = row.stage4_rating_request_call_date_planned || null;
+            const s4Actual = row.stage4_task_done_actual || null;
+            const s4Saved = row.stage4_remarks_for_next_visit_date ? {
+                doerRemarks: row.stage4_remarks_for_next_visit_date || "",
+                doer: "",
+            } : null;
+
+            // Stage 5: Online Rating & Review Request (CrrCalling / CrrProcess Col AU)
+            const c5 = findCallingRow(uid, "Call after landing, seek feedback") || findCallingRow(uid, "rating");
+            const s5Planned = row.stage4_rating_request_call_date_planned || c5?.planned || null;
+            const s5Actual = c5?.actual || row.stage4_task_done_actual || null;
+            const s5Saved = c5 ? {
+                ratingStatus: c5.rating_status || "",
+                notGivenRemarks: c5.remarks_why_not_given_ratings || "",
+                proofFileName: c5.proof_of_ratings || "",
+                outcomeAchieved: c5.did_they_achieve_the_outcomes_planned_for || "",
+                outcomeRemarks: c5.outcome_remarks || "",
+                status: c5.status || "",
+                notDoneRemarks: c5.remarks_why_not_done_or_close || "",
+                followupDate: c5.followup_date_for_the_rating ? formatDMYDate(c5.followup_date_for_the_rating) : "",
+                doer: c5.doer || "",
+            } : null;
+
+            // Stage 6: Safe Return Confirmation (CrrCalling / CrrProcess Col BA)
+            const c6 = findCallingRow(uid, "Time to Return") || findCallingRow(uid, "Safe Return");
+            const s6Planned = row.stage6_call_date_planned || c6?.planned || null;
+            const s6Actual = c6?.actual || row.stage6_task_done_actual || null;
+            const s6Saved = c6 ? {
+                stayFeedback: c6.stay_feedback || "",
+                outcomeAchieved: c6.did_they_achieve_the_outcomes_planned_for || "",
+                outcomeRemarks: c6.outcome_remarks || "",
+                status: c6.status || "",
+                notDoneRemarks: c6.remarks_why_not_done_or_close || "",
+                doer: c6.doer || "",
+            } : null;
+
+            // Stage 7: Result Tracking & Health Progress Check (CrrCalling / CrrProcess Col BQ)
+            const c7 = findCallingRow(uid, "Result and Progress Since Return") || findCallingRow(uid, "Result and Progress");
+            const s7Planned = row.stage7_call_date_planned || c7?.planned || null;
+            const s7Actual = c7?.actual || row.stage7_task_done_actual || null;
+            const s7Saved = c7 ? {
+                outcomeAchieved: c7.did_they_achieve_the_outcomes_planned_for || "",
+                outcomeRemarks: c7.outcome_remarks || "",
+                status: c7.status || "",
+                notDoneRemarks: c7.remarks_why_not_done_or_close || "",
+                followupDate: c7.followup_date_for_the_result_and_progress ? formatDMYDate(c7.followup_date_for_the_result_and_progress) : "",
+                doer: c7.doer || "",
+            } : null;
+
+            // Stage 8: Referral Collection & Lead Generation (CrrProcess)
+            const s8Planned = row.stage8_call_date_planned || null;
+            const s8Actual = row.stage8_task_done_actual || null;
+            const s8Saved = row.stage7_referals_details ? {
+                doerStatus: "Yes",
+                doerRemarks: row.stage7_referals_details || "",
+                doer: "",
+            } : null;
+
+            // Stage 9: Driver Assignment – Arrival Pickup (Guest Tracker)
+            const s9Planned = tracker?.arrival_planned || row.stage1_call_date_planned || null;
+            const s9Actual = tracker?.arrival_actual || null;
+            const s9Saved = tracker ? {
+                pickupRequired: tracker.arrival_doer_name ? "Yes" : "",
+                driverName: tracker.arrival_doer_name || "",
+                driverContact: "",
+                pickupFrom: "",
+                pickupDate: tracker.arrival_planned ? formatDMYDate(tracker.arrival_planned) : "",
+                pickupTime: "",
+                remarks: tracker.client_arrival_data_upload_remarks || "",
+                assignedBy: tracker.arrival_doer_name || "",
+                doer: tracker.arrival_doer_name || "",
+            } : null;
+
+            // Stage 10: Driver Assignment – Departure Drop (Guest Tracker)
+            const s10Planned = tracker?.departure_planned || row.stage6_call_date_planned || null;
+            const s10Actual = tracker?.departure_actual || null;
+            const s10Saved = tracker ? {
+                dropRequired: tracker.departure_doer_name ? "Yes" : "",
+                driverName: tracker.departure_doer_name || "",
+                driverContact: "",
+                dropTo: "",
+                dropDate: tracker.departure_planned ? formatDMYDate(tracker.departure_planned) : "",
+                dropTime: "",
+                remarks: tracker.client_departure_data_upload_remarks || "",
+                assignedBy: tracker.departure_doer_name || "",
+                doer: tracker.departure_doer_name || "",
+            } : null;
+
+            // Stage 11: Guest Requirement Verification (Guest Tracker)
+            const s11Planned = tracker?.arrival_planned || row.check_in_date || null;
+            const s11Completed = Boolean(tracker?.doctor_assigned_to_the_client);
+            const s11Actual = s11Completed ? tracker?.updated_at || tracker?.created_at || null : null;
+            const s11Saved = tracker ? {
+                doctorAssignedToClient: tracker.doctor_assigned_to_the_client || "",
+                email: tracker.email_address || "",
+                timestamp: tracker.doctor_assigned_to_the_client ? formatTimestamp(tracker.updated_at) : "",
+                doctorAssignStatus: tracker.doctor_assigned_to_the_client ? "Assigned" : "",
+                changedDoctor: "",
+                remarks: tracker.special_request_or_requirement_noted || "",
+                doer: tracker.doctor_assigned_to_the_client || "",
+            } : null;
+
+            const stages = [
+                { stage: 1, available: true, locked: isLockedDate(s1Planned), plannedDate: formatDMYDate(s1Planned), completed: Boolean(s1Actual), actualDate: formatDMYDate(s1Actual), savedData: s1Saved },
+                { stage: 2, available: true, locked: isLockedDate(s2Planned), plannedDate: formatDMYDate(s2Planned), completed: Boolean(s2Actual), actualDate: formatDMYDate(s2Actual), savedData: s2Saved },
+                { stage: 3, available: true, locked: isLockedDate(s3Planned), plannedDate: formatDMYDate(s3Planned), completed: Boolean(s3Actual), actualDate: formatDMYDate(s3Actual), savedData: s3Saved },
+                { stage: 4, available: true, locked: isLockedDate(s4Planned), plannedDate: formatDMYDate(s4Planned), completed: Boolean(s4Actual), actualDate: formatDMYDate(s4Actual), savedData: s4Saved },
+                { stage: 5, available: true, locked: isLockedDate(s5Planned), plannedDate: formatDMYDate(s5Planned), completed: Boolean(s5Actual), actualDate: formatDMYDate(s5Actual), savedData: s5Saved },
+                { stage: 6, available: true, locked: isLockedDate(s6Planned), plannedDate: formatDMYDate(s6Planned), completed: Boolean(s6Actual), actualDate: formatDMYDate(s6Actual), savedData: s6Saved },
+                { stage: 7, available: true, locked: isLockedDate(s7Planned), plannedDate: formatDMYDate(s7Planned), completed: Boolean(s7Actual), actualDate: formatDMYDate(s7Actual), savedData: s7Saved },
+                { stage: 8, available: true, locked: isLockedDate(s8Planned), plannedDate: formatDMYDate(s8Planned), completed: Boolean(s8Actual), actualDate: formatDMYDate(s8Actual), savedData: s8Saved },
+                { stage: 9, available: true, locked: isLockedDate(s9Planned), plannedDate: formatDMYDate(s9Planned), completed: Boolean(s9Actual), actualDate: formatDMYDate(s9Actual), savedData: s9Saved },
+                { stage: 10, available: true, locked: isLockedDate(s10Planned), plannedDate: formatDMYDate(s10Planned), completed: Boolean(s10Actual), actualDate: formatDMYDate(s10Actual), savedData: s10Saved },
+                { stage: 11, available: true, locked: isLockedDate(s11Planned), plannedDate: formatDMYDate(s11Planned), completed: Boolean(s11Actual), actualDate: formatDMYDate(s11Actual), savedData: s11Saved },
+            ];
+
+            return {
+                timestamp: formatTimestamp(row.timestamp),
+                checkInDate: formatDMYDate(row.check_in_date),
+                checkOutDate: formatDMYDate(row.check_out_date),
+                clientName: row.client_name || "",
+                gender: row.gender || "",
+                mobile: row.mobile || "",
+                country: row.country || "",
+                countryCode: row.country_code || "",
+                email: row.email || "",
+                bookingId: row.booking_id || "",
+                daysOfStay: row.days_of_stay || 0,
+                packageName: row.programme_package_name || row.package_type || "",
+                roomType: row.room_type || "",
+                roomCategory: row.room_category || (checkin?.room_no ? `Room ${checkin.room_no}` : ""),
+                invoiceAmount: Number(row.invoice_amount) || 0,
+                bookingTakenBy: row.booking_taken_by || "",
+                mid: row.mid || "",
+                bookingNo: row.booking_no || "",
+                bookingUrl: row.booking_url || "",
+                uid: row.uid || "",
+                bookingStatus: row.booking_status || "Confirmed",
+                rowNumber: row.id || idx + 1,
+                stages,
+            };
         });
 
-        if (!res.ok) {
-            console.error("[crr-calling/bookings] GAS returned status", res.status);
-            return NextResponse.json(
-                { success: false, error: `Booking source returned ${res.status}` },
-                { status: 502 }
-            );
-        }
-
-        const json = await res.json();
-
-        if (!json?.success) {
-            // Status only — the upstream payload may carry booking data.
-            console.error("[crr-calling/bookings] GAS payload missing success:true");
-            return NextResponse.json(
-                { success: false, error: "Booking source returned an unexpected payload" },
-                { status: 502 }
-            );
-        }
-
-        // Pass the { success, count, data } shape straight through.
-        return NextResponse.json(json);
+        return NextResponse.json({
+            success: true,
+            count: data.length,
+            data,
+        });
     } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") {
-            console.error("[crr-calling/bookings] GAS request timed out");
-            return NextResponse.json(
-                { success: false, error: "Booking source timed out" },
-                { status: 504 }
-            );
-        }
-
-        console.error("[crr-calling/bookings] fetch failed");
+        console.error("[crr-calling/bookings] MySQL fetch failed:", err);
         return NextResponse.json(
-            { success: false, error: "Could not reach the booking source" },
+            { success: false, error: err instanceof Error ? err.message : "Failed to fetch bookings from database" },
             { status: 500 }
         );
-    } finally {
-        if (timeout) clearTimeout(timeout);
     }
 }
 
