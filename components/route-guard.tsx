@@ -113,13 +113,19 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
     // Allow access to login page for all users
     if (pathname === '/') return
 
+    // If user is not authenticated (or just logged out), redirect to login page '/', not access-denied
+    if (!user) {
+      router.replace('/')
+      return
+    }
+
     // Super admin has unrestricted access to all pages
     if (user?.role === 'super_admin' || user?.permissions?.includes('all')) return
 
     // If route is restricted, redirect to access-denied unless user has the permission
     if (isRestricted(pathname)) {
       const requiredPermission = pagePermissions[pathname]
-      if (!requiredPermission || !user || !hasPermission(requiredPermission)) {
+      if (!requiredPermission || !hasPermission(requiredPermission)) {
         router.replace('/access-denied')
         return
       }
@@ -129,7 +135,7 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
     const requiredPermission = pagePermissions[pathname]
 
     // If route requires permission and user doesn't have it, redirect to access-denied
-    if (requiredPermission && user && !hasPermission(requiredPermission)) {
+    if (requiredPermission && !hasPermission(requiredPermission)) {
       router.replace('/access-denied')
     }
   }, [user, isLoading, pathname, hasPermission, router])

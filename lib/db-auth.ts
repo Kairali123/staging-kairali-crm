@@ -149,11 +149,13 @@ export async function authenticateUserFromDb(
     const pool = await getPool()
     const cleanEmail = email.trim().toLowerCase()
 
-    // 1. Query user by email_id
-    const [rows]: any = await pool.query(
-      `SELECT * FROM userlogin WHERE LOWER(TRIM(email_id)) = ? LIMIT 1`,
-      [cleanEmail]
-    )
+    // 1. Query user and role-permissions concurrently in parallel
+    const [userResult, permResult]: any = await Promise.all([
+      pool.query(`SELECT * FROM userlogin WHERE LOWER(TRIM(email_id)) = ? LIMIT 1`, [cleanEmail]),
+      pool.query(`SELECT * FROM user_role_permissions WHERE LOWER(TRIM(email)) = ? LIMIT 1`, [cleanEmail]),
+    ])
+
+    const rows = userResult[0]
 
     if (!Array.isArray(rows) || rows.length === 0) {
       return { success: false, message: 'Invalid credentials or inactive account' }
@@ -183,8 +185,14 @@ export async function authenticateUserFromDb(
       }
     }
 
-    // 5. Fetch permissions from user_role_permissions table
-    let permissions = await getUserPermissionsFromDb(cleanEmail, userRole)
+    // 5. Fetch permissions from the parallel query or fallback
+    let permissions: string[] = []
+    const permRows = permResult[0]
+    if (Array.isArray(permRows) && permRows.length > 0) {
+      permissions = parsePermissionsFromDbRow(permRows[0])
+    } else {
+      permissions = await getUserPermissionsFromDb(cleanEmail, userRole)
+    }
 
     // Merge any direct permissions from userlogin.permission column if present
     if (userRow.permission && typeof userRow.permission === 'string') {

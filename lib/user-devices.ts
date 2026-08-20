@@ -94,9 +94,13 @@ export async function ensureSecurityTables(): Promise<void> {
  * Resolves any user identifier (id, unique_key, user_id, email_id) to the canonical userlogin.id string
  */
 export async function resolveCanonicalUserId(userIdOrEmail: string): Promise<string> {
+  const clean = String(userIdOrEmail).trim()
+  if (!clean) return ''
+  // If already a canonical numeric ID, return immediately without a DB round-trip
+  if (/^\d+$/.test(clean)) return clean
+
   try {
     const pool = await getPool()
-    const clean = String(userIdOrEmail).trim()
     const [rows]: any = await pool.query(
       `SELECT id FROM userlogin WHERE id = ? OR unique_key = ? OR user_id = ? OR LOWER(TRIM(email_id)) = ? LIMIT 1`,
       [clean, clean, clean, clean.toLowerCase()]
@@ -107,7 +111,7 @@ export async function resolveCanonicalUserId(userIdOrEmail: string): Promise<str
   } catch (err) {
     console.warn('[user-devices] resolveCanonicalUserId error:', err)
   }
-  return String(userIdOrEmail).trim()
+  return clean
 }
 
 /**
@@ -129,7 +133,6 @@ export async function registerOrValidateDevice(
   registeredCount?: number
   devices?: UserDevice[]
 }> {
-  await ensureSecurityTables()
   const pool = await getPool()
   const cleanUserId = await resolveCanonicalUserId(rawUserId)
   const cleanDeviceId = String(deviceId).trim()
@@ -138,14 +141,17 @@ export async function registerOrValidateDevice(
     return { allowed: false, reason: 'INVALID_DEVICE' }
   }
 
-  // 1. Check if this device is already registered for this user
-  const [existingRows]: any = await pool.query(
-    `SELECT * FROM user_devices WHERE (user_id = ? OR user_id = ?) AND device_id = ? LIMIT 1`,
-    [cleanUserId, String(rawUserId).trim(), cleanDeviceId]
+  // 1. Fetch currently registered devices in one query
+  const [rows]: any = await pool.query(
+    `SELECT * FROM user_devices WHERE user_id = ? OR user_id = ? ORDER BY last_used_at DESC`,
+    [cleanUserId, String(rawUserId).trim()]
   )
 
-  if (Array.isArray(existingRows) && existingRows.length > 0) {
-    // Update metadata and last used time
+  const currentDevices: any[] = Array.isArray(rows) ? rows : []
+  const existingDevice = currentDevices.find((d) => String(d.device_id).trim() === cleanDeviceId)
+
+  // If this device is already registered, update its metadata
+  if (existingDevice) {
     await pool.query(
       `UPDATE user_devices 
        SET user_id = ?,
@@ -161,21 +167,13 @@ export async function registerOrValidateDevice(
         meta.platform || null,
         meta.browser || null,
         meta.ipAddress || null,
-        existingRows[0].id,
+        existingDevice.id,
       ]
     )
     return { allowed: true }
   }
 
-  // 2. Count currently registered devices
-  const [countRows]: any = await pool.query(
-    `SELECT * FROM user_devices WHERE user_id = ? OR user_id = ? ORDER BY last_used_at DESC`,
-    [cleanUserId, String(rawUserId).trim()]
-  )
-
-  const currentDevices: any[] = Array.isArray(countRows) ? countRows : []
-
-  // If already at 2 devices, reject 3rd new device
+  // If already at 2 registered devices, reject 3rd new device
   if (currentDevices.length >= 2) {
     const formattedDevices: UserDevice[] = currentDevices.map((d) => ({
       id: d.id,
@@ -197,7 +195,7 @@ export async function registerOrValidateDevice(
     }
   }
 
-  // 3. Register the new device (1st or 2nd device)
+  // Register the new device (1st or 2nd device)
   const newId = randomUUID()
   await pool.query(
     `INSERT INTO user_devices (id, user_id, device_id, device_name, platform, browser, ip_address)
@@ -226,7 +224,6 @@ export async function registerOrValidateDevice(
  * Gets all registered devices for a given user.
  */
 export async function getRegisteredDevices(rawUserId: string): Promise<UserDevice[]> {
-  await ensureSecurityTables()
   const pool = await getPool()
   const cleanUserId = await resolveCanonicalUserId(rawUserId)
 
@@ -254,7 +251,6 @@ export async function getRegisteredDevices(rawUserId: string): Promise<UserDevic
  * Removes a registered device and terminates its active sessions.
  */
 export async function removeRegisteredDevice(rawUserId: string, deviceId: string): Promise<boolean> {
-  await ensureSecurityTables()
   const pool = await getPool()
   const cleanUserId = await resolveCanonicalUserId(rawUserId)
   const cleanDeviceId = String(deviceId).trim()
@@ -306,7 +302,6 @@ export async function createActiveSession(
     ipAddress?: string
   }
 ): Promise<void> {
-  await ensureSecurityTables()
   const pool = await getPool()
   const cleanUserId = await resolveCanonicalUserId(rawUserId)
   const cleanDeviceId = String(deviceId).trim()
@@ -382,7 +377,6 @@ export async function validateSessionState(
   reason?: string
 }> {
   try {
-    await ensureSecurityTables()
     const pool = await getPool()
     const cleanUserId = await resolveCanonicalUserId(rawUserId)
 
@@ -482,7 +476,6 @@ export async function autoEnsureActiveSessionAndDevice(
  * Gets all active sessions for a user (for Super Admin dashboard).
  */
 export async function getUserSessions(rawUserId: string): Promise<UserSessionRecord[]> {
-  await ensureSecurityTables()
   const pool = await getPool()
   const cleanUserId = await resolveCanonicalUserId(rawUserId)
 
@@ -511,7 +504,6 @@ export async function getUserSessions(rawUserId: string): Promise<UserSessionRec
  * Revokes a single session by sid.
  */
 export async function revokeSessionBySid(sid: string, reason = 'REMOTE_LOGOUT'): Promise<boolean> {
-  await ensureSecurityTables()
   const pool = await getPool()
 
   const [rows]: any = await pool.query(`SELECT user_id, device_id FROM user_sessions WHERE sid = ? LIMIT 1`, [sid])
@@ -538,7 +530,6 @@ export async function revokeSessionBySid(sid: string, reason = 'REMOTE_LOGOUT'):
  * Revokes all sessions for a specific user (e.g. on Super Admin force logout or password reset).
  */
 export async function revokeAllSessionsForUser(rawUserId: string, reason = 'FORCE_LOGOUT_ALL'): Promise<void> {
-  await ensureSecurityTables()
   const pool = await getPool()
   const cleanUserId = await resolveCanonicalUserId(rawUserId)
 
@@ -572,7 +563,6 @@ export async function adminResetUserPassword(
   rawUserId: string,
   newPasswordPlain: string
 ): Promise<{ success: boolean; message?: string }> {
-  await ensureSecurityTables()
   const pool = await getPool()
   const clean = String(rawUserId).trim()
 
