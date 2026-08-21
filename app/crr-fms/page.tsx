@@ -378,7 +378,7 @@ export default function CRRCallingProcessPage() {
 
     const [search, setSearch] = useState("");
     const [stageFilter, setStageFilter] = useState<string>("all");
-    const [statusFilter, setStatusFilter] = useState<string>("pending");
+    const [statusFilter, setStatusFilter] = useState<string>("all");
     const [respFilter, setRespFilter] = useState<string>("all");
 
     useEffect(() => {
@@ -396,7 +396,7 @@ export default function CRRCallingProcessPage() {
             }
         }
     }, [user, isAdminRole]);
-    const [dateRangeFilter, setDateRangeFilter] = useState<DateRangePreset>("thisWeek");
+    const [dateRangeFilter, setDateRangeFilter] = useState<DateRangePreset>("all");
 
     // ---------- Sorting for the main data table ----------
     const [sortColumn, setSortColumn] = useState<string | null>(null);
@@ -562,8 +562,6 @@ export default function CRRCallingProcessPage() {
     const clientStickyWidth = isMobile ? 150 : STICKY_COLS.client.width;
     const frozenColsSticky = !isMobile;
 
-    const effectiveStatusFilter = role === "user" ? "pending" : statusFilter;
-
     /* ---------- DATE RANGE BOUNDS ---------- */
     const { start: dateRangeStart, end: dateRangeEnd } = useMemo(
         () => getDateRangeBounds(dateRangeFilter, customStartDate, customEndDate),
@@ -574,23 +572,20 @@ export default function CRRCallingProcessPage() {
     const rows = useMemo(() => {
         const s = search.toLowerCase();
         const filtered = guests.filter((g) => {
-            /* ---------- WORK-QUEUE FILTER (restricted users only) ----------
-               A stage-user only sees a booking when at least ONE of their
-               permitted stages is actionable right now — i.e. that stage is
-               unlocked (planned date reached) AND still pending. Locked or
-               already-completed permitted stages hide the row. Admins
-               (role === "admin") and users with zero stage permissions
-               (pure viewers) are unaffected and see everything. */
-            if (role === "user" && permittedStages.length > 0) {
-                // Cancelled bookings are auto-closed — nothing actionable on them.
-                if (isBookingCancelled(g)) return false;
-                const hasActionableStage = permittedStages.some(
-                    (n) => !isStageLocked(g, n) && g.stageStatus[n - 1] !== "Complete"
-                );
-                if (!hasActionableStage) return false;
+            if (s) {
+                const matches =
+                    String(g.name ?? "").toLowerCase().includes(s) ||
+                    String(g.bookingId ?? "").toLowerCase().includes(s) ||
+                    String(g.mobile ?? "").toLowerCase().includes(s) ||
+                    String(g.bookingNo ?? "").toLowerCase().includes(s) ||
+                    String(g.uid ?? "").toLowerCase().includes(s) ||
+                    String(g.id ?? "").toLowerCase().includes(s) ||
+                    String(g.email ?? "").toLowerCase().includes(s) ||
+                    String(g.room ?? "").toLowerCase().includes(s) ||
+                    String(g.programme ?? "").toLowerCase().includes(s) ||
+                    String(g.takenBy ?? "").toLowerCase().includes(s);
+                if (!matches) return false;
             }
-
-            if (s && !(String(g.name ?? "").toLowerCase().includes(s) || String(g.bookingId ?? "").toLowerCase().includes(s) || String(g.mobile ?? "").toLowerCase().includes(s))) return false;
             if (respFilter !== "all" && !g.allComplete) {
                 const stageIdx = g.currentStage - 1;
                 if (stageIdx < 0 || stageIdx >= STAGES.length || STAGES[stageIdx].resp !== respFilter) {
@@ -598,14 +593,20 @@ export default function CRRCallingProcessPage() {
                 }
             }
             if (stageFilter !== "all") {
-                // A cancelled booking is auto-closed — it is not "at" any stage,
-                // so it must not appear (or be counted) under a stage filter.
                 if (isBookingCancelled(g)) return false;
-                if (String(g.currentStage) !== stageFilter && !(g.allComplete && stageFilter === "8")) return false;
+                const stageNum = Number(stageFilter);
+                if (statusFilter === "complete") {
+                    if (g.stageStatus[stageNum - 1] !== "Complete") return false;
+                } else if (statusFilter === "pending") {
+                    if (g.stageStatus[stageNum - 1] !== "Pending") return false;
+                } else {
+                    if (String(g.currentStage) !== stageFilter && g.stageStatus[stageNum - 1] !== "Complete" && !(g.allComplete && stageFilter === "8")) return false;
+                }
+            } else {
+                if (statusFilter === "pending" && (g.allComplete || isBookingCancelled(g))) return false;
+                if (statusFilter === "complete" && (!g.allComplete || isBookingCancelled(g))) return false;
+                if (statusFilter === "cancelled" && !isBookingCancelled(g)) return false;
             }
-            if (effectiveStatusFilter === "pending" && (g.allComplete || isBookingCancelled(g))) return false; // cancelled = auto-closed, never pending
-            if (effectiveStatusFilter === "complete" && (!g.allComplete || isBookingCancelled(g))) return false;
-            if (effectiveStatusFilter === "cancelled" && !isBookingCancelled(g)) return false;
             if (dateRangeStart || dateRangeEnd) {
                 const gDate = parseDMY(g.timestamp);
                 if (isNaN(gDate.getTime())) return false; // no valid date → can't match an active range
@@ -625,12 +626,12 @@ export default function CRRCallingProcessPage() {
         }
 
         return filtered;
-    }, [guests, role, permittedStages, search, stageFilter, respFilter, effectiveStatusFilter, dateRangeStart, dateRangeEnd, sortColumn, sortDirection]);
+    }, [guests, search, stageFilter, respFilter, statusFilter, dateRangeStart, dateRangeEnd, sortColumn, sortDirection]);
 
     // Reset to page 1 whenever the filtered result set changes shape
     useEffect(() => {
         setCurrentPage(1);
-    }, [search, stageFilter, respFilter, effectiveStatusFilter, dateRangeFilter, customStartDate, customEndDate, itemsPerPage]);
+    }, [search, stageFilter, respFilter, statusFilter, dateRangeFilter, customStartDate, customEndDate, itemsPerPage]);
 
     // Safety net: Radix Dropdown -> Dialog transitions can occasionally leave
     // `pointer-events: none` stuck on <body>, freezing the whole page (clicks
@@ -732,6 +733,9 @@ export default function CRRCallingProcessPage() {
     const isStagePending = (g: Guest, stageNo: number) =>
         !isBookingCancelled(g) && g.stageStatus[stageNo - 1] === "Pending";
 
+    const isStageCompleted = (g: Guest, stageNo: number) =>
+        !isBookingCancelled(g) && g.stageStatus[stageNo - 1] === "Complete";
+
     const pendingCount =
         stageFilter !== "all"
             ? rows.filter((g) => isStagePending(g, Number(stageFilter))).length
@@ -755,7 +759,10 @@ export default function CRRCallingProcessPage() {
             }).length;
     // Cancelled bookings are auto-closed journeys — they are excluded from
     // Pending, so they must be counted here or Total ≠ Pending + Completed.
-    const completeCount = rows.filter((g) => g.allComplete && !isBookingCancelled(g)).length;
+    const completeCount =
+        stageFilter !== "all"
+            ? rows.filter((g) => isStageCompleted(g, Number(stageFilter))).length
+            : rows.filter((g) => g.allComplete && !isBookingCancelled(g)).length;
     const cancelledCount = rows.filter((g) => isBookingCancelled(g)).length;
     const referralsGeneratedCount = rows.filter(
         (g) => g.referralCollection?.referralTakenStatus === "Yes"
@@ -896,7 +903,7 @@ export default function CRRCallingProcessPage() {
         setDateRangeFilter("all");
         setCustomStartDate("");
         setCustomEndDate("");
-        if (role === "admin") setStatusFilter("all");
+        setStatusFilter("all");
         setCurrentPage(1);
     }
 
@@ -1661,11 +1668,10 @@ export default function CRRCallingProcessPage() {
                                 </div>
 
                                 {/* Stage Status */}
-                                <div className="flex flex-col gap-1.5" style={{ opacity: role === "user" ? 0.5 : 1 }}>
+                                <div className="flex flex-col gap-1.5">
                                     <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Stage Status</label>
                                     <Select
-                                        value={role === "user" ? "pending" : statusFilter}
-                                        disabled={role === "user"}
+                                        value={statusFilter}
                                         onValueChange={setStatusFilter}
                                     >
                                         <SelectTrigger className="h-10 bg-white border-slate-200 w-full">
@@ -1898,7 +1904,7 @@ export default function CRRCallingProcessPage() {
                                 <div>
                                     <h3 className="text-sm sm:text-base font-semibold text-slate-900 leading-tight">Guest Follow-up Records</h3>
                                     <p className="text-xs text-slate-500 mt-0.5">
-                                        {role === "user" ? "Showing only your pending stage actions — completed rows are hidden" : "Click Open to view the stage action form"}
+                                        Showing guest follow-up records — click Open to view stage actions
                                     </p>
                                 </div>
                             </div>

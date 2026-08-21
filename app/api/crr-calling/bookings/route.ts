@@ -10,9 +10,10 @@ import {
 import { getPool } from "@/lib/db";
 
 const GAS_BOOKINGS_URL =
-    "https://script.google.com/macros/s/AKfycbzG_1Y18INn0l0mNXoPtNH50s24WjpGq_WIGeKkUcWcMWELSvcK7cHmxtS4iUmiel6eqA/exec";
+    // "https://script.google.com/macros/s/AKfycbzG_1Y18INn0l0mNXoPtNH50s24WjpGq_WIGeKkUcWcMWELSvcK7cHmxtS4iUmiel6eqA/exec";
+    "https://script.google.com/macros/s/AKfycbyzNdrB-UocDp-Q_RX8rXBs3Bnm4D6nfGa1BN2BEvbRWQ5fSbrYkSirFT0iQujRFRBmcw/exec";
 
-const UPSTREAM_TIMEOUT_MS = 20_000;
+const UPSTREAM_TIMEOUT_MS = 90_000;
 
 // Force dynamic execution — bookings/calls change frequently
 export const dynamic = "force-dynamic";
@@ -448,36 +449,108 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // One controller/timer spans the fetch AND the full JSON body read, so a
+        console.log("[crr-calling/bookings] POST incoming request:", {
+            bookingId,
+            stage,
+            fields,
+            adminOverride: isAdminRole,
+        });
+
+        // One controller/timer spans the fetch AND the full body read, so a
         // slow upstream can't stall the response past the 20s budget after
         // headers arrive.
         const controller = new AbortController();
         timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
 
+        const sharedSecret = process.env.GAS_SHARED_SECRET;
+
         const res = await fetch(GAS_BOOKINGS_URL, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
             body: JSON.stringify({
                 bookingId,
                 stage,
                 fields,
                 adminOverride: isAdminRole,
+                sharedSecret,
             }),
             signal: controller.signal,
         });
 
-        const json = await res.json();
+        const responseText = await res.text();
+        console.log("[crr-calling/bookings] GAS response status:", res.status);
+        console.log("[crr-calling/bookings] GAS raw response:", responseText);
 
-        if (!res.ok || !json?.success) {
-            // Status only — never the upstream body or its error text.
-            console.error("[crr-calling/bookings] GAS save failed with status", res.status);
+        let json: any = null;
+        try {
+            json = JSON.parse(responseText);
+        } catch {
+            json = null;
+        }
+
+        // 1. If GAS returned a JSON object
+        if (json && typeof json === "object") {
+            const isFailure =
+                json.success === false ||
+                json.status === "ERROR" ||
+                json.status === "FAIL" ||
+                json.status === "error" ||
+                json.status === "fail";
+
+            if (!res.ok || isFailure) {
+                console.error("[crr-calling/bookings] GAS save failed with status", res.status, "body:", json);
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: json?.error || json?.message || "Booking source rejected the save",
+                        details: json,
+                    },
+                    { status: res.ok ? 502 : res.status }
+                );
+            }
+
+            return NextResponse.json({
+                success: true,
+                ...json,
+            });
+        }
+
+        // 2. If GAS returned an HTML Error page
+        if (responseText.includes("<title>Error</title>") || responseText.includes("class=\"errorMessage\"")) {
+            // Extract the user-friendly error message from Google's error page
+            const match = responseText.match(/<div[^>]*style="text-align:center[^"]*"[^>]*>([\s\S]*?)<\/div>/i) ||
+                responseText.match(/<div[^>]*class="errorMessage"[^>]*>([\s\S]*?)<\/div>/i) ||
+                responseText.match(/<div[^>]*>([^<]{15,400})<\/div>/i);
+            const cleanError = match ? match[1].replace(/<[^>]+>/g, "").trim() : "Booking source execution error";
+
+            console.error("[crr-calling/bookings] GAS execution error:", cleanError);
             return NextResponse.json(
-                { success: false, error: "Booking source rejected the save" },
+                {
+                    success: false,
+                    error: cleanError,
+                },
                 { status: 502 }
             );
         }
 
-        return NextResponse.json(json);
+        // 3. Non-OK status from GAS
+        if (!res.ok) {
+            console.error("[crr-calling/bookings] GAS returned non-OK status:", res.status, responseText.slice(0, 200));
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: `Booking source returned error status ${res.status}`,
+                },
+                { status: res.status }
+            );
+        }
+
+        // 4. Successful output
+        console.log("[crr-calling/bookings] GAS saved successfully (HTTP 200)");
+        return NextResponse.json({
+            success: true,
+            message: "Stage data saved successfully",
+        });
     } catch (err) {
         if (err instanceof Error && err.name === "AbortError") {
             console.error("[crr-calling/bookings] POST timed out");
@@ -487,9 +560,13 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        console.error("[crr-calling/bookings] POST failed");
+        console.error("[crr-calling/bookings] POST failed with error:", err);
         return NextResponse.json(
-            { success: false, error: "Could not save stage data" },
+            {
+                success: false,
+                error: "Could not save stage data",
+                details: err instanceof Error ? err.message : String(err),
+            },
             { status: 500 }
         );
     } finally {

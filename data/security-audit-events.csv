@@ -1,0 +1,11 @@
+eventId,timestamp,action,outcome,actor,target,sourceIp,correlationId,context
+"9aad0427-c3c2-400c-9ec6-807bdb72a41c","2026-08-21T06:43:39.015Z","auth.logout","success","dme@kairali.com","","::1","cb0df747-fcc1-4fd7-a53a-d5546c04f2bc","{""sessionRevoked"":true}"
+"ccf79d5f-84fb-488c-bf08-716181e500bf","2026-08-21T06:43:48.295Z","auth.login","failure","test@kairali.com","","::1","0ff7028b-efc1-4bc2-83c8-56b4e7756967","{""reason"":""invalid_credentials""}"
+"5f6f8fcd-1d49-4e85-82e6-4eb00e2c6763","2026-08-21T06:43:54.444Z","auth.login","success","test@kairali.com","","::1","478a596e-db80-49e8-bf9e-e6f3966943e0","{}"
+"405f6cbd-b0fa-4075-b887-826f625c49aa","2026-08-21T08:49:27.116Z","auth.logout","success","test@kairali.com","","::1","c88a2bc4-dbb2-449b-bbfc-141a417644e2","{""sessionRevoked"":true}"
+"8e33ff0b-48d1-4782-baab-847d475933b0","2026-08-21T08:49:30.579Z","api.access_denied","denied","","/api/auth/me","::1","927eb59f-ebaf-491b-bd36-1f183876e25f","{""reason"":""missing_session""}"
+"a4286772-b094-4360-a34e-70f4605e5c69","2026-08-21T08:49:32.401Z","auth.login","success","test@kairali.com","","::1","03af81c3-cff1-405d-b82b-698e89927f78","{}"
+"d61f415b-7f4a-4b12-ae66-3835d15c5f66","2026-08-21T08:52:20.019Z","auth.logout","success","test@kairali.com","","::1","93d3c403-ac05-4261-a7bc-f3296da46b40","{""sessionRevoked"":true}"
+"b6bb763f-5086-48e4-9a32-96f9f1b00b39","2026-08-21T08:52:21.013Z","api.access_denied","denied","","/api/auth/me","::1","94944ecd-ea14-402f-be10-add66f1480d6","{""reason"":""missing_session""}"
+"daa67d63-0989-45c0-8d4f-47d62de365c9","2026-08-21T08:52:23.453Z","api.access_denied","denied","","/api/auth/me","::1","f959e6a2-b616-4be8-8590-ed1959162d5f","{""reason"":""missing_session""}"
+"69a1ec0b-b292-41e5-b632-6560a6d759cd","2026-08-21T08:52:24.481Z","auth.login","success","test@kairali.com","","::1","5d9c61e7-5146-454c-8356-149966d033c3","{}"
