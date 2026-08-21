@@ -126,6 +126,7 @@ export async function registerOrValidateDevice(
     platform?: string
     browser?: string
     ipAddress?: string
+    role?: string
   }
 ): Promise<{
   allowed: boolean
@@ -139,6 +140,24 @@ export async function registerOrValidateDevice(
 
   if (!cleanUserId || !cleanDeviceId) {
     return { allowed: false, reason: 'INVALID_DEVICE' }
+  }
+
+  // Check if user is super_admin (exempt from 2-device limit)
+  let isSuperAdmin = String(meta?.role || '').toLowerCase().trim() === 'super_admin'
+  if (!isSuperAdmin) {
+    try {
+      const [roleRows]: any = await pool.query(
+        `SELECT role FROM userlogin WHERE id = ? OR unique_key = ? OR user_id = ? LIMIT 1`,
+        [cleanUserId, cleanUserId, cleanUserId]
+      )
+      if (Array.isArray(roleRows) && roleRows.length > 0) {
+        if (String(roleRows[0]?.role || '').toLowerCase().trim() === 'super_admin') {
+          isSuperAdmin = true
+        }
+      }
+    } catch {
+      // Ignore query error and proceed with standard check
+    }
   }
 
   // 1. Fetch currently registered devices in one query
@@ -173,8 +192,8 @@ export async function registerOrValidateDevice(
     return { allowed: true }
   }
 
-  // If already at 2 registered devices, reject 3rd new device
-  if (currentDevices.length >= 2) {
+  // If already at 2 registered devices and NOT super_admin, reject 3rd new device
+  if (!isSuperAdmin && currentDevices.length >= 2) {
     const formattedDevices: UserDevice[] = currentDevices.map((d) => ({
       id: d.id,
       userId: d.user_id,
@@ -195,7 +214,7 @@ export async function registerOrValidateDevice(
     }
   }
 
-  // Register the new device (1st or 2nd device)
+  // Register the new device (1st, 2nd device, or unlimited for super_admin)
   const newId = randomUUID()
   await pool.query(
     `INSERT INTO user_devices (id, user_id, device_id, device_name, platform, browser, ip_address)
@@ -436,6 +455,7 @@ export async function autoEnsureActiveSessionAndDevice(
     platform?: string
     browser?: string
     ipAddress?: string
+    role?: string
   }
 ): Promise<void> {
   try {
@@ -480,7 +500,7 @@ export async function getUserSessions(rawUserId: string): Promise<UserSessionRec
   const cleanUserId = await resolveCanonicalUserId(rawUserId)
 
   const [rows]: any = await pool.query(
-    `SELECT * FROM user_sessions WHERE user_id = ? OR user_id = ? ORDER BY last_heartbeat DESC LIMIT 20`,
+    `SELECT * FROM user_sessions WHERE (user_id = ? OR user_id = ?) AND is_active = 1 ORDER BY last_heartbeat DESC LIMIT 20`,
     [cleanUserId, String(rawUserId).trim()]
   )
 

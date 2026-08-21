@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
     platform: userAgent.includes('Mac') ? 'macOS' : userAgent.includes('Windows') ? 'Windows' : 'Web',
     browser: userAgent.includes('Chrome') ? 'Chrome' : userAgent.includes('Firefox') ? 'Firefox' : 'Browser',
     ipAddress: sourceIp,
+    role: payload.user.role,
   })
 
   let isStreamOpen = true

@@ -148,6 +148,7 @@ export async function POST(req: NextRequest) {
     platform: effectivePlatform,
     browser: effectiveBrowser,
     ipAddress: sourceIp,
+    role: finalUser.role,
   })
 
   if (!deviceCheck.allowed) {

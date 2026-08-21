@@ -356,7 +356,7 @@ export default function UsersPage() {
       u.department,
       u.company,
       u.phone || "",
-      `${u.registeredDevicesCount || 0}/2`,
+      u.role === "super_admin" ? `${u.registeredDevicesCount || 0} (Unlimited)` : `${u.registeredDevicesCount || 0}/2`,
       u.isActive ? "Active" : "Inactive",
     ])
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n")
@@ -984,16 +984,23 @@ export default function UsersPage() {
                           {/* Devices Count */}
                           <td className="px-4 py-3 text-center border-r border-slate-200 whitespace-nowrap">
                             <div className="flex items-center justify-center gap-1.5">
-                              <span
-                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md font-mono text-xs font-semibold border ${
-                                  (u.registeredDevicesCount || 0) >= 2
-                                    ? "bg-amber-50 text-amber-800 border-amber-300"
-                                    : "bg-blue-50 text-blue-700 border-blue-200"
-                                }`}
-                              >
-                                <Smartphone className="h-3 w-3" />
-                                {u.registeredDevicesCount || 0}/2
-                              </span>
+                              {u.role === "super_admin" ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md font-mono text-xs font-semibold border bg-purple-50 text-purple-700 border-purple-200">
+                                  <Smartphone className="h-3 w-3" />
+                                  {u.registeredDevicesCount || 0} (Unlimited)
+                                </span>
+                              ) : (
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md font-mono text-xs font-semibold border ${
+                                    (u.registeredDevicesCount || 0) >= 2
+                                      ? "bg-amber-50 text-amber-800 border-amber-300"
+                                      : "bg-blue-50 text-blue-700 border-blue-200"
+                                  }`}
+                                >
+                                  <Smartphone className="h-3 w-3" />
+                                  {u.registeredDevicesCount || 0}/2
+                                </span>
+                              )}
                               {u.activeSessionsCount ? (
                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-[10px] font-bold text-emerald-800 animate-pulse">
                                   ● 1 active
@@ -1439,7 +1446,7 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
             }`}
           >
             <Smartphone className="h-3.5 w-3.5" />
-            Registered Devices ({devices.length}/2)
+            Registered Devices ({devices.length}{user.role === "super_admin" ? " - Unlimited" : "/2"})
           </button>
           <button
             onClick={() => setActiveTab("sessions")}
@@ -1517,10 +1524,18 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
             <div className="space-y-4">
               <div className="flex items-center justify-between text-xs text-gray-600 bg-gray-50 p-3 rounded-xl border">
                 <span>
-                  Registered: <strong>{devices.length} of 2 max devices</strong>
+                  {user.role === "super_admin" ? (
+                    <>Registered: <strong>{devices.length} devices</strong></>
+                  ) : (
+                    <>Registered: <strong>{devices.length} of 2 max devices</strong></>
+                  )}
                 </span>
                 <span className="text-[11px] text-muted-foreground">
-                  (Users cannot log in from a 3rd device unless one is removed)
+                  {user.role === "super_admin" ? (
+                    "(Super Admin has unlimited device access)"
+                  ) : (
+                    "(Users cannot log in from a 3rd device unless one is removed)"
+                  )}
                 </span>
               </div>
 
@@ -1584,39 +1599,27 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
 
               {isLoadingDetails ? (
                 <div className="py-8 text-center text-xs text-gray-500">Loading sessions…</div>
-              ) : sessions.length === 0 ? (
+              ) : sessions.filter((s) => s.isActive).length === 0 ? (
                 <div className="py-8 text-center text-xs text-gray-500">No active session records found.</div>
               ) : (
                 <div className="space-y-2.5">
-                  {sessions.map((s) => (
+                  {sessions
+                    .filter((s) => s.isActive)
+                    .map((s) => (
                     <div
                       key={s.sid}
-                      className={`flex items-center justify-between p-3.5 rounded-xl border ${
-                        s.isActive ? "bg-white border-emerald-200 shadow-xs" : "bg-gray-50 border-gray-200 opacity-60"
-                      }`}
+                      className="flex items-center justify-between p-3.5 rounded-xl border bg-white border-emerald-200 shadow-xs"
                     >
                       <div className="flex items-center gap-3">
-                        <div
-                          className={`flex h-9 w-9 items-center justify-center rounded-lg ${
-                            s.isActive
-                              ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
-                              : "bg-gray-100 text-gray-400"
-                          }`}
-                        >
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200">
                           <Laptop className="h-4 w-4" />
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
                             <p className="text-xs font-semibold text-gray-900">{s.deviceName || "Session"}</p>
-                            {s.isActive ? (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
-                                <CheckCircle2 className="h-2.5 w-2.5" /> ACTIVE NOW
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-700">
-                                {s.revokedReason || "Terminated"}
-                              </span>
-                            )}
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                              <CheckCircle2 className="h-2.5 w-2.5" /> ACTIVE NOW
+                            </span>
                           </div>
                           <p className="text-[11px] text-gray-500 font-mono">
                             IP: {s.ipAddress || "N/A"} • Platform: {s.platform || "Web"}
@@ -1627,16 +1630,14 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
                         </div>
                       </div>
 
-                      {s.isActive && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleRevokeSid(s.sid)}
-                          className="h-8 text-xs text-rose-600 border-rose-200 hover:bg-rose-50 gap-1 rounded-lg"
-                        >
-                          <LogOut className="h-3 w-3" /> Log out
-                        </Button>
-                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleRevokeSid(s.sid)}
+                        className="h-8 text-xs text-rose-600 border-rose-200 hover:bg-rose-50 gap-1 rounded-lg"
+                      >
+                        <LogOut className="h-3 w-3" /> Log out
+                      </Button>
                     </div>
                   ))}
                 </div>
