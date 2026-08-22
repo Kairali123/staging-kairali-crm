@@ -63,7 +63,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getUserPermissionsFromDb } from '@/lib/db-auth'
-import { createSessionCookieValue, verifySessionCookieValue } from '@/lib/session'
+import { createSessionCookieValue, verifySessionCookieValue, readVerifiedSessionPayload } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
 
