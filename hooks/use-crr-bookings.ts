@@ -95,10 +95,18 @@ function stageOf(stages: StageInfo[], stageNo: number): StageInfo | undefined {
     return stages.find((s) => s.stage === stageNo);
 }
 
+// Metadata keys that do not represent user-submitted stage data
+const METADATA_KEYS = new Set(["doer", "assignedBy"]);
+
 // True when the saved row has at least one non-empty value —
 // used to decide whether legacy per-stage objects should be hydrated.
 function hasAnyValue(saved: Record<string, string> | null): boolean {
-    return !!saved && Object.values(saved).some((v) => v.trim() !== "");
+    return !!saved && Object.entries(saved).some(([k, v]) => !METADATA_KEYS.has(k) && v.trim() !== "");
+}
+
+function hasActualSavedContent(saved: Record<string, string | number | null> | null | undefined): boolean {
+    if (!saved) return false;
+    return Object.entries(saved).some(([k, v]) => !METADATA_KEYS.has(k) && v !== null && String(v).trim() !== "");
 }
 
 function mapRow(row: GasBookingRow): Guest {
@@ -122,7 +130,7 @@ function mapRow(row: GasBookingRow): Guest {
         const info = stageOf(stages, i + 1);
         if (info?.completed) return "Complete";
         // Two-phase stages (1, 5, 6, 7): if submitted/saved data exists but to_show is false -> "Processing"
-        const hasSavedContent = info?.savedData && Object.values(info.savedData).some(v => v !== null && v !== "" && v !== undefined);
+        const hasSavedContent = hasActualSavedContent(info?.savedData);
         if (TO_SHOW_STAGES.has(i + 1) && (info?.submitted || info?.actualDate || hasSavedContent) && !info?.toShow) {
             return "Processing";
         }
@@ -149,12 +157,12 @@ function mapRow(row: GasBookingRow): Guest {
 
     const arrivalWelcome = hasAnyValue(s1)
         ? ({
-              outcomeAchieved: s1!.outcomeAchieved,
-              outcomeRemarks: s1!.outcomeRemarks,
-              status: s1!.status,
-              notDoneRemarks: s1!.notDoneRemarks,
-              followupDate: s1!.followupDate,
-          } as Guest["arrivalWelcome"])
+            outcomeAchieved: s1!.outcomeAchieved,
+            outcomeRemarks: s1!.outcomeRemarks,
+            status: s1!.status,
+            notDoneRemarks: s1!.notDoneRemarks,
+            followupDate: s1!.followupDate,
+        } as Guest["arrivalWelcome"])
         : undefined;
 
     const guestFeedback = hasAnyValue(s4)
@@ -167,44 +175,44 @@ function mapRow(row: GasBookingRow): Guest {
     // (ratingStatus BF / notGivenRemarks BG / proofFileName BH).
     const ratingRequest = hasAnyValue(s5)
         ? ({
-              ratingStatus: s5!.ratingStatus,
-              notGivenRemarks: s5!.notGivenRemarks,
-              proofFileName: s5!.proofFileName,
-              outcomeRemarks: s5!.outcomeRemarks,
-              status: s5!.status,
-              notDoneRemarks: s5!.notDoneRemarks,
-              followupDate: s5!.followupDate,
-              outcomeAchieved: s5!.outcomeAchieved,
-          } as Guest["ratingRequest"])
+            ratingStatus: s5!.ratingStatus,
+            notGivenRemarks: s5!.notGivenRemarks,
+            proofFileName: s5!.proofFileName,
+            outcomeRemarks: s5!.outcomeRemarks,
+            status: s5!.status,
+            notDoneRemarks: s5!.notDoneRemarks,
+            followupDate: s5!.followupDate,
+            outcomeAchieved: s5!.outcomeAchieved,
+        } as Guest["ratingRequest"])
         : undefined;
 
     const safeReturn = hasAnyValue(s6)
         ? ({
-              stayFeedback: s6!.stayFeedback,
-              outcomeAchieved: s6!.outcomeAchieved,
-              outcomeRemarks: s6!.outcomeRemarks,
-              status: s6!.status,
-              notDoneRemarks: s6!.notDoneRemarks,
-              followupDate: "", // no followupDate column for stage 6 (confirmed intentional)
-          } as Guest["safeReturn"])
+            stayFeedback: s6!.stayFeedback,
+            outcomeAchieved: s6!.outcomeAchieved,
+            outcomeRemarks: s6!.outcomeRemarks,
+            status: s6!.status,
+            notDoneRemarks: s6!.notDoneRemarks,
+            followupDate: "", // no followupDate column for stage 6 (confirmed intentional)
+        } as Guest["safeReturn"])
         : undefined;
 
     const resultProgress = hasAnyValue(s7)
         ? ({
-              outcomeAchieved: s7!.outcomeAchieved,
-              outcomeRemarks: s7!.outcomeRemarks,
-              status: s7!.status,
-              notDoneRemarks: s7!.notDoneRemarks,
-              followupDate: s7!.followupDate,
-          } as Guest["resultProgress"])
+            outcomeAchieved: s7!.outcomeAchieved,
+            outcomeRemarks: s7!.outcomeRemarks,
+            status: s7!.status,
+            notDoneRemarks: s7!.notDoneRemarks,
+            followupDate: s7!.followupDate,
+        } as Guest["resultProgress"])
         : undefined;
 
     // GAS stage-8 key for "Referral Taken Status" is doerStatus.
     const referralCollection = hasAnyValue(s8)
         ? ({
-              referralTakenStatus: s8!.doerStatus,
-              doerRemarks: s8!.doerRemarks,
-          } as Guest["referralCollection"])
+            referralTakenStatus: s8!.doerStatus,
+            doerRemarks: s8!.doerRemarks,
+        } as Guest["referralCollection"])
         : undefined;
 
     const s9 = normalizeSavedData(stageOf(stages, 9)?.savedData); // Driver Assignment Arrival
@@ -213,39 +221,39 @@ function mapRow(row: GasBookingRow): Guest {
 
     const driverAssignmentArrival = hasAnyValue(s9)
         ? ({
-              pickupRequired: s9!.pickupRequired,
-              driverName: s9!.driverName,
-              driverContact: s9!.driverContact,
-              pickupFrom: s9!.pickupFrom,
-              pickupDate: s9!.pickupDate,
-              pickupTime: s9!.pickupTime,
-              remarks: s9!.remarks,
-              assignedBy: s9!.assignedBy,
-          } as Guest["driverAssignmentArrival"])
+            pickupRequired: s9!.pickupRequired,
+            driverName: s9!.driverName,
+            driverContact: s9!.driverContact,
+            pickupFrom: s9!.pickupFrom,
+            pickupDate: s9!.pickupDate,
+            pickupTime: s9!.pickupTime,
+            remarks: s9!.remarks,
+            assignedBy: s9!.assignedBy,
+        } as Guest["driverAssignmentArrival"])
         : undefined;
 
     const driverAssignmentDeparture = hasAnyValue(s10)
         ? ({
-              dropRequired: s10!.dropRequired,
-              driverName: s10!.driverName,
-              driverContact: s10!.driverContact,
-              dropTo: s10!.dropTo,
-              dropDate: s10!.dropDate,
-              dropTime: s10!.dropTime,
-              remarks: s10!.remarks,
-              assignedBy: s10!.assignedBy,
-          } as Guest["driverAssignmentDeparture"])
+            dropRequired: s10!.dropRequired,
+            driverName: s10!.driverName,
+            driverContact: s10!.driverContact,
+            dropTo: s10!.dropTo,
+            dropDate: s10!.dropDate,
+            dropTime: s10!.dropTime,
+            remarks: s10!.remarks,
+            assignedBy: s10!.assignedBy,
+        } as Guest["driverAssignmentDeparture"])
         : undefined;
 
     const guestRequirementVerification = hasAnyValue(s11)
         ? ({
-              doctorAssignedToClient: s11!.doctorAssignedToClient,
-              email: s11!.email,
-              timestamp: s11!.timestamp,
-              doctorAssignStatus: s11!.doctorAssignStatus,
-              changedDoctor: s11!.changedDoctor,
-              remarks: s11!.remarks,
-          } as Guest["guestRequirementVerification"])
+            doctorAssignedToClient: s11!.doctorAssignedToClient,
+            email: s11!.email,
+            timestamp: s11!.timestamp,
+            doctorAssignStatus: s11!.doctorAssignStatus,
+            changedDoctor: s11!.changedDoctor,
+            remarks: s11!.remarks,
+        } as Guest["guestRequirementVerification"])
         : undefined;
 
     return {

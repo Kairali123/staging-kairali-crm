@@ -1,5 +1,5 @@
 import React, { useState, type ReactNode } from "react";
-import { ClipboardCheck, X, FileText, Send } from "lucide-react";
+import { ClipboardCheck, X, FileText, Send, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import type { Guest } from "@/types/crr";
 
@@ -390,8 +390,17 @@ export default function GuestRequirementVerificationModal({ open = true, onClose
                                 cursor: (isValid() && !disabled && !isSubmitting) ? "pointer" : "not-allowed",
                             }}
                         >
-                            <Send size={15} />
-                            Submit
+                            {isSubmitting ? (
+                                <>
+                                    <Loader2 size={15} className="animate-spin" />
+                                    Submitting...
+                                </>
+                            ) : (
+                                <>
+                                    <Send size={15} />
+                                    Submit
+                                </>
+                            )}
                         </button>
                     </div>
                 </div>

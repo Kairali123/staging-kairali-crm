@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import DriverAssignmentArrivalModal from "@/components/Driverassignmentarrivalmodal";
 import DriverAssignmentDepartureModal from "@/components/Driverassignmentdeparturemodal";
 import GuestRequirementVerificationModal from "@/components/Guestrequirementverificationmodal";
+import CrrStageViewModal from "@/components/CrrStageViewModal";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +57,8 @@ import {
     ArrowUpDown,
     ArrowUp,
     ArrowDown,
+    Loader2,
+    Eye,
 } from "lucide-react";
 
 /* =========================================================
@@ -558,6 +561,16 @@ export default function CRRCallingProcessPage() {
     const [activeDetailsAction, setActiveDetailsAction] = useState<string>("");
 
     const activeDetailsGuest = guests.find((g) => g.id === activeDetailsGuestId) || null;
+
+    // "View All Stages / Stage Data" modal
+    const [activeViewGuestId, setActiveViewGuestId] = useState<number | null>(null);
+    const [activeViewStage, setActiveViewStage] = useState<number>(1);
+    const activeViewGuest = guests.find((g) => g.id === activeViewGuestId) || null;
+
+    function openViewModal(guestId: number, stageNo = 1) {
+        setActiveViewStage(stageNo);
+        setActiveViewGuestId(guestId);
+    }
 
     // On narrow screens only "Client Details" stays frozen; Timestamp and
     // Booking ID scroll away normally so the table isn't ~480px of dead,
@@ -2220,33 +2233,43 @@ export default function CRRCallingProcessPage() {
                                                                 </div>
                                                             </td>
                                                             {/* Action */}
-                                                            <td className="px-4 py-3.5 text-center">
-                                                                <DropdownMenu>
-                                                                    <DropdownMenuTrigger asChild>
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="sm"
-                                                                            className="h-8 w-8 p-0 mx-auto text-slate-500 hover:text-slate-700 hover:bg-slate-100"
-                                                                        >
-                                                                            <MoreVertical className="h-4 w-4" />
-                                                                        </Button>
-                                                                    </DropdownMenuTrigger>
-                                                                    <DropdownMenuContent align="end" className="w-56">
-                                                                        {isBookingCancelled(g) && !isAdminRole ? (
-                                                                            /* (3) Cancelled booking — guest journey auto-closed, no stage actions.
-                                                                               Admin tier bypasses this and keeps full access below. */
-                                                                            <DropdownMenuItem disabled className="gap-2.5 text-red-500 opacity-70">
-                                                                                <AlertTriangle className="h-4 w-4" />
-                                                                                Booking cancelled — stages closed
-                                                                            </DropdownMenuItem>
-                                                                        ) : (
-                                                                            <>
-                                                                                {isBookingCancelled(g) && (
-                                                                                    <DropdownMenuItem disabled className="gap-2.5 text-red-500 opacity-70">
-                                                                                        <AlertTriangle className="h-4 w-4" />
-                                                                                        Cancelled booking — admin access
-                                                                                    </DropdownMenuItem>
-                                                                                )}
+                                                            <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                                                                <div className="flex items-center justify-center gap-1.5">
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="sm"
+                                                                        onClick={() => openViewModal(g.id, 1)}
+                                                                        title="View All Stages & Filled Data"
+                                                                        className="h-8 px-2.5 text-xs font-semibold text-blue-600 bg-blue-50/80 border-blue-200 hover:bg-blue-100 hover:text-blue-700 hover:border-blue-300 rounded-lg flex items-center gap-1 shadow-xs"
+                                                                    >
+                                                                        <Eye className="h-3.5 w-3.5 text-blue-600" />
+                                                                        <span>View</span>
+                                                                    </Button>
+                                                                    <DropdownMenu>
+                                                                        <DropdownMenuTrigger asChild>
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="sm"
+                                                                                className="h-8 w-8 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg"
+                                                                            >
+                                                                                <MoreVertical className="h-4 w-4" />
+                                                                            </Button>
+                                                                        </DropdownMenuTrigger>
+                                                                        <DropdownMenuContent align="end" className="w-60">
+                                                                            {isBookingCancelled(g) && !isAdminRole ? (
+                                                                                /* (3) Cancelled booking — guest journey auto-closed, no stage actions for non-admin. */
+                                                                                <DropdownMenuItem disabled className="gap-2.5 text-red-500 opacity-70">
+                                                                                    <AlertTriangle className="h-4 w-4" />
+                                                                                    Booking cancelled — stages closed
+                                                                                </DropdownMenuItem>
+                                                                            ) : (
+                                                                                <>
+                                                                                    {isBookingCancelled(g) && (
+                                                                                        <div className="px-2.5 py-1.5 mx-1 my-1 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-md flex items-center gap-1.5">
+                                                                                            <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                                                                                            <span>Cancelled Booking (Admin Access)</span>
+                                                                                        </div>
+                                                                                    )}
                                                                                 {/* (4) Visibility = permission (no permission → hidden entirely).
                                                                             Disabled = stage locked (planned date not reached).
                                                                             Completed stages stay clickable to view saved data read-only. */}
@@ -2427,7 +2450,7 @@ export default function CRRCallingProcessPage() {
                                                                                     </DropdownMenuItem>
                                                                                 )}
 
-                                                                                {/* Pure viewer (no stage permissions at all) */}
+                                                                                 {/* Pure viewer (no stage permissions at all) */}
                                                                                 {![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].some((n) => canEditStage(n)) && (
                                                                                     <DropdownMenuItem disabled className="gap-2.5 text-slate-400 opacity-70">
                                                                                         No stage permissions assigned
@@ -2437,6 +2460,7 @@ export default function CRRCallingProcessPage() {
                                                                         )}
                                                                     </DropdownMenuContent>
                                                                 </DropdownMenu>
+                                                                </div>
                                                             </td>
                                                         </tr>
                                                     );
@@ -2872,7 +2896,7 @@ export default function CRRCallingProcessPage() {
                         </div>
 
                         <DialogFooter className="bg-slate-50 border-t border-slate-200 px-6 py-4 flex justify-end gap-2 sticky bottom-0">
-                            <Button variant="outline" size="sm" onClick={closeModal} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
+                            <Button variant="outline" size="sm" onClick={closeModal} disabled={modalSaved} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
                                 Cancel
                             </Button>
                             {!isStage3Complete && !activeGuest.allComplete && (
@@ -2880,9 +2904,16 @@ export default function CRRCallingProcessPage() {
                                     size="sm"
                                     onClick={saveModal}
                                     disabled={(!isAdminRole && isStageLocked(activeGuest, 3)) || isStage3Complete || activeGuest.allComplete || !isModalFormComplete() || modalSaved}
-                                    className="w-28 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="min-w-[112px] bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                                 >
-                                    Save
+                                    {modalSaved ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            Saving...
+                                        </>
+                                    ) : (
+                                        "Save"
+                                    )}
                                 </Button>
                             )}
                         </DialogFooter>
@@ -3088,7 +3119,7 @@ export default function CRRCallingProcessPage() {
                         </div>
 
                         <DialogFooter className="bg-slate-50 border-t border-slate-200 px-6 py-4 flex justify-end gap-2 sticky bottom-0 z-10">
-                            <Button variant="outline" size="sm" onClick={closeSafeReturnModal} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
+                            <Button variant="outline" size="sm" onClick={closeSafeReturnModal} disabled={safeReturnSaved} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
                                 Close
                             </Button>
                             {!isStage6Complete && !isStage6Processing && (
@@ -3096,9 +3127,16 @@ export default function CRRCallingProcessPage() {
                                     size="sm"
                                     onClick={saveSafeReturnModal}
                                     disabled={isSafeReturnDisabled || !isSafeReturnFormComplete() || safeReturnSaved}
-                                    className="w-28 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="min-w-[112px] bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                                 >
-                                    Save
+                                    {safeReturnSaved ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            Saving...
+                                        </>
+                                    ) : (
+                                        "Save"
+                                    )}
                                 </Button>
                             )}
                         </DialogFooter>
@@ -3352,7 +3390,7 @@ export default function CRRCallingProcessPage() {
                         </div>
 
                         <DialogFooter className="bg-slate-50 border-t border-slate-200 px-6 py-4 flex justify-end gap-2 sticky bottom-0 z-10">
-                            <Button variant="outline" size="sm" onClick={closeRatingModal} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
+                            <Button variant="outline" size="sm" onClick={closeRatingModal} disabled={ratingSaved} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
                                 Close
                             </Button>
                             {!isStage5Complete && !isStage5Processing && (
@@ -3360,9 +3398,16 @@ export default function CRRCallingProcessPage() {
                                     size="sm"
                                     onClick={saveRatingModal}
                                     disabled={isRatingDisabled || !isRatingFormComplete() || ratingSaved}
-                                    className="w-28 bg-orange-600 hover:bg-orange-700 text-white font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="min-w-[112px] bg-orange-600 hover:bg-orange-700 text-white font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                                 >
-                                    Save
+                                    {ratingSaved ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            Saving...
+                                        </>
+                                    ) : (
+                                        "Save"
+                                    )}
                                 </Button>
                             )}
                         </DialogFooter>
@@ -3479,7 +3524,7 @@ export default function CRRCallingProcessPage() {
                         </div>
 
                         <DialogFooter className="bg-slate-50 border-t border-slate-200 px-6 py-4 flex justify-end gap-2 sticky bottom-0 z-10">
-                            <Button variant="outline" size="sm" onClick={closeFeedbackModal} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
+                            <Button variant="outline" size="sm" onClick={closeFeedbackModal} disabled={feedbackSaved} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
                                 Close
                             </Button>
                             {(!isStage4Complete || isAdminRole) && (
@@ -3487,9 +3532,16 @@ export default function CRRCallingProcessPage() {
                                     size="sm"
                                     onClick={saveFeedbackModal}
                                     disabled={!activeFeedbackGuest || (!isAdminRole && (isStageLocked(activeFeedbackGuest, 4) || isStage4Complete)) || !isFeedbackFormComplete() || feedbackSaved}
-                                    className="w-28 bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="min-w-[112px] bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                                 >
-                                    Save
+                                    {feedbackSaved ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            Saving...
+                                        </>
+                                    ) : (
+                                        "Save"
+                                    )}
                                 </Button>
                             )}
                         </DialogFooter>
@@ -3620,7 +3672,7 @@ export default function CRRCallingProcessPage() {
                         </div>
 
                         <DialogFooter className="bg-slate-50 border-t border-slate-200 px-6 py-4 flex justify-end gap-2 sticky bottom-0 z-10">
-                            <Button variant="outline" size="sm" onClick={closeReferralModal} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
+                            <Button variant="outline" size="sm" onClick={closeReferralModal} disabled={referralSaved} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
                                 Close
                             </Button>
                             {(!isStage8Complete || isAdminRole) && (
@@ -3628,9 +3680,16 @@ export default function CRRCallingProcessPage() {
                                     size="sm"
                                     onClick={saveReferralModal}
                                     disabled={!activeReferralGuest || (!isAdminRole && (isStageLocked(activeReferralGuest, 8) || isStage8Complete)) || !isReferralFormComplete() || referralSaved}
-                                    className="w-28 bg-green-600 hover:bg-green-700 text-white font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="min-w-[112px] bg-green-600 hover:bg-green-700 text-white font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                                 >
-                                    Save
+                                    {referralSaved ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            Saving...
+                                        </>
+                                    ) : (
+                                        "Save"
+                                    )}
                                 </Button>
                             )}
                         </DialogFooter>
@@ -3820,7 +3879,7 @@ export default function CRRCallingProcessPage() {
                             </div>
 
                             <DialogFooter className="bg-slate-50 border-t border-slate-200 px-6 py-4 flex justify-end gap-2 sticky bottom-0 z-10">
-                                <Button variant="outline" size="sm" onClick={closeWelcomeModal} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
+                                <Button variant="outline" size="sm" onClick={closeWelcomeModal} disabled={welcomeSaved} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
                                     Close
                                 </Button>
                                 {!isStage1Complete && !isStage1Processing && (
@@ -3828,9 +3887,16 @@ export default function CRRCallingProcessPage() {
                                         size="sm"
                                         onClick={saveWelcomeModal}
                                         disabled={!activeWelcomeGuest || isWelcomeDisabled || !isWelcomeFormComplete() || welcomeSaved}
-                                        className="w-28 bg-sky-600 hover:bg-sky-700 text-white font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="min-w-[112px] bg-sky-600 hover:bg-sky-700 text-white font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                                     >
-                                        Save
+                                        {welcomeSaved ? (
+                                            <>
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                Saving...
+                                            </>
+                                        ) : (
+                                            "Save"
+                                        )}
                                     </Button>
                                 )}
                             </DialogFooter>
@@ -4021,7 +4087,7 @@ export default function CRRCallingProcessPage() {
                         </div>
 
                         <DialogFooter className="bg-slate-50 border-t border-slate-200 px-6 py-4 flex justify-end gap-2 sticky bottom-0 z-10">
-                            <Button variant="outline" size="sm" onClick={closeResultProgressModal} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
+                            <Button variant="outline" size="sm" onClick={closeResultProgressModal} disabled={resultSaved} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
                                 Close
                             </Button>
                             {!isStage7Complete && !isStage7Processing && (
@@ -4029,9 +4095,16 @@ export default function CRRCallingProcessPage() {
                                     size="sm"
                                     onClick={saveResultProgressModal}
                                     disabled={isResultDisabled || !isResultProgressFormComplete() || resultSaved}
-                                    className="w-28 bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="min-w-[112px] bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                                 >
-                                    Save
+                                    {resultSaved ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            Saving...
+                                        </>
+                                    ) : (
+                                        "Save"
+                                    )}
                                 </Button>
                             )}
                         </DialogFooter>
@@ -4126,7 +4199,7 @@ export default function CRRCallingProcessPage() {
                         </div>
 
                         <DialogFooter className="bg-slate-50 border-t border-slate-200 px-6 py-4 flex justify-end gap-2 sticky bottom-0 z-10">
-                            <Button variant="outline" size="sm" onClick={closeCallModal} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
+                            <Button variant="outline" size="sm" onClick={closeCallModal} disabled={callSaved} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
                                 Close
                             </Button>
                             {!isStage2Complete && (
@@ -4134,9 +4207,16 @@ export default function CRRCallingProcessPage() {
                                     size="sm"
                                     onClick={saveCallModal}
                                     disabled={!activeCallGuest || (!isAdminRole && (isStageLocked(activeCallGuest, 2) || isStage2Complete)) || !isCallFormComplete() || callSaved}
-                                    className="w-28 bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="min-w-[112px] bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                                 >
-                                    Save
+                                    {callSaved ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            Saving...
+                                        </>
+                                    ) : (
+                                        "Save"
+                                    )}
                                 </Button>
                             )}
                         </DialogFooter>
@@ -4233,6 +4313,13 @@ export default function CRRCallingProcessPage() {
                     onSubmit={saveRequirementVerificationModal}
                 />
             )}
+
+            <CrrStageViewModal
+                open={activeViewGuestId !== null}
+                guest={activeViewGuest}
+                initialStage={activeViewStage}
+                onClose={() => setActiveViewGuestId(null)}
+            />
         </DashboardLayout>
     );
 }
