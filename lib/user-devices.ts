@@ -143,7 +143,8 @@ export async function registerOrValidateDevice(
   }
 
   // Check if user is super_admin (exempt from 2-device limit)
-  let isSuperAdmin = String(meta?.role || '').toLowerCase().trim() === 'super_admin'
+  const normalizedRole = String(meta?.role || '').toLowerCase().trim().replace(/[\s_-]+/g, '_')
+  let isSuperAdmin = normalizedRole === 'super_admin' || normalizedRole === 'superadmin'
   if (!isSuperAdmin) {
     try {
       const [roleRows]: any = await pool.query(
@@ -151,7 +152,8 @@ export async function registerOrValidateDevice(
         [cleanUserId, cleanUserId, cleanUserId]
       )
       if (Array.isArray(roleRows) && roleRows.length > 0) {
-        if (String(roleRows[0]?.role || '').toLowerCase().trim() === 'super_admin') {
+        const dbRole = String(roleRows[0]?.role || '').toLowerCase().trim().replace(/[\s_-]+/g, '_')
+        if (dbRole === 'super_admin' || dbRole === 'superadmin') {
           isSuperAdmin = true
         }
       }

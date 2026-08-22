@@ -737,7 +737,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!response.ok) {
         if (data?.code === "DEVICE_LIMIT_REACHED") {
-          throw new Error(data.message || "Device limit reached (max 2 devices).")
+          throw new Error(data.message || "Device limit reached. You can log in to your account on a maximum of two devices. Please contact the system administrator for access or assistance.")
         }
         throw new Error(data?.message || "Login service unavailable")
       }

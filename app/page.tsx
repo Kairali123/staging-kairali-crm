@@ -13,6 +13,10 @@ import { Building2, Mail, Lock, LogIn, AlertCircle } from "lucide-react"
 function loginErrorMessage(error: unknown) {
   const message = error instanceof Error ? error.message : ""
 
+  if (message.includes("maximum of two devices") || message.includes("Device limit") || message.includes("device")) {
+    return message
+  }
+
   if (message === "Invalid credentials or inactive account") {
     return "Invalid email or password. Please try again."
   }
@@ -25,7 +29,7 @@ function loginErrorMessage(error: unknown) {
     return "Login service is unavailable right now. Please try again in a moment."
   }
 
-  return "Unable to sign in right now. Please try again."
+  return message || "Unable to sign in right now. Please try again."
 }
 
 export default function LoginPage() {

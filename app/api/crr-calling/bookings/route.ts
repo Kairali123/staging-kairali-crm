@@ -30,6 +30,15 @@ function formatDMYDate(val: any): string {
     return `${day}-${month}-${year}`;
 }
 
+function parseToShow(val: any): boolean {
+    if (val === true || val === 1) return true;
+    if (typeof val === "string") {
+        const lower = val.trim().toLowerCase();
+        return lower === "true" || lower === "1";
+    }
+    return false;
+}
+
 function formatTimestamp(val: any): string {
     if (!val) return "";
     const d = new Date(val);
@@ -176,6 +185,8 @@ export async function GET(req: NextRequest) {
             const c1 = findCallingRow(uid, "Welcome Call");
             const s1Planned = row.stage1_call_date_planned || c1?.planned || null;
             const s1Actual = c1?.actual || row.stage1_task_done_actual || null;
+            const s1ToShow = parseToShow(c1?.to_show);
+            const hasS1Data = Boolean(s1Actual || (c1 && (c1.status || c1.outcome_remarks || c1.did_they_achieve_the_outcomes_planned_for)));
             const s1Saved = c1 ? {
                 outcomeAchieved: c1.did_they_achieve_the_outcomes_planned_for || "",
                 outcomeRemarks: c1.outcome_remarks || "",
@@ -215,6 +226,8 @@ export async function GET(req: NextRequest) {
             const c5 = findCallingRow(uid, "Call after landing, seek feedback") || findCallingRow(uid, "rating");
             const s5Planned = row.stage4_rating_request_call_date_planned || c5?.planned || null;
             const s5Actual = c5?.actual || row.stage4_task_done_actual || null;
+            const s5ToShow = parseToShow(c5?.to_show);
+            const hasS5Data = Boolean(s5Actual || (c5 && (c5.status || c5.rating_status || c5.outcome_remarks || c5.remarks_why_not_given_ratings)));
             const s5Saved = c5 ? {
                 ratingStatus: c5.rating_status || "",
                 notGivenRemarks: c5.remarks_why_not_given_ratings || "",
@@ -231,6 +244,8 @@ export async function GET(req: NextRequest) {
             const c6 = findCallingRow(uid, "Time to Return") || findCallingRow(uid, "Safe Return");
             const s6Planned = row.stage6_call_date_planned || c6?.planned || null;
             const s6Actual = c6?.actual || row.stage6_task_done_actual || null;
+            const s6ToShow = parseToShow(c6?.to_show);
+            const hasS6Data = Boolean(s6Actual || (c6 && (c6.status || c6.stay_feedback || c6.outcome_remarks)));
             const s6Saved = c6 ? {
                 stayFeedback: c6.stay_feedback || "",
                 outcomeAchieved: c6.did_they_achieve_the_outcomes_planned_for || "",
@@ -244,6 +259,8 @@ export async function GET(req: NextRequest) {
             const c7 = findCallingRow(uid, "Result and Progress Since Return") || findCallingRow(uid, "Result and Progress");
             const s7Planned = row.stage7_call_date_planned || c7?.planned || null;
             const s7Actual = c7?.actual || row.stage7_task_done_actual || null;
+            const s7ToShow = parseToShow(c7?.to_show);
+            const hasS7Data = Boolean(s7Actual || (c7 && (c7.status || c7.outcome_remarks || c7.did_they_achieve_the_outcomes_planned_for)));
             const s7Saved = c7 ? {
                 outcomeAchieved: c7.did_they_achieve_the_outcomes_planned_for || "",
                 outcomeRemarks: c7.outcome_remarks || "",
@@ -307,14 +324,19 @@ export async function GET(req: NextRequest) {
             } : null;
 
             const stages = [
-                { stage: 1, available: true, locked: isLockedDate(s1Planned), plannedDate: formatDMYDate(s1Planned), completed: Boolean(s1Actual), actualDate: formatDMYDate(s1Actual), savedData: s1Saved },
+                // Stage 1: completed only when (actual or submitted data) + to_show=true; toShow & submitted fed through for Processing state
+                { stage: 1, available: true, locked: isLockedDate(s1Planned), plannedDate: formatDMYDate(s1Planned), completed: Boolean(s1Actual || hasS1Data) && s1ToShow, toShow: s1ToShow, submitted: hasS1Data, actualDate: formatDMYDate(s1Actual) || (hasS1Data ? formatDMYDate(c1?.updated_at || c1?.timestamp) : null), savedData: s1Saved },
                 { stage: 2, available: true, locked: isLockedDate(s2Planned), plannedDate: formatDMYDate(s2Planned), completed: Boolean(s2Actual), actualDate: formatDMYDate(s2Actual), savedData: s2Saved },
                 { stage: 3, available: true, locked: isLockedDate(s3Planned), plannedDate: formatDMYDate(s3Planned), completed: Boolean(s3Actual), actualDate: formatDMYDate(s3Actual), savedData: s3Saved },
                 { stage: 4, available: true, locked: isLockedDate(s4Planned), plannedDate: formatDMYDate(s4Planned), completed: Boolean(s4Actual), actualDate: formatDMYDate(s4Actual), savedData: s4Saved },
-                { stage: 5, available: true, locked: isLockedDate(s5Planned), plannedDate: formatDMYDate(s5Planned), completed: Boolean(s5Actual), actualDate: formatDMYDate(s5Actual), savedData: s5Saved },
-                { stage: 6, available: true, locked: isLockedDate(s6Planned), plannedDate: formatDMYDate(s6Planned), completed: Boolean(s6Actual), actualDate: formatDMYDate(s6Actual), savedData: s6Saved },
-                { stage: 7, available: true, locked: isLockedDate(s7Planned), plannedDate: formatDMYDate(s7Planned), completed: Boolean(s7Actual), actualDate: formatDMYDate(s7Actual), savedData: s7Saved },
+                // Stage 5: two-phase
+                { stage: 5, available: true, locked: isLockedDate(s5Planned), plannedDate: formatDMYDate(s5Planned), completed: Boolean(s5Actual || hasS5Data) && s5ToShow, toShow: s5ToShow, submitted: hasS5Data, actualDate: formatDMYDate(s5Actual) || (hasS5Data ? formatDMYDate(c5?.updated_at || c5?.timestamp) : null), savedData: s5Saved },
+                // Stage 6: two-phase
+                { stage: 6, available: true, locked: isLockedDate(s6Planned), plannedDate: formatDMYDate(s6Planned), completed: Boolean(s6Actual || hasS6Data) && s6ToShow, toShow: s6ToShow, submitted: hasS6Data, actualDate: formatDMYDate(s6Actual) || (hasS6Data ? formatDMYDate(c6?.updated_at || c6?.timestamp) : null), savedData: s6Saved },
+                // Stage 7: two-phase
+                { stage: 7, available: true, locked: isLockedDate(s7Planned), plannedDate: formatDMYDate(s7Planned), completed: Boolean(s7Actual || hasS7Data) && s7ToShow, toShow: s7ToShow, submitted: hasS7Data, actualDate: formatDMYDate(s7Actual) || (hasS7Data ? formatDMYDate(c7?.updated_at || c7?.timestamp) : null), savedData: s7Saved },
                 { stage: 8, available: true, locked: isLockedDate(s8Planned), plannedDate: formatDMYDate(s8Planned), completed: Boolean(s8Actual), actualDate: formatDMYDate(s8Actual), savedData: s8Saved },
+                // Stages 9,10,11 — excluded from to_show rule, single-phase as before
                 { stage: 9, available: true, locked: isLockedDate(s9Planned), plannedDate: formatDMYDate(s9Planned), completed: Boolean(s9Actual), actualDate: formatDMYDate(s9Actual), savedData: s9Saved },
                 { stage: 10, available: true, locked: isLockedDate(s10Planned), plannedDate: formatDMYDate(s10Planned), completed: Boolean(s10Actual), actualDate: formatDMYDate(s10Actual), savedData: s10Saved },
                 { stage: 11, available: true, locked: isLockedDate(s11Planned), plannedDate: formatDMYDate(s11Planned), completed: Boolean(s11Actual), actualDate: formatDMYDate(s11Actual), savedData: s11Saved },

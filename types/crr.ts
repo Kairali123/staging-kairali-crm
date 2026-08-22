@@ -1,6 +1,6 @@
 export type Role = "user" | "admin";
 export type Resp = "GRE" | "Doctor" | "FO";
-export type StageStatus = "Pending" | "Complete";
+export type StageStatus = "Pending" | "Processing" | "Complete";
 export type CallStatus = "Done" | "Not Done - Close" | "Close Follow-up";
 export type YesNo = "Yes" | "No";
 export type RatingStatus = "Given" | "Not Given" | "Requested";
@@ -32,8 +32,10 @@ export interface StageInfo {
     locked: boolean;      // true if today < plannedDate, or unavailable/unparseable
     plannedDate: string | null;
     completed: boolean;   // true only when that stage's Status column === "Done"
-    actualDate?: string | null;      // NEW — completion timestamp from actualCol
-    savedData?: Record<string, string | number | null> | null; // NEW — saved form values for prefill
+    actualDate?: string | null;      // completion timestamp from actualCol
+    toShow?: boolean;                // KTAHV_CRR_Calling_FMS.to_show; only populated for stages 1,5,6,7
+    submitted?: boolean;             // true if stage has saved/submitted data in MySQL
+    savedData?: Record<string, string | number | null> | null; // saved form values for prefill
 }
 
 export interface Guest {

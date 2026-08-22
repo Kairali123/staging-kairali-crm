@@ -115,11 +115,22 @@ function mapRow(row: GasBookingRow): Guest {
     // timestamp) is non-empty on the stage's own row — GAS resolves the
     // correct CrrCalling row per stage via UID + Call Purpose keyword.
     // currentStage = first not-completed stage (1-indexed); 9 if all 8 are complete.
+    // Stages that use the two-phase to_show model (KTAHV_CRR_Calling_FMS.to_show)
+    const TO_SHOW_STAGES = new Set([1, 5, 6, 7]);
+
     const stageStatus: StageStatus[] = Array.from({ length: 11 }, (_, i) => {
         const info = stageOf(stages, i + 1);
-        return info?.completed ? "Complete" : "Pending";
+        if (info?.completed) return "Complete";
+        // Two-phase stages (1, 5, 6, 7): if submitted/saved data exists but to_show is false -> "Processing"
+        const hasSavedContent = info?.savedData && Object.values(info.savedData).some(v => v !== null && v !== "" && v !== undefined);
+        if (TO_SHOW_STAGES.has(i + 1) && (info?.submitted || info?.actualDate || hasSavedContent) && !info?.toShow) {
+            return "Processing";
+        }
+        return "Pending";
     });
-    const firstIncompleteIdx = stageStatus.findIndex((s) => s === "Pending");
+    // "Processing" stages do NOT count as complete for progress tracking.
+    // Only "Complete" stages advance currentStage / trigger allComplete.
+    const firstIncompleteIdx = stageStatus.findIndex((s) => s !== "Complete");
     const currentStage = firstIncompleteIdx === -1 ? 12 : firstIncompleteIdx + 1;
     const allComplete = firstIncompleteIdx === -1;
 

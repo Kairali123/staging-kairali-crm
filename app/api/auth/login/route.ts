@@ -166,7 +166,7 @@ export async function POST(req: NextRequest) {
         success: false,
         code: 'DEVICE_LIMIT_REACHED',
         message:
-          'Device limit reached (maximum 2 registered devices). Please ask an administrator to remove an old device or log out from another device.',
+          'Device limit reached. You can log in to your account on a maximum of two devices. Please contact the system administrator for access or assistance.',
         devices: deviceCheck.devices || [],
       },
       403

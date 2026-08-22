@@ -15,6 +15,7 @@ import type {
     Guest,
 } from "@/types/crr";
 import { DashboardLayout } from "@/components/dashboard-layout";
+import { toast } from "sonner";
 import DriverAssignmentArrivalModal from "@/components/Driverassignmentarrivalmodal";
 import DriverAssignmentDepartureModal from "@/components/Driverassignmentdeparturemodal";
 import GuestRequirementVerificationModal from "@/components/Guestrequirementverificationmodal";
@@ -511,24 +512,28 @@ export default function CRRCallingProcessPage() {
 
     const activeResultProgressGuest = guests.find((g) => g.id === activeResultProgressGuestId) || null;
 
-    /* ---------- Stage-completed flags (GAS actualCol-driven) ----------
-       completed = the stage's actual-timestamp column is non-empty on its
-       own sheet row. A completed stage opens with its saved data prefilled
-       and read-only (mirrors the existing Stage-1 pattern). */
-    const isStage1Complete = activeWelcomeGuest?.stageStatus?.[0] === "Complete";
-    const isStage2Complete = activeCallGuest?.stageStatus?.[1] === "Complete";
-    const isStage3Complete = activeGuest?.stageStatus?.[2] === "Complete";
-    const isStage4Complete = activeFeedbackGuest?.stageStatus?.[3] === "Complete";
-    const isStage5Complete = activeRatingGuest?.stageStatus?.[4] === "Complete";
-    const isStage6Complete = activeSafeReturnGuest?.stageStatus?.[5] === "Complete";
-    const isStage7Complete = activeResultProgressGuest?.stageStatus?.[6] === "Complete";
-    const isStage8Complete = activeReferralGuest?.stageStatus?.[7] === "Complete";
+    /* ---------- Stage-completed / stage-processing flags ----------
+       completed  = actual + to_show = TRUE  (stages 1,5,6,7: two-phase)
+       processing = actual present, to_show still FALSE (stages 1,5,6,7 only) */
+    const isStage1Complete    = activeWelcomeGuest?.stageStatus?.[0] === "Complete";
+    const isStage1Processing  = activeWelcomeGuest?.stageStatus?.[0] === "Processing";
+    const isStage2Complete    = activeCallGuest?.stageStatus?.[1] === "Complete";
+    const isStage3Complete    = activeGuest?.stageStatus?.[2] === "Complete";
+    const isStage4Complete    = activeFeedbackGuest?.stageStatus?.[3] === "Complete";
+    const isStage5Complete    = activeRatingGuest?.stageStatus?.[4] === "Complete";
+    const isStage5Processing  = activeRatingGuest?.stageStatus?.[4] === "Processing";
+    const isStage6Complete    = activeSafeReturnGuest?.stageStatus?.[5] === "Complete";
+    const isStage6Processing  = activeSafeReturnGuest?.stageStatus?.[5] === "Processing";
+    const isStage7Complete    = activeResultProgressGuest?.stageStatus?.[6] === "Complete";
+    const isStage7Processing  = activeResultProgressGuest?.stageStatus?.[6] === "Processing";
+    const isStage8Complete    = activeReferralGuest?.stageStatus?.[7] === "Complete";
 
-    // Combined read-only flags: locked (planned date not reached) OR already completed.
-    const isRatingDisabled = !activeRatingGuest || (!isAdminRole && isStageLocked(activeRatingGuest, 5)) || isStage5Complete;
-    const isSafeReturnDisabled = !activeSafeReturnGuest || (!isAdminRole && isStageLocked(activeSafeReturnGuest, 6)) || isStage6Complete;
-    const isResultDisabled = !activeResultProgressGuest || (!isAdminRole && isStageLocked(activeResultProgressGuest, 7)) || isStage7Complete;
-    const isReferralDisabled = !activeReferralGuest || (!isAdminRole && isStageLocked(activeReferralGuest, 8)) || isStage8Complete;
+    // Combined read-only flags: locked (planned date not reached) OR completed OR processing.
+    // Processing stages are accessible (modal opens) but fully non-editable — same as Complete.
+    const isRatingDisabled      = !activeRatingGuest      || (!isAdminRole && isStageLocked(activeRatingGuest, 5))      || isStage5Complete || isStage5Processing;
+    const isSafeReturnDisabled  = !activeSafeReturnGuest  || (!isAdminRole && isStageLocked(activeSafeReturnGuest, 6))  || isStage6Complete || isStage6Processing;
+    const isResultDisabled      = !activeResultProgressGuest || (!isAdminRole && isStageLocked(activeResultProgressGuest, 7)) || isStage7Complete || isStage7Processing;
+    const isReferralDisabled    = !activeReferralGuest    || (!isAdminRole && isStageLocked(activeReferralGuest, 8))    || isStage8Complete;
 
     // "Driver Assignment - Arrival Pickup" modal (Stage 9)
     const [activeDriverArrivalGuestId, setActiveDriverArrivalGuestId] = useState<number | null>(null);
@@ -957,8 +962,11 @@ export default function CRRCallingProcessPage() {
                 remarks: modalRemark,
             });
             await refetchGuests();
+            toast.success("Stage 3 (Next Visit Planning) saved successfully!");
         } catch (err) {
             setModalSaved(false);
+            const msg = err instanceof Error ? err.message : "Failed to save stage 3";
+            toast.error(msg);
             console.error("Failed to save stage 3:", err);
             return;
         }
@@ -981,8 +989,11 @@ export default function CRRCallingProcessPage() {
         try {
             await saveStageWithRole(activeDriverArrivalGuest.uid || activeDriverArrivalGuest.bookingId, 9, data);
             await refetchGuests();
+            toast.success("Driver Arrival Assignment saved successfully!");
             closeDriverArrivalModal();
         } catch (err) {
+            const msg = err instanceof Error ? err.message : "Failed to save stage 9";
+            toast.error(msg);
             console.error("Failed to save stage 9:", err);
         }
     }
@@ -1004,8 +1015,11 @@ export default function CRRCallingProcessPage() {
         try {
             await saveStageWithRole(activeDriverDepartureGuest.uid || activeDriverDepartureGuest.bookingId, 10, data);
             await refetchGuests();
+            toast.success("Driver Departure Assignment saved successfully!");
             closeDriverDepartureModal();
         } catch (err) {
+            const msg = err instanceof Error ? err.message : "Failed to save stage 10";
+            toast.error(msg);
             console.error("Failed to save stage 10:", err);
         }
     }
@@ -1027,8 +1041,11 @@ export default function CRRCallingProcessPage() {
         try {
             await saveStageWithRole(activeRequirementVerificationGuest.uid || activeRequirementVerificationGuest.bookingId, 11, data);
             await refetchGuests();
+            toast.success("Guest Requirement Verification saved successfully!");
             closeRequirementVerificationModal();
         } catch (err) {
+            const msg = err instanceof Error ? err.message : "Failed to save stage 11";
+            toast.error(msg);
             console.error("Failed to save stage 11:", err);
         }
     }
@@ -1107,10 +1124,13 @@ export default function CRRCallingProcessPage() {
                 outcomeAchieved: welcomeOutcomeAchieved,
             });
             await refetchGuests();
+            toast.success("Arrival Welcome data saved successfully! Submission is recorded.");
             closeWelcomeModal();
         } catch (err) {
             setWelcomeSaved(false);
-            setWelcomeFormError(err instanceof Error ? err.message : "Save failed. Please try again.");
+            const msg = err instanceof Error ? err.message : "Save failed. Please try again.";
+            setWelcomeFormError(msg);
+            toast.error(msg);
         }
     }
 
@@ -1175,10 +1195,13 @@ export default function CRRCallingProcessPage() {
                 // no followupDate column configured for stage 6 (confirmed intentional)
             });
             await refetchGuests();
+            toast.success("Safe Return Confirmation saved successfully! Submission is recorded.");
             closeSafeReturnModal();
         } catch (err) {
             setSafeReturnSaved(false);
-            setSafeReturnFormError(err instanceof Error ? err.message : "Save failed. Please try again.");
+            const msg = err instanceof Error ? err.message : "Save failed. Please try again.";
+            setSafeReturnFormError(msg);
+            toast.error(msg);
         }
     }
 
@@ -1240,10 +1263,13 @@ export default function CRRCallingProcessPage() {
                 followupDate: resultStatus === "Close Follow-up" ? resultFollowupDate : "",
             });
             await refetchGuests();
+            toast.success("Result Tracking & Health Progress Check saved successfully! Submission is recorded.");
             closeResultProgressModal();
         } catch (err) {
             setResultSaved(false);
-            setResultFormError(err instanceof Error ? err.message : "Save failed. Please try again.");
+            const msg = err instanceof Error ? err.message : "Save failed. Please try again.";
+            setResultFormError(msg);
+            toast.error(msg);
         }
     }
 
@@ -1293,10 +1319,13 @@ export default function CRRCallingProcessPage() {
                 doerRemarks: feedbackDoerRemarks,
             });
             await refetchGuests();
+            toast.success("Guest Feedback saved successfully!");
             closeFeedbackModal();
         } catch (err) {
             setFeedbackSaved(false);
-            setFeedbackFormError(err instanceof Error ? err.message : "Save failed. Please try again.");
+            const msg = err instanceof Error ? err.message : "Save failed. Please try again.";
+            setFeedbackFormError(msg);
+            toast.error(msg);
         }
     }
 
@@ -1347,10 +1376,13 @@ export default function CRRCallingProcessPage() {
                 doerRemarks: referralDoerRemarks,
             });
             await refetchGuests();
+            toast.success("Referral Collection saved successfully!");
             closeReferralModal();
         } catch (err) {
             setReferralSaved(false);
-            setReferralFormError(err instanceof Error ? err.message : "Save failed. Please try again.");
+            const msg = err instanceof Error ? err.message : "Save failed. Please try again.";
+            setReferralFormError(msg);
+            toast.error(msg);
         }
     }
 
@@ -1425,10 +1457,13 @@ export default function CRRCallingProcessPage() {
                 followupDate: ratingCallStatus === "Close Follow-up" ? ratingFollowupDate : "",
             });
             await refetchGuests();
+            toast.success("Online Rating & Review Request saved successfully! Submission is recorded.");
             closeRatingModal();
         } catch (err) {
             setRatingSaved(false);
-            setRatingFormError(err instanceof Error ? err.message : "Save failed. Please try again.");
+            const msg = err instanceof Error ? err.message : "Save failed. Please try again.";
+            setRatingFormError(msg);
+            toast.error(msg);
         }
     }
 
@@ -1485,10 +1520,13 @@ export default function CRRCallingProcessPage() {
             // marked Complete on the next fetch.
             await saveStageWithRole(activeCallGuest.uid || activeCallGuest.bookingId, 2, {});
             await refetchGuests();
+            toast.success("Stage 2 (QR Leaflet Confirmation) saved successfully!");
             closeCallModal();
         } catch (err) {
             setCallSaved(false);
-            setCallFormError(err instanceof Error ? err.message : "Save failed. Please try again.");
+            const msg = err instanceof Error ? err.message : "Save failed. Please try again.";
+            setCallFormError(msg);
+            toast.error(msg);
         }
     }
 
@@ -2170,6 +2208,8 @@ export default function CRRCallingProcessPage() {
                                                                         let cls = "w-3.5 h-1 rounded-sm transition-colors";
                                                                         if (g.stageStatus[idx] === "Complete") {
                                                                             cls += " bg-emerald-500";
+                                                                        } else if (g.stageStatus[idx] === "Processing") {
+                                                                            cls += " bg-amber-400 animate-pulse";
                                                                         } else if (idx === g.currentStage - 1 && !g.allComplete) {
                                                                             cls += " bg-amber-500";
                                                                         } else {
@@ -2906,14 +2946,24 @@ export default function CRRCallingProcessPage() {
                                 <div className="flex items-center gap-2 pb-2 border-b border-emerald-200">
                                     <RotateCcw className="h-4 w-4 text-emerald-500" />
                                     <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-600">Safe Return Call Details</h4>
-                                    <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${isStage6Complete ? 'text-slate-500 bg-slate-100' : 'text-emerald-400 bg-emerald-100'}`}>
-                                        {isStage6Complete ? "Read Only" : "Fill in below"}
+                                    <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                                        isStage6Complete ? 'text-slate-500 bg-slate-100' :
+                                        isStage6Processing ? 'text-amber-700 bg-amber-100' :
+                                        'text-emerald-400 bg-emerald-100'
+                                    }`}>
+                                        {isStage6Complete ? "Read Only" : isStage6Processing ? "Processing" : "Fill in below"}
                                     </span>
                                 </div>
-                                {activeSafeReturnGuest && !isAdminRole && isStageLocked(activeSafeReturnGuest, 6) && !isStage6Complete && (
+                                {activeSafeReturnGuest && !isAdminRole && isStageLocked(activeSafeReturnGuest, 6) && !isStage6Complete && !isStage6Processing && (
                                     <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                                         <Clock className="h-4 w-4 shrink-0" />
                                         This stage unlocks on {formatISTDate(getStagePlannedDate(activeSafeReturnGuest, 6))}. Fields are read-only until then.
+                                    </div>
+                                )}
+                                {isStage6Processing && (
+                                    <div className="flex items-center gap-2 text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-300 rounded-md px-3 py-2">
+                                        <svg className="h-4 w-4 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" /></svg>
+                                        Processing — your submission is being verified. This stage will be marked complete once confirmed.
                                     </div>
                                 )}
                                 {isStage6Complete && (
@@ -3041,7 +3091,7 @@ export default function CRRCallingProcessPage() {
                             <Button variant="outline" size="sm" onClick={closeSafeReturnModal} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
                                 Close
                             </Button>
-                            {!isStage6Complete && (
+                            {!isStage6Complete && !isStage6Processing && (
                                 <Button
                                     size="sm"
                                     onClick={saveSafeReturnModal}
@@ -3112,14 +3162,24 @@ export default function CRRCallingProcessPage() {
                                 <div className="flex items-center gap-2 pb-2 border-b border-orange-200">
                                     <Send className="h-4 w-4 text-orange-500" />
                                     <h4 className="text-xs font-bold uppercase tracking-wider text-orange-600">Rating &amp; Review Details</h4>
-                                    <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${isStage5Complete ? 'text-slate-500 bg-slate-100' : 'text-orange-400 bg-orange-100'}`}>
-                                        {isStage5Complete ? "Read Only" : "Fill in below"}
+                                    <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                                        isStage5Complete ? 'text-slate-500 bg-slate-100' :
+                                        isStage5Processing ? 'text-amber-700 bg-amber-100' :
+                                        'text-orange-400 bg-orange-100'
+                                    }`}>
+                                        {isStage5Complete ? "Read Only" : isStage5Processing ? "Processing" : "Fill in below"}
                                     </span>
                                 </div>
-                                {activeRatingGuest && !isAdminRole && isStageLocked(activeRatingGuest, 5) && !isStage5Complete && (
+                                {activeRatingGuest && !isAdminRole && isStageLocked(activeRatingGuest, 5) && !isStage5Complete && !isStage5Processing && (
                                     <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                                         <Clock className="h-4 w-4 shrink-0" />
                                         This stage unlocks on {formatISTDate(getStagePlannedDate(activeRatingGuest, 5))}. Fields are read-only until then.
+                                    </div>
+                                )}
+                                {isStage5Processing && (
+                                    <div className="flex items-center gap-2 text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-300 rounded-md px-3 py-2">
+                                        <svg className="h-4 w-4 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" /></svg>
+                                        Processing — your submission is being verified. This stage will be marked complete once confirmed.
                                     </div>
                                 )}
                                 {isStage5Complete && (
@@ -3295,7 +3355,7 @@ export default function CRRCallingProcessPage() {
                             <Button variant="outline" size="sm" onClick={closeRatingModal} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
                                 Close
                             </Button>
-                            {!isStage5Complete && (
+                            {!isStage5Complete && !isStage5Processing && (
                                 <Button
                                     size="sm"
                                     onClick={saveRatingModal}
@@ -3580,9 +3640,8 @@ export default function CRRCallingProcessPage() {
 
             <Dialog open={activeWelcomeGuestId !== null} onOpenChange={(open) => !open && closeWelcomeModal()}>
                 {activeWelcomeGuest && (() => {
-                    // Read-only when Stage 1 is locked OR already completed
-                    // (isStage1Complete is the top-level actualCol-driven flag).
-                    const isWelcomeDisabled = !activeWelcomeGuest || (!isAdminRole && isStageLocked(activeWelcomeGuest, 1)) || isStage1Complete;
+                    // (isStage1Complete / isStage1Processing are the top-level to_show-driven flags).
+                    const isWelcomeDisabled = !activeWelcomeGuest || (!isAdminRole && isStageLocked(activeWelcomeGuest, 1)) || isStage1Complete || isStage1Processing;
                     return (
                         <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col">
                             <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white shrink-0">
@@ -3641,10 +3700,16 @@ export default function CRRCallingProcessPage() {
                                             {isWelcomeDisabled ? "Read Only" : "Fill in below"}
                                         </span>
                                     </div>
-                                    {activeWelcomeGuest && !isAdminRole && isStageLocked(activeWelcomeGuest, 1) && !isStage1Complete && (
+                                    {activeWelcomeGuest && !isAdminRole && isStageLocked(activeWelcomeGuest, 1) && !isStage1Complete && !isStage1Processing && (
                                         <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                                             <Clock className="h-4 w-4 shrink-0" />
                                             This stage unlocks on {formatISTDate(getStagePlannedDate(activeWelcomeGuest, 1))}. Fields are read-only until then.
+                                        </div>
+                                    )}
+                                    {isStage1Processing && (
+                                        <div className="flex items-center gap-2 text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-300 rounded-md px-3 py-2">
+                                            <svg className="h-4 w-4 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" /></svg>
+                                            Processing — your submission is being verified. This stage will be marked complete once confirmed.
                                         </div>
                                     )}
                                     {isStage1Complete && (
@@ -3758,7 +3823,7 @@ export default function CRRCallingProcessPage() {
                                 <Button variant="outline" size="sm" onClick={closeWelcomeModal} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
                                     Close
                                 </Button>
-                                {!isStage1Complete && (
+                                {!isStage1Complete && !isStage1Processing && (
                                     <Button
                                         size="sm"
                                         onClick={saveWelcomeModal}
@@ -3828,14 +3893,24 @@ export default function CRRCallingProcessPage() {
                                 <div className="flex items-center gap-2 pb-2 border-b border-purple-200">
                                     <TrendingUp className="h-4 w-4 text-purple-500" />
                                     <h4 className="text-xs font-bold uppercase tracking-wider text-purple-600">Result &amp; Health Progress Details</h4>
-                                    <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${isStage7Complete ? 'text-slate-500 bg-slate-100' : 'text-purple-400 bg-purple-100'}`}>
-                                        {isStage7Complete ? "Read Only" : "Fill in below"}
+                                    <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                                        isStage7Complete ? 'text-slate-500 bg-slate-100' :
+                                        isStage7Processing ? 'text-amber-700 bg-amber-100' :
+                                        'text-purple-400 bg-purple-100'
+                                    }`}>
+                                        {isStage7Complete ? "Read Only" : isStage7Processing ? "Processing" : "Fill in below"}
                                     </span>
                                 </div>
-                                {activeResultProgressGuest && !isAdminRole && isStageLocked(activeResultProgressGuest, 7) && !isStage7Complete && (
+                                {activeResultProgressGuest && !isAdminRole && isStageLocked(activeResultProgressGuest, 7) && !isStage7Complete && !isStage7Processing && (
                                     <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                                         <Clock className="h-4 w-4 shrink-0" />
                                         This stage unlocks on {formatISTDate(getStagePlannedDate(activeResultProgressGuest, 7))}. Fields are read-only until then.
+                                    </div>
+                                )}
+                                {isStage7Processing && (
+                                    <div className="flex items-center gap-2 text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-300 rounded-md px-3 py-2">
+                                        <svg className="h-4 w-4 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" /></svg>
+                                        Processing — your submission is being verified. This stage will be marked complete once confirmed.
                                     </div>
                                 )}
                                 {isStage7Complete && (
@@ -3949,7 +4024,7 @@ export default function CRRCallingProcessPage() {
                             <Button variant="outline" size="sm" onClick={closeResultProgressModal} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
                                 Close
                             </Button>
-                            {!isStage7Complete && (
+                            {!isStage7Complete && !isStage7Processing && (
                                 <Button
                                     size="sm"
                                     onClick={saveResultProgressModal}
