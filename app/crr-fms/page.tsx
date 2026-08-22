@@ -839,8 +839,22 @@ export default function CRRCallingProcessPage() {
         // Doers with zero pendency across ALL stages add no information — hide them.
         const visibleTable = table.filter((r) => r.counts.some((c) => c > 0));
 
-        return { table: visibleTable, totals };
-    }, [rows, stageFilter]);
+        // Access control: non-admin users see only their own row in the report.
+        // super_admin and admin see the full employee breakdown.
+        const currentUserName = user?.name ?? "";
+        const scopedTable = isAdminRole
+            ? visibleTable
+            : visibleTable.filter((r) => r.emp === currentUserName);
+
+        // Recompute Grand Total from the scoped rows so the footer always
+        // matches exactly the rows that are displayed.
+        const scopedTotals = new Array(STAGES.length).fill(0);
+        scopedTable.forEach((r) => {
+            r.counts.forEach((c, idx) => { scopedTotals[idx] += c; });
+        });
+
+        return { table: scopedTable, totals: scopedTotals };
+    }, [rows, stageFilter, isAdminRole, user]);
 
     /* ---------- CHART VIEW DATA ---------- */
     // Derived purely from the same filtered `rows` / `pendingReport` used by
