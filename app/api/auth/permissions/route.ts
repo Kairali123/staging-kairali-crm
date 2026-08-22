@@ -97,9 +97,15 @@ export async function POST(req: NextRequest) {
       permissions: permissions.length > 0 ? permissions : (Array.isArray(sessionUser.permissions) ? sessionUser.permissions : []),
     }
 
+    const payload = readVerifiedSessionPayload(rawSession)
+
     let sessionCookie: string
     try {
-      sessionCookie = createSessionCookieValue(updatedUser)
+      sessionCookie = createSessionCookieValue(updatedUser, {
+        sid: payload?.sid,
+        deviceId: payload?.deviceId,
+        tokenVersion: payload?.tokenVersion,
+      })
     } catch {
       console.error('[permissions] session cookie could not be signed')
       return jsonNoStore({ success: false, error: MSG_UNAVAILABLE }, 500)

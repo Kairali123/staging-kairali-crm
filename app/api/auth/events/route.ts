@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
 
       // 1. Send initial connected event
       controller.enqueue(
-        encoder.encode(`event: connected\ndata: ${JSON.stringify({ userId, sid, timestamp: Date.now() })}\n\n`)
+        encoder.encode(`event: connected\ndata: ${JSON.stringify({ userId, sid, deviceId: payload.deviceId, timestamp: Date.now() })}\n\n`)
       )
 
       // 2. Event listener callback

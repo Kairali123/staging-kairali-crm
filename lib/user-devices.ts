@@ -401,41 +401,45 @@ export async function validateSessionState(
     const pool = await getPool()
     const cleanUserId = await resolveCanonicalUserId(rawUserId)
 
-    // 1. Check userlogin token_version
-    const [userRows]: any = await pool.query(
-      `SELECT token_version, active FROM userlogin WHERE id = ? LIMIT 1`,
-      [cleanUserId]
-    )
+    // 1. Check userlogin token_version (only if client tokenVersion is known)
+    if (tokenVersion !== undefined && tokenVersion > 0) {
+      const [userRows]: any = await pool.query(
+        `SELECT token_version, active FROM userlogin WHERE id = ? LIMIT 1`,
+        [cleanUserId]
+      )
 
-    if (Array.isArray(userRows) && userRows.length > 0) {
-      const dbUser = userRows[0]
-      const dbTokenVersion = Number(dbUser.token_version || 1)
+      if (Array.isArray(userRows) && userRows.length > 0) {
+        const dbUser = userRows[0]
+        const dbTokenVersion = Number(dbUser.token_version || 1)
 
-      if (tokenVersion !== undefined && tokenVersion < dbTokenVersion) {
-        return {
-          valid: false,
-          reason: 'PASSWORD_CHANGED',
+        if (tokenVersion < dbTokenVersion) {
+          return {
+            valid: false,
+            reason: 'PASSWORD_CHANGED',
+          }
         }
       }
     }
 
-    // 2. Check user_sessions record for this exact sid
-    const [sessionRows]: any = await pool.query(
-      `SELECT is_active, revoked_reason FROM user_sessions WHERE sid = ? LIMIT 1`,
-      [sid]
-    )
+    // 2. Check user_sessions record for this exact sid (if not legacy)
+    if (sid && !sid.startsWith('legacy_')) {
+      const [sessionRows]: any = await pool.query(
+        `SELECT is_active, revoked_reason FROM user_sessions WHERE sid = ? LIMIT 1`,
+        [sid]
+      )
 
-    if (Array.isArray(sessionRows) && sessionRows.length > 0) {
-      const s = sessionRows[0]
-      if (!s.is_active || s.is_active === 0) {
-        return {
-          valid: false,
-          reason: s.revoked_reason || 'SESSION_REVOKED',
+      if (Array.isArray(sessionRows) && sessionRows.length > 0) {
+        const s = sessionRows[0]
+        if (s.is_active === 0 || s.is_active === false) {
+          return {
+            valid: false,
+            reason: s.revoked_reason || 'SESSION_REVOKED',
+          }
         }
-      }
 
-      // Update heartbeat timestamp
-      await pool.query(`UPDATE user_sessions SET last_heartbeat = NOW() WHERE sid = ?`, [sid])
+        // Update heartbeat timestamp
+        await pool.query(`UPDATE user_sessions SET last_heartbeat = NOW() WHERE sid = ?`, [sid])
+      }
     }
 
     return { valid: true }

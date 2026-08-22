@@ -1470,7 +1470,7 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
                 <div>
                   <p className="font-semibold">Real-Time Session Invalidation</p>
                   <p className="text-[11px] text-amber-800 mt-0.5">
-                    Updating the password will immediately invalidate all active sessions for this account. The employee will receive an instant notification on their screen and will be given a 30-second window before being redirected to the login page.
+                    Updating the password will immediately invalidate all active sessions for this account. The employee will receive an instant notification on their screen and will be given a 20-second window before being redirected to the login page.
                   </p>
                 </div>
               </div>

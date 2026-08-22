@@ -41,6 +41,9 @@ export function SessionGuard() {
   const [countdown, setCountdown] = useState<number | null>(null)
   const isLoggedOutRef = useRef(false)
 
+  const currentSidRef = useRef<string | null>(null)
+  const currentDeviceIdRef = useRef<string | null>(null)
+
   // Trigger alert and start automatic redirect countdown
   const triggerSessionAlert = (type: SessionAlertState["type"], title: string, message: string) => {
     if (isLoggedOutRef.current) return
@@ -50,7 +53,7 @@ export function SessionGuard() {
       title,
       message,
     })
-    setCountdown(30) // 30 seconds auto-redirect countdown
+    setCountdown(20) // 20 seconds auto-redirect countdown
   }
 
   // Handle countdown tick
@@ -91,6 +94,14 @@ export function SessionGuard() {
       try {
         eventSource = new EventSource("/api/auth/events")
 
+        eventSource.addEventListener("connected", (e: any) => {
+          try {
+            const data = JSON.parse(e.data)
+            if (data.sid) currentSidRef.current = String(data.sid)
+            if (data.deviceId) currentDeviceIdRef.current = String(data.deviceId)
+          } catch {}
+        })
+
         eventSource.addEventListener("PASSWORD_CHANGED", (e: any) => {
           try {
             const data = JSON.parse(e.data)
@@ -112,36 +123,40 @@ export function SessionGuard() {
         eventSource.addEventListener("SESSION_KICKED", (e: any) => {
           try {
             const data = JSON.parse(e.data)
+            // If the kick event was targeted at a specific SID/deviceId and it does NOT match this session, ignore it
+            if (data.sid && currentSidRef.current && data.sid !== currentSidRef.current) {
+              return
+            }
+            if (data.deviceId && currentDeviceIdRef.current && data.deviceId !== currentDeviceIdRef.current) {
+              return
+            }
+
             triggerSessionAlert(
               "SESSION_KICKED",
               "Concurrent Login Detected",
               data.message ||
                 "Your account has been accessed from another authorized device. To adhere to security guidelines, simultaneous active sessions are restricted, and access on this device has been paused."
             )
-          } catch {
-            triggerSessionAlert(
-              "SESSION_KICKED",
-              "Concurrent Login Detected",
-              "Your account has been accessed from another authorized device. Access on this device has been paused to prevent concurrent logins."
-            )
-          }
+          } catch {}
         })
 
         eventSource.addEventListener("REMOTE_LOGOUT", (e: any) => {
           try {
             const data = JSON.parse(e.data)
+            // If remote logout targeted a specific SID/deviceId and does NOT match this session, ignore it
+            if (data.sid && currentSidRef.current && data.sid !== currentSidRef.current) {
+              return
+            }
+            if (data.deviceId && currentDeviceIdRef.current && data.deviceId !== currentDeviceIdRef.current) {
+              return
+            }
+
             triggerSessionAlert(
               "REMOTE_LOGOUT",
               "Session Terminated",
               data.message || "Your active session has been remotely terminated by the system administrator."
             )
-          } catch {
-            triggerSessionAlert(
-              "REMOTE_LOGOUT",
-              "Session Terminated",
-              "Your active session has been remotely terminated by the system administrator. Please log in again to continue."
-            )
-          }
+          } catch {}
         })
 
         eventSource.onerror = () => {
@@ -193,7 +208,7 @@ export function SessionGuard() {
               "Concurrent Login Detected",
               "Your account was accessed from another authorized device. Access on this device has been paused to prevent concurrent logins."
             )
-          } else {
+          } else if (data.reason === "SESSION_REVOKED" || data.reason === "DEVICE_REMOVED") {
             triggerSessionAlert(
               "REMOTE_LOGOUT",
               "Session Terminated",
