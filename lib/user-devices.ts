@@ -348,14 +348,14 @@ export async function createActiveSession(
           type: 'SESSION_KICKED',
           sid: s.sid,
           deviceId: s.device_id,
-          message: 'You have logged in on another device. Access has been paused on this device.',
+          message: 'Your account was accessed from another authorized device. Access on this device has been paused to prevent concurrent logins.',
         })
         if (rawUserId !== cleanUserId) {
           broadcastSessionEvent(String(rawUserId).trim(), {
             type: 'SESSION_KICKED',
             sid: s.sid,
             deviceId: s.device_id,
-            message: 'You have logged in on another device. Access has been paused on this device.',
+            message: 'Your account was accessed from another authorized device. Access on this device has been paused to prevent concurrent logins.',
           })
         }
       }
@@ -564,16 +564,16 @@ export async function revokeAllSessionsForUser(rawUserId: string, reason = 'FORC
     type: reason === 'PASSWORD_CHANGED' ? 'PASSWORD_CHANGED' : 'REMOTE_LOGOUT',
     message:
       reason === 'PASSWORD_CHANGED'
-        ? 'Your password was changed by Super Admin. Kindly login again with your updated password.'
-        : 'All your active sessions have been logged out by the administrator.',
+        ? 'Your account password has been updated by the system administrator. For security reasons, your active session has been ended. Please log in using your new credentials.'
+        : 'All active sessions for your account have been terminated by the administrator.',
   })
   if (rawUserId !== cleanUserId) {
     broadcastSessionEvent(String(rawUserId).trim(), {
       type: reason === 'PASSWORD_CHANGED' ? 'PASSWORD_CHANGED' : 'REMOTE_LOGOUT',
       message:
         reason === 'PASSWORD_CHANGED'
-          ? 'Your password was changed by Super Admin. Kindly login again with your updated password.'
-          : 'All your active sessions have been logged out by the administrator.',
+          ? 'Your account password has been updated by the system administrator. For security reasons, your active session has been ended. Please log in using your new credentials.'
+          : 'All active sessions for your account have been terminated by the administrator.',
     })
   }
 }

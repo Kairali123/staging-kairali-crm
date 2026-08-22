@@ -50,7 +50,7 @@ export function SessionGuard() {
       title,
       message,
     })
-    setCountdown(10) // 10 seconds auto-redirect countdown
+    setCountdown(30) // 30 seconds auto-redirect countdown
   }
 
   // Handle countdown tick
@@ -96,15 +96,15 @@ export function SessionGuard() {
             const data = JSON.parse(e.data)
             triggerSessionAlert(
               "PASSWORD_CHANGED",
-              "Password Changed by Super Admin",
+              "Password Updated by Administrator",
               data.message ||
-                "Your password has been changed by the Super Administrator. Kindly log in again with your updated password."
+                "Your account password has been updated by the system administrator. For security reasons, your active session has been ended. Please log in using your new credentials."
             )
           } catch {
             triggerSessionAlert(
               "PASSWORD_CHANGED",
-              "Password Changed",
-              "Your password was updated. Please log in again."
+              "Password Updated by Administrator",
+              "Your account password has been updated by the system administrator. For security reasons, your active session has been ended. Please log in using your new credentials."
             )
           }
         })
@@ -114,15 +114,15 @@ export function SessionGuard() {
             const data = JSON.parse(e.data)
             triggerSessionAlert(
               "SESSION_KICKED",
-              "Logged In On Another Device",
+              "Concurrent Login Detected",
               data.message ||
-                "Your account was accessed from another device. To prevent simultaneous logins, access on this device has been paused."
+                "Your account has been accessed from another authorized device. To adhere to security guidelines, simultaneous active sessions are restricted, and access on this device has been paused."
             )
           } catch {
             triggerSessionAlert(
               "SESSION_KICKED",
-              "Logged In Elsewhere",
-              "Your account is currently active on another device."
+              "Concurrent Login Detected",
+              "Your account has been accessed from another authorized device. Access on this device has been paused to prevent concurrent logins."
             )
           }
         })
@@ -133,13 +133,13 @@ export function SessionGuard() {
             triggerSessionAlert(
               "REMOTE_LOGOUT",
               "Session Terminated",
-              data.message || "Your session has been logged out remotely by the administrator."
+              data.message || "Your active session has been remotely terminated by the system administrator."
             )
           } catch {
             triggerSessionAlert(
               "REMOTE_LOGOUT",
-              "Session Logged Out",
-              "This session was logged out by the administrator."
+              "Session Terminated",
+              "Your active session has been remotely terminated by the system administrator. Please log in again to continue."
             )
           }
         })
@@ -184,20 +184,20 @@ export function SessionGuard() {
           if (data.reason === "PASSWORD_CHANGED") {
             triggerSessionAlert(
               "PASSWORD_CHANGED",
-              "Password Changed by Super Admin",
-              "Your password was updated. Kindly log in again with your updated password."
+              "Password Updated by Administrator",
+              "Your account password has been updated by the system administrator. For security reasons, your active session has been ended. Please log in using your new credentials."
             )
           } else if (data.reason === "KICKED_BY_CONCURRENT_DEVICE") {
             triggerSessionAlert(
               "SESSION_KICKED",
-              "Logged In On Another Device",
-              "Your account was accessed from another device. Access on this device is paused."
+              "Concurrent Login Detected",
+              "Your account was accessed from another authorized device. Access on this device has been paused to prevent concurrent logins."
             )
           } else {
             triggerSessionAlert(
               "REMOTE_LOGOUT",
-              "Session Expired or Terminated",
-              "Your session is no longer active. Please log in again."
+              "Session Terminated",
+              "Your session is no longer active. Please log in again to continue."
             )
           }
         }
@@ -253,7 +253,7 @@ export function SessionGuard() {
             <DialogTitle className="text-lg font-bold text-gray-900 leading-snug">
               {alertState.title}
             </DialogTitle>
-            <p className="text-xs text-gray-500 font-medium mt-0.5">Session Security Alert</p>
+            <p className="text-xs text-gray-500 font-medium mt-0.5">Session Security Notification</p>
           </div>
         </div>
 
@@ -279,7 +279,7 @@ export function SessionGuard() {
             className="w-full h-10 rounded-xl bg-gray-900 hover:bg-black font-semibold text-sm shadow-sm gap-2"
           >
             <LogOut className="h-4 w-4" />
-            Log In With New Credentials Now
+            Proceed to Login
           </Button>
         </DialogFooter>
       </DialogContent>

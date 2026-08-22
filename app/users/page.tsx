@@ -1468,10 +1468,9 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
               <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3.5 text-xs text-amber-900 flex items-start gap-2.5">
                 <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
                 <div>
-                  <p className="font-semibold">Instant Real-Time Invalidation</p>
+                  <p className="font-semibold">Real-Time Session Invalidation</p>
                   <p className="text-[11px] text-amber-800 mt-0.5">
-                    When you update the password, an immediate alert will pop up on the employee&apos;s active screen
-                    informing them that their password was changed by the Super Admin, and will log them out.
+                    Updating the password will immediately invalidate all active sessions for this account. The employee will receive an instant notification on their screen and will be given a 30-second window before being redirected to the login page.
                   </p>
                 </div>
               </div>
