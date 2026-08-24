@@ -44,6 +44,7 @@ export async function GET(req: NextRequest) {
     const source = searchParams.get("source")
     const website = searchParams.get("website")
     const coldBy = searchParams.get("coldBy")
+    const verifyStatus = searchParams.get("verifyStatus")
     const skipFilters = searchParams.get("skipFilters") === "true"
 
     const sortField = searchParams.get("sortField") || "generate_date_time"
@@ -140,7 +141,16 @@ export async function GET(req: NextRequest) {
       params.push(coldBy)
     }
 
+    if (verifyStatus && verifyStatus !== "all") {
+      // Filter strictly by Senior Verifier Action Status column
+      conditions.push("TRIM(verify_action_status_senior_verifier) = ?")
+      params.push(verifyStatus)
+    }
+
     const countWhereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
+
+    // Snapshot params before appending the "not both done" condition — used for the completed-records query
+    const completedParams = [...params]
 
     const executiveDoneClause = "COALESCE(TRIM(verify_action_status_executive_verifier), '') <> ''"
     const seniorDoneClause = "COALESCE(TRIM(verify_action_status_senior_verifier), '') <> ''"
@@ -157,7 +167,11 @@ export async function GET(req: NextRequest) {
         SUM(CASE WHEN ${executiveDoneClause} AND ${seniorDoneClause} THEN 1 ELSE 0 END) as completed,
         SUM(CASE WHEN LOWER(cold_done_in_calling_appsheet_or_in_dailer) = 'yes' 
                       OR verify_action_status_executive_verifier = 'Reopen and Escalate To Abhilash Sir' 
-                      OR verify_action_status_senior_verifier = 'Reopen and Escalate To Abhilash Sir' THEN 1 ELSE 0 END) as appsheet
+                      OR verify_action_status_senior_verifier = 'Reopen and Escalate To Abhilash Sir' THEN 1 ELSE 0 END) as appsheet,
+        SUM(CASE WHEN ${executiveDoneClause} AND ${seniorDoneClause} AND TRIM(verify_action_status_senior_verifier) = 'Reopen' THEN 1 ELSE 0 END) as seniorReopen,
+        SUM(CASE WHEN ${executiveDoneClause} AND ${seniorDoneClause} AND TRIM(verify_action_status_senior_verifier) = 'Cold' THEN 1 ELSE 0 END) as seniorCold,
+        SUM(CASE WHEN ${executiveDoneClause} AND ${seniorDoneClause} AND TRIM(verify_action_status_senior_verifier) = 'Reopen to Other' THEN 1 ELSE 0 END) as seniorReopenToOther,
+        SUM(CASE WHEN ${executiveDoneClause} AND ${seniorDoneClause} AND TRIM(verify_action_status_senior_verifier) = 'Reopen and Escalate To Abhilash Sir' THEN 1 ELSE 0 END) as seniorEscalateAbhilash
       FROM fms_enquiry_cold_reverification_v2
       ${countWhereClause}
     `
@@ -213,17 +227,73 @@ export async function GET(req: NextRequest) {
         email_alert_to_sales_person_if_reopen,
         doer_senior_verifier_email_id,
         hs_status_if_escalate_to_abhilash_sir_by_senior,
-        transfer_to_user_fms_if_reopen
+        transfer_to_user_fms_if_reopen,
+        both_done
       FROM fms_enquiry_cold_reverification_v2
       ${whereClause}
       ORDER BY ${finalSortField} ${finalSortDirection}
       LIMIT ? OFFSET ?
     `
 
-    // Run count aggregation and paginated select concurrently in parallel
-    const [countResult, dataResult]: any = await Promise.all([
+    // Build completed-records query using the same logic as the KPI "completed" count:
+    // both executive AND senior verify_action_status must be filled — do NOT rely on both_done column
+    // which may not always be updated consistently.
+    const completedConditions = [...conditions.filter(c => !c.startsWith("NOT ("))]
+    const completedDoneClause = `(${executiveDoneClause} AND ${seniorDoneClause})`
+    const completedWhereClause = completedConditions.length > 0
+      ? `WHERE (${completedConditions.join(" AND ")}) AND ${completedDoneClause}`
+      : `WHERE ${completedDoneClause}`
+
+    const completedQuery = `
+      SELECT 
+        id,
+        generate_date_time,
+        enquiry_created_datetime,
+        lead_id,
+        name_of_client,
+        mobile,
+        email_id,
+        subjects,
+        website_name,
+        data_source,
+        cold_by_employee_name,
+        cold_done_datetime,
+        cold_remarks_by_sales_team,
+        uid,
+        company_belongs_to,
+        doer_executive_verifier AS CH,
+        verify_action_status_executive_verifier AS CI,
+        valid_reason_executive_verifier AS CJ,
+        what_went_wrong_by_sales_team_executive_verifier AS CK,
+        overall_rating_out_of_10_executive_verifier AS CL,
+        suggested_solution_for_improvement_executive_verifier AS CM,
+        remarks_executive_verifier AS CN,
+        ht_created_to_executive_verifier_if_delay_status,
+        actual_executive_verifier AS actual,
+        doer_senior_verifier AS CW,
+        verify_action_status_senior_verifier AS CX,
+        valid_reason_senior_verifier AS CY,
+        what_went_wrong_by_sales_team_senior_verifier AS CZ,
+        overall_rating_out_of_10_senior_verifier AS DA,
+        suggested_solution_for_improvement_senior_verifier AS DB,
+        remarks_senior_verifier AS DC,
+        ht_created_to_senior_verifier_if_delay_status,
+        whatsapp_alert_to_sales_person_if_reopen,
+        email_alert_to_sales_person_if_reopen,
+        transfer_to_user_fms_if_reopen,
+        actual_senior_verifier AS senior_actual,
+        both_done
+      FROM fms_enquiry_cold_reverification_v2
+      ${completedWhereClause}
+      ORDER BY generate_date_time DESC
+      LIMIT 200
+    `
+
+    // Run count aggregation, paginated select, and completed-records fetch concurrently
+    const [countResult, dataResult, completedResult]: any = await Promise.all([
       connection.execute(countQuery, params),
-      connection.execute(query, [...params, String(limit), String(offset)])
+      connection.execute(query, [...params, String(limit), String(offset)]),
+      connection.execute(completedQuery, completedParams)
     ])
 
     const total = countResult[0][0]?.total || 0
@@ -232,9 +302,12 @@ export async function GET(req: NextRequest) {
     const appsheet = Number(countResult[0][0]?.appsheet || 0)
     const rows = dataResult[0]
 
+    const completedRows = completedResult[0] || []
+
     return NextResponse.json({
       success: true,
       data: rows,
+      completedData: completedRows,
       pagination: {
         total: pending,
         page,
@@ -245,7 +318,11 @@ export async function GET(req: NextRequest) {
         total,
         pending,
         completed,
-        appsheet
+        appsheet,
+        seniorReopen: Number(countResult[0][0]?.seniorReopen || 0),
+        seniorCold: Number(countResult[0][0]?.seniorCold || 0),
+        seniorReopenToOther: Number(countResult[0][0]?.seniorReopenToOther || 0),
+        seniorEscalateAbhilash: Number(countResult[0][0]?.seniorEscalateAbhilash || 0)
       },
       filters: skipFilters ? null : {
         websites,

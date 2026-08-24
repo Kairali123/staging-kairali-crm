@@ -35,7 +35,11 @@ import {
     ChevronLeft,
     ChevronRight,
     ChevronsLeft,
-    ChevronsRight
+    ChevronsRight,
+    RotateCcw,
+    Snowflake,
+    Share2,
+    AlertTriangle
 } from "lucide-react"
 
 
@@ -57,6 +61,7 @@ export default function EnquiryReverificationPage() {
     const [sourceFilter, setSourceFilter] = useState("all")
     const [websiteFilter, setWebsiteFilter] = useState("all")
     const [coldByFilter, setColdByFilter] = useState("all")
+    const [verifyStatusFilter, setVerifyStatusFilter] = useState("all")
     const [customDateRange, setCustomDateRange] = useState({ start: "", end: "" })
 
     const [isInitialLoading, setIsInitialLoading] = useState(true)
@@ -77,7 +82,21 @@ export default function EnquiryReverificationPage() {
     const [isSeniorModalOpen, setIsSeniorModalOpen] = useState(false)
 
     const [enquiries, setEnquiries] = useState<any[]>([])
-    const [kpi, setKpi] = useState({ total: 0, pending: 0, completed: 0, appsheet: 0 })
+    const [completedEnquiries, setCompletedEnquiries] = useState<any[]>([])
+    const [completedPage, setCompletedPage] = useState(1)
+    const [completedPageSize, setCompletedPageSize] = useState(10)
+    const [selectedCompletedEnquiry, setSelectedCompletedEnquiry] = useState<any>(null)
+    const [isCompletedViewOpen, setIsCompletedViewOpen] = useState(false)
+    const [kpi, setKpi] = useState({
+        total: 0,
+        pending: 0,
+        completed: 0,
+        appsheet: 0,
+        seniorReopen: 0,
+        seniorCold: 0,
+        seniorReopenToOther: 0,
+        seniorEscalateAbhilash: 0
+    })
     const [websitesOptions, setWebsitesOptions] = useState<string[]>([])
     const [agentsOptions, setAgentsOptions] = useState<string[]>([])
 
@@ -97,6 +116,23 @@ export default function EnquiryReverificationPage() {
             String(enq?.CX ?? "").trim() ||
             String(enq?.senior_actual ?? "").trim()
         )
+
+    const hasSeniorPlanned = (enq: any) =>
+        Boolean(
+            enq?.senior_planned &&
+            String(enq?.senior_planned).trim() !== "" &&
+            String(enq?.senior_planned).trim() !== "0000-00-00 00:00:00"
+        )
+
+    const getKpiPercentage = (val: number, total: number) => {
+        if (!total || val <= 0) return "0%"
+        if (val === total) return "100%"
+        const pct = (val / total) * 100
+        if (pct > 99.9 && val < total) return "99.99%"
+        if (pct < 0.1 && val > 0) return `${pct.toFixed(2)}%`
+        if (Number.isInteger(pct)) return `${pct}%`
+        return `${pct.toFixed(1)}%`
+    }
 
     const getCompanyColorClass = (company: string) => {
         const c = String(company || "").trim().toUpperCase()
@@ -119,6 +155,7 @@ export default function EnquiryReverificationPage() {
             if (sourceFilter !== "all") url += `source=${encodeURIComponent(sourceFilter)}&`
             if (websiteFilter !== "all") url += `website=${encodeURIComponent(websiteFilter)}&`
             if (coldByFilter !== "all") url += `coldBy=${encodeURIComponent(coldByFilter)}&`
+            if (verifyStatusFilter !== "all") url += `verifyStatus=${encodeURIComponent(verifyStatusFilter)}&`
 
             let fromDate = ""
             let toDate = ""
@@ -193,6 +230,7 @@ export default function EnquiryReverificationPage() {
             }
 
             setEnquiries(Array.isArray(json?.data) ? json.data : [])
+            setCompletedEnquiries(Array.isArray(json?.completedData) ? json.completedData : [])
             setTotalEnquiries(json.pagination?.total || 0)
             setTotalPages(json.pagination?.totalPages || 1)
             if (json.kpi) {
@@ -292,14 +330,14 @@ export default function EnquiryReverificationPage() {
     // Reset to first page on search or filter change
     useEffect(() => {
         setCurrentPage(1)
-    }, [searchInput, dateFilter, selectedCompany, sourceFilter, websiteFilter, coldByFilter, customDateRange])
+    }, [searchInput, dateFilter, selectedCompany, sourceFilter, websiteFilter, coldByFilter, verifyStatusFilter, customDateRange])
 
     // Fetch when filters, page, or sorting changes
     useEffect(() => {
         if (!isLoading && user && hasPermission("cold_enquiry_reverification.view")) {
             fetchEnquiries()
         }
-    }, [currentPage, pageSize, searchInput, dateFilter, selectedCompany, sourceFilter, websiteFilter, coldByFilter, customDateRange, sortField, sortDirection, user, isLoading, hasPermission])
+    }, [currentPage, pageSize, searchInput, dateFilter, selectedCompany, sourceFilter, websiteFilter, coldByFilter, verifyStatusFilter, customDateRange, sortField, sortDirection, user, isLoading, hasPermission])
 
     const handleSort = (field: string) => {
         if (sortField === field) {
@@ -443,6 +481,7 @@ export default function EnquiryReverificationPage() {
                                     setSourceFilter("all")
                                     setWebsiteFilter("all")
                                     setColdByFilter("all")
+                                    setVerifyStatusFilter("all")
                                     setCustomDateRange({ start: "", end: "" })
                                 }}
                                 className="w-full sm:w-auto bg-white border-slate-300 text-slate-700 font-medium hover:bg-blue-100"
@@ -453,7 +492,7 @@ export default function EnquiryReverificationPage() {
 
                         {/* CONTENT */}
                         <div className="px-4 sm:px-5 py-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-8 gap-4">
 
                                 {/* SEARCH */}
                                 <div className="flex flex-col gap-1.5 lg:col-span-2">
@@ -572,6 +611,25 @@ export default function EnquiryReverificationPage() {
                                     </Select>
                                 </div>
 
+                                {/* VERIFY ACTION STATUS */}
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                                        Verify Status
+                                    </label>
+                                    <Select value={verifyStatusFilter} onValueChange={setVerifyStatusFilter}>
+                                        <SelectTrigger className="h-10 w-full rounded-md border-gray-300">
+                                            <SelectValue placeholder="All Statuses" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All</SelectItem>
+                                            <SelectItem value="Reopen">Reopen</SelectItem>
+                                            <SelectItem value="Cold">Cold</SelectItem>
+                                            <SelectItem value="Reopen to Other">Reopen to Other</SelectItem>
+                                            <SelectItem value="Reopen and Escalate To Abhilash Sir">Reopen and Escalate To Abhilash Sir</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
                             </div>
 
                             {/* CUSTOM DATE RANGE */}
@@ -633,18 +691,24 @@ export default function EnquiryReverificationPage() {
 
                         {/* KPI Cards Grid */}
                         <div className="p-4 sm:p-5">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                            {/* Row 1: Core KPIs */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
 
                                 <div className="bg-blue-50/70 border-2 border-blue-300 rounded-lg p-3 shadow-sm hover:shadow-md transition">
                                     <div className="flex items-center justify-between gap-2 mb-2">
                                         <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-700 leading-tight">
-                                            Total Enquiries
+                                            Total Cold Enquiries
                                         </p>
                                         <FileText className="h-4 w-4 text-blue-600" />
                                     </div>
-                                    <p className="text-2xl font-bold text-slate-900 leading-none mb-2">
-                                        {kpi.total}
-                                    </p>
+                                    <div className="flex items-baseline justify-between mb-2">
+                                        <p className="text-2xl font-bold text-slate-900 leading-none">
+                                            {kpi.total}
+                                        </p>
+                                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                                            100%
+                                        </span>
+                                    </div>
                                     <p className="text-[10px] text-slate-500 font-medium">
                                         Fetched from database
                                     </p>
@@ -653,13 +717,18 @@ export default function EnquiryReverificationPage() {
                                 <div className="bg-amber-50/70 border-2 border-amber-300 rounded-lg p-3 shadow-sm hover:shadow-md transition">
                                     <div className="flex items-center justify-between gap-2 mb-2">
                                         <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 leading-tight">
-                                            Pending Action
+                                            Reverification Pending
                                         </p>
                                         <AlertCircle className="h-4 w-4 text-amber-600" />
                                     </div>
-                                    <p className="text-2xl font-bold text-slate-900 leading-none mb-2">
-                                        {kpi.pending}
-                                    </p>
+                                    <div className="flex items-baseline justify-between mb-2">
+                                        <p className="text-2xl font-bold text-slate-900 leading-none">
+                                            {kpi.pending}
+                                        </p>
+                                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                                            {getKpiPercentage(kpi.pending, kpi.total)}
+                                        </span>
+                                    </div>
                                     <p className="text-[10px] text-slate-500 font-medium">
                                         Requires reverification remarks
                                     </p>
@@ -668,13 +737,18 @@ export default function EnquiryReverificationPage() {
                                 <div className="bg-green-50/70 border-2 border-green-300 rounded-lg p-3 shadow-sm hover:shadow-md transition">
                                     <div className="flex items-center justify-between gap-2 mb-2">
                                         <p className="text-[10px] font-semibold uppercase tracking-wide text-green-700 leading-tight">
-                                            Completed Actions
+                                            Verification Done
                                         </p>
                                         <Check className="h-4 w-4 text-green-600" />
                                     </div>
-                                    <p className="text-2xl font-bold text-slate-900 leading-none mb-2">
-                                        {kpi.completed}
-                                    </p>
+                                    <div className="flex items-baseline justify-between mb-2">
+                                        <p className="text-2xl font-bold text-slate-900 leading-none">
+                                            {kpi.completed}
+                                        </p>
+                                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-800 border border-green-300">
+                                            {getKpiPercentage(kpi.completed, kpi.total)}
+                                        </span>
+                                    </div>
                                     <p className="text-[10px] text-slate-500 font-medium">
                                         Reverification completed
                                     </p>
@@ -683,18 +757,151 @@ export default function EnquiryReverificationPage() {
                                 <div className="bg-red-50/70 border-2 border-red-300 rounded-lg p-3 shadow-sm hover:shadow-md transition">
                                     <div className="flex items-center justify-between gap-2 mb-2">
                                         <p className="text-[10px] font-semibold uppercase tracking-wide text-red-700 leading-tight">
-                                            Appsheet Logs
+                                            Escalate to Management
                                         </p>
                                         <XCircle className="h-4 w-4 text-red-600" />
                                     </div>
-                                    <p className="text-2xl font-bold text-slate-900 leading-none mb-2">
-                                        {kpi.appsheet}
-                                    </p>
+                                    <div className="flex items-baseline justify-between mb-2">
+                                        <p className="text-2xl font-bold text-slate-900 leading-none">
+                                            {kpi.appsheet}
+                                        </p>
+                                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-800 border border-red-300">
+                                            {getKpiPercentage(kpi.appsheet, kpi.total)}
+                                        </span>
+                                    </div>
                                     <p className="text-[10px] text-slate-500 font-medium">
                                         Logged in Appsheet
                                     </p>
                                 </div>
 
+                            </div>
+
+                            {/* Row 2: Senior Verify Status Breakdown Cards */}
+                            <div className="pt-3 border-t border-slate-200">
+                                <div className="flex items-center justify-between gap-2 mb-2.5">
+                                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                                        <span className="w-2 h-2 rounded-full bg-violet-600 inline-block" />
+                                        Senior Verifier Status Breakdown
+                                    </p>
+                                    <span className="text-[10px] text-slate-400 font-medium">
+                                        Click any card to filter by status
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+
+                                    {/* 1. Status: Reopen */}
+                                    <div
+                                        onClick={() => setVerifyStatusFilter(verifyStatusFilter === "Reopen" ? "all" : "Reopen")}
+                                        className={`cursor-pointer rounded-lg p-3 shadow-sm hover:shadow-md transition border-2 ${
+                                            verifyStatusFilter === "Reopen"
+                                                ? "bg-violet-100/90 border-violet-600 ring-2 ring-violet-400"
+                                                : "bg-violet-50/70 border-violet-300 hover:border-violet-400"
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between gap-2 mb-2">
+                                            <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-800 leading-tight">
+                                                Reopen
+                                            </p>
+                                            <RotateCcw className="h-4 w-4 text-violet-600" />
+                                        </div>
+                                        <div className="flex items-baseline justify-between mb-2">
+                                            <p className="text-2xl font-bold text-slate-900 leading-none">
+                                                {kpi.seniorReopen || 0}
+                                            </p>
+                                            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 border border-violet-300">
+                                                {getKpiPercentage(kpi.seniorReopen || 0, kpi.completed)}
+                                            </span>
+                                        </div>
+                                        <p className="text-[10px] text-slate-500 font-medium">
+                                            Marked as Reopen
+                                        </p>
+                                    </div>
+
+                                    {/* 2. Status: Cold */}
+                                    <div
+                                        onClick={() => setVerifyStatusFilter(verifyStatusFilter === "Cold" ? "all" : "Cold")}
+                                        className={`cursor-pointer rounded-lg p-3 shadow-sm hover:shadow-md transition border-2 ${
+                                            verifyStatusFilter === "Cold"
+                                                ? "bg-cyan-100/90 border-cyan-600 ring-2 ring-cyan-400"
+                                                : "bg-cyan-50/70 border-cyan-300 hover:border-cyan-400"
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between gap-2 mb-2">
+                                            <p className="text-[10px] font-semibold uppercase tracking-wide text-cyan-800 leading-tight">
+                                                Cold
+                                            </p>
+                                            <Snowflake className="h-4 w-4 text-cyan-600" />
+                                        </div>
+                                        <div className="flex items-baseline justify-between mb-2">
+                                            <p className="text-2xl font-bold text-slate-900 leading-none">
+                                                {kpi.seniorCold || 0}
+                                            </p>
+                                            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-800 border border-cyan-300">
+                                                {getKpiPercentage(kpi.seniorCold || 0, kpi.completed)}
+                                            </span>
+                                        </div>
+                                        <p className="text-[10px] text-slate-500 font-medium">
+                                            Confirmed as Cold
+                                        </p>
+                                    </div>
+
+                                    {/* 3. Status: Reopen to Other */}
+                                    <div
+                                        onClick={() => setVerifyStatusFilter(verifyStatusFilter === "Reopen to Other" ? "all" : "Reopen to Other")}
+                                        className={`cursor-pointer rounded-lg p-3 shadow-sm hover:shadow-md transition border-2 ${
+                                            verifyStatusFilter === "Reopen to Other"
+                                                ? "bg-indigo-100/90 border-indigo-600 ring-2 ring-indigo-400"
+                                                : "bg-indigo-50/70 border-indigo-300 hover:border-indigo-400"
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between gap-2 mb-2">
+                                            <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-800 leading-tight">
+                                                Reopen to Other
+                                            </p>
+                                            <Share2 className="h-4 w-4 text-indigo-600" />
+                                        </div>
+                                        <div className="flex items-baseline justify-between mb-2">
+                                            <p className="text-2xl font-bold text-slate-900 leading-none">
+                                                {kpi.seniorReopenToOther || 0}
+                                            </p>
+                                            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-300">
+                                                {getKpiPercentage(kpi.seniorReopenToOther || 0, kpi.completed)}
+                                            </span>
+                                        </div>
+                                        <p className="text-[10px] text-slate-500 font-medium">
+                                            Assigned to other team
+                                        </p>
+                                    </div>
+
+                                    {/* 4. Status: Escalate To Abhilash Sir */}
+                                    <div
+                                        onClick={() => setVerifyStatusFilter(verifyStatusFilter === "Reopen and Escalate To Abhilash Sir" ? "all" : "Reopen and Escalate To Abhilash Sir")}
+                                        className={`cursor-pointer rounded-lg p-3 shadow-sm hover:shadow-md transition border-2 ${
+                                            verifyStatusFilter === "Reopen and Escalate To Abhilash Sir"
+                                                ? "bg-rose-100/90 border-rose-600 ring-2 ring-rose-400"
+                                                : "bg-rose-50/70 border-rose-300 hover:border-rose-400"
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between gap-2 mb-2">
+                                            <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-800 leading-tight">
+                                                Escalate to Abhilash Sir
+                                            </p>
+                                            <AlertTriangle className="h-4 w-4 text-rose-600" />
+                                        </div>
+                                        <div className="flex items-baseline justify-between mb-2">
+                                            <p className="text-2xl font-bold text-slate-900 leading-none">
+                                                {kpi.seniorEscalateAbhilash || 0}
+                                            </p>
+                                            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300">
+                                                {getKpiPercentage(kpi.seniorEscalateAbhilash || 0, kpi.completed)}
+                                            </span>
+                                        </div>
+                                        <p className="text-[10px] text-slate-500 font-medium">
+                                            Escalated to Abhilash Sir
+                                        </p>
+                                    </div>
+
+                                </div>
                             </div>
                         </div>
 
@@ -984,7 +1191,7 @@ export default function EnquiryReverificationPage() {
                                                         Executive Verify
                                                     </button>
                                                 )}
-                                                {!hasSeniorCompleted(enq) && (isSenior || isAdmin) && (
+                                                {!hasSeniorCompleted(enq) && (isSenior || isAdmin) && hasSeniorPlanned(enq) && (
                                                     <button
                                                         onClick={() => {
                                                             setSelectedSeniorRecord({
@@ -1101,6 +1308,335 @@ export default function EnquiryReverificationPage() {
                     </div>
 
                 </div>
+
+                {/* ═══════════ BOTH VERIFICATIONS COMPLETED TABLE ═══════════ */}
+                {completedEnquiries.length > 0 && (() => {
+                    const compTotal = completedEnquiries.length
+                    const compTotalPages = Math.ceil(compTotal / completedPageSize)
+                    const compStart = (completedPage - 1) * completedPageSize
+                    const compEnd = Math.min(completedPage * completedPageSize, compTotal)
+                    const compPagedRows = completedEnquiries.slice(compStart, compEnd)
+
+                    return (
+                    <div className="rounded-xl border border-green-200 bg-white shadow-md overflow-hidden">
+
+                        {/* Header */}
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-4 sm:px-5 py-4 bg-gradient-to-r from-green-50 via-white to-emerald-50/30 border-b border-green-200">
+                            <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-green-100 flex items-center justify-center border border-green-300">
+                                    <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-700" />
+                                </div>
+                                <div>
+                                    <h3 className="text-sm sm:text-base font-semibold text-slate-900 leading-tight flex items-center gap-2">
+                                        Both Verifications Completed
+                                        <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 border border-green-300 rounded-full px-2.5 py-0.5 text-[11px] font-bold">
+                                            <Check className="h-3 w-3" /> {compTotal} records
+                                        </span>
+                                    </h3>
+                                    <p className="text-xs text-slate-500">
+                                        Enquiries where both Executive & Senior verification is fully done
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Table */}
+                        <div className="relative overflow-x-auto w-full">
+                            <table className="min-w-full divide-y divide-slate-200 text-xs border-collapse">
+                                <thead style={{ backgroundColor: '#14532d' }} className="sticky top-0 z-20">
+                                    <tr>
+                                        {/* Sticky cols */}
+                                        <th className="sticky left-0 z-30 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[140px] w-[140px]" style={{ backgroundColor: '#14532d' }}>Timestamp</th>
+                                        <th className="sticky left-[140px] z-30 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[130px] w-[130px]" style={{ backgroundColor: '#14532d' }}>Lead ID</th>
+                                        <th className="sticky left-[270px] z-30 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[180px] w-[180px] border-r-2 border-white/20 shadow-[inset_-8px_0_12px_-6px_rgba(0,0,0,0.35)]" style={{ backgroundColor: '#14532d' }}>Client</th>
+                                        {/* Scrollable cols */}
+                                        <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">Subject</th>
+                                        <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">Company</th>
+                                        <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">Cold By</th>
+                                        <th className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-normal leading-tight border-l-2 border-white/30 min-w-[90px]">Exec Verifier</th>
+                                        <th className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-normal leading-tight min-w-[80px]">Exec Status</th>
+                                        <th className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[70px] border-r border-white/15">Exec Rating</th>
+                                        <th className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-normal leading-tight border-l-2 border-white/30 min-w-[90px]">Senior Verifier</th>
+                                        <th className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-normal leading-tight min-w-[80px]">Senior Status</th>
+                                        <th className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[70px] border-r border-white/15">Senior Rating</th>
+                                        <th className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {compPagedRows.map((enq) => (
+                                        <tr key={enq.id} className="border-b border-slate-100 hover:bg-green-50 transition group">
+                                            {/* Sticky cells */}
+                                            <td className="sticky left-0 z-10 py-3 px-4 font-medium text-slate-600 whitespace-nowrap min-w-[140px] w-[140px] bg-white group-hover:bg-green-50 transition-colors border-r border-slate-100">{formatDateStr(enq.generate_date_time)}</td>
+                                            <td className="sticky left-[140px] z-10 py-3 px-4 font-bold text-blue-700 whitespace-nowrap min-w-[130px] w-[130px] bg-white group-hover:bg-green-50 transition-colors border-r border-slate-100">{enq.lead_id}</td>
+                                            <td className="sticky left-[270px] z-10 py-3 px-4 min-w-[180px] w-[180px] bg-white group-hover:bg-green-50 transition-colors border-r-2 border-slate-200 shadow-[inset_-8px_0_12px_-6px_rgba(15,23,42,0.12)]">
+                                                <p className="font-bold text-slate-900">{enq.name_of_client || "—"}</p>
+                                                <p className="text-slate-500 text-[11px]">{enq.mobile || ""}</p>
+                                            </td>
+                                            {/* Scrollable cells */}
+                                            <td className="py-3 px-4 max-w-[180px] truncate text-slate-700 border-r border-slate-100" title={enq.subjects}>{enq.subjects || "—"}</td>
+                                            <td className={`py-3 px-4 font-bold whitespace-nowrap border-r border-slate-100 ${getCompanyColorClass(enq.company_belongs_to)}`}>{enq.company_belongs_to || "—"}</td>
+                                            <td className="py-3 px-4 font-semibold text-slate-700 whitespace-nowrap border-r border-slate-100">{enq.cold_by_employee_name || "—"}</td>
+                                            {/* Executive */}
+                                            <td className="py-3 px-4 text-center font-medium text-slate-700 border-l-2 border-slate-200 whitespace-nowrap">{enq.CH || "—"}</td>
+                                            <td className="py-3 px-4 text-center">
+                                                {enq.CI ? (
+                                                    <Badge className="bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold px-2 py-0.5 rounded-full text-[11px]">{enq.CI}</Badge>
+                                                ) : "—"}
+                                            </td>
+                                            <td className="py-3 px-4 text-center font-bold text-slate-800 border-r border-slate-100">
+                                                {enq.CL != null ? Number(enq.CL).toFixed(1) : "—"}
+                                            </td>
+                                            {/* Senior */}
+                                            <td className="py-3 px-4 text-center font-medium text-slate-700 border-l-2 border-slate-200 whitespace-nowrap">{enq.CW || "—"}</td>
+                                            <td className="py-3 px-4 text-center">
+                                                {enq.CX ? (
+                                                    <Badge className="bg-violet-100 text-violet-700 border border-violet-200 font-semibold px-2 py-0.5 rounded-full text-[11px]">{enq.CX}</Badge>
+                                                ) : "—"}
+                                            </td>
+                                            <td className="py-3 px-4 text-center font-bold text-slate-800 border-r border-slate-100">
+                                                {enq.DA != null ? Number(enq.DA).toFixed(1) : "—"}
+                                            </td>
+                                            {/* Action */}
+                                            <td className="py-3 px-4 text-center">
+                                                <button
+                                                    onClick={() => { setSelectedCompletedEnquiry(enq); setIsCompletedViewOpen(true) }}
+                                                    className="inline-flex items-center gap-1.5 rounded-lg border border-green-300 text-green-700 font-bold bg-white hover:bg-green-50 px-3.5 py-1.5 text-xs shadow-sm transition"
+                                                >
+                                                    <Eye className="h-3.5 w-3.5" /> View
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Pagination Footer */}
+                        <div className="bg-green-50 border-t border-green-200 px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3">
+                            <div className="flex items-center gap-3 text-xs font-semibold text-green-800">
+                                <div className="flex items-center gap-2">
+                                    <span>Show</span>
+                                    <Select value={String(completedPageSize)} onValueChange={(v) => { setCompletedPageSize(Number(v)); setCompletedPage(1) }}>
+                                        <SelectTrigger className="w-[64px] h-7 bg-white text-xs border-green-300 font-bold text-slate-700">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="5">5</SelectItem>
+                                            <SelectItem value="10">10</SelectItem>
+                                            <SelectItem value="25">25</SelectItem>
+                                            <SelectItem value="50">50</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <span>entries</span>
+                                </div>
+                                <div className="border-l border-green-300 h-4 hidden sm:block" />
+                                <span>Showing <b className="text-slate-900">{compStart + 1}</b> to <b className="text-slate-900">{compEnd}</b> of <b className="text-slate-900">{compTotal}</b> records</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <button onClick={() => setCompletedPage(1)} disabled={completedPage === 1} className="h-7 w-7 rounded bg-white border border-green-300 flex items-center justify-center text-green-700 hover:bg-green-100 disabled:opacity-40 shadow-sm transition" title="First"><ChevronsLeft className="h-3.5 w-3.5" /></button>
+                                <button onClick={() => setCompletedPage(p => Math.max(p - 1, 1))} disabled={completedPage === 1} className="h-7 w-7 rounded bg-white border border-green-300 flex items-center justify-center text-green-700 hover:bg-green-100 disabled:opacity-40 shadow-sm transition" title="Prev"><ChevronLeft className="h-3.5 w-3.5" /></button>
+                                <div className="flex items-center px-3 h-7 rounded bg-white border border-green-300 text-xs font-bold text-slate-700 shadow-sm select-none">Page {completedPage} of {compTotalPages}</div>
+                                <button onClick={() => setCompletedPage(p => Math.min(p + 1, compTotalPages))} disabled={completedPage === compTotalPages} className="h-7 w-7 rounded bg-white border border-green-300 flex items-center justify-center text-green-700 hover:bg-green-100 disabled:opacity-40 shadow-sm transition" title="Next"><ChevronRight className="h-3.5 w-3.5" /></button>
+                                <button onClick={() => setCompletedPage(compTotalPages)} disabled={completedPage === compTotalPages} className="h-7 w-7 rounded bg-white border border-green-300 flex items-center justify-center text-green-700 hover:bg-green-100 disabled:opacity-40 shadow-sm transition" title="Last"><ChevronsRight className="h-3.5 w-3.5" /></button>
+                            </div>
+                        </div>
+
+                    </div>
+                    )
+                })()}
+
+                {/* ═══════ COMPLETED ENQUIRY VIEW MODAL ═══════ */}
+                {selectedCompletedEnquiry && (
+                    <Dialog open={isCompletedViewOpen} onOpenChange={setIsCompletedViewOpen}>
+                        <DialogContent className="max-w-[900px] w-[95vw] max-h-[90vh] overflow-hidden bg-white p-0 rounded-2xl border-0 shadow-[0_28px_70px_rgba(0,0,0,0.28)] flex flex-col sm:max-w-[900px]">
+
+                            {/* ── MODAL HEADER ── */}
+                            <div className="flex items-start gap-4 px-6 py-5 bg-gradient-to-r from-[#1e3a5f] to-[#14532d] shrink-0">
+                                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center text-base font-extrabold text-white shrink-0 border border-white/30">
+                                    {(() => {
+                                        const parts = String(selectedCompletedEnquiry.name_of_client || "").trim().split(/\s+/).filter(Boolean)
+                                        return parts.length ? (parts[0][0] + (parts[1]?.[0] || "")).toUpperCase() : "?"
+                                    })()}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h2 className="text-lg font-extrabold text-white leading-tight break-words">
+                                        {selectedCompletedEnquiry.name_of_client || "Unnamed Client"}
+                                    </h2>
+                                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                                        <span className="inline-flex items-center gap-1 bg-white/15 text-white border border-white/25 rounded-full px-2.5 py-0.5 text-[11px] font-bold">
+                                            {selectedCompletedEnquiry.lead_id}
+                                        </span>
+                                        <span className="inline-flex items-center gap-1 bg-green-400/30 text-green-100 border border-green-400/40 rounded-full px-2.5 py-0.5 text-[11px] font-bold">
+                                            <Check className="h-3 w-3" /> Both Done
+                                        </span>
+                                        <span className={`inline-flex items-center bg-white/10 border border-white/20 rounded-full px-2.5 py-0.5 text-[11px] font-bold text-white`}>
+                                            {selectedCompletedEnquiry.company_belongs_to || "—"}
+                                        </span>
+                                    </div>
+                                    <p className="text-white/70 text-[11.5px] mt-1">
+                                        {selectedCompletedEnquiry.mobile || ""}{selectedCompletedEnquiry.mobile && selectedCompletedEnquiry.email_id ? " · " : ""}{selectedCompletedEnquiry.email_id || ""}
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => setIsCompletedViewOpen(false)}
+                                    className="w-8 h-8 rounded-lg bg-white/15 hover:bg-white/25 flex items-center justify-center text-white transition shrink-0"
+                                >
+                                    <XCircle className="h-4.5 w-4.5" />
+                                </button>
+                            </div>
+
+                            {/* ── MODAL BODY (sidebar + content) ── */}
+                            <div className="flex flex-1 min-h-0 overflow-hidden">
+
+                                {/* LEFT SIDEBAR */}
+                                <div className="w-[220px] shrink-0 border-r border-[#e8ecf3] bg-[#f8fafc] flex flex-col overflow-y-auto">
+                                    <div className="p-4 border-b border-[#e8ecf3]">
+                                        <p className="text-[10px] font-extrabold tracking-wider uppercase text-[#94a3b8] mb-2">Lead Info</p>
+                                        <div className="space-y-2">
+                                            <div>
+                                                <div className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wide">Cold By</div>
+                                                <div className="text-[12px] font-bold text-[#0f172a]">{selectedCompletedEnquiry.cold_by_employee_name || "—"}</div>
+                                            </div>
+                                            <div>
+                                                <div className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wide">Subject</div>
+                                                <div className="text-[12px] font-semibold text-[#334155] break-words line-clamp-3">{selectedCompletedEnquiry.subjects || "—"}</div>
+                                            </div>
+                                            <div>
+                                                <div className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wide">Generated On</div>
+                                                <div className="text-[12px] font-semibold text-[#334155]">{formatDateStr(selectedCompletedEnquiry.generate_date_time)}</div>
+                                            </div>
+                                            <div>
+                                                <div className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wide">UID</div>
+                                                <div className="text-[11px] font-mono text-[#475569] break-all">{selectedCompletedEnquiry.uid || "—"}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="p-4">
+                                        <p className="text-[10px] font-extrabold tracking-wider uppercase text-[#94a3b8] mb-3">Sections</p>
+                                        <div className="space-y-1">
+                                            <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-200">
+                                                <div className="w-2 h-2 rounded-full bg-indigo-500"/>
+                                                <span className="text-[11.5px] font-bold text-indigo-700">Executive Verifier</span>
+                                            </div>
+                                            <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-violet-50 border border-violet-200">
+                                                <div className="w-2 h-2 rounded-full bg-violet-500"/>
+                                                <span className="text-[11.5px] font-bold text-violet-700">Senior Verifier</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* RIGHT CONTENT PANEL */}
+                                <div className="flex-1 min-w-0 overflow-y-auto bg-[#fbfcfe] p-5 space-y-6">
+
+                                    {/* ── EXECUTIVE SECTION ── */}
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <div className="w-1 h-4 rounded bg-indigo-500" />
+                                            <span className="text-[12px] font-extrabold tracking-wider uppercase text-indigo-600">Executive Verifier Details</span>
+                                            {selectedCompletedEnquiry.actual && (
+                                                <span className="ml-auto text-[10.5px] font-semibold text-slate-500">Verified: {formatDateStr(selectedCompletedEnquiry.actual)}</span>
+                                            )}
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                            <div className="border border-[#e2e8f0] rounded-xl bg-white p-[10px_14px]">
+                                                <div className="text-[10px] font-bold tracking-[0.7px] uppercase text-[#94a3b8] mb-1">Doer (Verifier Name)</div>
+                                                <div className="text-[13px] font-bold text-[#1e293b]">{selectedCompletedEnquiry.CH || "—"}</div>
+                                            </div>
+                                            <div className="border border-[#e2e8f0] rounded-xl bg-white p-[10px_14px]">
+                                                <div className="text-[10px] font-bold tracking-[0.7px] uppercase text-[#94a3b8] mb-1">Verify Action Status</div>
+                                                <div className="text-[13px] font-bold text-indigo-700">{selectedCompletedEnquiry.CI || "—"}</div>
+                                            </div>
+                                            <div className="border border-[#e2e8f0] rounded-xl bg-white p-[10px_14px]">
+                                                <div className="text-[10px] font-bold tracking-[0.7px] uppercase text-[#94a3b8] mb-1">Overall Rating (/10)</div>
+                                                <div className="text-[18px] font-extrabold text-indigo-600">
+                                                    {selectedCompletedEnquiry.CL != null ? Number(selectedCompletedEnquiry.CL).toFixed(1) : "—"}
+                                                    {selectedCompletedEnquiry.CL != null && <span className="text-[12px] text-slate-400 font-semibold">/10</span>}
+                                                </div>
+                                            </div>
+                                            <div className="border border-[#e2e8f0] rounded-xl bg-white p-[10px_14px]">
+                                                <div className="text-[10px] font-bold tracking-[0.7px] uppercase text-[#94a3b8] mb-1">Valid Reason</div>
+                                                <div className="text-[12.5px] font-semibold text-[#1e293b]">{selectedCompletedEnquiry.CJ || "—"}</div>
+                                            </div>
+                                            <div className="border border-[#e2e8f0] rounded-xl bg-white p-[10px_14px] sm:col-span-2">
+                                                <div className="text-[10px] font-bold tracking-[0.7px] uppercase text-[#94a3b8] mb-1">What Went Wrong</div>
+                                                <div className="text-[12.5px] font-medium text-[#334155]">{selectedCompletedEnquiry.CK || "—"}</div>
+                                            </div>
+                                            <div className="border border-[#e2e8f0] rounded-xl bg-white p-[10px_14px] sm:col-span-2">
+                                                <div className="text-[10px] font-bold tracking-[0.7px] uppercase text-[#94a3b8] mb-1">Suggested Solution</div>
+                                                <div className="text-[12.5px] font-medium text-[#334155]">{selectedCompletedEnquiry.CM || "—"}</div>
+                                            </div>
+                                            <div className="border border-[#e2e8f0] rounded-xl bg-white p-[10px_14px] sm:col-span-3">
+                                                <div className="text-[10px] font-bold tracking-[0.7px] uppercase text-[#94a3b8] mb-1">Remarks</div>
+                                                <div className="text-[12.5px] font-medium text-[#334155] whitespace-pre-wrap">{selectedCompletedEnquiry.CN || "—"}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Divider */}
+                                    <div className="border-t-2 border-dashed border-slate-200" />
+
+                                    {/* ── SENIOR SECTION ── */}
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <div className="w-1 h-4 rounded bg-violet-500" />
+                                            <span className="text-[12px] font-extrabold tracking-wider uppercase text-violet-600">Senior Verifier Details</span>
+                                            {selectedCompletedEnquiry.senior_actual && (
+                                                <span className="ml-auto text-[10.5px] font-semibold text-slate-500">Verified: {formatDateStr(selectedCompletedEnquiry.senior_actual)}</span>
+                                            )}
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                            <div className="border border-[#e2e8f0] rounded-xl bg-white p-[10px_14px]">
+                                                <div className="text-[10px] font-bold tracking-[0.7px] uppercase text-[#94a3b8] mb-1">Doer (Verifier Name)</div>
+                                                <div className="text-[13px] font-bold text-[#1e293b]">{selectedCompletedEnquiry.CW || "—"}</div>
+                                            </div>
+                                            <div className="border border-[#e2e8f0] rounded-xl bg-white p-[10px_14px]">
+                                                <div className="text-[10px] font-bold tracking-[0.7px] uppercase text-[#94a3b8] mb-1">Verify Action Status</div>
+                                                <div className="text-[13px] font-bold text-violet-700">{selectedCompletedEnquiry.CX || "—"}</div>
+                                            </div>
+                                            <div className="border border-[#e2e8f0] rounded-xl bg-white p-[10px_14px]">
+                                                <div className="text-[10px] font-bold tracking-[0.7px] uppercase text-[#94a3b8] mb-1">Overall Rating (/10)</div>
+                                                <div className="text-[18px] font-extrabold text-violet-600">
+                                                    {selectedCompletedEnquiry.DA != null ? Number(selectedCompletedEnquiry.DA).toFixed(1) : "—"}
+                                                    {selectedCompletedEnquiry.DA != null && <span className="text-[12px] text-slate-400 font-semibold">/10</span>}
+                                                </div>
+                                            </div>
+                                            <div className="border border-[#e2e8f0] rounded-xl bg-white p-[10px_14px]">
+                                                <div className="text-[10px] font-bold tracking-[0.7px] uppercase text-[#94a3b8] mb-1">Valid Reason</div>
+                                                <div className="text-[12.5px] font-semibold text-[#1e293b]">{selectedCompletedEnquiry.CY || "—"}</div>
+                                            </div>
+                                            <div className="border border-[#e2e8f0] rounded-xl bg-white p-[10px_14px] sm:col-span-2">
+                                                <div className="text-[10px] font-bold tracking-[0.7px] uppercase text-[#94a3b8] mb-1">What Went Wrong</div>
+                                                <div className="text-[12.5px] font-medium text-[#334155]">{selectedCompletedEnquiry.CZ || "—"}</div>
+                                            </div>
+                                            <div className="border border-[#e2e8f0] rounded-xl bg-white p-[10px_14px] sm:col-span-3">
+                                                <div className="text-[10px] font-bold tracking-[0.7px] uppercase text-[#94a3b8] mb-1">Suggested Solution</div>
+                                                <div className="text-[12.5px] font-medium text-[#334155]">{selectedCompletedEnquiry.DB || "—"}</div>
+                                            </div>
+                                            <div className="border border-[#e2e8f0] rounded-xl bg-white p-[10px_14px] sm:col-span-3">
+                                                <div className="text-[10px] font-bold tracking-[0.7px] uppercase text-[#94a3b8] mb-1">Remarks</div>
+                                                <div className="text-[12.5px] font-medium text-[#334155] whitespace-pre-wrap">{selectedCompletedEnquiry.DC || "—"}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </div>
+
+                            {/* ── MODAL FOOTER ── */}
+                            <div className="shrink-0 border-t border-slate-200 px-6 py-4 bg-white flex items-center justify-between">
+                                <span className="text-[11.5px] text-slate-500 font-medium">Read-only view · Both verifications completed</span>
+                                <button
+                                    onClick={() => setIsCompletedViewOpen(false)}
+                                    className="inline-flex items-center gap-2 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 font-bold px-4 py-2 text-xs transition"
+                                >
+                                    Close
+                                </button>
+                            </div>
+
+                        </DialogContent>
+                    </Dialog>
+                )}
 
                 {/* Detailed Reverification Dialog Popup Modal */}
                 <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
@@ -1398,7 +1934,7 @@ export default function EnquiryReverificationPage() {
                                                 Executive Verify
                                             </button>
                                         )}
-                                        {!hasSeniorCompleted(selectedEnquiry) && (isSenior || isAdmin) && (
+                                        {!hasSeniorCompleted(selectedEnquiry) && (isSenior || isAdmin) && hasSeniorPlanned(selectedEnquiry) && (
                                             <button
                                                 onClick={() => {
                                                     const enq = selectedEnquiry;

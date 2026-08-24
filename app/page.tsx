@@ -1,12 +1,11 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useRouter } from "next/navigation"
 import { useAuth } from "@/hooks/use-auth"
 import { Building2, Mail, Lock, LogIn, AlertCircle } from "lucide-react"
 
@@ -37,13 +36,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
-  const router = useRouter()
   const { login } = useAuth()
-
-  useEffect(() => {
-    // Preload dashboard code in background for instant navigation
-    router.prefetch("/dashboard")
-  }, [router])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -53,7 +46,11 @@ export default function LoginPage() {
     try {
       const company = email.includes("@kappl.com") ? "KAPPL" : "KTAHV"
       await login(email, password, company)
-      router.replace("/dashboard")
+      // Use full browser navigation so middleware evaluates the newly created
+      // HttpOnly session cookie on a fresh request, bypassing any stale
+      // client-side router cache that may have captured a pre-login
+      // unauthenticated redirect for /dashboard.
+      window.location.href = "/dashboard"
     } catch (error) {
       console.error("Login failed:", error)
       setError(loginErrorMessage(error))
