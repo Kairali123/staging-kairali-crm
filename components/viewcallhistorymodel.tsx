@@ -448,7 +448,6 @@ export default function ViewModal({ row, onClose }: { row: LeadRow | null; onClo
                                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase", color: "#94a3b8", marginBottom: 3 }}>Assign To MR</div>
                                 <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{val(row.assignToMR)}</div>
                             </div>
-
                         </div>
                     </div>
 
@@ -483,7 +482,7 @@ export default function ViewModal({ row, onClose }: { row: LeadRow | null; onClo
                             <SectionLabel title="Lead Information" />
                             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
                                 <InfoCard label="Time Stamp" value={val(row.timeStamp)} />
-                                <InfoCard label="Date & Time" value={val(row.dateTime)} />
+                                <InfoCard label="Enquiry Date & Time" value={val(row.dateTime)} />
                                 <InfoCard label="Subjects" value={val(row.subjects)} />
                                 <InfoCard label="WebSite Name" value={val(row.websiteName)} />
                                 <InfoCard label="Data Source" value={val(row.dataSource)} full={false} />
@@ -516,7 +515,7 @@ export default function ViewModal({ row, onClose }: { row: LeadRow | null; onClo
                         </span>
                         <span style={{ width: 1, height: 16, background: "#e2e8f0" }} />
                         <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", color: "#94a3b8" }}>
-                            Date &amp; Time{" "}
+                            Enquiry Date &amp; Time{" "}
                             <span style={{ color: "#1e293b", fontSize: 12.5, textTransform: "none", letterSpacing: 0 }}>{val(row.dateTime)}</span>
                         </span>
                     </div>

@@ -1733,7 +1733,7 @@ export default function EnquiryReverificationPage() {
                                             <div className="flex items-center gap-2.5">
                                                 <div className="w-7 h-7 rounded-full bg-[#4f46e5] flex items-center justify-center text-sm">📞</div>
                                                 <span className="text-[14px] font-extrabold text-[#1e293b]">
-                                                    {formatDateStr(selectedEnquiry.generate_date_time) || "N/A"}
+                                                    {formatDateStr(selectedEnquiry.enquiry_created_datetime) || "N/A"}
                                                 </span>
                                             </div>
                                             <span className="inline-flex items-center gap-1.5 border border-[#bfdbfe] bg-[#eff6ff] text-[#2563eb] rounded-full px-3 py-1 text-xs font-extrabold">
@@ -1887,9 +1887,9 @@ export default function EnquiryReverificationPage() {
                                 <div className="shrink-0 border-t border-[#e8ecf3] bg-white p-[12px_22px] flex items-center justify-between gap-3">
                                     <div className="flex items-center gap-4.5 flex-wrap">
                                         <span className="text-[11px] font-bold tracking-[0.6px] uppercase text-[#94a3b8]">
-                                            Generate Date{" "}
+                                            Enquiry Date{" "}
                                             <span className="text-[#1e293b] text-[12.5px] normal-case tracking-normal ml-1">
-                                                {formatDateStr(selectedEnquiry.generate_date_time)}
+                                                {formatDateStr(selectedEnquiry.enquiry_created_datetime)}
                                             </span>
                                         </span>
                                         <span className="w-px h-4 bg-[#e2e8f0]" />
