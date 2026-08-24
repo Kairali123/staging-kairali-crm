@@ -59,6 +59,22 @@ function isLockedDate(plannedVal: any): boolean {
     return today < planned;
 }
 
+const DOCTOR_EMAIL_MAP: Record<string, string> = {
+    "Dr Deepu John": "drdeepu@ktahv.com",
+    "Ashikha Raj": "ashikha@ktahv.com",
+    "Dr. Rahul R": "drrahul@ktahv.com",
+    "Dr. Akhila Oommen": "drakhila@ktahv.com",
+    "ANAGHA S": "anagha@ktahv.com",
+};
+
+function getDoctorEmail(doctorName?: string | null): string {
+    if (!doctorName) return "doctor@ktahv.com";
+    if (DOCTOR_EMAIL_MAP[doctorName]) return DOCTOR_EMAIL_MAP[doctorName];
+    if (doctorName.includes("@")) return doctorName;
+    const slug = doctorName.toLowerCase().replace(/^dr\.?\s*/i, "").trim().replace(/\s+/g, ".");
+    return slug ? `${slug}@ktahv.com` : "doctor@ktahv.com";
+}
+
 export async function GET(req: NextRequest) {
     try {
         const session = getSessionUserResult(req);
@@ -315,7 +331,7 @@ export async function GET(req: NextRequest) {
             const s11Actual = s11Completed ? tracker?.updated_at || tracker?.created_at || null : null;
             const s11Saved = tracker ? {
                 doctorAssignedToClient: tracker.doctor_assigned_to_the_client || "",
-                email: tracker.email_address || "",
+                email: getDoctorEmail(tracker.doctor_assigned_to_the_client),
                 timestamp: tracker.doctor_assigned_to_the_client ? formatTimestamp(tracker.updated_at) : "",
                 doctorAssignStatus: tracker.doctor_assigned_to_the_client ? "Assigned" : "",
                 changedDoctor: "",

@@ -28,6 +28,7 @@ import {
     ClipboardCheck,
 } from "lucide-react";
 import type { Guest, Stage, StageStatus } from "@/types/crr";
+import { getDoctorEmail } from "@/components/Guestrequirementverificationmodal";
 
 interface CrrStageViewModalProps {
     open: boolean;
@@ -488,13 +489,16 @@ export default function CrrStageViewModal({
                 const s = guest.guestRequirementVerification;
                 const hasData = s || activeStageSummary?.hasSaved;
                 if (!hasData) return null;
+                const assignedDoc = s?.changedDoctor || s?.doctorAssignedToClient || (savedData.changedDoctor as string) || (savedData.doctorAssignedToClient as string);
+                const rawEmail = s?.email || (savedData.email as string);
+                const doctorEmail = (rawEmail && rawEmail !== guest.email && (rawEmail.includes("@ktahv.com") || !rawEmail.includes("@gmail.com"))) ? rawEmail : getDoctorEmail(assignedDoc);
                 return (
                     <>
                         <SectionGroup title="Guest Requirement Verification">
                             <FieldBox label="Doctor Assigned" value={s?.doctorAssignedToClient || (savedData.doctorAssignedToClient as string)} />
                             <FieldBox label="Doctor Assign Status" value={s?.doctorAssignStatus || (savedData.doctorAssignStatus as string)} badgeColor="#0d9488" />
                             <FieldBox label="Changed Doctor" value={s?.changedDoctor || (savedData.changedDoctor as string)} />
-                            <FieldBox label="Doctor Email" value={s?.email || (savedData.email as string)} />
+                            <FieldBox label="Doctor Email" value={doctorEmail} />
                             <FieldBox label="Timestamp" value={s?.timestamp || (savedData.timestamp as string)} />
                             <FieldBox label="Remarks" value={s?.remarks || (savedData.remarks as string)} fullWidth />
                         </SectionGroup>

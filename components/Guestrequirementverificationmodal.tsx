@@ -5,9 +5,24 @@ import type { Guest } from "@/types/crr";
 
 const DOCTORS = ["Dr Deepu John", "Ashikha Raj", "Dr. Rahul R", "Dr. Akhila Oommen", "ANAGHA S"];
 
+const DOCTOR_EMAIL_MAP: Record<string, string> = {
+    "Dr Deepu John": "drdeepu@ktahv.com",
+    "Ashikha Raj": "ashikha@ktahv.com",
+    "Dr. Rahul R": "drrahul@ktahv.com",
+    "Dr. Akhila Oommen": "drakhila@ktahv.com",
+    "ANAGHA S": "anagha@ktahv.com",
+};
+
+export function getDoctorEmail(doctorName?: string | null): string {
+    if (!doctorName) return "doctor@ktahv.com";
+    if (DOCTOR_EMAIL_MAP[doctorName]) return DOCTOR_EMAIL_MAP[doctorName];
+    if (doctorName.includes("@")) return doctorName;
+    const slug = doctorName.toLowerCase().replace(/^dr\.?\s*/i, "").trim().replace(/\s+/g, ".");
+    return slug ? `${slug}@ktahv.com` : "doctor@ktahv.com";
+}
+
 // Fallbacks if no user is logged in
 const ASSIGNED_DOCTOR = "Dr Deepu John";
-const AUTO_EMAIL = "doctor@ktahv.com";
 
 const LOCKED_DETAILS = {
     bookingId: "KTAHV-PMS-5453",
@@ -94,8 +109,13 @@ export default function GuestRequirementVerificationModal({ open = true, onClose
     const [changedDoctor, setChangedDoctor] = useState(saved?.changedDoctor || "");
     const [remarks, setRemarks] = useState(saved?.remarks || "");
     const [isSubmitting, setIsSubmitting] = useState(false);
-    // Timestamp is captured live at the moment of Submit, not when the modal opens.
-    // Shown as "will be recorded on submit" until then.
+    const activeDoctor = doctorAssignStatus === "change" && changedDoctor
+        ? changedDoctor
+        : (saved?.doctorAssignedToClient || ASSIGNED_DOCTOR);
+
+    // Prevent guest email from leaking into doctor email field
+    const savedEmailIsDoctor = saved?.email && saved.email !== guest?.email && (saved.email.includes("@ktahv.com") || !saved.email.includes("@gmail.com"));
+    const doctorEmail = savedEmailIsDoctor ? saved.email : getDoctorEmail(activeDoctor);
 
     if (!open) return null;
 
@@ -112,7 +132,7 @@ export default function GuestRequirementVerificationModal({ open = true, onClose
         const timestamp = saved?.timestamp || getTimestamp(); // captured at click time or use existing
         onSubmit({
             doctorAssignedToClient: saved?.doctorAssignedToClient || ASSIGNED_DOCTOR,
-            email: saved?.email || AUTO_EMAIL,
+            email: doctorEmail,
             timestamp,
             doctorAssignStatus,
             changedDoctor: doctorAssignStatus === "change" ? changedDoctor : "",
@@ -298,7 +318,7 @@ export default function GuestRequirementVerificationModal({ open = true, onClose
                             </div>
                             <div>
                                 <Label required>E-Mail</Label>
-                                <div style={readonlyBoxStyle}>{saved?.email || AUTO_EMAIL}</div>
+                                <div style={readonlyBoxStyle}>{doctorEmail}</div>
                             </div>
                         </div>
 
