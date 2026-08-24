@@ -25,6 +25,7 @@ import {
     Check,
     Lock,
     Sparkles,
+    ClipboardCheck,
 } from "lucide-react";
 import type { Guest, Stage, StageStatus } from "@/types/crr";
 
@@ -137,9 +138,9 @@ const STAGES_CONFIG: {
     {
         no: 11,
         name: "Guest Requirement Verification",
-        resp: "Doctor",
+        resp: "GM",
         trigger: "Before Check-in",
-        icon: Stethoscope,
+        icon: ClipboardCheck,
         color: "#0d9488",
         accentColor: "#ccfbf1",
     },

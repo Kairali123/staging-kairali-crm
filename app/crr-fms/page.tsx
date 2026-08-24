@@ -59,6 +59,7 @@ import {
     ArrowDown,
     Loader2,
     Eye,
+    ClipboardCheck,
 } from "lucide-react";
 
 /* =========================================================
@@ -82,7 +83,7 @@ const STAGES: Stage[] = [
     { no: 8, name: "Referral Collection & Lead Generation", resp: "FO", trigger: "Departure + 30 Days", dateLabel: "Referral Collected Date", remarkLabel: "Referral Details / Remarks" },
     { no: 9, name: "Driver Assignment – Arrival Pickup", resp: "FO", trigger: "Before Arrival", dateLabel: "Pickup Date", remarkLabel: "Remarks For Driver" },
     { no: 10, name: "Driver Assignment – Departure Drop", resp: "FO", trigger: "Before Departure", dateLabel: "Drop Date", remarkLabel: "Remarks For Driver" },
-    { no: 11, name: "Guest Requirement Verification", resp: "Doctor", trigger: "Before Check-in", dateLabel: "Verification Timestamp", remarkLabel: "Remarks" },
+    { no: 11, name: "Guest Requirement Verification", resp: "GM", trigger: "Before Check-in", dateLabel: "Verification Timestamp", remarkLabel: "Remarks" },
 ];
 
 /* =========================================================
@@ -884,7 +885,7 @@ export default function CRRCallingProcessPage() {
         const maxStagePending = Math.max(1, ...stagePending);
 
         // Active (not-yet-complete, not-cancelled) guests grouped by responsible role
-        const respCounts: Record<string, number> = { GRE: 0, Doctor: 0, FO: 0 };
+        const respCounts: Record<string, number> = { GRE: 0, Doctor: 0, FO: 0, GM: 0 };
         rows.forEach((g) => {
             if (g.allComplete || isBookingCancelled(g)) return;
             const resp = STAGES[g.currentStage - 1]?.resp;
@@ -1763,6 +1764,7 @@ export default function CRRCallingProcessPage() {
                                             <SelectItem value="GRE">GRE</SelectItem>
                                             <SelectItem value="Doctor">Doctor</SelectItem>
                                             <SelectItem value="FO">FO</SelectItem>
+                                            <SelectItem value="GM">GM</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -2645,6 +2647,7 @@ export default function CRRCallingProcessPage() {
                                                             { key: "GRE", label: "Guest Relations Executive (GRE)", icon: PhoneCall, from: "from-sky-500", to: "to-sky-600" },
                                                             { key: "Doctor", label: "Doctor", icon: Award, from: "from-teal-500", to: "to-teal-600" },
                                                             { key: "FO", label: "Front Office (FO)", icon: Briefcase, from: "from-purple-500", to: "to-purple-600" },
+                                                            { key: "GM", label: "General Manager (GM)", icon: ClipboardCheck, from: "from-amber-500", to: "to-amber-600" },
                                                         ] as const
                                                     ).map((r) => {
                                                         const value = chartData.respCounts[r.key] ?? 0;

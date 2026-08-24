@@ -1,5 +1,5 @@
 export type Role = "user" | "admin";
-export type Resp = "GRE" | "Doctor" | "FO";
+export type Resp = "GRE" | "Doctor" | "FO" | "GM";
 export type StageStatus = "Pending" | "Processing" | "Complete";
 export type CallStatus = "Done" | "Not Done - Close" | "Close Follow-up";
 export type YesNo = "Yes" | "No";
