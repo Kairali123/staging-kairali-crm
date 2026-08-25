@@ -90,6 +90,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [salesExpanded, setSalesExpanded] = useState(false)
   const [portalHubExpanded, setPortalHubExpanded] = useState(false)
   const [voiceCallExpanded, setVoiceCallExpanded] = useState(false)
+  const [dialShreeExpanded, setDialShreeExpanded] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isClearingCache, setIsClearingCache] = useState(false)
   const [meetingsExpanded, setMeetingsExpanded] = useState(false)
@@ -130,6 +131,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (pathname.startsWith("/doctor-consultation")) setDoctorConsultationExpanded(true)
     if (pathname.startsWith("/sales")) setSalesExpanded(true)
     if (pathname.startsWith("/voicecall")) setVoiceCallExpanded(true)
+    if (pathname.startsWith("/dialShree") || pathname.startsWith("/dialshree")) setDialShreeExpanded(true)
     if (pathname.startsWith("/meetings")) setMeetingsExpanded(true)
   }, [pathname])
 
@@ -179,6 +181,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "AI Deal Assistant", href: "/deal-assistant", icon: Sparkles, permission: "deal_assistant.view" },
     // { name: "K-Serve Billing Auditor", href: "/ksereve-billing-auditer", icon: FileText, permission: "bill_fms.view" },
     { name: "AI Voice Lead Qual.", icon: Phone, permission: "ai_voice_menu.view" },
+    // { name: "DialShree Lead Qual.", icon: PhoneCall, permission: "dialshree_menu.view" },
     { name: "KTAHV Accounts Tracker", href: "/accounts-tracker", icon: Receipt, permission: "accounts_tracker.view" },
     { name: "Partner Onboarding System", href: "/partners", icon: Building2, permission: "partners.view" },
     { name: "New Order FMS", href: "/new-order-fms", icon: FileText, permission: "new-order-fms.view" },
@@ -409,6 +412,52 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     onClick={() => isMobile && setSidebarOpen(false)}
                   >
                     <subItem.icon className={`mr-3 h-4 w-4 ${pathname === subItem.href ? "text-cyan-600" : "text-gray-500"}`} />
+                    {subItem.name}
+                  </Link>
+                ))}
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    if (item.name === "DialShree Lead Qual.") {
+      const dialShreeSubMenu = [
+        { name: "Received", href: "/dialShree/received", icon: Phone, permission: "dialshree_received.view" },
+        { name: "Sent", href: "/dialShree/sent", icon: Phone, permission: "dialshree_sent.view" },
+      ]
+      const isActive = pathname.startsWith("/dialShree") || pathname.startsWith("/dialshree")
+      return (
+        <div key={item.name}>
+          <button
+            onClick={() => setDialShreeExpanded(!dialShreeExpanded)}
+            className={`group flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${isActive
+              ? "bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-md"
+              : "text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"
+              }`}
+          >
+            <item.icon className={`mr-3 h-5 w-5 ${isActive ? "text-white" : "text-indigo-500"}`} />
+            {item.name}
+            {dialShreeExpanded
+              ? <ChevronDown className={`ml-auto h-4 w-4 ${isActive ? "text-white" : "text-gray-500"}`} />
+              : <ChevronRight className={`ml-auto h-4 w-4 ${isActive ? "text-white" : "text-gray-500"}`} />
+            }
+          </button>
+          {dialShreeExpanded && (
+            <div className="ml-6 mt-2 space-y-1">
+              {dialShreeSubMenu
+                .filter((s) => hasPermission(s.permission) || hasPermission("all"))
+                .map((subItem) => (
+                  <Link
+                    key={subItem.name}
+                    href={subItem.href}
+                    className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${pathname === subItem.href
+                      ? "bg-gradient-to-r from-indigo-50 to-indigo-100 text-indigo-700 border-l-4 border-indigo-500 shadow-sm"
+                      : "text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"
+                      }`}
+                    onClick={() => isMobile && setSidebarOpen(false)}
+                  >
+                    <subItem.icon className={`mr-3 h-4 w-4 ${pathname === subItem.href ? "text-indigo-600" : "text-gray-500"}`} />
                     {subItem.name}
                   </Link>
                 ))}

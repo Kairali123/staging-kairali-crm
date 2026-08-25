@@ -18,6 +18,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
+import { toast } from "sonner"
 
 export default function ReportsPage() {
   const { data, loading, generateReport, exportReport } = useAnalytics()
@@ -29,18 +30,18 @@ export default function ReportsPage() {
     setGeneratingReport(false)
 
     if (result.success) {
-      alert("Report generated successfully!")
+      toast.success("Report generated successfully!")
     } else {
-      alert("Failed to generate report: " + result.error)
+      toast.error("Failed to generate report: " + result.error)
     }
   }
 
   const handleExportReport = async (format: "pdf" | "excel" | "csv") => {
     const result = await exportReport(format, data)
     if (result.success) {
-      alert(`Report exported as ${format.toUpperCase()} successfully!`)
+      toast.success(`Report exported as ${format.toUpperCase()} successfully!`)
     } else {
-      alert("Failed to export report: " + result.error)
+      toast.error("Failed to export report: " + result.error)
     }
   }
 

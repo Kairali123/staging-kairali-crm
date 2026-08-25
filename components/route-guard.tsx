@@ -55,6 +55,8 @@ const pagePermissions: Record<string, string> = {
   // giving it a permission would be new policy, which is D7.
   '/voicecall/data/received': 'ai_voice_received.view',
   '/voicecall/data/sent': 'ai_voice_sent.view',
+  '/dialShree/received': 'dialshree_received.view',
+  '/dialShree/sent': 'dialshree_sent.view',
   '/voicecall/summary': 'ai_voice_summary.view',
   '/meetings': 'meetings.view',
   '/accounts-tracker': 'accounts_tracker.view',
@@ -119,8 +121,9 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
       return
     }
 
-    // Super admin has unrestricted access to all pages
-    if (user?.role === 'super_admin' || user?.permissions?.includes('all')) return
+    // Super admin and admin have unrestricted access to all pages
+    const roleStr = String(user?.role || '').toLowerCase().trim()
+    if (roleStr === 'super_admin' || roleStr === 'admin' || user?.permissions?.includes('all')) return
 
     // If route is restricted, redirect to access-denied unless user has the permission
     if (isRestricted(pathname)) {

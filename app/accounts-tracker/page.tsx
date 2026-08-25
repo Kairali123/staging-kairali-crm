@@ -4140,7 +4140,7 @@ const SortIconLight = ({ config, field }: { config: { key: string; direction: 'a
 };
 
 export default function AccountsTrackerPage() {
-    const { bookings: apiBookings, loading, refresh } = useAccountsTracker();
+    const { bookings: apiBookings, loading, error, refresh } = useAccountsTracker();
     const { hasPermission, user } = useAuth();
     const role: UserRole = 'admin';
     const isSuperAdmin = hasPermission('all') || user?.permissions?.includes('all') || user?.role === 'super_admin' || user?.role === 'admin';
@@ -4601,11 +4601,20 @@ export default function AccountsTrackerPage() {
                     <img src="/grouploader.gif" alt="Loading..." className="w-48 h-48" />
                     <p className="text-sm font-semibold text-slate-500 tracking-wide">Loading data...</p>
                 </div>
+            ) : error ? (
+                <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 bg-white rounded-2xl border border-red-200 p-8 shadow-sm text-center my-6">
+                    <AlertTriangle className="w-12 h-12 text-red-500" />
+                    <h2 className="text-xl font-bold text-slate-800">Failed to Load Accounts Tracker</h2>
+                    <p className="text-sm text-slate-600 max-w-md">{error}</p>
+                    <Button onClick={() => refresh()} variant="default" className="bg-blue-600 hover:bg-blue-700 text-white gap-2">
+                        <RefreshCw className="w-4 h-4" /> Retry
+                    </Button>
+                </div>
             ) : null}
             <div style={{
-                opacity: loading ? 0 : 1,
+                opacity: loading || error ? 0 : 1,
                 transition: 'opacity 0.3s ease-in-out',
-                display: loading ? 'none' : undefined
+                display: loading || error ? 'none' : undefined
             }} className="space-y-6">                {/* Hero Header Section */}
                 <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 border-b border-blue-500 shadow-[0_8px_30px_rgba(59,130,246,0.35)] -mx-4 sm:-mx-6 lg:-mx-8 -mt-6 sm:-mt-10 mb-6">
                     <div className="w-full px-4 sm:px-6 lg:px-8 py-6">

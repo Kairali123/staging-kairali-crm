@@ -1,6 +1,31 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSessionUser, hasDoctorConsultationAccess } from "@/lib/authz"
 
+function getDynamicTrend() {
+  const trend = []
+  const counts = [
+    { c: 45, p: 38 },
+    { c: 52, p: 44 },
+    { c: 48, p: 41 },
+    { c: 61, p: 53 },
+    { c: 58, p: 49 },
+    { c: 67, p: 59 },
+  ]
+  const today = new Date()
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(today)
+    d.setDate(today.getDate() - i)
+    const dateStr = d.toISOString().split("T")[0]
+    const idx = 5 - i
+    trend.push({
+      date: dateStr,
+      consultations: counts[idx].c,
+      prescriptions: counts[idx].p,
+    })
+  }
+  return trend
+}
+
 const mockKPIs = {
   totalConsultations: 247,
   completedConsultations: 198,
@@ -17,14 +42,6 @@ const mockKPIs = {
     { stage: "Day-Of Reminder", count: 22, pending: 12, overdue: 0 },
     { stage: "Post-Consult Upload", count: 35, pending: 8, overdue: 4 },
     { stage: "Handover", count: 145, pending: 6, overdue: 1 },
-  ],
-  trend: [
-    { date: "2024-01-01", consultations: 45, prescriptions: 38 },
-    { date: "2024-01-02", consultations: 52, prescriptions: 44 },
-    { date: "2024-01-03", consultations: 48, prescriptions: 41 },
-    { date: "2024-01-04", consultations: 61, prescriptions: 53 },
-    { date: "2024-01-05", consultations: 58, prescriptions: 49 },
-    { date: "2024-01-06", consultations: 67, prescriptions: 59 },
   ],
 }
 
@@ -55,5 +72,8 @@ export async function GET(request: NextRequest) {
   // Simulate API delay
   await new Promise((resolve) => setTimeout(resolve, 300))
 
-  return NextResponse.json(mockKPIs)
+  return NextResponse.json({
+    ...mockKPIs,
+    trend: getDynamicTrend(),
+  })
 }

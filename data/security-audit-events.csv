@@ -64,3 +64,8 @@ eventId,timestamp,action,outcome,actor,target,sourceIp,correlationId,context
 "7b515b1a-f456-43fc-9ae7-ba165432c26a","2026-08-24T08:25:48.721Z","auth.login","success","doctor@ktahv.com","","::1","74e758ca-4416-492e-b91a-97e4703cab07","{}"
 "e53efd1e-a181-4a72-a983-67e68d958277","2026-08-24T08:25:52.023Z","auth.logout","success","doctor@ktahv.com","","::1","6a5599ab-5752-4780-ba2a-b5d5f30a70c5","{""sessionRevoked"":true}"
 "bb439f9f-e728-412b-9da3-7795bb18c864","2026-08-24T08:25:57.983Z","auth.login","success","developer3@kairali.com","","::1","46fbbd90-e969-4b99-9ea2-5e496e5abd77","{}"
+"9b5a5482-1330-4939-89f0-bcabfa8af55a","2026-08-24T10:27:21.170Z","auth.logout","success","developer3@kairali.com","","::1","03e884ac-d6ac-4e47-aa05-c11f67950f10","{""sessionRevoked"":true}"
+"aeb5b241-f508-4206-b7e7-72c13f307607","2026-08-24T10:27:25.326Z","api.access_denied","denied","","/api/auth/me","::1","7921e810-ebfb-4f4e-9a5f-4291941928e2","{""reason"":""missing_session""}"
+"b534b52e-284f-4768-a16f-29d315e8d7b9","2026-08-24T10:27:32.487Z","auth.login","failure","developer3@kairali.com","","::1","167bac25-03c5-49ac-b9b1-e181188cceba","{""reason"":""invalid_credentials""}"
+"6817d6f4-c44c-45aa-8d75-45cc41ec6b62","2026-08-24T10:27:37.959Z","auth.login","success","developer3@kairali.com","","::1","5a0ed7cc-0c4a-4b82-8f63-c460f43cf9f9","{}"
+"dce9f4de-e94d-4ac3-82b3-9a4e18fc52e9","2026-08-24T11:18:37.366Z","api.access_denied","denied","","/api/fms/enquiry-reverification","::1","52980b1c-1cac-471b-a6fd-18c0840f49d3","{""reason"":""missing_session""}"

@@ -14,6 +14,7 @@ import { Calendar, ArrowLeft, Save, User, MapPin, CreditCard, FileText, Building
 import Link from "next/link"
 import { useBookingAuth } from "@/hooks/use-booking-auth"
 import type { Booking } from "@/types/booking"
+import { toast } from "sonner"
 
 export default function NewBookingPage() {
   const { user, hasPermission } = useBookingAuth()
@@ -76,7 +77,7 @@ export default function NewBookingPage() {
     e.preventDefault()
 
     if (!hasPermission("booking.create")) {
-      alert("You do not have permission to create bookings")
+      toast.error("You do not have permission to create bookings")
       return
     }
 
@@ -86,7 +87,7 @@ export default function NewBookingPage() {
     const daysOfStay = Math.ceil((departure.getTime() - arrival.getTime()) / (1000 * 60 * 60 * 24))
 
     if (daysOfStay <= 0) {
-      alert("Departure date must be after arrival date")
+      toast.error("Departure date must be after arrival date")
       return
     }
 
@@ -132,7 +133,7 @@ export default function NewBookingPage() {
       stageUpdatedAt: new Date().toISOString(),
     }
 
-    alert("Booking created successfully with all required fields!")
+    toast.success("Booking created successfully with all required fields!")
   }
 
   if (!user) {

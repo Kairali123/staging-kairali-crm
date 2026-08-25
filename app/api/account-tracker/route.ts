@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
+import { getSessionUser, hasAccountsTrackerAccess } from '@/lib/authz'
 
 // ─── Date formatter → "DD/MM/YYYY" ───────────────────────────────────────────
 function fmtDate(val: any): string | null {
@@ -85,6 +86,14 @@ function mapRow(row: any, index: number) {
 }
 
 export async function GET(req: NextRequest) {
+    const user = getSessionUser(req)
+    if (!user) {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    }
+    if (!hasAccountsTrackerAccess(user)) {
+        return NextResponse.json({ success: false, error: 'Insufficient permissions' }, { status: 403 })
+    }
+
     try {
         const pool = await getPool()
 

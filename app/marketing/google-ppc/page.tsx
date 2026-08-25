@@ -778,12 +778,16 @@ export default function GooglePPCPage(): JSX.Element {
                 Track campaign performance and ROAS metrics
               </p>
             </div>
-
           </div>
-
         </div>
       </div>
 
+      {error && !loading && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-center">
+          <p className="text-sm font-semibold text-red-800">Failed to load live Google PPC data</p>
+          <p className="text-xs text-red-600 mt-1">{error}</p>
+        </div>
+      )}
 
       {/* Filters Panel */}
       <div className="-mt-0">

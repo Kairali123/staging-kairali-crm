@@ -50,6 +50,7 @@ interface ExecutiveVerifierModalProps {
     onSubmit: (values: ExecutiveVerifierFormValues) => Promise<void> | void;
     defaultDoerName?: string;
     defaultDoerEmail?: string;
+    readOnly?: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -126,6 +127,46 @@ const EMPTY_FORM: ExecutiveVerifierFormValues = {
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+function parseDate(str?: string): Date | null {
+    if (!str || str === "—" || str.trim() === "") return null;
+    const s = str.trim();
+    const ddmmyyyyMatch = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+    if (ddmmyyyyMatch) {
+        const [, day, month, year, hours, minutes, seconds] = ddmmyyyyMatch;
+        return new Date(
+            Number(year),
+            Number(month) - 1,
+            Number(day),
+            hours ? Number(hours) : 0,
+            minutes ? Number(minutes) : 0,
+            seconds ? Number(seconds) : 0
+        );
+    }
+    const parsed = new Date(s);
+    if (!isNaN(parsed.getTime())) return parsed;
+    return null;
+}
+
+function calculateTimeDelay(plannedStr?: string, actualStr?: string, currentNow?: Date): string {
+    const plannedDate = parseDate(plannedStr);
+    if (!plannedDate) return "—";
+
+    const actualDate = parseDate(actualStr) || currentNow || new Date();
+    let diffMs = actualDate.getTime() - plannedDate.getTime();
+    if (diffMs < 0) diffMs = 0;
+
+    const totalSeconds = Math.floor(diffMs / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    const hh = String(hours).padStart(2, "0");
+    const mm = String(minutes).padStart(2, "0");
+    const ss = String(seconds).padStart(2, "0");
+
+    return `${hh}:${mm}:${ss}`;
+}
+
 /* ------------------------------------------------------------------ */
 /* Component                                                           */
 /* ------------------------------------------------------------------ */
@@ -137,17 +178,33 @@ export default function ExecutiveVerifierModal({
     onSubmit,
     defaultDoerName,
     defaultDoerEmail,
+    readOnly = false,
 }: ExecutiveVerifierModalProps) {
     const [form, setForm] = useState<ExecutiveVerifierFormValues>(EMPTY_FORM);
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [currentTime, setCurrentTime] = useState(() => new Date());
+
+    useEffect(() => {
+        if (!open) return;
+        setCurrentTime(new Date());
+        const timer = setInterval(() => {
+            setCurrentTime(new Date());
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [open]);
+
+    const displayTimeDelay = useMemo(() => {
+        return calculateTimeDelay(record?.planned, record?.actual, currentTime);
+    }, [record?.planned, record?.actual, currentTime]);
 
     const isAlreadySubmitted = Boolean(record?.savedVerifyActionStatus);
+    const isReadOnlyMode = Boolean(readOnly || isAlreadySubmitted);
 
     React.useEffect(() => {
         if (open) {
-            if (isAlreadySubmitted) {
+            if (isAlreadySubmitted || readOnly) {
                 setForm({
                     doer: record.savedDoer || "",
                     doerEmail: record.savedDoerEmail || "",
@@ -174,17 +231,20 @@ export default function ExecutiveVerifierModal({
             setError(null);
             setSubmitted(false);
         }
-    }, [open, defaultDoerName, defaultDoerEmail, isAlreadySubmitted, record]);
+    }, [open, defaultDoerName, defaultDoerEmail, isAlreadySubmitted, readOnly, record]);
 
-    // Planned must have a value or the modal is not allowed to be used at all.
+    // Planned must have a value or the modal is not allowed to be used at all in edit mode.
     const hasPlanned = Boolean(record?.planned && record.planned.trim() !== "");
+
+    const isColdSelected = form.verifyActionStatus === "Cold";
 
     const isFormComplete = useMemo(() => {
         const rating = Number(form.overallRating);
+        const isCold = form.verifyActionStatus === "Cold";
         return (
             form.doer.trim() !== "" &&
             form.verifyActionStatus !== "" &&
-            form.validReason !== "" &&
+            (!isCold || form.validReason !== "") &&
             form.whatWentWrong.trim() !== "" &&
             form.overallRating.trim() !== "" &&
             !Number.isNaN(rating) &&
@@ -192,12 +252,10 @@ export default function ExecutiveVerifierModal({
             rating <= 10 &&
             form.suggestedSolution.trim() !== "" &&
             form.remarks.trim() !== ""
-            // form.htCreatedStatus !== "" && // commented out with HT Created Status field
-            // form.hsStatus !== "" && // commented out with HS Status field
         );
     }, [form]);
 
-    const canSubmit = hasPlanned && isFormComplete && !submitting && !submitted;
+    const canSubmit = !isReadOnlyMode && hasPlanned && isFormComplete && !submitting && !submitted;
 
     if (!open) return null;
 
@@ -205,11 +263,17 @@ export default function ExecutiveVerifierModal({
         key: K,
         value: ExecutiveVerifierFormValues[K]
     ) => {
-        setForm((prev) => ({ ...prev, [key]: value }));
+        if (isReadOnlyMode) return;
+        setForm((prev) => {
+            if (key === "verifyActionStatus" && value !== "Cold") {
+                return { ...prev, verifyActionStatus: value as string, validReason: "" };
+            }
+            return { ...prev, [key]: value };
+        });
     };
 
     const handleSubmit = async () => {
-        if (!canSubmit) return;
+        if (!canSubmit || isReadOnlyMode) return;
         setSubmitting(true);
         setSubmitted(true); // disable immediately, prevents double submit
         setError(null);
@@ -237,10 +301,10 @@ export default function ExecutiveVerifierModal({
                         </span>
                         <div>
                             <h2 className="text-base font-semibold text-white">
-                                Executive Verifier
+                                Executive Verifier {isReadOnlyMode && "(Read-Only Review)"}
                             </h2>
                             <p className="text-xs text-indigo-100">
-                                Complete all fields to proceed
+                                {isReadOnlyMode ? "Reviewing verification details" : "Complete all fields to proceed"}
                             </p>
                             <div className="mt-2 flex flex-wrap items-center gap-2">
                                 <span className="inline-flex items-center gap-1.5 rounded-md bg-white/10 px-2.5 py-1 text-xs text-indigo-50 ring-1 ring-inset ring-white/20">
@@ -278,20 +342,20 @@ export default function ExecutiveVerifierModal({
 
                 {/* Body */}
                 <div className="flex-1 overflow-y-auto px-6 py-5">
-                    {!hasPlanned ? (
+                    {!hasPlanned && !isReadOnlyMode ? (
                         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                             This entry has no "Planned" value yet. Verification form is
                             locked until a Planned date/time is set.
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+                            <div className={`grid grid-cols-1 gap-4 ${isColdSelected ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>
                                 <TextField
                                     label="Doer"
                                     required
                                     value={form.doer}
                                     onChange={(v) => update("doer", v)}
-                                    disabled
+                                    disabled={true}
                                     className="sm:col-span-1"
                                 />
 
@@ -302,18 +366,20 @@ export default function ExecutiveVerifierModal({
                                     options={VERIFY_ACTION_STATUS_OPTIONS}
                                     onChange={(v) => update("verifyActionStatus", v)}
                                     className="sm:col-span-1"
-                                    disabled={isAlreadySubmitted}
+                                    disabled={isReadOnlyMode}
                                 />
 
-                                <SelectField
-                                    label="Valid Reason"
-                                    required
-                                    value={form.validReason}
-                                    options={VALID_REASON_OPTIONS}
-                                    onChange={(v) => update("validReason", v)}
-                                    className="sm:col-span-1"
-                                    disabled={isAlreadySubmitted}
-                                />
+                                {isColdSelected && (
+                                    <SelectField
+                                        label="Valid Reason"
+                                        required
+                                        value={form.validReason}
+                                        options={VALID_REASON_OPTIONS}
+                                        onChange={(v) => update("validReason", v)}
+                                        className="sm:col-span-1"
+                                        disabled={isReadOnlyMode}
+                                    />
+                                )}
 
                                 <SelectField
                                     label="Overall Rating (Out of 10)"
@@ -322,7 +388,7 @@ export default function ExecutiveVerifierModal({
                                     options={OVERALL_RATING_OPTIONS}
                                     onChange={(v) => update("overallRating", v)}
                                     className="sm:col-span-1"
-                                    disabled={isAlreadySubmitted}
+                                    disabled={isReadOnlyMode}
                                 />
                             </div>
 
@@ -333,7 +399,7 @@ export default function ExecutiveVerifierModal({
                                     value={form.whatWentWrong}
                                     onChange={(v) => update("whatWentWrong", v)}
                                     className="w-full"
-                                    disabled={isAlreadySubmitted}
+                                    disabled={isReadOnlyMode}
                                     maxLength={500}
                                 />
 
@@ -343,7 +409,7 @@ export default function ExecutiveVerifierModal({
                                     value={form.suggestedSolution}
                                     onChange={(v) => update("suggestedSolution", v)}
                                     className="w-full"
-                                    disabled={isAlreadySubmitted}
+                                    disabled={isReadOnlyMode}
                                     maxLength={500}
                                 />
                             </div>
@@ -354,7 +420,7 @@ export default function ExecutiveVerifierModal({
                                 value={form.remarks}
                                 onChange={(v) => update("remarks", v)}
                                 className="w-full"
-                                disabled={isAlreadySubmitted}
+                                disabled={isReadOnlyMode}
                                 maxLength={500}
                             />
                         </div>
@@ -386,8 +452,8 @@ export default function ExecutiveVerifierModal({
                             <span className="font-medium uppercase tracking-wide text-gray-400">
                                 Time Delay:{" "}
                             </span>
-                            <span className="text-gray-700">
-                                {record?.timeDelay || "—"}
+                            <span className="text-gray-700 font-mono">
+                                {displayTimeDelay}
                             </span>
                         </span>
                     </div>
@@ -398,9 +464,9 @@ export default function ExecutiveVerifierModal({
                             onClick={onClose}
                             className="flex-1 rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
                         >
-                            {isAlreadySubmitted ? "Close" : "Cancel"}
+                            {isReadOnlyMode ? "Close" : "Cancel"}
                         </button>
-                        {!isAlreadySubmitted && (
+                        {!isReadOnlyMode && (
                             <button
                                 type="button"
                                 onClick={handleSubmit}

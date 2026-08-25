@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { toast } from "sonner"
 
 import {
   DropdownMenu,
@@ -1256,8 +1257,9 @@ export default function VillaRaagBookingPage() {
       setCancelReason("")
       setCancelRemarks("")
       setSelectedBookingId("")
+      toast.success("Booking cancelled successfully")
     } catch (err: any) {
-      alert(err.message || "An error occurred while cancelling the booking.")
+      toast.error(err.message || "An error occurred while cancelling the booking.")
     } finally {
       setIsSubmitting(false)
     }
@@ -1277,13 +1279,13 @@ export default function VillaRaagBookingPage() {
 
     const amount = parseFloat(paymentData.receivedAmount)
     if (isNaN(amount) || amount <= 0) {
-      alert("Please enter a valid positive received amount")
+      toast.error("Please enter a valid positive received amount")
       return
     }
 
     const pending = selectedBookingForPayment.amount - selectedBookingForPayment.receivedAmount
     if (amount > pending) {
-      alert("Received amount cannot exceed the pending amount")
+      toast.error("Received amount cannot exceed the pending amount")
       return
     }
 
@@ -1321,8 +1323,9 @@ export default function VillaRaagBookingPage() {
         paymentLocation: "",
         paymentCollectedBy: "",
       })
+      toast.success("Payment submitted successfully")
     } catch (err: any) {
-      alert(err.message || "An error occurred while submitting payment.")
+      toast.error(err.message || "An error occurred while submitting payment.")
     } finally {
       setIsSubmitting(false)
     }

@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
+import { toast } from "sonner"
 
 export default function FMSPage() {
   const { stats, loading, syncWithGoogleSheets } = useFMS()
@@ -30,9 +31,9 @@ export default function FMSPage() {
     setSyncing(false)
 
     if (result.success) {
-      alert("Data synchronized successfully!")
+      toast.success("Data synchronized successfully!")
     } else {
-      alert("Sync failed: " + result.error)
+      toast.error("Sync failed: " + result.error)
     }
   }
 

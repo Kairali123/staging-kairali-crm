@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { BackButton } from "@/components/back-button"
 import { AlertTriangle, Save } from "lucide-react"
+import { toast } from "sonner"
 
 export default function NewComplaintPage() {
   const [formData, setFormData] = useState({
@@ -29,7 +30,7 @@ export default function NewComplaintPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     // Handle form submission
-    alert("Complaint registered successfully!")
+    toast.success("Complaint registered successfully!")
   }
 
   return (

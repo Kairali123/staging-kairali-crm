@@ -1668,6 +1668,9 @@ export const PERMISSION_GROUPS: {
       { key: "leads.assign", label: "Assign Leads to Staff", description: "Reallocate leads across agents & teams" },
       { key: "deal_assistant.view", label: "AI Deal Assistant", description: "AI-driven deal intelligence & tracking" },
       { key: "ai_voice_menu.view", label: "AI Voice Lead Qualification", description: "Voice transcription & qualification reports" },
+      { key: "dialshree_menu.view", label: "DialShree Lead Qualification", description: "DialShree calling & callback logs" },
+      { key: "dialshree_received.view", label: "DialShree Received Leads", description: "View DialShree received callback leads" },
+      { key: "dialshree_sent.view", label: "DialShree Sent Leads", description: "View DialShree sent outreach leads" },
     ],
   },
   {
@@ -1748,7 +1751,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "calls_report.view", "sales_report.view", "sales_calling.view",
     "marketing.view", "marketing_funnel.view", "marketing_google_report.view", "marketing_facebook_report.view", "google_adword_report.view",
     "fms.view", "team.view", "villa_raag.view", "ktahv_booking_form.view", "crr_fms.view", "task_fms.view", "cold_enquiry_reverification.view", "new-order-fms.view", "mr-fms.view",
-    "deal_assistant.view", "ai_voice_menu.view", "accounts_tracker.view", "partners.view", "meetings.view", "portal_hub.view", "sales_target_portal.view", "call_recording_portal.view", "doctor_portal.view", "partner_onboard_form.view"
+    "deal_assistant.view", "ai_voice_menu.view", "dialshree_menu.view", "dialshree_received.view", "dialshree_sent.view", "accounts_tracker.view", "partners.view", "meetings.view", "portal_hub.view", "sales_target_portal.view", "call_recording_portal.view", "doctor_portal.view", "partner_onboard_form.view"
   ],
   sales_manager: [
     "dashboard.view", "leads.view", "leads.edit", "leads.assign", "calls_report.view", "sales_report.view", "sales_calling.view", "riya_sharma.view", "marketing.view", "fms.view", "team.view", "villa_raag.view", "ktahv_booking_form.view", "crr_fms.view", "deal_assistant.view", "portal_hub.view", "sales_target_portal.view", "call_recording_portal.view", "meetings.view"

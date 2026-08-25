@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { toast } from "sonner"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -475,7 +476,7 @@ export default function ComplaintsPage() {
       }
     } catch (error) {
       console.error("Error accessing camera:", error)
-      alert("Unable to access camera. Please check permissions.")
+      toast.error("Unable to access camera. Please check permissions.")
     }
   }
 

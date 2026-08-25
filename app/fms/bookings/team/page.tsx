@@ -4080,7 +4080,7 @@ export default function SalesAccountsTeamPage() {
           if (id) {
             router.push(`/fms/bookings/ktahv?id=${encodeURIComponent(id)}&formType=${encodeURIComponent(formType)}`)
           } else {
-            alert("Unable to open edit form: missing booking id.")
+            toast.error("Unable to open edit form: missing booking id.")
           }
           break
         }

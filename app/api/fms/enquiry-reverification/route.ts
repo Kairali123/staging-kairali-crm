@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getPool } from "@/lib/db"
 import { getSessionUserResult, hasAdminRole } from "@/lib/authz"
 
-let cachedFilters: { websites: string[], agents: string[], timestamp: number } | null = null;
+let cachedFilters: { websites: string[], agents: string[], priorities: string[], timestamp: number } | null = null;
 const CACHE_DURATION = 1000 * 60 * 60; // 1 hour
 
 // Fetch all enquiries with search and filter parameters (optimized)
@@ -45,6 +45,8 @@ export async function GET(req: NextRequest) {
     const website = searchParams.get("website")
     const coldBy = searchParams.get("coldBy")
     const verifyStatus = searchParams.get("verifyStatus")
+    const priority = searchParams.get("priority")
+    const workflowTab = searchParams.get("tab") || "manual_review"
     const skipFilters = searchParams.get("skipFilters") === "true"
 
     const sortField = searchParams.get("sortField") || "generate_date_time"
@@ -58,7 +60,8 @@ export async function GET(req: NextRequest) {
       "data_source",
       "call_count_before_cold",
       "company_belongs_to",
-      "website_name"
+      "website_name",
+      "sqv_priority"
     ]
     const finalSortField = allowedSortFields.includes(sortField) ? sortField : "generate_date_time"
     const finalSortDirection = sortDirection.toLowerCase() === "asc" ? "ASC" : "DESC"
@@ -74,11 +77,13 @@ export async function GET(req: NextRequest) {
 
     let websites: string[] = []
     let agents: string[] = []
+    let priorities: string[] = []
 
     if (!skipFilters) {
       if (cachedFilters && (Date.now() - cachedFilters.timestamp < CACHE_DURATION)) {
         websites = cachedFilters.websites
         agents = cachedFilters.agents
+        priorities = cachedFilters.priorities || []
       } else {
         const [websitesRows]: any = await connection.execute(
           "SELECT DISTINCT website_name FROM fms_enquiry_cold_reverification_v2 WHERE website_name IS NOT NULL AND website_name != '' ORDER BY website_name ASC"
@@ -86,10 +91,28 @@ export async function GET(req: NextRequest) {
         const [agentsRows]: any = await connection.execute(
           "SELECT DISTINCT cold_by_employee_name FROM fms_enquiry_cold_reverification_v2 WHERE cold_by_employee_name IS NOT NULL AND cold_by_employee_name != '' ORDER BY cold_by_employee_name ASC"
         )
+        let dbPriorities: string[] = []
+        try {
+          const [priorityRows]: any = await connection.execute(
+            "SELECT DISTINCT TRIM(COALESCE(NULLIF(TRIM(sqv_priority), ''), NULLIF(TRIM(sqv_intent), ''))) as p FROM archieve_fms_enquiry_cold_reverification_v2 WHERE (sqv_priority IS NOT NULL AND TRIM(sqv_priority) != '') OR (sqv_intent IS NOT NULL AND TRIM(sqv_intent) != '') ORDER BY p ASC"
+          )
+          dbPriorities = priorityRows.map((r: any) => r.p?.trim()).filter(Boolean)
+        } catch (e) {
+          console.log("Could not fetch distinct sqv_priority:", e)
+        }
         websites = websitesRows.map((r: any) => r.website_name)
         agents = agentsRows.map((r: any) => r.cold_by_employee_name)
-        cachedFilters = { websites, agents, timestamp: Date.now() }
+        priorities = Array.from(new Set(["High", "Medium", "Low", ...dbPriorities]))
+        cachedFilters = { websites, agents, priorities, timestamp: Date.now() }
       }
+    }
+
+    let hasFmsPriorityCol = false
+    try {
+      const [cols]: any = await connection.execute("SHOW COLUMNS FROM fms_enquiry_cold_reverification_v2 LIKE 'sqv_priority'")
+      hasFmsPriorityCol = Array.isArray(cols) && cols.length > 0
+    } catch {
+      hasFmsPriorityCol = false
     }
 
     const conditions: string[] = []
@@ -147,15 +170,28 @@ export async function GET(req: NextRequest) {
       params.push(verifyStatus)
     }
 
-    const countWhereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
+    if (priority && priority !== "all") {
+      const cleanPriority = priority.trim()
+      conditions.push("TRIM(COALESCE(NULLIF(TRIM(sqv_priority), ''), NULLIF(TRIM(dialer_priority), ''))) = ?")
+      params.push(cleanPriority)
+    }
 
-    // Snapshot params before appending the "not both done" condition — used for the completed-records query
-    const completedParams = [...params]
+    const countWhereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
 
     const executiveDoneClause = "COALESCE(TRIM(verify_action_status_executive_verifier), '') <> ''"
     const seniorDoneClause = "COALESCE(TRIM(verify_action_status_senior_verifier), '') <> ''"
-    // Keep the queue visible until both verifiers are complete.
-    conditions.push(`NOT (${executiveDoneClause} AND ${seniorDoneClause})`)
+
+    // Apply workflow tab specific filter
+    if (workflowTab === "manual_review") {
+      conditions.push("(COALESCE(TRIM(verify_action_status_executive_verifier), '') = '' AND COALESCE(TRIM(verify_action_status_senior_verifier), '') = '')")
+    } else if (workflowTab === "ai_cold") {
+      conditions.push("(TRIM(verify_action_status_senior_verifier) = 'Cold' OR (TRIM(verify_action_status_executive_verifier) = 'Cold' AND (verify_action_status_senior_verifier IS NULL OR TRIM(verify_action_status_senior_verifier) = '' OR TRIM(verify_action_status_senior_verifier) = 'Cold')))")
+    } else if (workflowTab === "ai_reopened") {
+      conditions.push("(TRIM(verify_action_status_senior_verifier) LIKE '%Reopen%' OR (TRIM(verify_action_status_executive_verifier) LIKE '%Reopen%' AND (verify_action_status_senior_verifier IS NULL OR TRIM(verify_action_status_senior_verifier) = '' OR TRIM(verify_action_status_senior_verifier) LIKE '%Reopen%')))")
+    } else {
+      // Keep queue visible until both verifiers are complete
+      conditions.push(`NOT (${executiveDoneClause} AND ${seniorDoneClause})`)
+    }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
 
@@ -163,6 +199,9 @@ export async function GET(req: NextRequest) {
     const countQuery = `
       SELECT 
         COUNT(*) as total,
+        SUM(CASE WHEN (COALESCE(TRIM(verify_action_status_executive_verifier), '') = '' AND COALESCE(TRIM(verify_action_status_senior_verifier), '') = '') THEN 1 ELSE 0 END) as countManualReview,
+        SUM(CASE WHEN (TRIM(verify_action_status_senior_verifier) = 'Cold' OR (TRIM(verify_action_status_executive_verifier) = 'Cold' AND (verify_action_status_senior_verifier IS NULL OR TRIM(verify_action_status_senior_verifier) = '' OR TRIM(verify_action_status_senior_verifier) = 'Cold'))) THEN 1 ELSE 0 END) as countAiCold,
+        SUM(CASE WHEN (TRIM(verify_action_status_senior_verifier) LIKE '%Reopen%' OR (TRIM(verify_action_status_executive_verifier) LIKE '%Reopen%' AND (verify_action_status_senior_verifier IS NULL OR TRIM(verify_action_status_senior_verifier) = '' OR TRIM(verify_action_status_senior_verifier) LIKE '%Reopen%'))) THEN 1 ELSE 0 END) as countAiReopened,
         SUM(CASE WHEN NOT (${executiveDoneClause} AND ${seniorDoneClause}) THEN 1 ELSE 0 END) as pending,
         SUM(CASE WHEN ${executiveDoneClause} AND ${seniorDoneClause} THEN 1 ELSE 0 END) as completed,
         SUM(CASE WHEN LOWER(cold_done_in_calling_appsheet_or_in_dailer) = 'yes' 
@@ -199,6 +238,7 @@ export async function GET(req: NextRequest) {
         uid,
         company_belongs_to,
         appsheet_call_recording_url,
+        COALESCE(NULLIF(TRIM(sqv_priority), ''), NULLIF(TRIM(dialer_priority), '')) AS sqv_priority,
         planned_executive_verifier AS planned,
         actual_executive_verifier AS actual,
         time_delay_executive_verifier AS timedelay,
@@ -235,19 +275,75 @@ export async function GET(req: NextRequest) {
       LIMIT ? OFFSET ?
     `
 
-    // Build completed-records query using the same logic as the KPI "completed" count:
-    // both executive AND senior verify_action_status must be filled — do NOT rely on both_done column
-    // which may not always be updated consistently.
-    const completedConditions = [...conditions.filter(c => !c.startsWith("NOT ("))]
-    const completedDoneClause = `(${executiveDoneClause} AND ${seniorDoneClause})`
-    const completedWhereClause = completedConditions.length > 0
-      ? `WHERE (${completedConditions.join(" AND ")}) AND ${completedDoneClause}`
-      : `WHERE ${completedDoneClause}`
+    // Build completed-records query for `archieve_fms_enquiry_cold_reverification_v2`
+    // using its table column mappings with the same user/company/date/search/verifyStatus/priority filters
+    const archiveConditions: string[] = []
+    const archiveParams: any[] = []
+
+    if (!isAdmin) {
+      const emailPrefix = user.email.split('@')[0]
+      if (isSenior) {
+        archiveConditions.push("SUBSTRING_INDEX(doer_email_senior_verifier, '@', 1) = ?")
+        archiveParams.push(emailPrefix)
+      } else {
+        archiveConditions.push("SUBSTRING_INDEX(doer_email_executive_verifier, '@', 1) = ?")
+        archiveParams.push(emailPrefix)
+      }
+    }
+
+    if (search) {
+      const cleanSearch = search.trim()
+      archiveConditions.push("(lead_id = ? OR name_of_client = ? OR mobile = ? OR email_id = ? OR uid = ?)")
+      archiveParams.push(cleanSearch, cleanSearch, cleanSearch, cleanSearch, cleanSearch)
+    }
+
+    if (from) {
+      archiveConditions.push("generate_datetime >= ?")
+      archiveParams.push(`${from} 00:00:00`)
+    }
+    if (to) {
+      archiveConditions.push("generate_datetime <= ?")
+      archiveParams.push(`${to} 23:59:59`)
+    }
+
+    if (company && company !== "ALL") {
+      archiveConditions.push("company = ?")
+      archiveParams.push(company)
+    }
+
+    if (source && source !== "all") {
+      archiveConditions.push("data_source LIKE ?")
+      archiveParams.push(`%${source}%`)
+    }
+
+    if (website && website !== "all") {
+      archiveConditions.push("website_name = ?")
+      archiveParams.push(website)
+    }
+
+    if (coldBy && coldBy !== "all") {
+      archiveConditions.push("assign_to_mr = ?")
+      archiveParams.push(coldBy)
+    }
+
+    if (verifyStatus && verifyStatus !== "all") {
+      archiveConditions.push("TRIM(verify_action_status_senior_verifier) = ?")
+      archiveParams.push(verifyStatus)
+    }
+
+    if (priority && priority !== "all") {
+      archiveConditions.push("TRIM(COALESCE(NULLIF(TRIM(sqv_priority), ''), NULLIF(TRIM(sqv_intent), ''))) = ?")
+      archiveParams.push(priority.trim())
+    }
+
+    const archiveWhereClause = archiveConditions.length > 0
+      ? `WHERE ${archiveConditions.join(" AND ")}`
+      : ""
 
     const completedQuery = `
       SELECT 
         id,
-        generate_date_time,
+        generate_datetime AS generate_date_time,
         enquiry_created_datetime,
         lead_id,
         name_of_client,
@@ -256,77 +352,113 @@ export async function GET(req: NextRequest) {
         subjects,
         website_name,
         data_source,
-        cold_by_employee_name,
+        assign_to_mr AS cold_by_employee_name,
         cold_done_datetime,
         cold_remarks_by_sales_team,
         uid,
-        company_belongs_to,
+        company AS company_belongs_to,
+        COALESCE(NULLIF(TRIM(sqv_priority), ''), NULLIF(TRIM(sqv_intent), '')) AS sqv_priority,
         doer_executive_verifier AS CH,
         verify_action_status_executive_verifier AS CI,
         valid_reason_executive_verifier AS CJ,
-        what_went_wrong_by_sales_team_executive_verifier AS CK,
-        overall_rating_out_of_10_executive_verifier AS CL,
-        suggested_solution_for_improvement_executive_verifier AS CM,
+        what_went_wrong_sales_team_executive_verifier AS CK,
+        overall_rating_executive_verifier AS CL,
+        suggested_solution_executive_verifier AS CM,
         remarks_executive_verifier AS CN,
-        ht_created_to_executive_verifier_if_delay_status,
+        ht_created_executive_verifier_delay_status AS ht_created_to_executive_verifier_if_delay_status,
         actual_executive_verifier AS actual,
         doer_senior_verifier AS CW,
         verify_action_status_senior_verifier AS CX,
         valid_reason_senior_verifier AS CY,
-        what_went_wrong_by_sales_team_senior_verifier AS CZ,
-        overall_rating_out_of_10_senior_verifier AS DA,
-        suggested_solution_for_improvement_senior_verifier AS DB,
+        what_went_wrong_sales_team_senior_verifier AS CZ,
+        overall_rating_senior_verifier AS DA,
+        suggested_solution_senior_verifier AS DB,
         remarks_senior_verifier AS DC,
-        ht_created_to_senior_verifier_if_delay_status,
-        whatsapp_alert_to_sales_person_if_reopen,
-        email_alert_to_sales_person_if_reopen,
+        ht_created_senior_verifier_delay_status AS ht_created_to_senior_verifier_if_delay_status,
+        whatsapp_alert_sales_person_reopen AS whatsapp_alert_to_sales_person_if_reopen,
+        email_alert_sales_person_reopen AS email_alert_to_sales_person_if_reopen,
         transfer_to_user_fms_if_reopen,
         actual_senior_verifier AS senior_actual,
         both_done
-      FROM fms_enquiry_cold_reverification_v2
-      ${completedWhereClause}
-      ORDER BY generate_date_time DESC
-      LIMIT 200
+      FROM archieve_fms_enquiry_cold_reverification_v2
+      ${archiveWhereClause}
+      ORDER BY generate_datetime DESC
+    `
+
+    const archiveCountQuery = `
+      SELECT 
+        COUNT(*) as completed,
+        SUM(CASE WHEN TRIM(verify_action_status_senior_verifier) = 'Reopen' THEN 1 ELSE 0 END) as seniorReopen,
+        SUM(CASE WHEN TRIM(verify_action_status_senior_verifier) = 'Cold' THEN 1 ELSE 0 END) as seniorCold,
+        SUM(CASE WHEN TRIM(verify_action_status_senior_verifier) = 'Reopen to Other' THEN 1 ELSE 0 END) as seniorReopenToOther,
+        SUM(CASE WHEN TRIM(verify_action_status_senior_verifier) = 'Reopen and Escalate To Abhilash Sir' THEN 1 ELSE 0 END) as seniorEscalateAbhilash
+      FROM archieve_fms_enquiry_cold_reverification_v2
+      ${archiveWhereClause}
     `
 
     // Run count aggregation, paginated select, and completed-records fetch concurrently
-    const [countResult, dataResult, completedResult]: any = await Promise.all([
+    const [countResult, dataResult, completedResult, archiveCountResult]: any = await Promise.all([
       connection.execute(countQuery, params),
       connection.execute(query, [...params, String(limit), String(offset)]),
-      connection.execute(completedQuery, completedParams)
+      connection.execute(completedQuery, archiveParams),
+      connection.execute(archiveCountQuery, archiveParams)
     ])
 
-    const total = countResult[0][0]?.total || 0
     const pending = Number(countResult[0][0]?.pending || 0)
-    const completed = Number(countResult[0][0]?.completed || 0)
+    const archiveCompleted = Number(archiveCountResult[0][0]?.completed || 0)
+    const activeCompleted = Number(countResult[0][0]?.completed || 0)
+    const completed = archiveCompleted + activeCompleted
+    const total = pending + completed
     const appsheet = Number(countResult[0][0]?.appsheet || 0)
     const rows = dataResult[0]
 
     const completedRows = completedResult[0] || []
+
+    const seniorReopen = Number(archiveCountResult[0][0]?.seniorReopen || 0) + Number(countResult[0][0]?.seniorReopen || 0)
+    const seniorCold = Number(archiveCountResult[0][0]?.seniorCold || 0) + Number(countResult[0][0]?.seniorCold || 0)
+    const seniorReopenToOther = Number(archiveCountResult[0][0]?.seniorReopenToOther || 0) + Number(countResult[0][0]?.seniorReopenToOther || 0)
+    const seniorEscalateAbhilash = Number(archiveCountResult[0][0]?.seniorEscalateAbhilash || 0) + Number(countResult[0][0]?.seniorEscalateAbhilash || 0)
+
+    const countManualReview = Number(countResult[0][0]?.countManualReview || 0)
+    const countAiCold = Number(countResult[0][0]?.countAiCold || 0)
+    const countAiReopened = Number(countResult[0][0]?.countAiReopened || 0)
+
+    let currentTabTotal = countManualReview
+    if (workflowTab === "ai_cold") currentTabTotal = countAiCold
+    else if (workflowTab === "ai_reopened") currentTabTotal = countAiReopened
+    else if (workflowTab === "all") currentTabTotal = pending
+
+    const totalPages = Math.max(1, Math.ceil(currentTabTotal / limit))
 
     return NextResponse.json({
       success: true,
       data: rows,
       completedData: completedRows,
       pagination: {
-        total: pending,
+        total: currentTabTotal,
         page,
         limit,
-        totalPages: Math.ceil(pending / limit)
+        totalPages
+      },
+      tabCounts: {
+        manualReview: countManualReview,
+        aiCold: countAiCold,
+        aiReopened: countAiReopened
       },
       kpi: {
         total,
         pending,
         completed,
         appsheet,
-        seniorReopen: Number(countResult[0][0]?.seniorReopen || 0),
-        seniorCold: Number(countResult[0][0]?.seniorCold || 0),
-        seniorReopenToOther: Number(countResult[0][0]?.seniorReopenToOther || 0),
-        seniorEscalateAbhilash: Number(countResult[0][0]?.seniorEscalateAbhilash || 0)
+        seniorReopen,
+        seniorCold,
+        seniorReopenToOther,
+        seniorEscalateAbhilash
       },
       filters: skipFilters ? null : {
         websites,
-        agents
+        agents,
+        priorities
       }
     })
 
