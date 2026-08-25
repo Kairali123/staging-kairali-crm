@@ -564,7 +564,6 @@ export default function LeadAssignmentPage() {
 
   useEffect(() => {
     const fetchWasted = async () => {
-      // 🚀 FORCED RESET: Clear old data immediately to avoid stale views
       setDbWastedData({})
       setDbPotentialValueData({})
       try {
@@ -573,66 +572,58 @@ export default function LeadAssignmentPage() {
         if (endDate) params.set('to', endDate)
         if (selectedCompany && selectedCompany !== 'ALL') params.set('company', selectedCompany)
 
-        // 🚀 SMART LIMIT: Use small limit for recent data, large limit only for big ranges
         const isSmallRange = dateFilter === 'today' || dateFilter === 'yesterday' || dateFilter === 'this_week'
         params.set('pageSize', isSmallRange ? '2000' : '50000')
 
-        // 🚀 OPTIMIZATION: Only fetch full detailed list if the date range is manageable.
-        // For 'All Time' (no startDate), we skip this and rely on the lightweight aggregated API.
-        if (startDate || endDate) {
-          fetch(`/api/wasted-leads?${params.toString()}`)
-            .then(res => res.json())
-            .then(json => {
-              if (json.success && json.data) {
-                if (json.data.all) {
-                  const grouped: Record<string, any> = {}
-                  json.data.all.forEach((lead: any) => {
-                    const company = lead.company || 'KTAHV'
-                    const date = lead.dateTime ? lead.dateTime.split('T')[0] : '-'
-                    const { key: sourceKey } = normalizeVSrc(lead.source)
-
-                    if (!grouped[company]) grouped[company] = {}
-                    if (!grouped[company][date]) grouped[company][date] = {}
-                    if (!grouped[company][date][sourceKey]) {
-                      grouped[company][date][sourceKey] = { leads: [], wastedQty: 0, potentialLostValue: 0, reasons: {} }
-                    }
-                    const entry = grouped[company][date][sourceKey]
-                    entry.leads.push(lead)
-                    entry.wastedQty++
-                    entry.potentialLostValue += lead.lostValue || 0   // ← ADD THIS
-
-                    const reason = lead.disposition || lead.cancellationRemarks || 'N/A'
-                    entry.reasons[reason] = (entry.reasons[reason] || 0) + 1
-                    // const entry = grouped[company][date][sourceKey]
-                    // entry.leads.push(lead)
-                    // entry.wastedQty++
-
-                    // const reason = lead.cancellationRemarks || 'N/A'
-                    // entry.reasons[reason] = (entry.reasons[reason] || 0) + 1
-                  })
-                  setDbWastedData(grouped)
+        const res = await fetch(`/api/wasted-leads?${params.toString()}`)
+        const json = await res.json()
+        if (json.success && json.data) {
+          if (json.data.all) {
+            const grouped: Record<string, any> = {}
+            json.data.all.forEach((lead: any) => {
+              const company = lead.company || 'KTAHV'
+              
+              // Normalize date to DD-MM-YYYY format
+              let date = '-'
+              if (lead.dateTime) {
+                const str = String(lead.dateTime).trim()
+                const ymdMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/)
+                if (ymdMatch) {
+                  date = `${ymdMatch[3]}-${ymdMatch[2]}-${ymdMatch[1]}`
                 } else {
-                  setDbWastedData(json.data || {})
+                  const dmyMatch = str.match(/^(\d{2})[-/](\d{2})[-/](\d{4})/)
+                  if (dmyMatch) {
+                    date = `${dmyMatch[1]}-${dmyMatch[2]}-${dmyMatch[3]}`
+                  } else {
+                    date = str.split('T')[0]
+                  }
                 }
               }
+
+              const { key: sourceKey } = normalizeVSrc(lead.source)
+
+              if (!grouped[company]) grouped[company] = {}
+              if (!grouped[company][date]) grouped[company][date] = {}
+              if (!grouped[company][date][sourceKey]) {
+                grouped[company][date][sourceKey] = { leads: [], wastedQty: 0, potentialLostValue: 0, reasons: {} }
+              }
+              const entry = grouped[company][date][sourceKey]
+              entry.leads.push(lead)
+              entry.wastedQty++
+              entry.potentialLostValue += lead.lostValue || 0
+
+              const reason = lead.disposition || lead.cancellationRemarks || 'N/A'
+              entry.reasons[reason] = (entry.reasons[reason] || 0) + 1
             })
-        } else {
-          // 🚀 RESET detailed data for 'All Time' so we don't show stale rows from 'This Week'
-          setDbWastedData({})
+            setDbWastedData(grouped)
+          } else {
+            setDbWastedData(json.data || {})
+          }
         }
-
-        // Fetch potential lost value aggregation
-        // fetch(`/api/potential-value?${params.toString()}`)
-        //   .then(res => res.json())
-        //   .then(json => {
-        //     if (json.success) setDbPotentialValueData(json.data || {})
-        //     else console.error('[Potential Value DB] Fetch failed:', json.error)
-        //   })
-
-      } catch (err) { console.error('[Wasted/Potential DB] Error:', err) }
+      } catch (err) { console.error('[Wasted DB] Error:', err) }
     }
     fetchWasted()
-  }, [startDate, endDate, selectedCompany])
+  }, [startDate, endDate, selectedCompany, dateFilter])
   // ─────────────────────────────────────────────────────────────────────────
 
   const getCallHistory = (leadId: string): CallHistory[] => {
@@ -4800,9 +4791,10 @@ Cancelled Amt:
             {/* ---------- Table / Chart Content ---------- */}
             <div className="bg-white pt-4">
               {dataSourceView === "table" ? (
-                <div className="overflow-x-auto">
-                  <div className="inline-block min-w-full align-middle">
-                    <table className="min-w-full divide-y divide-slate-300">
+                <>
+                  <div className="overflow-x-auto">
+                    <div className="inline-block min-w-full align-middle">
+                      <table className="min-w-full divide-y divide-slate-300">
                       <thead style={{ backgroundColor: '#1e3a5f' }}>
                         <tr>
                           {/* STICKY - Data Source Column */}
@@ -5947,113 +5939,114 @@ Cancelled Amt:
                       </tfoot>
                     </table>
                   </div>
-
-                  {/* Pagination Controls */}
-                  {dataSourceDateGroups.length > 0 && (() => {
-                    const dsTotalPages = Math.ceil(dataSourceDateGroups.length / dataSourceItemsPerPage)
-                    const dsStart = (dataSourceCurrentPage - 1) * dataSourceItemsPerPage + 1
-                    const dsEnd = Math.min(dataSourceCurrentPage * dataSourceItemsPerPage, dataSourceDateGroups.length)
-                    return (
-                      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 px-6 py-4 border-t bg-gradient-to-r from-slate-50 to-blue-50">
-
-                        {/* Left - Info */}
-                        <div className="flex items-center gap-2 text-sm text-slate-600">
-                          <span>Showing</span>
-                          <span className="font-bold text-slate-800 bg-white border border-slate-200 px-2 py-0.5 rounded">
-                            {dsStart}–{dsEnd}
-                          </span>
-                          <span>of</span>
-                          <span className="font-bold text-blue-700">{dataSourceDateGroups.length}</span>
-                          <span>dates</span>
-                        </div>
-
-                        {/* Center - Page Numbers */}
-                        <div className="flex items-center gap-1">
-                          <Button size="sm" variant="outline"
-                            disabled={dataSourceCurrentPage === 1}
-                            onClick={() => setDataSourceCurrentPage(1)}
-                            className="h-8 w-8 p-0 text-xs"
-                          >«</Button>
-
-                          <Button size="sm" variant="outline"
-                            disabled={dataSourceCurrentPage === 1}
-                            onClick={() => setDataSourceCurrentPage((p) => Math.max(1, p - 1))}
-                            className="h-8 px-3 text-xs"
-                          >‹ Prev</Button>
-
-                          {(() => {
-                            const pages = []
-                            const cur = dataSourceCurrentPage
-                            let start = Math.max(1, cur - 2)
-                            let end = Math.min(dsTotalPages, cur + 2)
-                            if (cur <= 3) end = Math.min(5, dsTotalPages)
-                            if (cur >= dsTotalPages - 2) start = Math.max(1, dsTotalPages - 4)
-                            if (start > 1) pages.push(<span key="s-ellipsis" className="px-1 text-slate-400">…</span>)
-                            for (let i = start; i <= end; i++) {
-                              pages.push(
-                                <button key={i} onClick={() => setDataSourceCurrentPage(i)}
-                                  className={`h-8 w-8 rounded-md text-xs font-semibold transition-all ${i === cur
-                                    ? 'bg-blue-600 text-white shadow-md border border-blue-700'
-                                    : 'bg-white text-slate-700 border border-slate-300 hover:bg-blue-50 hover:border-blue-300'
-                                    }`}
-                                >{i}</button>
-                              )
-                            }
-                            if (end < dsTotalPages) pages.push(<span key="e-ellipsis" className="px-1 text-slate-400">…</span>)
-                            return pages
-                          })()}
-
-                          <Button size="sm" variant="outline"
-                            disabled={dataSourceCurrentPage === dsTotalPages}
-                            onClick={() => setDataSourceCurrentPage((p) => Math.min(dsTotalPages, p + 1))}
-                            className="h-8 px-3 text-xs"
-                          >Next ›</Button>
-
-                          <Button size="sm" variant="outline"
-                            disabled={dataSourceCurrentPage === dsTotalPages}
-                            onClick={() => setDataSourceCurrentPage(dsTotalPages)}
-                            className="h-8 w-8 p-0 text-xs"
-                          >»</Button>
-                        </div>
-
-                        {/* Right - Rows per page & Go to page */}
-                        <div className="flex flex-wrap items-center gap-4">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-slate-500">Rows/page</span>
-                            <select
-                              value={dataSourceItemsPerPage}
-                              onChange={(e) => {
-                                setDataSourceItemsPerPage(Number(e.target.value))
-                                setDataSourceCurrentPage(1)
-                              }}
-                              className="h-8 rounded-md border border-slate-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                              {[5, 10, 15, 25, 50].map((size) => (
-                                <option key={size} value={size}>{size}</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-slate-500">Go to</span>
-                            <input
-                              type="number" min={1} max={dsTotalPages}
-                              value={dataSourceGotoPage}
-                              onChange={(e) => setDataSourceGotoPage(e.target.value)}
-                              onKeyDown={(e) => e.key === 'Enter' && handleDataSourceGotoPage()}
-                              className="h-8 w-16 rounded-md border border-slate-300 px-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              placeholder="#"
-                            />
-                            <Button size="sm" className="h-8 bg-blue-600 hover:bg-blue-700 text-xs px-3"
-                              onClick={handleDataSourceGotoPage}
-                            >Go</Button>
-                          </div>
-                        </div>
-
-                      </div>
-                    )
-                  })()}
                 </div>
+
+                {/* Pagination Controls */}
+                {dataSourceDateGroups.length > 0 && (() => {
+                  const dsTotalPages = Math.ceil(dataSourceDateGroups.length / dataSourceItemsPerPage)
+                  const dsStart = (dataSourceCurrentPage - 1) * dataSourceItemsPerPage + 1
+                  const dsEnd = Math.min(dataSourceCurrentPage * dataSourceItemsPerPage, dataSourceDateGroups.length)
+                  return (
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 px-6 py-4 border-t bg-gradient-to-r from-slate-50 to-blue-50">
+
+                      {/* Left - Info */}
+                      <div className="flex items-center gap-2 text-sm text-slate-600">
+                        <span>Showing</span>
+                        <span className="font-bold text-slate-800 bg-white border border-slate-200 px-2 py-0.5 rounded">
+                          {dsStart}–{dsEnd}
+                        </span>
+                        <span>of</span>
+                        <span className="font-bold text-blue-700">{dataSourceDateGroups.length}</span>
+                        <span>dates</span>
+                      </div>
+
+                      {/* Center - Page Numbers */}
+                      <div className="flex items-center gap-1">
+                        <Button size="sm" variant="outline"
+                          disabled={dataSourceCurrentPage === 1}
+                          onClick={() => setDataSourceCurrentPage(1)}
+                          className="h-8 w-8 p-0 text-xs"
+                        >«</Button>
+
+                        <Button size="sm" variant="outline"
+                          disabled={dataSourceCurrentPage === 1}
+                          onClick={() => setDataSourceCurrentPage((p) => Math.max(1, p - 1))}
+                          className="h-8 px-3 text-xs"
+                        >‹ Prev</Button>
+
+                        {(() => {
+                          const pages = []
+                          const cur = dataSourceCurrentPage
+                          let start = Math.max(1, cur - 2)
+                          let end = Math.min(dsTotalPages, cur + 2)
+                          if (cur <= 3) end = Math.min(5, dsTotalPages)
+                          if (cur >= dsTotalPages - 2) start = Math.max(1, dsTotalPages - 4)
+                          if (start > 1) pages.push(<span key="s-ellipsis" className="px-1 text-slate-400">…</span>)
+                          for (let i = start; i <= end; i++) {
+                            pages.push(
+                              <button key={i} onClick={() => setDataSourceCurrentPage(i)}
+                                className={`h-8 w-8 rounded-md text-xs font-semibold transition-all ${i === cur
+                                  ? 'bg-blue-600 text-white shadow-md border border-blue-700'
+                                  : 'bg-white text-slate-700 border border-slate-300 hover:bg-blue-50 hover:border-blue-300'
+                                  }`}
+                              >{i}</button>
+                            )
+                          }
+                          if (end < dsTotalPages) pages.push(<span key="e-ellipsis" className="px-1 text-slate-400">…</span>)
+                          return pages
+                        })()}
+
+                        <Button size="sm" variant="outline"
+                          disabled={dataSourceCurrentPage === dsTotalPages}
+                          onClick={() => setDataSourceCurrentPage((p) => Math.min(dsTotalPages, p + 1))}
+                          className="h-8 px-3 text-xs"
+                        >Next ›</Button>
+
+                        <Button size="sm" variant="outline"
+                          disabled={dataSourceCurrentPage === dsTotalPages}
+                          onClick={() => setDataSourceCurrentPage(dsTotalPages)}
+                          className="h-8 w-8 p-0 text-xs"
+                        >»</Button>
+                      </div>
+
+                      {/* Right - Rows per page & Go to page */}
+                      <div className="flex flex-wrap items-center gap-4">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-slate-500">Rows/page</span>
+                          <select
+                            value={dataSourceItemsPerPage}
+                            onChange={(e) => {
+                              setDataSourceItemsPerPage(Number(e.target.value))
+                              setDataSourceCurrentPage(1)
+                            }}
+                            className="h-8 rounded-md border border-slate-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            {[5, 10, 15, 25, 50].map((size) => (
+                              <option key={size} value={size}>{size}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-slate-500">Go to</span>
+                          <input
+                            type="number" min={1} max={dsTotalPages}
+                            value={dataSourceGotoPage}
+                            onChange={(e) => setDataSourceGotoPage(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleDataSourceGotoPage()}
+                            className="h-8 w-16 rounded-md border border-slate-300 px-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="#"
+                          />
+                          <Button size="sm" className="h-8 bg-blue-600 hover:bg-blue-700 text-xs px-3"
+                            onClick={handleDataSourceGotoPage}
+                          >Go</Button>
+                        </div>
+                      </div>
+
+                    </div>
+                  )
+                })()}
+              </>
               ) : (
                 <div className="space-y-8 p-6">
                   {/* Lead Priority Distribution by Source */}

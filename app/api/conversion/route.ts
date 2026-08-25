@@ -48,6 +48,7 @@ export async function GET(req: NextRequest) {
 
         const [rows] = await pool.execute(
             `SELECT 
+                DATE_FORMAT(date_and_time, '%d-%m-%Y') as formatted_date,
                 date_and_time,
                 week_number,
                 month_name,
@@ -89,19 +90,37 @@ export async function GET(req: NextRequest) {
             }
             let amount;
 
-            
+            // ✅ IST DATE FIX (Independent of server timezone: Local vs Vercel)
+            let dateKey = ''
+            if (row.formatted_date && typeof row.formatted_date === 'string' && /^\d{2}-\d{2}-\d{4}$/.test(row.formatted_date)) {
+                dateKey = row.formatted_date
+            } else if (row.date_and_time) {
+                const strVal = String(row.date_and_time).trim()
+                const ymd = strVal.match(/^(\d{4})-(\d{2})-(\d{2})/)
+                if (ymd) {
+                    dateKey = `${ymd[3]}-${ymd[2]}-${ymd[1]}`
+                } else {
+                    const dmy = strVal.match(/^(\d{2})[-/](\d{2})[-/](\d{4})/)
+                    if (dmy) {
+                        dateKey = `${dmy[1]}-${dmy[2]}-${dmy[3]}`
+                    } else {
+                        const d = new Date(row.date_and_time)
+                        if (isNaN(d.getTime())) return
+                        const istParts = new Intl.DateTimeFormat('en-IN', {
+                            timeZone: 'Asia/Kolkata',
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                        }).formatToParts(d)
+                        const dd = istParts.find(p => p.type === 'day')?.value.padStart(2, '0') || '01'
+                        const mm = istParts.find(p => p.type === 'month')?.value.padStart(2, '0') || '01'
+                        const yyyy = istParts.find(p => p.type === 'year')?.value || '2026'
+                        dateKey = `${dd}-${mm}-${yyyy}`
+                    }
+                }
+            }
 
-            // ✅ IST DATE FIX
-            const d = new Date(row.date_and_time)
-            if (isNaN(d.getTime())) return
-
-
-
-            const dd = String(d.getDate()).padStart(2, '0')
-            const mm = String(d.getMonth() + 1).padStart(2, '0')
-            const yyyy = d.getFullYear()
-
-            const dateKey = `${dd}-${mm}-${yyyy}`
+            if (!dateKey) return
 
             // ✅ INIT STRUCTURE
             if (!result[company]) result[company] = {}
@@ -131,9 +150,9 @@ export async function GET(req: NextRequest) {
             // =========================
             if (company === "KAPPL") {
                 amount =
-                processAmount(row.amount_after_return) ||
-                processAmount(row.conversion_amount) ||
-                0
+                    processAmount(row.amount_after_return) ||
+                    processAmount(row.conversion_amount) ||
+                    0
                 if (row.is_verified == 1 && returnId === "") {
                     obj.verified_conversion_count += 1
                     obj.verified_conversion_amount += amount
@@ -157,7 +176,7 @@ export async function GET(req: NextRequest) {
 
             } else {
                 amount = processAmount(row.conversion_amount) ||
-                0
+                    0
 
                 // ✅ VERIFIED
                 if (row.is_verified == 1 && status === 'confirmed') {
