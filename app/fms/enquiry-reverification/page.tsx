@@ -8,7 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/hooks/use-auth"
 import Loader from "@/components/Loader"
 import { Badge } from "@/components/ui/badge"
-import { toast } from "sonner"
 import ViewModal, { LeadRow } from "@/components/viewcallhistorymodel"
 import ExecutiveVerifierModal, { ExecutiveVerifierRecord, ExecutiveVerifierFormValues } from "@/components/ExecutiveverifyModel"
 import SeniorVerifierModal, { SeniorVerifierRecord, SeniorVerifierFormValues } from "@/components/SeniorVerifyModel"
@@ -40,8 +39,7 @@ import {
     RotateCcw,
     Snowflake,
     Share2,
-    AlertTriangle,
-    Users
+    AlertTriangle
 } from "lucide-react"
 
 
@@ -64,15 +62,12 @@ export default function EnquiryReverificationPage() {
     const [websiteFilter, setWebsiteFilter] = useState("all")
     const [coldByFilter, setColdByFilter] = useState("all")
     const [verifyStatusFilter, setVerifyStatusFilter] = useState("all")
-    const [priorityFilter, setPriorityFilter] = useState("all")
-    const [workflowTab, setWorkflowTab] = useState<"manual_review" | "ai_cold" | "ai_reopened">("manual_review")
     const [customDateRange, setCustomDateRange] = useState({ start: "", end: "" })
 
     const [isInitialLoading, setIsInitialLoading] = useState(true)
     const [isFilterFetching, setIsFilterFetching] = useState(false)
     const [totalEnquiries, setTotalEnquiries] = useState(0)
     const [loadError, setLoadError] = useState<string | null>(null)
-    const [tabCounts, setTabCounts] = useState({ manualReview: 0, aiCold: 0, aiReopened: 0 })
 
     const [sortField, setSortField] = useState("generate_date_time")
     const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
@@ -104,7 +99,6 @@ export default function EnquiryReverificationPage() {
     })
     const [websitesOptions, setWebsitesOptions] = useState<string[]>([])
     const [agentsOptions, setAgentsOptions] = useState<string[]>([])
-    const [prioritiesOptions, setPrioritiesOptions] = useState<string[]>([])
 
     // Pagination states
     const [currentPage, setCurrentPage] = useState(1)
@@ -148,46 +142,12 @@ export default function EnquiryReverificationPage() {
         return "text-slate-800"
     }
 
-    const renderPriorityBadge = (priority: string | null | undefined) => {
-        if (!priority || !String(priority).trim()) {
-            return <span className="text-slate-400 font-medium">—</span>
-        }
-        const p = String(priority).trim()
-        const pLower = p.toLowerCase()
-        if (pLower.includes("high") || pLower.includes("p0") || pLower.includes("urgent")) {
-            return (
-                <Badge className="bg-rose-50 text-rose-700 border border-rose-200 font-bold px-2 py-0.5 rounded-md text-[11px] shadow-none whitespace-nowrap">
-                    {p}
-                </Badge>
-            )
-        }
-        if (pLower.includes("med") || pLower.includes("p1") || pLower.includes("moderate")) {
-            return (
-                <Badge className="bg-amber-50 text-amber-700 border border-amber-200 font-semibold px-2 py-0.5 rounded-md text-[11px] shadow-none whitespace-nowrap">
-                    {p}
-                </Badge>
-            )
-        }
-        if (pLower.includes("low") || pLower.includes("p2") || pLower.includes("p3")) {
-            return (
-                <Badge className="bg-slate-100 text-slate-700 border border-slate-200 font-semibold px-2 py-0.5 rounded-md text-[11px] shadow-none whitespace-nowrap">
-                    {p}
-                </Badge>
-            )
-        }
-        return (
-            <Badge className="bg-blue-50 text-blue-700 border border-blue-200 font-semibold px-2 py-0.5 rounded-md text-[11px] shadow-none whitespace-nowrap">
-                {p}
-            </Badge>
-        )
-    }
-
     // Fetch enquiries from MySQL DB
     const fetchEnquiries = async () => {
         setLoadError(null)
         setIsFilterFetching(true)
         try {
-            const skipFilters = websitesOptions.length > 0 && agentsOptions.length > 0 && prioritiesOptions.length > 0
+            const skipFilters = websitesOptions.length > 0 && agentsOptions.length > 0
             let url = `/api/fms/enquiry-reverification?page=${currentPage}&limit=${pageSize}&skipFilters=${skipFilters}&sortField=${encodeURIComponent(sortField)}&sortDirection=${encodeURIComponent(sortDirection)}&`
 
             if (searchInput) url += `search=${encodeURIComponent(searchInput)}&`
@@ -196,8 +156,6 @@ export default function EnquiryReverificationPage() {
             if (websiteFilter !== "all") url += `website=${encodeURIComponent(websiteFilter)}&`
             if (coldByFilter !== "all") url += `coldBy=${encodeURIComponent(coldByFilter)}&`
             if (verifyStatusFilter !== "all") url += `verifyStatus=${encodeURIComponent(verifyStatusFilter)}&`
-            if (priorityFilter !== "all") url += `priority=${encodeURIComponent(priorityFilter)}&`
-            if (workflowTab) url += `tab=${encodeURIComponent(workflowTab)}&`
 
             let fromDate = ""
             let toDate = ""
@@ -275,18 +233,12 @@ export default function EnquiryReverificationPage() {
             setCompletedEnquiries(Array.isArray(json?.completedData) ? json.completedData : [])
             setTotalEnquiries(json.pagination?.total || 0)
             setTotalPages(json.pagination?.totalPages || 1)
-            if (json.tabCounts) {
-                setTabCounts(json.tabCounts)
-            }
             if (json.kpi) {
                 setKpi(json.kpi)
             }
             if (json.filters) {
                 setWebsitesOptions(json.filters.websites || [])
                 setAgentsOptions(json.filters.agents || [])
-                if (json.filters.priorities) {
-                    setPrioritiesOptions(json.filters.priorities || [])
-                }
             }
             setLoadError(null)
         } catch (error: any) {
@@ -321,16 +273,17 @@ export default function EnquiryReverificationPage() {
             })
             const json = await res.json()
             if (json.success) {
-                toast.success("Executive verification saved successfully.")
+                alert("Executive verification saved successfully.")
                 setIsExecutiveModalOpen(false)
                 setSelectedExecutiveRecord(null)
                 fetchEnquiries()
             } else {
-                toast.error(json.error || "Failed to save executive verification")
+                throw new Error(json.error || "Failed to save verification")
             }
         } catch (err: any) {
-            console.error("Failed to save executive verification:", err)
-            toast.error("An error occurred while saving.")
+            console.error("Error saving executive verification:", err)
+            alert("Error saving executive verification: " + err.message)
+            throw err
         }
     }
 
@@ -354,36 +307,37 @@ export default function EnquiryReverificationPage() {
                     whatsapp_alert_to_sales_person_if_reopen: values.whatsappAlert,
                     email_alert_to_sales_person_if_reopen: values.emailAlert,
                     doer_senior_verifier_email_id: values.doerEmail,
-                    DF: values.hsStatus,
+                    hs_status_if_escalate_to_abhilash_sir_by_senior: values.hsStatus,
                     transfer_to_user_fms_if_reopen: values.transferToUserFms,
                 })
             })
             const json = await res.json()
             if (json.success) {
-                toast.success("Senior verification saved successfully.")
+                alert("Senior verification saved successfully.")
                 setIsSeniorModalOpen(false)
                 setSelectedSeniorRecord(null)
                 fetchEnquiries()
             } else {
-                toast.error(json.error || "Failed to save senior verification")
+                throw new Error(json.error || "Failed to save verification")
             }
         } catch (err: any) {
-            console.error("Failed to save senior verification:", err)
-            toast.error("An error occurred while saving.")
+            console.error("Error saving senior verification:", err)
+            alert("Error saving senior verification: " + err.message)
+            throw err
         }
     }
 
     // Reset to first page on search or filter change
     useEffect(() => {
         setCurrentPage(1)
-    }, [workflowTab, searchInput, dateFilter, selectedCompany, sourceFilter, websiteFilter, coldByFilter, verifyStatusFilter, priorityFilter, customDateRange])
+    }, [searchInput, dateFilter, selectedCompany, sourceFilter, websiteFilter, coldByFilter, verifyStatusFilter, customDateRange])
 
     // Fetch when filters, page, or sorting changes
     useEffect(() => {
         if (!isLoading && user && hasPermission("cold_enquiry_reverification.view")) {
             fetchEnquiries()
         }
-    }, [workflowTab, currentPage, pageSize, searchInput, dateFilter, selectedCompany, sourceFilter, websiteFilter, coldByFilter, verifyStatusFilter, priorityFilter, customDateRange, sortField, sortDirection, user, isLoading, hasPermission])
+    }, [currentPage, pageSize, searchInput, dateFilter, selectedCompany, sourceFilter, websiteFilter, coldByFilter, verifyStatusFilter, customDateRange, sortField, sortDirection, user, isLoading, hasPermission])
 
     const handleSort = (field: string) => {
         if (sortField === field) {
@@ -528,7 +482,6 @@ export default function EnquiryReverificationPage() {
                                     setWebsiteFilter("all")
                                     setColdByFilter("all")
                                     setVerifyStatusFilter("all")
-                                    setPriorityFilter("all")
                                     setCustomDateRange({ start: "", end: "" })
                                 }}
                                 className="w-full sm:w-auto bg-white border-slate-300 text-slate-700 font-medium hover:bg-blue-100"
@@ -539,10 +492,10 @@ export default function EnquiryReverificationPage() {
 
                         {/* CONTENT */}
                         <div className="px-4 sm:px-5 py-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-8 gap-4">
 
                                 {/* SEARCH */}
-                                <div className="flex flex-col gap-1.5 lg:col-span-2 xl:col-span-2">
+                                <div className="flex flex-col gap-1.5 lg:col-span-2">
                                     <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
                                         Search Enquiries
                                     </label>
@@ -673,31 +626,6 @@ export default function EnquiryReverificationPage() {
                                             <SelectItem value="Cold">Cold</SelectItem>
                                             <SelectItem value="Reopen to Other">Reopen to Other</SelectItem>
                                             <SelectItem value="Reopen and Escalate To Abhilash Sir">Reopen and Escalate To Abhilash Sir</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                {/* PRIORITY */}
-                                <div className="flex flex-col gap-1.5">
-                                    <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                                        Priority
-                                    </label>
-                                    <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                                        <SelectTrigger className="h-10 w-full rounded-md border-gray-300">
-                                            <SelectValue placeholder="All Priorities" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All</SelectItem>
-                                            <SelectItem value="High">High</SelectItem>
-                                            <SelectItem value="Medium">Medium</SelectItem>
-                                            <SelectItem value="Low">Low</SelectItem>
-                                            {prioritiesOptions
-                                                .filter((p) => !["all", "high", "medium", "low"].includes(String(p).trim().toLowerCase()))
-                                                .map((p) => (
-                                                    <SelectItem key={p} value={p}>
-                                                        {p}
-                                                    </SelectItem>
-                                                ))}
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -983,9 +911,9 @@ export default function EnquiryReverificationPage() {
                 {/* Data Table / Content Shell */}
                 <div className="rounded-xl border border-slate-200 bg-white shadow-md overflow-hidden">
 
-                    <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 px-4 sm:px-5 py-4 bg-gradient-to-r from-slate-50 via-white to-blue-50/20 border-b border-slate-200">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-4 sm:px-5 py-4 bg-gradient-to-r from-slate-50 via-white to-blue-50/20 border-b border-slate-200">
                         <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-blue-100 flex items-center justify-center border border-blue-200 shrink-0">
+                            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-blue-100 flex items-center justify-center border border-blue-200">
                                 <TableIcon className="w-4 h-4 sm:w-5 sm:h-5 text-blue-700" />
                             </div>
                             <div>
@@ -996,86 +924,9 @@ export default function EnquiryReverificationPage() {
                                     )}
                                 </h3>
                                 <p className="text-xs text-slate-500">
-                                    {workflowTab === "manual_review" && "Enquiries requiring manual Executive/Senior verification or reverification"}
-                                    {workflowTab === "ai_cold" && "Enquiries confirmed as Cold by AI / verification workflow"}
-                                    {workflowTab === "ai_reopened" && "Enquiries reopened by AI / verification workflow requiring renewed attention"}
+                                    Manage and verify the details of incoming customer enquiries
                                 </p>
                             </div>
-                        </div>
-
-                        {/* 3 WORKFLOW TABS */}
-                        <div className="inline-flex p-1 bg-slate-100/90 rounded-xl border border-slate-200/80 shadow-inner w-full lg:w-auto overflow-x-auto">
-                            {/* Tab 1: Manual Review */}
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setWorkflowTab("manual_review")
-                                    setCurrentPage(1)
-                                }}
-                                className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex-1 lg:flex-initial ${
-                                    workflowTab === "manual_review"
-                                        ? "bg-white text-blue-700 shadow-sm border border-slate-200/80"
-                                        : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
-                                }`}
-                            >
-                                <span className={`w-2 h-2 rounded-full ${workflowTab === "manual_review" ? "bg-blue-600" : "bg-slate-400"}`} />
-                                Manual Review
-                                <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
-                                    workflowTab === "manual_review"
-                                        ? "bg-blue-100 text-blue-800 border border-blue-200"
-                                        : "bg-slate-200 text-slate-700"
-                                }`}>
-                                    {tabCounts.manualReview ? tabCounts.manualReview.toLocaleString() : (kpi.pending ? kpi.pending.toLocaleString() : 0)}
-                                </span>
-                            </button>
-
-                            {/* Tab 2: AI Cold Confirmed */}
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setWorkflowTab("ai_cold")
-                                    setCurrentPage(1)
-                                }}
-                                className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex-1 lg:flex-initial ${
-                                    workflowTab === "ai_cold"
-                                        ? "bg-white text-cyan-800 shadow-sm border border-slate-200/80"
-                                        : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
-                                }`}
-                            >
-                                <Snowflake className={`w-3.5 h-3.5 ${workflowTab === "ai_cold" ? "text-cyan-600" : "text-slate-400"}`} />
-                                AI Cold Confirmed
-                                <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
-                                    workflowTab === "ai_cold"
-                                        ? "bg-cyan-100 text-cyan-800 border border-cyan-200"
-                                        : "bg-slate-200 text-slate-700"
-                                }`}>
-                                    {tabCounts.aiCold ? tabCounts.aiCold.toLocaleString() : 0}
-                                </span>
-                            </button>
-
-                            {/* Tab 3: AI Reopened */}
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setWorkflowTab("ai_reopened")
-                                    setCurrentPage(1)
-                                }}
-                                className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex-1 lg:flex-initial ${
-                                    workflowTab === "ai_reopened"
-                                        ? "bg-white text-violet-800 shadow-sm border border-slate-200/80"
-                                        : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
-                                }`}
-                            >
-                                <RotateCcw className={`w-3.5 h-3.5 ${workflowTab === "ai_reopened" ? "text-violet-600" : "text-slate-400"}`} />
-                                AI Reopened
-                                <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
-                                    workflowTab === "ai_reopened"
-                                        ? "bg-violet-100 text-violet-800 border border-violet-200"
-                                        : "bg-slate-200 text-slate-700"
-                                }`}>
-                                    {tabCounts.aiReopened ? tabCounts.aiReopened.toLocaleString() : 0}
-                                </span>
-                            </button>
                         </div>
                     </div>
 
@@ -1109,7 +960,7 @@ export default function EnquiryReverificationPage() {
                             <thead style={{ backgroundColor: '#1e3a5f' }} className="sticky top-0 z-20">
                                 <tr>
                                     <th
-                                        className="sticky left-0 z-30 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[140px] w-[140px] cursor-pointer hover:bg-white/10 select-none"
+                                        className="sticky left-0 z-30 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[150px] w-[150px] cursor-pointer hover:bg-white/10 select-none"
                                         style={{ backgroundColor: '#1e3a5f' }}
                                         onClick={() => handleSort("generate_date_time")}
                                     >
@@ -1118,7 +969,7 @@ export default function EnquiryReverificationPage() {
                                         </div>
                                     </th>
                                     <th
-                                        className="sticky left-[140px] z-30 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[130px] w-[130px] cursor-pointer hover:bg-white/10 select-none"
+                                        className="sticky left-[150px] z-30 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[120px] w-[120px] cursor-pointer hover:bg-white/10 select-none"
                                         style={{ backgroundColor: '#1e3a5f' }}
                                         onClick={() => handleSort("enquiry_created_datetime")}
                                     >
@@ -1127,7 +978,7 @@ export default function EnquiryReverificationPage() {
                                         </div>
                                     </th>
                                     <th
-                                        className="sticky left-[270px] z-30 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[180px] w-[180px] cursor-pointer hover:bg-white/10 select-none"
+                                        className="sticky left-[270px] z-30 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[130px] w-[130px] cursor-pointer hover:bg-white/10 select-none"
                                         style={{ backgroundColor: '#1e3a5f' }}
                                         onClick={() => handleSort("lead_id")}
                                     >
@@ -1135,16 +986,7 @@ export default function EnquiryReverificationPage() {
                                             ID {renderSortIcon("lead_id")}
                                         </div>
                                     </th>
-                                    <th className="sticky left-[450px] z-30 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[200px] w-[200px] border-r-2 border-white/20 shadow-[inset_-8px_0_12px_-6px_rgba(0,0,0,0.35)]" style={{ backgroundColor: '#1e3a5f' }}>Client Details</th>
-
-                                    <th
-                                        className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-white/10 select-none border-r border-white/15"
-                                        onClick={() => handleSort("sqv_priority")}
-                                    >
-                                        <div className="flex items-center gap-1.5">
-                                            Priority {renderSortIcon("sqv_priority")}
-                                        </div>
-                                    </th>
+                                    <th className="sticky left-[400px] z-30 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[220px] w-[220px] border-r-2 border-white/20 shadow-[inset_-8px_0_12px_-6px_rgba(0,0,0,0.35)]" style={{ backgroundColor: '#1e3a5f' }}>Client Details</th>
 
                                     <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">Subject</th>
                                     <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">Notes</th>
@@ -1190,7 +1032,7 @@ export default function EnquiryReverificationPage() {
 
                                 {loadError && sortedEnquiries.length === 0 && (
                                     <tr>
-                                        <td colSpan={20} className="py-10 px-4 text-center">
+                                        <td colSpan={19} className="py-10 px-4 text-center">
                                             <div className="flex flex-col items-center gap-2">
                                                 <AlertCircle className="h-6 w-6 text-red-500" />
                                                 <p className="text-sm font-semibold text-slate-700">Unable to load enquiries</p>
@@ -1208,53 +1050,23 @@ export default function EnquiryReverificationPage() {
                                     </tr>
                                 )}
 
-                                {!loadError && sortedEnquiries.length === 0 && (
-                                    <tr>
-                                        <td colSpan={20} className="py-12 px-4 text-center">
-                                            <div className="flex flex-col items-center justify-center gap-2">
-                                                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
-                                                    {workflowTab === "manual_review" && <Users className="w-5 h-5 text-blue-500" />}
-                                                    {workflowTab === "ai_cold" && <Snowflake className="w-5 h-5 text-cyan-500" />}
-                                                    {workflowTab === "ai_reopened" && <RotateCcw className="w-5 h-5 text-violet-500" />}
-                                                </div>
-                                                <p className="text-sm font-bold text-slate-800">
-                                                    {workflowTab === "manual_review" && "No enquiries pending manual review"}
-                                                    {workflowTab === "ai_cold" && "No AI cold confirmed enquiries found"}
-                                                    {workflowTab === "ai_reopened" && "No AI reopened enquiries found"}
-                                                </p>
-                                                <p className="text-xs text-slate-500 max-w-sm">
-                                                    {searchInput || dateFilter !== "all" || selectedCompany !== "ALL" || sourceFilter !== "all" || websiteFilter !== "all" || coldByFilter !== "all" || verifyStatusFilter !== "all" || priorityFilter !== "all"
-                                                        ? "Try adjusting or clearing your filters above to see more records."
-                                                        : "No records found in this workflow queue."}
-                                                </p>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                )}
-
                                 {sortedEnquiries.map((enq) => (
                                     <tr key={enq.id} className="border-b border-slate-100 hover:bg-blue-50 transition group">
-                                        <td className="sticky left-0 z-10 py-3 px-4 font-medium text-slate-600 min-w-[140px] w-[140px] bg-white group-hover:bg-blue-50 transition-colors border-r border-slate-100">
+                                        <td className="sticky left-0 z-10 py-3 px-4 font-medium text-slate-600 min-w-[150px] w-[150px] bg-white group-hover:bg-blue-50 transition-colors border-r border-slate-100">
                                             {formatDateStr(enq.generate_date_time)}
                                         </td>
-                                        <td className="sticky left-[140px] z-10 py-3 px-4 font-medium text-slate-600 min-w-[130px] w-[130px] bg-white group-hover:bg-blue-50 transition-colors border-r border-slate-100">
+                                        <td className="sticky left-[150px] z-10 py-3 px-4 font-medium text-slate-600 min-w-[120px] w-[120px] bg-white group-hover:bg-blue-50 transition-colors border-r border-slate-100">
                                             {formatDateStr(enq.enquiry_created_datetime)}
                                         </td>
-                                        <td className="sticky left-[270px] z-10 py-3 px-4 font-bold text-blue-700 min-w-[180px] w-[180px] max-w-[180px] bg-white group-hover:bg-blue-50 transition-colors border-r border-slate-100 overflow-hidden">
-                                            <div className="truncate font-mono text-[11.5px]" title={enq.lead_id || "—"}>
-                                                {enq.lead_id || "—"}
-                                            </div>
+                                        <td className="sticky left-[270px] z-10 py-3 px-4 font-bold text-blue-700 min-w-[130px] w-[130px] bg-white group-hover:bg-blue-50 transition-colors border-r border-slate-100">
+                                            {enq.lead_id}
                                         </td>
-                                        <td className="sticky left-[450px] z-10 py-3 px-4 min-w-[200px] w-[200px] bg-white group-hover:bg-blue-50 transition-colors border-r-2 border-slate-200 shadow-[inset_-8px_0_12px_-6px_rgba(15,23,42,0.15)]">
+                                        <td className="sticky left-[400px] z-10 py-3 px-4 min-w-[220px] w-[220px] bg-white group-hover:bg-blue-50 transition-colors border-r-2 border-slate-200 shadow-[inset_-8px_0_12px_-6px_rgba(15,23,42,0.15)]">
                                             <div className="space-y-0.5">
                                                 <p className="font-bold text-slate-900">{enq.name_of_client || "—"}</p>
                                                 <p className="text-slate-500 font-medium">{enq.mobile || "—"}</p>
                                                 <p className="text-slate-400 font-medium">{enq.email_id || "—"}</p>
                                             </div>
-                                        </td>
-
-                                        <td className="py-3 px-4 whitespace-nowrap border-r border-slate-100">
-                                            {renderPriorityBadge(enq.sqv_priority)}
                                         </td>
 
                                         <td className="py-3 px-4 max-w-[200px] truncate font-medium text-slate-700 border-r border-slate-100" title={enq.subjects}>
@@ -1348,7 +1160,7 @@ export default function EnquiryReverificationPage() {
                                                 >
                                                     <Eye className="h-4 w-4" /> View
                                                 </button>
-                                                {(workflowTab !== "manual_review" || (!hasExecutiveCompleted(enq) && (!isSenior || isAdmin))) && (
+                                                {!hasExecutiveCompleted(enq) && (!isSenior || isAdmin) && (
                                                     <button
                                                         onClick={() => {
                                                             setSelectedExecutiveRecord({
@@ -1379,7 +1191,7 @@ export default function EnquiryReverificationPage() {
                                                         Executive Verify
                                                     </button>
                                                 )}
-                                                {(workflowTab !== "manual_review" || (!hasSeniorCompleted(enq) && (isSenior || isAdmin) && hasSeniorPlanned(enq))) && (
+                                                {!hasSeniorCompleted(enq) && (isSenior || isAdmin) && hasSeniorPlanned(enq) && (
                                                     <button
                                                         onClick={() => {
                                                             setSelectedSeniorRecord({
@@ -1535,10 +1347,9 @@ export default function EnquiryReverificationPage() {
                                     <tr>
                                         {/* Sticky cols */}
                                         <th className="sticky left-0 z-30 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[140px] w-[140px]" style={{ backgroundColor: '#14532d' }}>Timestamp</th>
-                                        <th className="sticky left-[140px] z-30 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[190px] w-[190px]" style={{ backgroundColor: '#14532d' }}>Lead ID</th>
-                                        <th className="sticky left-[330px] z-30 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[180px] w-[180px] border-r-2 border-white/20 shadow-[inset_-8px_0_12px_-6px_rgba(0,0,0,0.35)]" style={{ backgroundColor: '#14532d' }}>Client</th>
+                                        <th className="sticky left-[140px] z-30 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[130px] w-[130px]" style={{ backgroundColor: '#14532d' }}>Lead ID</th>
+                                        <th className="sticky left-[270px] z-30 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[180px] w-[180px] border-r-2 border-white/20 shadow-[inset_-8px_0_12px_-6px_rgba(0,0,0,0.35)]" style={{ backgroundColor: '#14532d' }}>Client</th>
                                         {/* Scrollable cols */}
-                                        <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">Priority</th>
                                         <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">Subject</th>
                                         <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">Company</th>
                                         <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">Cold By</th>
@@ -1556,19 +1367,12 @@ export default function EnquiryReverificationPage() {
                                         <tr key={enq.id} className="border-b border-slate-100 hover:bg-green-50 transition group">
                                             {/* Sticky cells */}
                                             <td className="sticky left-0 z-10 py-3 px-4 font-medium text-slate-600 whitespace-nowrap min-w-[140px] w-[140px] bg-white group-hover:bg-green-50 transition-colors border-r border-slate-100">{formatDateStr(enq.generate_date_time)}</td>
-                                            <td className="sticky left-[140px] z-10 py-3 px-4 font-bold text-blue-700 min-w-[190px] w-[190px] max-w-[190px] bg-white group-hover:bg-green-50 transition-colors border-r border-slate-100 overflow-hidden">
-                                                <div className="truncate font-mono text-[11.5px]" title={enq.lead_id || "—"}>
-                                                    {enq.lead_id || "—"}
-                                                </div>
-                                            </td>
-                                            <td className="sticky left-[330px] z-10 py-3 px-4 min-w-[180px] w-[180px] bg-white group-hover:bg-green-50 transition-colors border-r-2 border-slate-200 shadow-[inset_-8px_0_12px_-6px_rgba(15,23,42,0.12)]">
+                                            <td className="sticky left-[140px] z-10 py-3 px-4 font-bold text-blue-700 whitespace-nowrap min-w-[130px] w-[130px] bg-white group-hover:bg-green-50 transition-colors border-r border-slate-100">{enq.lead_id}</td>
+                                            <td className="sticky left-[270px] z-10 py-3 px-4 min-w-[180px] w-[180px] bg-white group-hover:bg-green-50 transition-colors border-r-2 border-slate-200 shadow-[inset_-8px_0_12px_-6px_rgba(15,23,42,0.12)]">
                                                 <p className="font-bold text-slate-900">{enq.name_of_client || "—"}</p>
                                                 <p className="text-slate-500 text-[11px]">{enq.mobile || ""}</p>
                                             </td>
                                             {/* Scrollable cells */}
-                                            <td className="py-3 px-4 whitespace-nowrap border-r border-slate-100">
-                                                {renderPriorityBadge(enq.sqv_priority)}
-                                            </td>
                                             <td className="py-3 px-4 max-w-[180px] truncate text-slate-700 border-r border-slate-100" title={enq.subjects}>{enq.subjects || "—"}</td>
                                             <td className={`py-3 px-4 font-bold whitespace-nowrap border-r border-slate-100 ${getCompanyColorClass(enq.company_belongs_to)}`}>{enq.company_belongs_to || "—"}</td>
                                             <td className="py-3 px-4 font-semibold text-slate-700 whitespace-nowrap border-r border-slate-100">{enq.cold_by_employee_name || "—"}</td>
@@ -1700,10 +1504,6 @@ export default function EnquiryReverificationPage() {
                                             <div>
                                                 <div className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wide">Generated On</div>
                                                 <div className="text-[12px] font-semibold text-[#334155]">{formatDateStr(selectedCompletedEnquiry.generate_date_time)}</div>
-                                            </div>
-                                            <div>
-                                                <div className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wide">SQV Priority</div>
-                                                <div className="mt-0.5">{renderPriorityBadge(selectedCompletedEnquiry.sqv_priority)}</div>
                                             </div>
                                             <div>
                                                 <div className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wide">UID</div>
@@ -2049,11 +1849,7 @@ export default function EnquiryReverificationPage() {
                                                         <div className="w-1 h-3.5 rounded bg-[#4f46e5]" />
                                                         <span className="text-[11.5px] font-extrabold tracking-wider uppercase text-[#4f46e5]">SQV & Dialer Details</span>
                                                     </div>
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                                                        <div className="border border-[#e2e8f0] rounded-xl bg-white p-[10px_14px]">
-                                                            <div className="text-[10px] font-bold tracking-[0.7px] uppercase text-[#94a3b8] mb-1">SQV Priority</div>
-                                                            <div className="mt-0.5">{renderPriorityBadge(selectedEnquiry.sqv_priority)}</div>
-                                                        </div>
+                                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                                         <div className="border border-[#e2e8f0] rounded-xl bg-white p-[10px_14px]">
                                                             <div className="text-[10px] font-bold tracking-[0.7px] uppercase text-[#94a3b8] mb-1">IVR Recording URL</div>
                                                             {selectedEnquiry.ivr_url ? (
@@ -2105,7 +1901,7 @@ export default function EnquiryReverificationPage() {
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-2.5">
-                                        {(workflowTab !== "manual_review" || (!hasExecutiveCompleted(selectedEnquiry) && (!isSenior || isAdmin))) && (
+                                        {!hasExecutiveCompleted(selectedEnquiry) && (!isSenior || isAdmin) && (
                                             <button
                                                 onClick={() => {
                                                     const enq = selectedEnquiry;
@@ -2138,7 +1934,7 @@ export default function EnquiryReverificationPage() {
                                                 Executive Verify
                                             </button>
                                         )}
-                                        {(workflowTab !== "manual_review" || (!hasSeniorCompleted(selectedEnquiry) && (isSenior || isAdmin) && hasSeniorPlanned(selectedEnquiry))) && (
+                                        {!hasSeniorCompleted(selectedEnquiry) && (isSenior || isAdmin) && hasSeniorPlanned(selectedEnquiry) && (
                                             <button
                                                 onClick={() => {
                                                     const enq = selectedEnquiry;
@@ -2203,7 +1999,6 @@ export default function EnquiryReverificationPage() {
                         onSubmit={handleSaveExecutiveVerification}
                         defaultDoerName={user?.name || ""}
                         defaultDoerEmail={user?.email || ""}
-                        readOnly={workflowTab !== "manual_review"}
                     />
                 )}
 
@@ -2218,7 +2013,6 @@ export default function EnquiryReverificationPage() {
                         onSubmit={handleSaveSeniorVerification}
                         defaultDoerName={user?.name || ""}
                         defaultDoerEmail={user?.email || ""}
-                        readOnly={workflowTab !== "manual_review"}
                     />
                 )}
 
