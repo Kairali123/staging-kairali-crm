@@ -110,7 +110,9 @@ import {
   Info,
   Wallet, Database, LogOut,
   User,
-  Tangent
+  Tangent,
+  Sparkles,
+  Crown
 } from "lucide-react"
 import { Bar, BarChart, Line, LineChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList, PieChart, Pie, Legend } from "recharts"
 import { set } from "date-fns"
@@ -3929,32 +3931,157 @@ export default function SalesAccountsTeamPage() {
     };
   }
 
-  const formatGuestName = (name: string, isScrolled: boolean) => {
+  // --- GUEST LIFETIME VALUE (LTV) CALCULATION & CACHE ---
+  const formatCompactINR = (amount: number) => {
+    if (!amount || isNaN(amount)) return "₹0";
+    if (amount >= 10000000) return `₹${(amount / 10000000).toFixed(1).replace(/\.0$/, "")}Cr`;
+    if (amount >= 100000) return `₹${(amount / 100000).toFixed(1).replace(/\.0$/, "")}L`;
+    if (amount >= 1000) return `₹${(amount / 1000).toFixed(1).replace(/\.0$/, "")}k`;
+    return `₹${amount.toLocaleString("en-IN")}`;
+  };
+
+  const guestLtvMetrics = useMemo(() => {
+    const guestMap = new Map<string, {
+      totalLtv: number;
+      totalStays: number;
+      guestName: string;
+      tier: "VIP" | "Premium" | "Standard";
+    }>();
+
+    (bookings || []).forEach((b: any) => {
+      const mobileKey = (b.mobile || b.phone || b.phoneNumber || b.mobileNo || "").toString().replace(/[^0-9]/g, "");
+      const emailKey = (b.email || "").toString().trim().toLowerCase();
+      const guestKey = mobileKey ? `m_${mobileKey}` : (emailKey ? `e_${emailKey}` : (b.guestId ? `id_${b.guestId}` : `n_${(b.guestName || "").toString().trim().toLowerCase()}`));
+      
+      if (!guestKey || guestKey === "n_") return;
+
+      const currentAmount = Number(b.amount || b.originalAmount || b.totalAmount || 0) || 0;
+      const existing = guestMap.get(guestKey);
+      if (existing) {
+        existing.totalLtv += currentAmount;
+        existing.totalStays += 1;
+        if (b.guestName && !existing.guestName) existing.guestName = b.guestName;
+      } else {
+        guestMap.set(guestKey, {
+          totalLtv: currentAmount,
+          totalStays: 1,
+          guestName: b.guestName || "",
+          tier: "Standard",
+        });
+      }
+    });
+
+    guestMap.forEach((val) => {
+      if (val.totalLtv >= 300000 || val.totalStays >= 3) {
+        val.tier = "VIP";
+      } else if (val.totalLtv >= 150000 || val.totalStays >= 2) {
+        val.tier = "Premium";
+      } else {
+        val.tier = "Standard";
+      }
+    });
+
+    const uniqueGuestCount = guestMap.size;
+    let totalLtvSum = 0;
+    let repeatGuestCount = 0;
+    guestMap.forEach((val) => {
+      totalLtvSum += val.totalLtv;
+      if (val.totalStays > 1) repeatGuestCount++;
+    });
+
+    const avgCustomerLtv = uniqueGuestCount > 0 ? Math.round(totalLtvSum / uniqueGuestCount) : 0;
+    const repeatRate = uniqueGuestCount > 0 ? Math.round((repeatGuestCount / uniqueGuestCount) * 100) : 0;
+
+    const getGuestSummary = (b: any) => {
+      if (!b) return null;
+      const mobileKey = (b.mobile || b.phone || b.phoneNumber || b.mobileNo || "").toString().replace(/[^0-9]/g, "");
+      const emailKey = (b.email || "").toString().trim().toLowerCase();
+      const guestKey = mobileKey ? `m_${mobileKey}` : (emailKey ? `e_${emailKey}` : (b.guestId ? `id_${b.guestId}` : `n_${(b.guestName || "").toString().trim().toLowerCase()}`));
+      
+      return guestMap.get(guestKey) || {
+        totalLtv: Number(b.amount || b.originalAmount || b.totalAmount || 0) || 0,
+        totalStays: 1,
+        guestName: b.guestName || "",
+        tier: "Standard" as const,
+      };
+    };
+
+    return {
+      guestMap,
+      avgCustomerLtv,
+      repeatRate,
+      repeatGuestCount,
+      uniqueGuestCount,
+      getGuestSummary,
+    };
+  }, [bookings]);
+
+  const formatGuestName = (name: string, isScrolled: boolean, booking?: any) => {
     if (!name) return "—";
+    const guestSummary = booking ? guestLtvMetrics.getGuestSummary(booking) : null;
+    const isRepeat = guestSummary && (guestSummary.totalStays > 1 || (booking?.repeat && String(booking.repeat).toLowerCase() !== "no"));
+    const ltvAmount = guestSummary ? guestSummary.totalLtv : (Number(booking?.amount || booking?.originalAmount || 0) || 0);
+    const tier = guestSummary?.tier || "Standard";
+
     const words = name.trim().split(/\s+/);
     return (
-      <div className="relative w-full overflow-hidden min-h-[48px] flex flex-col justify-center">
+      <div className="relative w-full min-h-[48px] flex flex-col justify-center py-1">
         {/* Single-line version */}
         <div
-          className={`truncate text-left whitespace-nowrap w-full transition-all duration-200 absolute top-1/2 left-0 -translate-y-1/2 ${isScrolled ? "opacity-0 invisible pointer-events-none scale-95" : "opacity-100 visible scale-100"
-            }`}
+          className={`text-left w-full transition-all duration-200 ${
+            isScrolled ? "opacity-0 invisible pointer-events-none scale-95 h-0 overflow-hidden" : "opacity-100 visible scale-100"
+          }`}
         >
-          {name}
+          <div className="font-semibold text-slate-900 truncate text-[13px] tracking-tight" title={name}>
+            {name}
+          </div>
+          {guestSummary && (
+            <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+              {isRepeat ? (
+                <span
+                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold rounded shadow-sm ${
+                    tier === "VIP"
+                      ? "bg-amber-50 text-amber-900 border border-amber-300"
+                      : "bg-purple-50 text-purple-800 border border-purple-200"
+                  }`}
+                  title={`Lifetime Value: ₹${ltvAmount.toLocaleString()} (${guestSummary.totalStays} total stays)`}
+                >
+                  <Sparkles className="w-2.5 h-2.5 text-purple-600" />
+                  <span className="font-bold">LTV {formatCompactINR(ltvAmount)}</span>
+                  <span className="opacity-75 text-[9px]">({guestSummary.totalStays} stays)</span>
+                </span>
+              ) : (
+                <span
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/70 rounded"
+                  title="First time guest booking"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  New Guest
+                </span>
+              )}
+            </div>
+          )}
         </div>
         {/* Stacked multi-line version */}
         <div
-          className={`flex flex-col items-center justify-center text-center leading-tight py-1 w-full transition-all duration-200 ${isScrolled ? "opacity-100 visible scale-100" : "opacity-0 invisible pointer-events-none scale-95 absolute"
-            }`}
+          className={`flex flex-col items-center justify-center text-center leading-tight py-1 w-full transition-all duration-200 ${
+            isScrolled ? "opacity-100 visible scale-100" : "opacity-0 invisible pointer-events-none scale-95 absolute"
+          }`}
         >
           {words.map((word, idx) => (
             <span key={idx} className="block uppercase text-[10px] sm:text-[11px] font-semibold tracking-normal truncate max-w-full">
               {word}
             </span>
           ))}
+          {guestSummary && isRepeat && (
+            <span className="mt-0.5 px-1 py-0.2 text-[9px] font-bold bg-purple-100 text-purple-900 rounded">
+              LTV {formatCompactINR(ltvAmount)}
+            </span>
+          )}
         </div>
       </div>
     );
-  }
+  };
 
 
   // -----------------------------------------------
@@ -6964,7 +7091,7 @@ export default function SalesAccountsTeamPage() {
         </div>
 
         {viewMode === "table" && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             {/* Total Revenue Card */}
             <Card className="bg-gradient-to-br from-indigo-700 to-indigo-800 text-white border-indigo-600 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
               <CardContent className="px-2.5 py-1.5 space-y-1">
@@ -7054,6 +7181,31 @@ export default function SalesAccountsTeamPage() {
                     ? `${Math.round(((cancelledAmount + autoReleaseAmount) / totalAmount) * 100)}%`
                     : "0%"}
                 </span>
+              </CardContent>
+            </Card>
+
+            {/* Average Guest LTV Card */}
+            <Card className="bg-gradient-to-br from-violet-700 to-purple-900 text-white border-violet-600 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
+              <CardContent className="px-2.5 py-1.5 space-y-1">
+                <div className="flex items-center justify-between mb-0.5">
+                  <p className="text-[13px] font-semibold uppercase">
+                    Avg. Guest LTV
+                  </p>
+                  <div className="w-6 h-6 rounded-md bg-white/20 flex items-center justify-center">
+                    <Sparkles className="h-3.5 w-3.5" />
+                  </div>
+                </div>
+
+                <p className="text-2xl font-bold leading-tight">
+                  {formatCurrency(guestLtvMetrics.avgCustomerLtv)}
+                </p>
+
+                <div className="flex items-center justify-between text-[11px] leading-none opacity-90">
+                  <span className="flex items-center gap-1 font-medium">
+                    ⭐ {guestLtvMetrics.repeatRate}% Repeat
+                  </span>
+                  <span className="text-[10px] opacity-80">{guestLtvMetrics.uniqueGuestCount} Unique Guests</span>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -7953,7 +8105,7 @@ export default function SalesAccountsTeamPage() {
                           className="font-medium text-slate-900"
                           style={getStickyBodyCellStyle(table1Scrolled, "guestName", "#FFE2C2", true, 20)}
                         >
-                          {formatGuestName(booking.guestName, table1Scrolled)}
+                          {formatGuestName(booking.guestName, table1Scrolled, booking)}
                         </TableCell>
                         <TableCell className="text-slate-700 space-y-1">
                           {/* MOBILE */}
@@ -8836,7 +8988,7 @@ export default function SalesAccountsTeamPage() {
                           className="font-medium text-slate-900"
                           style={getStickyBodyCellStyle(table2Scrolled, "guestName", "#DCFCE5", true, 20)}
                         >
-                          {formatGuestName(booking.guestName, table2Scrolled)}
+                          {formatGuestName(booking.guestName, table2Scrolled, booking)}
                         </TableCell>
                         <TableCell className="text-slate-700 space-y-1">
                           {/* MOBILE */}
@@ -9535,7 +9687,7 @@ export default function SalesAccountsTeamPage() {
                         <TableCell
                           style={getStickyBodyCellStyle(table3Scrolled, "guestName", "#FDD5D5", true, 20)}
                         >
-                          {formatGuestName(booking.guestName, table3Scrolled)}
+                          {formatGuestName(booking.guestName, table3Scrolled, booking)}
                         </TableCell>
 
                         {/* Room Number */}
@@ -10056,7 +10208,7 @@ export default function SalesAccountsTeamPage() {
                       <TableCell
                         style={getStickyBodyCellStyle(table4Scrolled, "guestName", "#E1F3FD", true, 20)}
                       >
-                        {formatGuestName(booking.guestName, table4Scrolled)}
+                        {formatGuestName(booking.guestName, table4Scrolled, booking)}
                       </TableCell>
 
                       {/* Room Number */}
@@ -13703,7 +13855,12 @@ export default function SalesAccountsTeamPage() {
                   </div>
 
                   <div className="p-4 rounded-lg border bg-white shadow-sm space-y-3">
-                    <h3 className="text-[13px] font-semibold border-b pb-1 text-blue-600">Guest Status</h3>
+                    <div className="flex items-center justify-between border-b pb-1">
+                      <h3 className="text-[13px] font-semibold text-blue-600">Guest Status & Lifetime Value</h3>
+                      <span className="px-1.5 py-0.5 text-[9px] font-bold bg-violet-100 text-violet-800 rounded">
+                        {guestLtvMetrics.getGuestSummary(viewBookingData)?.tier || "Standard"} Tier
+                      </span>
+                    </div>
                     <div className="space-y-2 text-[9px] leading-tight">
                       <div className="grid grid-cols-2">
                         <span className="text-gray-600">Guest Status:</span>
@@ -13730,6 +13887,24 @@ export default function SalesAccountsTeamPage() {
                         <span className="font-medium">
                           {(viewBookingData?.groupBooking === "Yes" || String(viewBookingData?.bookingType || viewBookingData?.bookingDetails?.bookingType).toLowerCase() === "group") ? "Yes" : "No"}
                         </span>
+                      </div>
+
+                      {/* Enriched Lifetime Value (LTV) Card */}
+                      <div className="pt-2 border-t mt-2">
+                        <div className="p-2.5 rounded-md bg-gradient-to-br from-violet-50 via-purple-50 to-indigo-50 border border-violet-200/80 space-y-1.5">
+                          <div className="flex items-center justify-between text-violet-950 font-semibold">
+                            <span className="flex items-center gap-1 text-[10px]">
+                              <Sparkles className="w-3 h-3 text-violet-600" /> Guest Lifetime Value (LTV)
+                            </span>
+                            <span className="text-[12px] font-bold text-violet-700">
+                              ₹{(guestLtvMetrics.getGuestSummary(viewBookingData)?.totalLtv || Number(viewBookingData?.amount || viewBookingData?.originalAmount || 0)).toLocaleString("en-IN")}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 text-[8.5px] text-violet-800 pt-0.5">
+                            <div>Total Stays: <span className="font-semibold text-violet-950">{guestLtvMetrics.getGuestSummary(viewBookingData)?.totalStays || 1} Stays</span></div>
+                            <div>Avg. Spend / Stay: <span className="font-semibold text-violet-950">₹{Math.round((guestLtvMetrics.getGuestSummary(viewBookingData)?.totalLtv || Number(viewBookingData?.amount || 0)) / (guestLtvMetrics.getGuestSummary(viewBookingData)?.totalStays || 1)).toLocaleString("en-IN")}</span></div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
