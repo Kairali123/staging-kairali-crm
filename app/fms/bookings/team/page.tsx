@@ -5,6 +5,7 @@ import { createPortal } from "react-dom"
 import { useRouter } from "next/navigation"
 import { useBookings, Booking as BaseBooking } from "@/hooks/use-fms-bookings"
 import { normalizeUserName } from "@/lib/utils"
+import { calculateGuestLtvMetrics, isBookingCancelled } from "@/lib/ltv"
 import { useAuth } from "@/hooks/use-auth"
 import { StageWisePendingsReport } from "@/components/fms/stage-wise-pendings"
 import {
@@ -3941,86 +3942,15 @@ export default function SalesAccountsTeamPage() {
   };
 
   const guestLtvMetrics = useMemo(() => {
-    const guestMap = new Map<string, {
-      totalLtv: number;
-      totalStays: number;
-      guestName: string;
-      tier: "VIP" | "Premium" | "Standard";
-    }>();
-
-    (bookings || []).forEach((b: any) => {
-      const mobileKey = (b.mobile || b.phone || b.phoneNumber || b.mobileNo || "").toString().replace(/[^0-9]/g, "");
-      const emailKey = (b.email || "").toString().trim().toLowerCase();
-      const guestKey = mobileKey ? `m_${mobileKey}` : (emailKey ? `e_${emailKey}` : (b.guestId ? `id_${b.guestId}` : `n_${(b.guestName || "").toString().trim().toLowerCase()}`));
-      
-      if (!guestKey || guestKey === "n_") return;
-
-      const currentAmount = Number(b.amount || b.originalAmount || b.totalAmount || 0) || 0;
-      const existing = guestMap.get(guestKey);
-      if (existing) {
-        existing.totalLtv += currentAmount;
-        existing.totalStays += 1;
-        if (b.guestName && !existing.guestName) existing.guestName = b.guestName;
-      } else {
-        guestMap.set(guestKey, {
-          totalLtv: currentAmount,
-          totalStays: 1,
-          guestName: b.guestName || "",
-          tier: "Standard",
-        });
-      }
-    });
-
-    guestMap.forEach((val) => {
-      if (val.totalLtv >= 300000 || val.totalStays >= 3) {
-        val.tier = "VIP";
-      } else if (val.totalLtv >= 150000 || val.totalStays >= 2) {
-        val.tier = "Premium";
-      } else {
-        val.tier = "Standard";
-      }
-    });
-
-    const uniqueGuestCount = guestMap.size;
-    let totalLtvSum = 0;
-    let repeatGuestCount = 0;
-    guestMap.forEach((val) => {
-      totalLtvSum += val.totalLtv;
-      if (val.totalStays > 1) repeatGuestCount++;
-    });
-
-    const avgCustomerLtv = uniqueGuestCount > 0 ? Math.round(totalLtvSum / uniqueGuestCount) : 0;
-    const repeatRate = uniqueGuestCount > 0 ? Math.round((repeatGuestCount / uniqueGuestCount) * 100) : 0;
-
-    const getGuestSummary = (b: any) => {
-      if (!b) return null;
-      const mobileKey = (b.mobile || b.phone || b.phoneNumber || b.mobileNo || "").toString().replace(/[^0-9]/g, "");
-      const emailKey = (b.email || "").toString().trim().toLowerCase();
-      const guestKey = mobileKey ? `m_${mobileKey}` : (emailKey ? `e_${emailKey}` : (b.guestId ? `id_${b.guestId}` : `n_${(b.guestName || "").toString().trim().toLowerCase()}`));
-      
-      return guestMap.get(guestKey) || {
-        totalLtv: Number(b.amount || b.originalAmount || b.totalAmount || 0) || 0,
-        totalStays: 1,
-        guestName: b.guestName || "",
-        tier: "Standard" as const,
-      };
-    };
-
-    return {
-      guestMap,
-      avgCustomerLtv,
-      repeatRate,
-      repeatGuestCount,
-      uniqueGuestCount,
-      getGuestSummary,
-    };
+    return calculateGuestLtvMetrics(bookings || []);
   }, [bookings]);
 
   const formatGuestName = (name: string, isScrolled: boolean, booking?: any) => {
     if (!name) return "—";
     const guestSummary = booking ? guestLtvMetrics.getGuestSummary(booking) : null;
-    const isRepeat = guestSummary && (guestSummary.totalStays > 1 || (booking?.repeat && String(booking.repeat).toLowerCase() !== "no"));
-    const ltvAmount = guestSummary ? guestSummary.totalLtv : (Number(booking?.amount || booking?.originalAmount || 0) || 0);
+    const isCancelled = isBookingCancelled(booking);
+    const isRepeat = guestSummary && (guestSummary.totalStays > 1 || (!isCancelled && booking?.repeat && String(booking.repeat).toLowerCase() !== "no"));
+    const ltvAmount = guestSummary ? guestSummary.totalLtv : (isCancelled ? 0 : (Number(booking?.amount || booking?.originalAmount || 0) || 0));
     const tier = guestSummary?.tier || "Standard";
 
     const words = name.trim().split(/\s+/);
@@ -4050,7 +3980,7 @@ export default function SalesAccountsTeamPage() {
                   <span className="font-bold">LTV {formatCompactINR(ltvAmount)}</span>
                   <span className="opacity-75 text-[9px]">({guestSummary.totalStays} stays)</span>
                 </span>
-              ) : (
+              ) : guestSummary.totalStays > 0 ? (
                 <span
                   className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/70 rounded"
                   title="First time guest booking"
@@ -4058,7 +3988,7 @@ export default function SalesAccountsTeamPage() {
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                   New Guest
                 </span>
-              )}
+              ) : null}
             </div>
           )}
         </div>
@@ -13890,22 +13820,31 @@ export default function SalesAccountsTeamPage() {
                       </div>
 
                       {/* Enriched Lifetime Value (LTV) Card */}
-                      <div className="pt-2 border-t mt-2">
-                        <div className="p-2.5 rounded-md bg-gradient-to-br from-violet-50 via-purple-50 to-indigo-50 border border-violet-200/80 space-y-1.5">
-                          <div className="flex items-center justify-between text-violet-950 font-semibold">
-                            <span className="flex items-center gap-1 text-[10px]">
-                              <Sparkles className="w-3 h-3 text-violet-600" /> Guest Lifetime Value (LTV)
-                            </span>
-                            <span className="text-[12px] font-bold text-violet-700">
-                              ₹{(guestLtvMetrics.getGuestSummary(viewBookingData)?.totalLtv || Number(viewBookingData?.amount || viewBookingData?.originalAmount || 0)).toLocaleString("en-IN")}
-                            </span>
+                      {(() => {
+                        const guestSummary = guestLtvMetrics.getGuestSummary(viewBookingData);
+                        const isCancelled = isBookingCancelled(viewBookingData);
+                        const ltvVal = guestSummary?.totalLtv ?? (isCancelled ? 0 : Number(viewBookingData?.amount || viewBookingData?.originalAmount || 0));
+                        const staysVal = guestSummary?.totalStays ?? (isCancelled ? 0 : 1);
+                        const avgVal = staysVal > 0 ? Math.round(ltvVal / staysVal) : 0;
+                        return (
+                          <div className="pt-2 border-t mt-2">
+                            <div className="p-2.5 rounded-md bg-gradient-to-br from-violet-50 via-purple-50 to-indigo-50 border border-violet-200/80 space-y-1.5">
+                              <div className="flex items-center justify-between text-violet-950 font-semibold">
+                                <span className="flex items-center gap-1 text-[10px]">
+                                  <Sparkles className="w-3 h-3 text-violet-600" /> Guest Lifetime Value (LTV)
+                                </span>
+                                <span className="text-[12px] font-bold text-violet-700">
+                                  ₹{ltvVal.toLocaleString("en-IN")}
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-2 text-[8.5px] text-violet-800 pt-0.5">
+                                <div>Total Stays: <span className="font-semibold text-violet-950">{staysVal} Stays</span></div>
+                                <div>Avg. Spend / Stay: <span className="font-semibold text-violet-950">₹{avgVal.toLocaleString("en-IN")}</span></div>
+                              </div>
+                            </div>
                           </div>
-                          <div className="grid grid-cols-2 text-[8.5px] text-violet-800 pt-0.5">
-                            <div>Total Stays: <span className="font-semibold text-violet-950">{guestLtvMetrics.getGuestSummary(viewBookingData)?.totalStays || 1} Stays</span></div>
-                            <div>Avg. Spend / Stay: <span className="font-semibold text-violet-950">₹{Math.round((guestLtvMetrics.getGuestSummary(viewBookingData)?.totalLtv || Number(viewBookingData?.amount || 0)) / (guestLtvMetrics.getGuestSummary(viewBookingData)?.totalStays || 1)).toLocaleString("en-IN")}</span></div>
-                          </div>
-                        </div>
-                      </div>
+                        );
+                      })()}
                     </div>
                   </div>
 
