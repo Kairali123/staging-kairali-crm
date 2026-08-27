@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useAuth, type UserRole } from "@/hooks/use-auth";
-import { useCrrBookings, isStageLocked, getStagePlannedDate, getStageSavedData, getStageDoer, isBookingCancelled, saveStage } from "@/hooks/use-crr-bookings";
+import { useCrrBookings, isStageLocked, getStagePlannedDate, getStageActualDate, getStageSavedData, getStageDoer, isBookingCancelled, saveStage } from "@/hooks/use-crr-bookings";
 import type {
     Role,
     Resp,
@@ -334,7 +334,7 @@ const SCROLLABLE_HEADERS = [
    COMPONENT
 ========================================================= */
 export default function CRRCallingProcessPage() {
-    const { guests, setGuests, loading: guestsLoading, error: guestsError, refetch: refetchGuests } = useCrrBookings();
+    const { guests, setGuests, loading: guestsLoading, error: guestsError, refetch: refetchGuests, stageUsers } = useCrrBookings();
 
     // ---------- REAL ROLE (from auth) — no manual switching, ever ----------
     const { user } = useAuth();
@@ -381,6 +381,40 @@ export default function CRRCallingProcessPage() {
         );
     }, [user]);
 
+    // Non-admin assigned users see only their assigned stages in the stage filter dropdown
+    const userAssignedStages = useMemo<typeof STAGES>(() => {
+        if (isAdminRole) return STAGES;
+        const myEmail = (user?.email || "").toLowerCase().trim();
+        const su = stageUsers.find((u) => u.email.toLowerCase().trim() === myEmail);
+        const stageNums = su && su.stages.length > 0 ? su.stages : permittedStages;
+        if (stageNums.length === 0) return STAGES;
+        return STAGES.filter((s) => stageNums.includes(s.no));
+    }, [isAdminRole, user, stageUsers, permittedStages]);
+
+    const DEFAULT_STAGE_USERS = useMemo(() => [
+        { name: "Jinsha Manoj MV", email: "grm@ktahv.com", role: "grm", stages: [1, 2, 4, 5, 6, 8] },
+        { name: "Dr. Rahul R", email: "doctor@ktahv.com", role: "doctor", stages: [3, 7] },
+        { name: "Shoukath Ali Moosa", email: "fom@ktahv.com", role: "fom", stages: [9, 10] },
+        { name: "Anoop Vijayaraj", email: "gm.hv@kairali.com", role: "gm", stages: [11] },
+        { name: "Abhilash Sir", email: "test@kairali.com", role: "test", stages: [1, 2, 6, 7] },
+    ], []);
+
+    const responsiblePersonList = useMemo(() => {
+        return stageUsers && stageUsers.length > 0 ? stageUsers : DEFAULT_STAGE_USERS;
+    }, [stageUsers, DEFAULT_STAGE_USERS]);
+
+    const responsiblePersonOptions = useMemo(() => {
+        if (isAdminRole) return responsiblePersonList;
+        const myEmail = (user?.email || "").toLowerCase().trim();
+        const myName = (user?.name || "").toLowerCase().trim();
+        const me = responsiblePersonList.filter(
+            (u) =>
+                u.email.toLowerCase().trim() === myEmail ||
+                u.name.toLowerCase().trim() === myName
+        );
+        return me.length > 0 ? me : responsiblePersonList;
+    }, [responsiblePersonList, isAdminRole, user]);
+
     const [search, setSearch] = useState("");
     const [stageFilter, setStageFilter] = useState<string>("all");
     const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -388,19 +422,18 @@ export default function CRRCallingProcessPage() {
 
     useEffect(() => {
         if (user && !isAdminRole) {
-            if (user.role === "doctor" || user.department === "Medical") {
-                setRespFilter("Doctor");
-            } else if (user.role === "front_office" || user.department === "Front Office") {
-                setRespFilter("FO");
-            } else if (
-                user.role === "operation_staff" ||
-                user.role === "operation_manager" ||
-                user.department === "Operations"
-            ) {
-                setRespFilter("GRE");
+            const myEmail = (user?.email || "").toLowerCase().trim();
+            const myName = (user?.name || "").toLowerCase().trim();
+            const match = responsiblePersonList.find(
+                (u) =>
+                    u.email.toLowerCase().trim() === myEmail ||
+                    u.name.toLowerCase().trim() === myName
+            );
+            if (match) {
+                setRespFilter(match.name || match.email);
             }
         }
-    }, [user, isAdminRole]);
+    }, [user, isAdminRole, responsiblePersonList]);
     const [dateRangeFilter, setDateRangeFilter] = useState<DateRangePreset>("all");
 
     // ---------- Sorting for the main data table ----------
@@ -606,9 +639,15 @@ export default function CRRCallingProcessPage() {
                 if (!matches) return false;
             }
             if (respFilter !== "all" && !g.allComplete) {
-                const stageIdx = g.currentStage - 1;
-                if (stageIdx < 0 || stageIdx >= STAGES.length || STAGES[stageIdx].resp !== respFilter) {
-                    return false;
+                const selectedPerson = responsiblePersonList.find(
+                    (u) =>
+                        (u.name && u.name.toLowerCase() === respFilter.toLowerCase()) ||
+                        (u.email && u.email.toLowerCase() === respFilter.toLowerCase())
+                );
+                if (selectedPerson) {
+                    if (!selectedPerson.stages.includes(g.currentStage)) {
+                        return false;
+                    }
                 }
             }
             if (stageFilter !== "all") {
@@ -617,9 +656,9 @@ export default function CRRCallingProcessPage() {
                 if (statusFilter === "complete") {
                     if (g.stageStatus[stageNum - 1] !== "Complete") return false;
                 } else if (statusFilter === "pending") {
-                    if (g.stageStatus[stageNum - 1] !== "Pending") return false;
+                    if (g.currentStage !== stageNum || g.allComplete) return false;
                 } else {
-                    if (String(g.currentStage) !== stageFilter && g.stageStatus[stageNum - 1] !== "Complete" && !(g.allComplete && stageFilter === "8")) return false;
+                    if (g.currentStage !== stageNum) return false;
                 }
             } else {
                 if (statusFilter === "pending" && (g.allComplete || isBookingCancelled(g))) return false;
@@ -750,7 +789,7 @@ export default function CRRCallingProcessPage() {
     // Lock status is surfaced in the KPI subtitle, not in the counts:
     // "N actionable now · M awaiting unlock".
     const isStagePending = (g: Guest, stageNo: number) =>
-        !isBookingCancelled(g) && g.stageStatus[stageNo - 1] === "Pending";
+        !isBookingCancelled(g) && !g.allComplete && g.currentStage === stageNo;
 
     const isStageCompleted = (g: Guest, stageNo: number) =>
         !isBookingCancelled(g) && g.stageStatus[stageNo - 1] === "Complete";
@@ -805,75 +844,60 @@ export default function CRRCallingProcessPage() {
         const activeRows = rows.filter((g) => !isBookingCancelled(g));
 
         // A booking is pending at its active currentStage (1-indexed).
-        // Categorizing each pending booking under its current stage ensures that
-        // the sum of table columns equals the Pending Actions KPI count (e.g. 1323 = 1323).
         const isPendingTask = (g: Guest, idx: number) =>
             !g.allComplete && g.currentStage === idx + 1;
 
-        // Row list = every distinct doer actually recorded across the filtered
-        // rows (dynamic — covers doers like GREs/doctors who never create bookings).
-        const doerSet = new Set<string>();
-        activeRows.forEach((g) => {
-            for (let n = 1; n <= STAGES.length; n++) {
-                const doer = getStageDoer(g, n);
-                if (doer) doerSet.add(doer);
+        // Stage totals across all active rows
+        const totals = new Array(STAGES.length).fill(0);
+        STAGES.forEach((s, idx) => {
+            if (stageFilter !== "all" && String(idx + 1) !== stageFilter) {
+                totals[idx] = 0;
+            } else {
+                totals[idx] = activeRows.filter((g) => isPendingTask(g, idx)).length;
             }
         });
-        const emps = Array.from(doerSet).sort();
 
-        const totals = new Array(STAGES.length).fill(0);
-        const table = emps.map((emp) => {
+        // Use RBAC/permission assigned users strictly from database by email
+        const usersToDisplay = (stageUsers && stageUsers.length > 0) ? stageUsers : DEFAULT_STAGE_USERS;
+
+        const table = usersToDisplay.map((su) => {
             const counts = STAGES.map((s, idx) => {
-                // Respect the page's Stage filter: with a specific stage
-                // selected, only that stage's column carries counts.
-                if (stageFilter !== "all" && String(idx + 1) !== stageFilter) {
+                const stageNo = idx + 1;
+                if (stageFilter !== "all" && String(stageNo) !== stageFilter) {
                     return 0;
                 }
-                const count = activeRows.filter(
-                    (g) =>
-                        getStageDoer(g, idx + 1) === emp &&
-                        isPendingTask(g, idx)
-                ).length;
-                totals[idx] += count;
-                return count;
+                if (!su.stages.includes(stageNo)) {
+                    return 0;
+                }
+                return activeRows.filter((g) => isPendingTask(g, idx)).length;
             });
-            return { emp, counts };
+            return { emp: su.name || su.email, email: su.email, counts };
         });
 
-        // Pending stages with no doer recorded (e.g. the stage's CrrCalling
-        // row hasn't been generated yet, or the doer cell is empty). Required
-        // for the Σ(report) === pendingCount identity — dropping these would
-        // silently lose tasks from the report.
-        const unassignedCounts = STAGES.map((s, idx) => {
-            if (stageFilter !== "all" && String(idx + 1) !== stageFilter) return 0;
-            return activeRows.filter(
-                (g) => getStageDoer(g, idx + 1) === "" && isPendingTask(g, idx)
-            ).length;
-        });
-        if (unassignedCounts.some((c) => c > 0)) {
-            unassignedCounts.forEach((c, idx) => { totals[idx] += c; });
-            table.push({ emp: "Unassigned", counts: unassignedCounts });
-        }
-
-        // Doers with zero pendency across ALL stages add no information — hide them.
-        const visibleTable = table.filter((r) => r.counts.some((c) => c > 0));
-
-        // Access control: non-admin users see only their own row in the report.
-        // super_admin and admin see the full employee breakdown.
-        const currentUserName = user?.name ?? "";
+        const currentUserName = (user?.name ?? "").toLowerCase();
+        const currentUserEmail = (user?.email ?? "").toLowerCase();
         const scopedTable = isAdminRole
-            ? visibleTable
-            : visibleTable.filter((r) => r.emp === currentUserName);
+            ? table
+            : table.filter(
+                  (r) =>
+                      r.emp.toLowerCase() === currentUserName ||
+                      (r.email && r.email.toLowerCase() === currentUserEmail)
+              );
 
-        // Recompute Grand Total from the scoped rows so the footer always
-        // matches exactly the rows that are displayed.
         const scopedTotals = new Array(STAGES.length).fill(0);
         scopedTable.forEach((r) => {
             r.counts.forEach((c, idx) => { scopedTotals[idx] += c; });
         });
 
-        return { table: scopedTable, totals: scopedTotals };
-    }, [rows, stageFilter, isAdminRole, user]);
+        // Sort descending: employee with the most pending tasks appears first
+        const sortedTable = [...scopedTable].sort((a, b) => {
+            const sumA = a.counts.reduce((acc, c) => acc + c, 0);
+            const sumB = b.counts.reduce((acc, c) => acc + c, 0);
+            return sumB - sumA;
+        });
+
+        return { table: sortedTable, totals: isAdminRole ? totals : scopedTotals };
+    }, [rows, stageFilter, isAdminRole, user, stageUsers, DEFAULT_STAGE_USERS]);
 
     /* ---------- CHART VIEW DATA ---------- */
     // Derived purely from the same filtered `rows` / `pendingReport` used by
@@ -1292,7 +1316,8 @@ export default function CRRCallingProcessPage() {
         const g = guests.find((x) => x.id === id);
         if (!g) return;
         setActiveFeedbackGuestId(id);
-        setFeedbackDoerRemarks(g.guestFeedback?.doerRemarks || "");
+        const s4Saved = getStageSavedData(g, 4);
+        setFeedbackDoerRemarks(s4Saved?.doerRemarks || g.guestFeedback?.doerRemarks || "");
         setFeedbackFormError("");
         setFeedbackSaved(false);
     }
@@ -1348,8 +1373,9 @@ export default function CRRCallingProcessPage() {
         const g = guests.find((x) => x.id === id);
         if (!g) return;
         setActiveReferralGuestId(id);
-        setReferralTakenStatus(g.referralCollection?.referralTakenStatus || "");
-        setReferralDoerRemarks(g.referralCollection?.doerRemarks || "");
+        const s8Saved = getStageSavedData(g, 8);
+        setReferralTakenStatus(s8Saved?.referralTakenStatus || s8Saved?.doerStatus || g.referralCollection?.referralTakenStatus || "");
+        setReferralDoerRemarks(s8Saved?.doerRemarks || g.referralCollection?.doerRemarks || "");
         setReferralFormError("");
         setReferralSaved(false);
     }
@@ -1723,8 +1749,10 @@ export default function CRRCallingProcessPage() {
                                             <SelectValue placeholder="All Stages" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="all">All Stages</SelectItem>
-                                            {STAGES.map((s) => (
+                                            <SelectItem value="all">
+                                                {isAdminRole ? "All Stages" : "All Assigned Stages"}
+                                            </SelectItem>
+                                            {userAssignedStages.map((s) => (
                                                 <SelectItem key={s.no} value={String(s.no)}>
                                                     Stage {s.no} — {s.name}
                                                 </SelectItem>
@@ -1761,10 +1789,11 @@ export default function CRRCallingProcessPage() {
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="all">All</SelectItem>
-                                            <SelectItem value="GRE">GRE</SelectItem>
-                                            <SelectItem value="Doctor">Doctor</SelectItem>
-                                            <SelectItem value="FO">FO</SelectItem>
-                                            <SelectItem value="GM">GM</SelectItem>
+                                            {responsiblePersonOptions.map((su) => (
+                                                <SelectItem key={su.email || su.name} value={su.name || su.email}>
+                                                    {su.name || su.email}
+                                                </SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -2320,20 +2349,13 @@ export default function CRRCallingProcessPage() {
                                                                                         Next Visit Planning &amp; Confirmation
                                                                                     </DropdownMenuItem>
                                                                                 )}
-                                                                                {/* Stage 4: Guest Feedback & Outcome Confirmation.
-                                                                            (5) Incomplete → open the external feedback form DIRECTLY
-                                                                            (no intermediate modal). Completed → open the modal showing
-                                                                            saved remarks read-only. */}
+                                                                                {/* Stage 4: Guest Feedback & Outcome Confirmation */}
                                                                                 {canEditStage(4) && (
                                                                                     <DropdownMenuItem
                                                                                         disabled={!isAdminRole && isStageLocked(g, 4) && g.stageStatus[3] !== "Complete"}
                                                                                         onSelect={(e) => {
                                                                                             e.preventDefault();
-                                                                                            if (g.stageStatus[3] === "Complete") {
-                                                                                                setTimeout(() => openFeedbackModal(g.id), 0);
-                                                                                            } else {
-                                                                                                window.open(buildFeedbackFormUrl(g.bookingId), "_blank", "noopener,noreferrer");
-                                                                                            }
+                                                                                            setTimeout(() => openFeedbackModal(g.id), 0);
                                                                                         }}
                                                                                         className="gap-2.5 text-amber-600 focus:text-amber-700 cursor-pointer disabled:opacity-40"
                                                                                     >
@@ -3469,68 +3491,78 @@ export default function CRRCallingProcessPage() {
                                 </div>
                             </div>
 
-                            {/* Editable feedback details — highlighted card, amber border, light bg */}
-                            <div className="rounded-xl border-2 border-amber-300 bg-amber-50/60 p-5 space-y-4 shadow-sm">
-                                <div className="flex items-center gap-2 pb-2 border-b border-amber-200">
-                                    <Star className="h-4 w-4 text-amber-500" />
-                                    <h4 className="text-xs font-bold uppercase tracking-wider text-amber-600">Feedback &amp; Outcome Details</h4>
-                                    <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${isStage4Complete ? 'text-slate-500 bg-slate-100' : 'text-amber-500 bg-amber-100'}`}>
-                                        {isStage4Complete ? "Read Only" : "Fill in below"}
-                                    </span>
-                                </div>
-                                <div className="grid grid-cols-1 gap-4">
-                                    {/* Row 1: Feedback Taking URL — hidden once the stage is complete
-                                        (completed view shows only the saved remarks). */}
-                                    {!isStage4Complete && (
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                                Feedback Taking URL
-                                            </Label>
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <a
-                                                    href={buildFeedbackFormUrl(activeFeedbackGuest.bookingId)}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-md px-3 py-2 shadow-sm transition-colors"
-                                                >
-                                                    <Send className="h-3.5 w-3.5" />
-                                                    Open Feedback Form for {activeFeedbackGuest.bookingId}
-                                                </a>
-                                            </div>
-                                            <p className="text-[11px] text-slate-500 break-all">
-                                                {buildFeedbackFormUrl(activeFeedbackGuest.bookingId)}
-                                            </p>
+                            {/* Feedback details card — non-edited if data exists, editable if pending */}
+                            {(() => {
+                                const hasData = Boolean(isStage4Complete || (feedbackDoerRemarks && feedbackDoerRemarks.trim() !== ""));
+                                return (
+                                    <div className="rounded-xl border-2 border-amber-300 bg-amber-50/60 p-5 space-y-4 shadow-sm">
+                                        <div className="flex items-center gap-2 pb-2 border-b border-amber-200">
+                                            <Star className="h-4 w-4 text-amber-500" />
+                                            <h4 className="text-xs font-bold uppercase tracking-wider text-amber-600">Feedback &amp; Outcome Details</h4>
+                                            <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${hasData ? 'text-slate-500 bg-slate-100' : 'text-amber-600 bg-amber-100'}`}>
+                                                {hasData ? "Read Only" : "Fill in below"}
+                                            </span>
                                         </div>
-                                    )}
+                                        <div className="grid grid-cols-1 gap-4">
+                                            {/* Row 1: Feedback Taking URL — only shown when pending / no data */}
+                                            {!hasData && (
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                                                        Feedback Taking URL
+                                                    </Label>
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <a
+                                                            href={buildFeedbackFormUrl(activeFeedbackGuest.bookingId)}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-md px-3 py-2 shadow-sm transition-colors"
+                                                        >
+                                                            <Send className="h-3.5 w-3.5" />
+                                                            Open Feedback Form for {activeFeedbackGuest.bookingId}
+                                                        </a>
+                                                    </div>
+                                                    <p className="text-[11px] text-slate-500 break-all">
+                                                        {buildFeedbackFormUrl(activeFeedbackGuest.bookingId)}
+                                                    </p>
+                                                </div>
+                                            )}
 
-                                    {/* Row 2: Doer Remarks */}
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                            Doer Remarks <span className="text-red-500">*</span>
-                                        </Label>
-                                        <Textarea
-                                            value={feedbackDoerRemarks}
-                                            disabled={!activeFeedbackGuest || (!isAdminRole && isStageLocked(activeFeedbackGuest, 4)) || isStage4Complete}
-                                            onChange={(e) => { setFeedbackDoerRemarks(e.target.value); setFeedbackSaved(false); }}
-                                            placeholder="Remarks from the doer regarding the feedback / outcome..."
-                                            className="min-h-[90px] border-amber-200 focus:border-amber-500 bg-white"
-                                        />
+                                            {/* Row 2: Doer Remarks — non-edited box if data exists, editable textarea if empty */}
+                                            <div className="space-y-2">
+                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                                                    Doer Remarks {!hasData && <span className="text-red-500">*</span>}
+                                                </Label>
+                                                {hasData ? (
+                                                    <div className="bg-white border border-amber-200 rounded-md p-3.5 text-xs font-medium text-slate-700 leading-relaxed whitespace-pre-wrap min-h-[60px]">
+                                                        {feedbackDoerRemarks || "No remarks entered"}
+                                                    </div>
+                                                ) : (
+                                                    <Textarea
+                                                        value={feedbackDoerRemarks}
+                                                        disabled={!activeFeedbackGuest || (!isAdminRole && isStageLocked(activeFeedbackGuest, 4)) || isStage4Complete}
+                                                        onChange={(e) => { setFeedbackDoerRemarks(e.target.value); setFeedbackSaved(false); }}
+                                                        placeholder="Remarks from the doer regarding the feedback / outcome..."
+                                                        className="min-h-[90px] border-amber-200 focus:border-amber-500 bg-white"
+                                                    />
+                                                )}
+                                            </div>
+                                        </div>
+                                        {feedbackFormError && (
+                                            <div className="flex items-center gap-2 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+                                                <AlertTriangle className="h-4 w-4 shrink-0" />
+                                                {feedbackFormError}
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
-                                {feedbackFormError && (
-                                    <div className="flex items-center gap-2 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
-                                        <AlertTriangle className="h-4 w-4 shrink-0" />
-                                        {feedbackFormError}
-                                    </div>
-                                )}
-                            </div>
+                                );
+                            })()}
                         </div>
 
                         <DialogFooter className="bg-slate-50 border-t border-slate-200 px-6 py-4 flex justify-end gap-2 sticky bottom-0 z-10">
                             <Button variant="outline" size="sm" onClick={closeFeedbackModal} disabled={feedbackSaved} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
                                 Close
                             </Button>
-                            {(!isStage4Complete || isAdminRole) && (
+                            {!isStage4Complete && !feedbackDoerRemarks.trim() && (
                                 <Button
                                     size="sm"
                                     onClick={saveFeedbackModal}
@@ -3603,82 +3635,98 @@ export default function CRRCallingProcessPage() {
                                 </div>
                             </div>
 
-                            {/* Editable referral details — highlighted card, green border, light bg */}
-                            <div className="rounded-xl border-2 border-green-300 bg-green-50/60 p-5 space-y-4 shadow-sm">
-                                <div className="flex items-center gap-2 pb-2 border-b border-green-200">
-                                    <Users className="h-4 w-4 text-green-500" />
-                                    <h4 className="text-xs font-bold uppercase tracking-wider text-green-600">Referral Collection Details</h4>
-                                    <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${isStage8Complete ? 'text-slate-500 bg-slate-100' : 'text-green-500 bg-green-100'}`}>
-                                        {isStage8Complete ? "Read Only" : "Fill in below"}
-                                    </span>
-                                </div>
-                                <div className="grid grid-cols-1 gap-4">
-                                    {/* Row 1: Referral Taking URL — hidden once the stage is complete
-                                        (completed view shows only the saved status + remarks). */}
-                                    {!isStage8Complete && (
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                                Referral Taking URL
-                                            </Label>
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <a
-                                                    href={buildReferralFormUrl(activeReferralGuest.bookingId)}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-green-600 hover:bg-green-700 rounded-md px-3 py-2 shadow-sm transition-colors"
-                                                >
-                                                    <Send className="h-3.5 w-3.5" />
-                                                    Open Referral Form for {activeReferralGuest.bookingId}
-                                                </a>
-                                            </div>
-                                            <p className="text-[11px] text-slate-500 break-all">
-                                                {buildReferralFormUrl(activeReferralGuest.bookingId)}
-                                            </p>
+                            {/* Referral details card — non-edited if data exists, editable if pending */}
+                            {(() => {
+                                const hasData = Boolean(isStage8Complete || (referralDoerRemarks && referralDoerRemarks.trim() !== "") || (referralTakenStatus && referralTakenStatus.trim() !== ""));
+                                return (
+                                    <div className="rounded-xl border-2 border-green-300 bg-green-50/60 p-5 space-y-4 shadow-sm">
+                                        <div className="flex items-center gap-2 pb-2 border-b border-green-200">
+                                            <Users className="h-4 w-4 text-green-500" />
+                                            <h4 className="text-xs font-bold uppercase tracking-wider text-green-600">Referral Collection Details</h4>
+                                            <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${hasData ? 'text-slate-500 bg-slate-100' : 'text-green-600 bg-green-100'}`}>
+                                                {hasData ? "Read Only" : "Fill in below"}
+                                            </span>
                                         </div>
-                                    )}
+                                        <div className="grid grid-cols-1 gap-4">
+                                            {/* Row 1: Referral Taking URL — hidden once data exists */}
+                                            {!hasData && (
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                                                        Referral Taking URL
+                                                    </Label>
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <a
+                                                            href={buildReferralFormUrl(activeReferralGuest.bookingId)}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-green-600 hover:bg-green-700 rounded-md px-3 py-2 shadow-sm transition-colors"
+                                                        >
+                                                            <Send className="h-3.5 w-3.5" />
+                                                            Open Referral Form for {activeReferralGuest.bookingId}
+                                                        </a>
+                                                    </div>
+                                                    <p className="text-[11px] text-slate-500 break-all">
+                                                        {buildReferralFormUrl(activeReferralGuest.bookingId)}
+                                                    </p>
+                                                </div>
+                                            )}
 
-                                    {/* Row 2: Referral Taken Status */}
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                            Referral Taken Status <span className="text-red-500">*</span>
-                                        </Label>
-                                        <Input
-                                            value={referralTakenStatus}
-                                            disabled={!activeReferralGuest || (!isAdminRole && isStageLocked(activeReferralGuest, 8)) || isStage8Complete}
-                                            onChange={(e) => { setReferralTakenStatus(e.target.value); setReferralSaved(false); }}
-                                            placeholder="e.g. Referral given, Follow-up needed, Declined..."
-                                            className="h-10 border-green-200 focus:border-green-500 bg-white"
-                                        />
-                                    </div>
+                                            {/* Row 2: Referral Taken Status */}
+                                            <div className="space-y-2">
+                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                                                    Referral Taken Status {!hasData && <span className="text-red-500">*</span>}
+                                                </Label>
+                                                {hasData ? (
+                                                    <div className="bg-white border border-green-200 rounded-md p-3 text-xs font-medium text-slate-700">
+                                                        {referralTakenStatus || "Not Taken"}
+                                                    </div>
+                                                ) : (
+                                                    <Input
+                                                        value={referralTakenStatus}
+                                                        disabled={!activeReferralGuest || (!isAdminRole && isStageLocked(activeReferralGuest, 8)) || isStage8Complete}
+                                                        onChange={(e) => { setReferralTakenStatus(e.target.value); setReferralSaved(false); }}
+                                                        placeholder="e.g. Referral given, Follow-up needed, Declined..."
+                                                        className="h-10 border-green-200 focus:border-green-500 bg-white"
+                                                    />
+                                                )}
+                                            </div>
 
-                                    {/* Row 3: Doer Remarks */}
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                            Doer Remarks <span className="text-red-500">*</span>
-                                        </Label>
-                                        <Textarea
-                                            value={referralDoerRemarks}
-                                            disabled={!activeReferralGuest || (!isAdminRole && isStageLocked(activeReferralGuest, 8)) || isStage8Complete}
-                                            onChange={(e) => { setReferralDoerRemarks(e.target.value); setReferralSaved(false); }}
-                                            placeholder="Remarks from the doer regarding the referral collection..."
-                                            className="min-h-[90px] border-green-200 focus:border-green-500 bg-white"
-                                        />
+                                            {/* Row 3: Doer Remarks */}
+                                            <div className="space-y-2">
+                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                                                    Doer Remarks {!hasData && <span className="text-red-500">*</span>}
+                                                </Label>
+                                                {hasData ? (
+                                                    <div className="bg-white border border-green-200 rounded-md p-3.5 text-xs font-medium text-slate-700 leading-relaxed whitespace-pre-wrap min-h-[60px]">
+                                                        {referralDoerRemarks || "No remarks entered"}
+                                                    </div>
+                                                ) : (
+                                                    <Textarea
+                                                        value={referralDoerRemarks}
+                                                        disabled={!activeReferralGuest || (!isAdminRole && isStageLocked(activeReferralGuest, 8)) || isStage8Complete}
+                                                        onChange={(e) => { setReferralDoerRemarks(e.target.value); setReferralSaved(false); }}
+                                                        placeholder="Remarks from the doer regarding the referral collection..."
+                                                        className="min-h-[90px] border-green-200 focus:border-green-500 bg-white"
+                                                    />
+                                                )}
+                                            </div>
+                                        </div>
+                                        {referralFormError && (
+                                            <div className="flex items-center gap-2 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+                                                <AlertTriangle className="h-4 w-4 shrink-0" />
+                                                {referralFormError}
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
-                                {referralFormError && (
-                                    <div className="flex items-center gap-2 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
-                                        <AlertTriangle className="h-4 w-4 shrink-0" />
-                                        {referralFormError}
-                                    </div>
-                                )}
-                            </div>
+                                );
+                            })()}
                         </div>
 
                         <DialogFooter className="bg-slate-50 border-t border-slate-200 px-6 py-4 flex justify-end gap-2 sticky bottom-0 z-10">
                             <Button variant="outline" size="sm" onClick={closeReferralModal} disabled={referralSaved} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
                                 Close
                             </Button>
-                            {(!isStage8Complete || isAdminRole) && (
+                            {!isStage8Complete && !referralDoerRemarks.trim() && !referralTakenStatus.trim() && (
                                 <Button
                                     size="sm"
                                     onClick={saveReferralModal}
@@ -4165,40 +4213,82 @@ export default function CRRCallingProcessPage() {
                                 </div>
                             </div>
 
-                            {/* Editable section — highlighted card, indigo border, light bg */}
-                            <div className="rounded-xl border-2 border-indigo-300 bg-indigo-50/60 p-4 shadow-sm">
-                                <div className="flex items-center gap-3 flex-wrap">
-                                    <div className="flex items-center gap-2 shrink-0">
-                                        <PhoneCall className="h-4 w-4 text-indigo-500" />
-                                        <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-600">QR Code</h4>
+                            {/* Stage 2 Details from checkinmasterfms */}
+                            {activeCallGuest && (() => {
+                                const saved = getStageSavedData(activeCallGuest, 2);
+                                const planned = getStagePlannedDate(activeCallGuest, 2);
+                                const actual = getStageActualDate(activeCallGuest, 2);
+                                const doer = getStageDoer(activeCallGuest, 2);
+                                return (
+                                    <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 shadow-sm">
+                                        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                                            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">Stage 2 Status &amp; Details</h4>
+                                            <span className={`px-2.5 py-0.5 rounded-full font-bold text-[11px] ${isStage2Complete ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
+                                                {isStage2Complete ? "Complete" : "Pending"}
+                                            </span>
+                                        </div>
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                                            <div>
+                                                <span className="text-slate-400 font-semibold block text-[10px] uppercase">Responsible Doer</span>
+                                                <span className="font-semibold text-slate-800">{doer || "—"}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-slate-400 font-semibold block text-[10px] uppercase">Planned Date</span>
+                                                <span className="font-semibold text-slate-800">{planned || "—"}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-slate-400 font-semibold block text-[10px] uppercase">Done / Actual Date</span>
+                                                <span className="font-semibold text-slate-800">{actual || "—"}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-slate-400 font-semibold block text-[10px] uppercase">QR Scanned Status</span>
+                                                <span className="font-semibold text-slate-800">{String(saved?.qrCodeScannedStatus || "Not Scanned")}</span>
+                                            </div>
+                                        </div>
+                                        {saved?.doerRemarks && (
+                                            <div className="pt-2 border-t border-slate-100 text-xs">
+                                                <span className="text-slate-400 font-semibold block text-[10px] uppercase">Doer Remarks</span>
+                                                <p className="mt-0.5 text-slate-800 font-medium">{String(saved.doerRemarks)}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })()}
+
+                            {/* Editable section — highlighted card, indigo border, light bg (hidden once stage has value / is complete) */}
+                            {!isStage2Complete && (
+                                <div className="rounded-xl border-2 border-indigo-300 bg-indigo-50/60 p-4 shadow-sm">
+                                    <div className="flex items-center gap-3 flex-wrap">
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <PhoneCall className="h-4 w-4 text-indigo-500" />
+                                            <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-600">QR Code</h4>
+                                        </div>
                                     </div>
 
+                                    {/* KTAHV QR leaflet — visible when pending */}
+                                    <div className="mt-3 pt-3 border-t border-indigo-200 rounded-lg bg-white p-3 space-y-3">
+                                        <img
+                                            src="/KTAHV%20leaflet%20A$%20landscape_V1.jpg.jpeg"
+                                            alt="Kairali — Facing Any Issue? Scan the QR to connect with our AI-powered Patient Services Assistant"
+                                            className="w-full max-h-[420px] object-contain rounded-md border border-slate-200"
+                                        />
+                                        <div className="text-xs font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 leading-relaxed">
+                                            <span className="font-bold">Note:</span> If submitting on behalf of a guest, please include{" "}
+                                            <span className="font-bold">#RoomNo</span> and <span className="font-bold">#GuestName</span> at the beginning of your message.
+                                            <br />
+                                            <span className="font-semibold">Example:</span>{" "}
+                                            <code className="bg-amber-100 border border-amber-200 rounded px-1.5 py-0.5 text-[11px] font-semibold">#RoomNo:-205 #GuestName:-RahulSharma</code>
+                                        </div>
+                                    </div>
+
+                                    {callFormError && (
+                                        <div className="flex items-center gap-2 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2 mt-3">
+                                            <AlertTriangle className="h-4 w-4 shrink-0" />
+                                            {callFormError}
+                                        </div>
+                                    )}
                                 </div>
-
-                                {/* KTAHV QR leaflet — always visible (show/hide toggle removed).
-                                    File lives in /public; spaces in the filename are URL-encoded. */}
-                                <div className="mt-3 pt-3 border-t border-indigo-200 rounded-lg bg-white p-3 space-y-3">
-                                    <img
-                                        src="/KTAHV%20leaflet%20A$%20landscape_V1.jpg.jpeg"
-                                        alt="Kairali — Facing Any Issue? Scan the QR to connect with our AI-powered Patient Services Assistant"
-                                        className="w-full max-h-[420px] object-contain rounded-md border border-slate-200"
-                                    />
-                                    <div className="text-xs font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 leading-relaxed">
-                                        <span className="font-bold">Note:</span> If submitting on behalf of a guest, please include{" "}
-                                        <span className="font-bold">#RoomNo</span> and <span className="font-bold">#GuestName</span> at the beginning of your message.
-                                        <br />
-                                        <span className="font-semibold">Example:</span>{" "}
-                                        <code className="bg-amber-100 border border-amber-200 rounded px-1.5 py-0.5 text-[11px] font-semibold">#RoomNo:-205 #GuestName:-RahulSharma</code>
-                                    </div>
-                                </div>
-
-                                {callFormError && (
-                                    <div className="flex items-center gap-2 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2 mt-3">
-                                        <AlertTriangle className="h-4 w-4 shrink-0" />
-                                        {callFormError}
-                                    </div>
-                                )}
-                            </div>
+                            )}
                         </div>
 
                         <DialogFooter className="bg-slate-50 border-t border-slate-200 px-6 py-4 flex justify-end gap-2 sticky bottom-0 z-10">
