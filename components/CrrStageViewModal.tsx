@@ -149,15 +149,30 @@ const STAGES_CONFIG: {
 
 function formatIST(val: string | null | undefined): string {
     if (!val) return "—";
+    const s = String(val).trim();
+
+    // Check if the string explicitly contains a time part (e.g. contains ":" with hours/minutes)
+    const hasTime = s.includes(":") && !/^\d{4}-\d{2}-\d{2}[ T]00:00:00(\.000)?(Z|\+00:00)?$/.test(s);
+
     const d = new Date(val);
-    if (isNaN(d.getTime())) return String(val);
+    if (isNaN(d.getTime())) return s;
+
+    if (hasTime) {
+        return new Intl.DateTimeFormat("en-IN", {
+            timeZone: "Asia/Kolkata",
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        }).format(d);
+    }
+
     return new Intl.DateTimeFormat("en-IN", {
         timeZone: "Asia/Kolkata",
         day: "2-digit",
         month: "short",
         year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
     }).format(d);
 }
 
@@ -334,15 +349,14 @@ export default function CrrStageViewModal({
                 );
             }
             case 2: {
-                const s = guest.callAfterLanding;
-                const hasData = s || activeStageSummary?.hasSaved;
-                if (!hasData) return null;
+                const remarks = (savedData.doerRemarks as string) || (savedData.remarks as string) || "";
+                const qrScanned = (savedData.qrCodeScannedStatus as string) || (savedData.qrCodeViewed ? "Yes" : "");
+
                 return (
                     <>
                         <SectionGroup title="Guest Request & QR Management">
-                            <FieldBox label="QR Code Viewed" value={s?.qrCodeViewed ? "Yes" : (savedData.qrCodeViewed as string) || "No"} badgeColor="#0284c7" />
-                            <FieldBox label="Request Logged Date" value={savedData.requestLoggedDate as string} />
-                            <FieldBox label="Remarks / Complaint Details" value={savedData.remarks as string || (savedData.outcomeRemarks as string)} fullWidth />
+                            <FieldBox label="QR Code Scanned" value={qrScanned || "Not Scanned"} badgeColor={qrScanned && qrScanned !== "Not Scanned" ? "#16a34a" : "#64748b"} />
+                            <FieldBox label="Remarks / Complaint Details" value={remarks || "No remarks entered"} fullWidth />
                         </SectionGroup>
                     </>
                 );
@@ -362,15 +376,14 @@ export default function CrrStageViewModal({
                 );
             }
             case 4: {
-                const s = guest.guestFeedback;
-                const doerRemarks = s?.doerRemarks || (savedData.doerRemarks as string);
-                const hasData = !!doerRemarks || activeStageSummary?.hasSaved;
-                if (!hasData) return null;
+                const remarks = (savedData.doerRemarks as string) || (savedData.remarks as string) || guest.guestFeedback?.doerRemarks || "";
+                const feedbackUrl = (savedData.feedbackTakingUrl as string) || `https://script.google.com/a/macros/kairali.com/s/AKfycby5x4cuxgMbs2SJjd46HzswkLjYGuuw83nOwiFNj9UqcJbfzJoigNBQxxmH__mCq5afRw/exec?bookingId=${encodeURIComponent(guest.bookingId)}`;
+
                 return (
                     <>
                         <SectionGroup title="Guest Feedback & Outcome">
-                            <FieldBox label="Feedback Remarks / Outcome" value={doerRemarks} fullWidth />
-                            <FieldBox label="External Feedback Form" value={`https://script.google.com/a/macros/kairali.com/s/AKfycby5x4cuxgMbs2SJjd46HzswkLjYGuuw83nOwiFNj9UqcJbfzJoigNBQxxmH__mCq5afRw/exec?bookingId=${encodeURIComponent(guest.bookingId)}`} isLink fullWidth />
+                            <FieldBox label="Doer Remarks / Feedback Details" value={remarks || "No remarks entered"} fullWidth />
+                            {feedbackUrl && <FieldBox label="External Feedback Form" value={feedbackUrl} isLink fullWidth />}
                         </SectionGroup>
                     </>
                 );
@@ -426,15 +439,14 @@ export default function CrrStageViewModal({
                 );
             }
             case 8: {
-                const s = guest.referralCollection;
-                const hasData = s || activeStageSummary?.hasSaved;
-                if (!hasData) return null;
+                const referralStatus = (savedData.referralTakenStatus as string) || (savedData.doerStatus as string) || guest.referralCollection?.referralTakenStatus || "";
+                const doerRemarks = (savedData.doerRemarks as string) || guest.referralCollection?.doerRemarks || "";
+
                 return (
                     <>
                         <SectionGroup title="Referral & Lead Generation">
-                            <FieldBox label="Referral Taken Status" value={s?.referralTakenStatus || (savedData.referralTakenStatus as string) || (savedData.doerStatus as string)} badgeColor="#16a34a" />
-                            <FieldBox label="Referral Remarks / Details" value={s?.doerRemarks || (savedData.doerRemarks as string)} fullWidth />
-                            <FieldBox label="External Referral Form" value={`https://script.google.com/a/macros/kairali.com/s/AKfycbzrsZGVVLk8pMhota7GSCPzj3BpLn_Ho1MQ5AG5G-laSZpwvJO6UGUfenY9tAfn2R8l/exec?bookingId=${encodeURIComponent(guest.bookingId)}`} isLink fullWidth />
+                            <FieldBox label="Referral Taken Status" value={referralStatus || "Not Taken"} badgeColor={referralStatus && referralStatus !== "No" && referralStatus !== "Not Taken" ? "#16a34a" : "#64748b"} />
+                            <FieldBox label="Referral Remarks / Details" value={doerRemarks || "No remarks entered"} fullWidth />
                         </SectionGroup>
                     </>
                 );
