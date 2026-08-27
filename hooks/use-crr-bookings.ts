@@ -45,10 +45,18 @@ interface GasBookingRow {
     stages?: StageInfo[]; // per-stage lock / planned-date / completion / savedData info from GAS
 }
 
+export interface StageUser {
+    name: string;
+    email: string;
+    role: string;
+    stages: number[];
+}
+
 interface GasBookingsResponse {
     success: boolean;
     count: number;
     data: GasBookingRow[];
+    stageUsers?: StageUser[];
     error?: string;
 }
 
@@ -59,12 +67,22 @@ interface GasBookingsResponse {
 // Keys whose values feed <input type="date"> — normalized to YYYY-MM-DD.
 const DATE_FIELD_KEYS = new Set(["followupDate", "nextVisitDate", "pickupDate", "dropDate"]);
 
-// GAS returns dates as ISO strings / serialized Dates / formatted strings.
-// Date inputs need strict YYYY-MM-DD, so normalize when parseable.
 function toDateInputValue(v: unknown): string {
     if (v === null || v === undefined || v === "") return "";
-    const d = new Date(v as string);
-    if (isNaN(d.getTime())) return String(v);
+    const s = String(v).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const dmyMatch = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);
+    if (dmyMatch) {
+        const dd = dmyMatch[1].padStart(2, "0");
+        const monthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+        const mIdx = monthNames.indexOf(dmyMatch[2].toLowerCase());
+        if (mIdx !== -1) {
+            const mm = String(mIdx + 1).padStart(2, "0");
+            return `${dmyMatch[3]}-${mm}-${dd}`;
+        }
+    }
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return s;
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, "0");
     const dd = String(d.getDate()).padStart(2, "0");
@@ -207,10 +225,10 @@ function mapRow(row: GasBookingRow): Guest {
         } as Guest["resultProgress"])
         : undefined;
 
-    // GAS stage-8 key for "Referral Taken Status" is doerStatus.
+    // Stage 8 hydration from checkinmasterfms / GAS
     const referralCollection = hasAnyValue(s8)
         ? ({
-            referralTakenStatus: s8!.doerStatus,
+            referralTakenStatus: s8!.referralTakenStatus || s8!.doerStatus,
             doerRemarks: s8!.doerRemarks,
         } as Guest["referralCollection"])
         : undefined;
@@ -301,6 +319,7 @@ function mapRow(row: GasBookingRow): Guest {
 
 export function useCrrBookings() {
     const [guests, setGuests] = useState<Guest[]>([]);
+    const [stageUsers, setStageUsers] = useState<StageUser[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -315,9 +334,9 @@ export function useCrrBookings() {
                 throw new Error(json.error || "Failed to load bookings");
             }
 
-
             const mapped = json.data.map(mapRow).sort((a, b) => b.id - a.id);
             setGuests(mapped);
+            setStageUsers(json.stageUsers || []);
         } catch (err) {
             console.error("[useCrrBookings] fetch failed:", err);
             setError(err instanceof Error ? err.message : "Failed to load bookings");
@@ -330,7 +349,7 @@ export function useCrrBookings() {
         fetchBookings();
     }, [fetchBookings]);
 
-    return { guests, setGuests, loading, error, refetch: fetchBookings };
+    return { guests, setGuests, loading, error, refetch: fetchBookings, stageUsers };
 }
 
 /* =========================================================
@@ -355,13 +374,47 @@ export function getStageActualDate(guest: Guest, stageNo: number): string | null
     return info?.actualDate ?? null;
 }
 
-// The person responsible for executing a stage (GAS savedData.doer).
-// Each stage row/record carries its own doer — this is who the stage-wise
-// pending report should attribute the stage to (NOT the booking creator).
+// The person responsible for executing a stage (GAS savedData.doer or assigned staff).
+// Falls back to doctor for medical stages, driver for transport stages, and bookingTakenBy for general stages.
 export function getStageDoer(guest: Guest, stageNo: number): string {
-    const info = guest.stages.find((s) => s.stage === stageNo);
+    const info = guest.stages?.find((s) => s.stage === stageNo);
     const doer = info?.savedData?.doer;
-    return doer === null || doer === undefined ? "" : String(doer).trim();
+    if (doer && String(doer).trim() !== "") {
+        return String(doer).trim();
+    }
+
+    // Stage 2, 4 & 8 strictly use database doer from checkinmasterfms
+    if (stageNo === 2 || stageNo === 4 || stageNo === 8) {
+        return "";
+    }
+
+    // Stage 3 & 7: Doctor stages -> assigned doctor
+    if (stageNo === 3 || stageNo === 7) {
+        const doc = guest.guestRequirementVerification?.doctorAssignedToClient ||
+                    guest.stages?.find((s) => s.stage === 11)?.savedData?.doctorAssignedToClient;
+        if (doc && String(doc).trim() !== "") return String(doc).trim();
+    }
+
+    // Stage 9: Arrival Driver / FO
+    if (stageNo === 9) {
+        const driver = guest.driverAssignmentArrival?.driverName ||
+                       guest.stages?.find((s) => s.stage === 9)?.savedData?.driverName;
+        if (driver && String(driver).trim() !== "") return String(driver).trim();
+    }
+
+    // Stage 10: Departure Driver / FO
+    if (stageNo === 10) {
+        const driver = guest.driverAssignmentDeparture?.driverName ||
+                       guest.stages?.find((s) => s.stage === 10)?.savedData?.driverName;
+        if (driver && String(driver).trim() !== "") return String(driver).trim();
+    }
+
+    // General / Calling / FO / GRE stages fallback: booking taken by / assigned employee
+    if (guest.takenBy && String(guest.takenBy).trim() !== "" && guest.takenBy !== "-") {
+        return String(guest.takenBy).trim();
+    }
+
+    return "";
 }
 
 // A cancelled booking auto-closes its guest journey: no stage is actionable,
