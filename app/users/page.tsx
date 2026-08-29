@@ -1681,6 +1681,8 @@ export const PERMISSION_GROUPS: {
       { key: "sales_report.view", label: "Sales Report", description: "Revenue statistics and sales conversion data" },
       { key: "sales_calling.view", label: "Sales Calling Master", description: "Calling schedules, daily master lists & status" },
       { key: "riya_sharma.view", label: "Riya Sharma Portal", description: "Agent dedicated conversion tracking" },
+      { key: "sales_call_audit.read", label: "View Sales Call Audit", description: "View synthetic/demo call quality reports and recordings" },
+      { key: "sales_call_audit.write", label: "Manage HR Audit Actions", description: "Verify call audits and save HR attendance actions" },
     ],
   },
   {
@@ -1748,7 +1750,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "dashboard.view",
     "users.view", "users.create", "users.edit", "users.delete",
     "leads.view", "leads.edit", "leads.assign",
-    "calls_report.view", "sales_report.view", "sales_calling.view",
+    "calls_report.view", "sales_report.view", "sales_calling.view", "sales_call_audit.read", "sales_call_audit.write",
     "marketing.view", "marketing_funnel.view", "marketing_google_report.view", "marketing_facebook_report.view", "google_adword_report.view",
     "fms.view", "team.view", "villa_raag.view", "ktahv_booking_form.view", "crr_fms.view", "task_fms.view", "cold_enquiry_reverification.view", "new-order-fms.view", "mr-fms.view",
     "deal_assistant.view", "ai_voice_menu.view", "dialshree_menu.view", "dialshree_received.view", "dialshree_sent.view", "accounts_tracker.view", "partners.view", "meetings.view", "portal_hub.view", "sales_target_portal.view", "call_recording_portal.view", "doctor_portal.view", "partner_onboard_form.view"

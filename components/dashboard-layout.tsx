@@ -175,6 +175,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "Riya Sharma", href: "/riya-sharma", icon: LayoutGrid, permission: "riya_sharma.view" },
     { name: "FMS Systems", icon: FileText, permission: "fms.view" },
     { name: "Calls Report", href: "/calls/reports", icon: PhoneCall, permission: "calls_report.view" },
+    { name: "Sales Call Audit", href: "/sales-call-audit", icon: UserCheck, permission: "sales_call_audit.read" },
     { name: "Sales Report", href: "/sales/reports", icon: IndianRupee, permission: "sales_report.view" },
     { name: "Sales Calling Master", href: "/sales-calling", icon: PhoneCall, CalendarDays, permission: "sales_calling.view" },
     { name: "Leads Assignment", href: "/leads/assign", icon: Shuffle, permission: "leads.view" },

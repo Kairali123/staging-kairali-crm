@@ -203,6 +203,7 @@ const protectedRoutes = [
   '/partners',
   '/accounts-tracker',
   '/sales-calling',
+  '/sales-call-audit',
   '/new-order-fms',
   // Six page prefixes the list had never caught up with, so these pages ran with
   // no server-side identity check at all (matrix M10, rollout step 7). Identity
