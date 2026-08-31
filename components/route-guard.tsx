@@ -44,9 +44,9 @@ const pagePermissions: Record<string, string> = {
   '/marketing/facebook-ppc': 'marketing_facebook_report.view',
   '/google-adword-reports': 'google_adword_report.view',
   '/calls/reports': 'calls_report.view',
-  '/sales-call-audit': 'sales_call_audit.read',
-  '/sales-call-audit/email-template': 'sales_call_audit.read',
   '/sales/reports': 'sales_report.view',
+  '/sales-call-audit': 'sales_call_audit.view',
+  '/sales-call-audit/email-template': 'sales_call_audit.view',
   // M6: these were `/voicecall/data?tab=received` and `?tab=sent`, which
   // `usePathname()` can never produce. The pages the two tabs became are
   // `/voicecall/data/received` and `/voicecall/data/sent`, and each already calls
