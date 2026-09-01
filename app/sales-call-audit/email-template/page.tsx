@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import {
   Calendar,
@@ -9,9 +9,12 @@ import {
   Mail,
   Printer,
   RefreshCw,
+  Send,
   TableProperties,
 } from "lucide-react"
+import { toast } from "sonner"
 
+import { useAuth } from "@/hooks/use-auth"
 import { BackButton } from "@/components/back-button"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -25,10 +28,46 @@ import {
 import type { AgentAuditMetric, SalesCallAuditEmailData } from "@/app/api/sales-call-audit/email-data/route"
 
 export default function SalesCallAuditEmailTemplatePage() {
+  const { user } = useAuth()
   const [data, setData] = useState<SalesCallAuditEmailData | null>(null)
   const [selectedDate, setSelectedDate] = useState<string>("")
   const [loading, setLoading] = useState<boolean>(true)
+  const [sendingEmail, setSendingEmail] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
+
+  const isHrOrAdmin = useMemo(() => {
+    if (!user) return false
+    const role = String(user.role || "").toLowerCase()
+    const dept = String(user.department || "").toLowerCase()
+    return (
+      role === "super_admin" ||
+      role === "admin" ||
+      role === "hr_manager" ||
+      role === "hr" ||
+      role === "hr_executive" ||
+      dept === "hr" ||
+      dept === "administration" ||
+      user.permissions?.includes("all") ||
+      user.permissions?.includes("sales_call_audit.admin") ||
+      user.permissions?.includes("hr.admin")
+    )
+  }, [user])
+
+  const isUserRecord = useCallback(
+    (empId?: string | null, name?: string | null) => {
+      if (isHrOrAdmin) return true
+      if (!user) return true
+      const uEmp = String(user.employeeId || "").trim().toLowerCase()
+      const uName = String(user.name || "").trim().toLowerCase()
+      const eId = String(empId || "").trim().toLowerCase()
+      const eName = String(name || "").trim().toLowerCase()
+
+      if (uEmp && eId && (eId === uEmp || eId.includes(uEmp) || uEmp.includes(eId))) return true
+      if (uName && eName && (eName.includes(uName) || uName.includes(eName))) return true
+      return false
+    },
+    [isHrOrAdmin, user]
+  )
 
   const fetchData = useCallback(async (date?: string) => {
     setLoading(true)
@@ -73,8 +112,43 @@ export default function SalesCallAuditEmailTemplatePage() {
     failedEmployeesCount: 0,
   }
 
-  const employees: AgentAuditMetric[] = data?.employees || []
+  const rawEmployees: AgentAuditMetric[] = data?.employees || []
+  const employees = useMemo(() => {
+    return rawEmployees.filter(emp => isUserRecord(emp.id, emp.name))
+  }, [rawEmployees, isUserRecord])
+
   const displayDate = data?.displayDate || "Today"
+
+  const handleSendEmail = async () => {
+    if (!data) return
+    try {
+      setSendingEmail(true)
+      const res = await fetch("/api/sales-call-audit/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: "sysadmin@kairali.com",
+          date: selectedDate,
+          displayDate,
+          metrics,
+          employees,
+        }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        toast.success(`Report successfully sent to sysadmin@kairali.com!`, {
+          description: `Dispatched ${employees.length} employee audit records for ${displayDate}`,
+        })
+      } else {
+        toast.error(json.error || "Failed to send email report")
+      }
+    } catch (e: any) {
+      console.error("Email send error:", e)
+      toast.error(e?.message || "Failed to connect to email service")
+    } finally {
+      setSendingEmail(false)
+    }
+  }
 
   return (
     <div className="space-y-6 pb-12">
@@ -103,7 +177,7 @@ export default function SalesCallAuditEmailTemplatePage() {
                     Daily HR Email Template
                   </h1>
                   <p className="text-sm sm:text-base text-white/90 mt-1 font-medium">
-                    Quality Assurance • Powered by kairali_sales_metric_bot_for_ho
+                    Quality Assurance • Powered by daily_sales_reports_log_fms
                   </p>
                 </div>
               </div>
@@ -136,10 +210,25 @@ export default function SalesCallAuditEmailTemplatePage() {
                 size="sm"
                 onClick={() => fetchData(selectedDate)}
                 disabled={loading}
-                className="bg-white/10 text-white border-white/20 hover:bg-white/20 backdrop-blur-sm shadow-sm"
+                className="bg-white/10 text-white border-white/20 hover:bg-white/20 backdrop-blur-sm shadow-sm cursor-pointer"
               >
                 <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                 Refresh
+              </Button>
+
+              {/* Send Email Button */}
+              <Button
+                size="sm"
+                onClick={handleSendEmail}
+                disabled={sendingEmail || !data}
+                className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold shadow-md cursor-pointer border border-emerald-400/40"
+              >
+                {sendingEmail ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="mr-2 h-4 w-4" />
+                )}
+                {sendingEmail ? "Sending..." : "Send to sysadmin@kairali.com"}
               </Button>
 
               <Button
@@ -157,7 +246,7 @@ export default function SalesCallAuditEmailTemplatePage() {
               <Button
                 size="sm"
                 onClick={() => window.print()}
-                className="bg-white/10 text-white border-white/20 hover:bg-white/20 backdrop-blur-sm shadow-sm"
+                className="bg-white/10 text-white border-white/20 hover:bg-white/20 backdrop-blur-sm shadow-sm cursor-pointer"
               >
                 <Printer className="mr-2 h-4 w-4" />
                 Print / Save PDF
@@ -181,65 +270,70 @@ export default function SalesCallAuditEmailTemplatePage() {
         </div>
       )}
 
-      {/* ─── Agent-wise Call Audit Report (Live Template) ──────────── */}
+      {/* ─── Email Template Card ────────────────────────────────────────────── */}
       {data && (
-        <div className="mx-auto max-w-[760px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl print:max-w-none print:rounded-none print:border-0 print:shadow-none">
-          <div className="bg-[#193a6a] px-7 py-7 text-white">
-            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-200">Head Office · Daily Quality Audit</div>
-            <h2 className="mt-2 text-2xl font-bold">Agent-wise Call Audit Report</h2>
-            <div className="mt-1 text-sm text-blue-100">Audit date: {displayDate}</div>
+        <div className="mx-auto max-w-[760px] overflow-hidden rounded-2xl bg-white shadow-xl border border-slate-200 print:shadow-none print:border-none print:max-w-none">
+          {/* Email Header */}
+          <div className="bg-gradient-to-r from-[#193a6a] to-[#12284c] p-6 text-white">
+            <div className="text-xs uppercase tracking-[0.2em] text-blue-200 font-bold">
+              Head Office • Daily Quality Audit
+            </div>
+            <h2 className="mt-1 text-2xl font-bold">Agent-wise Call Audit Report</h2>
+            <div className="mt-2 text-xs text-blue-100 font-medium">
+              Audit date: <span className="font-bold underline">{displayDate}</span>
+            </div>
           </div>
 
-          <div className="space-y-5 px-7 py-7 text-sm text-slate-600">
-            <div>
-              <p className="font-medium text-slate-900">Hi HR Team,</p>
-              <p className="mt-3 leading-6">
-                Please find below the daily audit outcome. Employees marked <strong className="text-red-600">FAIL</strong> require a half-day attendance adjustment for the audit date ({displayDate}), subject to final HR verification.
+          <div className="space-y-6 p-6 text-slate-700 text-sm">
+            <p className="leading-6">
+              Hi HR Team,
+              <br />
+              Please find below the daily call audit outcome. Employees marked <span className="font-bold text-red-600">FAIL</span> require a half-day attendance adjustment for the audit date (<strong>{displayDate}</strong>), subject to final HR verification.
+            </p>
+
+            {/* KPI Cards Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 text-center">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Audited Leads</div>
+                <div className="mt-1 text-2xl font-extrabold text-slate-900">{metrics.auditedLeads}</div>
+              </div>
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3.5 text-center">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Verified Good</div>
+                <div className="mt-1 text-2xl font-extrabold text-emerald-800">{metrics.verified}</div>
+              </div>
+              <div className="rounded-xl border border-rose-200 bg-rose-50/60 p-3.5 text-center">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-rose-700">Mismatch Bad</div>
+                <div className="mt-1 text-2xl font-extrabold text-rose-800">{metrics.mismatch}</div>
+              </div>
+              <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3.5 text-center">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-amber-700">Wrong Outcomes</div>
+                <div className="mt-1 text-2xl font-extrabold text-amber-900">{metrics.wrongOutcomesPercentage}%</div>
+              </div>
+            </div>
+
+            {/* Secondary KPIs */}
+            <div className="flex flex-wrap gap-4 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl p-3">
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-500">Team average:</span>
+                <span className="text-slate-900 font-bold">{metrics.teamAverageScore} / 5</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-500">Team performance:</span>
+                <span className="text-emerald-700 font-bold">{metrics.teamPerformancePercentage}%</span>
+              </div>
+            </div>
+
+            {/* HR Action Banner */}
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
+              <p className="text-xs leading-5">
+                <strong>HR action:</strong> {metrics.failedEmployeesCount} employee(s) failed. Verify each employee and mark half-day for <strong>{displayDate}</strong> where applicable. Confirm the Pagarbook update from the audit dashboard.
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {[
-                { label: "Audited leads", value: String(metrics.auditedLeads), danger: false },
-                { label: "Verified", value: String(metrics.verified), danger: false },
-                { label: "Mismatch", value: String(metrics.mismatch), danger: metrics.mismatch > 0 },
-                { label: "Wrong outcomes", value: `${metrics.wrongOutcomesPercentage}%`, danger: metrics.wrongOutcomesPercentage > 20 },
-              ].map(item => (
-                <div
-                  key={item.label}
-                  className={`rounded-lg border p-3 ${
-                    item.danger ? "border-red-200 bg-red-50" : "border-blue-200 bg-blue-50"
-                  }`}
-                >
-                  <div className="text-xs text-slate-500">{item.label}</div>
-                  <div className={`mt-1 text-xl font-bold ${item.danger ? "text-red-700" : "text-[#193a6a]"}`}>
-                    {item.value}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-lg border border-violet-200 bg-violet-50 p-3">
-                <span className="text-xs text-violet-700">Team average</span>
-                <strong className="float-right text-violet-800">{metrics.teamAverageScore.toFixed(2)} / 5</strong>
-              </div>
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-                <span className="text-xs text-emerald-700">Team performance</span>
-                <strong className="float-right text-emerald-800">{metrics.teamPerformancePercentage.toFixed(2)}%</strong>
-              </div>
-            </div>
-
-            <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900">
-              <strong>HR action:</strong>{" "}
-              {metrics.failedEmployeesCount > 0
-                ? `${metrics.failedEmployeesCount} employee(s) failed. Verify each employee and mark half-day for ${displayDate} where applicable. Confirm the Pagarbook update from the audit dashboard.`
-                : `All employees passed the quality threshold for ${displayDate}. No half-day attendance adjustment required.`}
-            </div>
-
-            <div className="overflow-x-auto rounded-lg border border-slate-200">
-              <table className="w-full min-w-[620px] border-collapse text-left text-xs">
-                <thead className="bg-slate-100 text-slate-600">
+            {/* Employee Audit Table */}
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-100 text-slate-600 font-bold uppercase tracking-wider">
                   <tr>
                     <th className="p-3">Employee</th>
                     <th className="p-3 text-center">Calls</th>
@@ -295,12 +389,25 @@ export default function SalesCallAuditEmailTemplatePage() {
               </table>
             </div>
 
-            <div className="text-center">
-              <Button asChild className="bg-[#193a6a] hover:bg-[#193a6a]/90">
+            {/* Bottom Actions */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <Button asChild className="bg-[#193a6a] hover:bg-[#193a6a]/90 cursor-pointer shadow-sm">
                 <Link href="/sales-call-audit">
                   <Mail className="mr-2 h-4 w-4" />
                   Open consolidated audit report
                 </Link>
+              </Button>
+              <Button
+                onClick={handleSendEmail}
+                disabled={sendingEmail || !data}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer shadow-sm"
+              >
+                {sendingEmail ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="mr-2 h-4 w-4" />
+                )}
+                {sendingEmail ? "Sending..." : "Send Report to sysadmin@kairali.com"}
               </Button>
             </div>
 

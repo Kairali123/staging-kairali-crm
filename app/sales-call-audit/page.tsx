@@ -31,6 +31,8 @@ import {
   Download,
   Filter,
   Headphones,
+  Info,
+  ListChecks,
   Loader2,
   Mail,
   PhoneCall,
@@ -38,11 +40,17 @@ import {
   RotateCcw,
   Save,
   Search,
+  Shield,
   ShieldAlert,
   ShieldCheck,
+  Sparkles,
+  Star,
   TableProperties,
+  ThumbsDown,
+  ThumbsUp,
   TrendingUp,
   UserCheck,
+  Volume2,
   X,
   XCircle,
   Award,
@@ -50,6 +58,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
+import { useAuth } from "@/hooks/use-auth"
 import { BackButton } from "@/components/back-button"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -199,10 +208,47 @@ function EmailBadge({ status }: { status: EmailStatus }) {
 }
 
 export default function SalesCallAuditPage() {
+  const { user } = useAuth()
   const [dbRecords, setDbRecords] = useState<SalesCallAuditDbRow[]>([])
   const [loading, setLoading] = useState(true)
   const [savingAction, setSavingAction] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<string>("")
+
+  // Determine if the logged-in user is HR or Admin (Super Admin / Admin / HR Manager)
+  const isHrOrAdmin = useMemo(() => {
+    if (!user) return false
+    const role = String(user.role || "").toLowerCase()
+    const dept = String(user.department || "").toLowerCase()
+    return (
+      role === "super_admin" ||
+      role === "admin" ||
+      role === "hr_manager" ||
+      role === "hr" ||
+      role === "hr_executive" ||
+      dept === "hr" ||
+      dept === "administration" ||
+      user.permissions?.includes("all") ||
+      user.permissions?.includes("sales_call_audit.admin") ||
+      user.permissions?.includes("hr.admin")
+    )
+  }, [user])
+
+  // Helper to determine if a record belongs to the logged-in user (for regular users)
+  const isUserRecord = useCallback(
+    (empId?: string | null, name?: string | null) => {
+      if (isHrOrAdmin) return true
+      if (!user) return true // fallback during session load
+      const uEmp = String(user.employeeId || "").trim().toLowerCase()
+      const uName = String(user.name || "").trim().toLowerCase()
+      const eId = String(empId || "").trim().toLowerCase()
+      const eName = String(name || "").trim().toLowerCase()
+
+      if (uEmp && eId && (eId === uEmp || eId.includes(uEmp) || uEmp.includes(eId))) return true
+      if (uName && eName && (eName.includes(uName) || uName.includes(eName))) return true
+      return false
+    },
+    [isHrOrAdmin, user]
+  )
 
   // Filter States
   const [employeeFilter, setEmployeeFilter] = useState("all")
@@ -219,6 +265,56 @@ export default function SalesCallAuditPage() {
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(5)
+
+  // Good / Bad Call Detail Modal
+  const [callDetailModal, setCallDetailModal] = useState<{
+    open: boolean
+    type: "good" | "bad" | "all"
+    agent: AgentAudit
+    date: string
+  } | null>(null)
+  const [modalCalls, setModalCalls] = useState<any[]>([])
+  const [modalCallsLoading, setModalCallsLoading] = useState(false)
+  const [modalCallTab, setModalCallTab] = useState<"all" | "good" | "bad">("all")
+  const [modalCallSearch, setModalCallSearch] = useState("")
+  const [expandedCallId, setExpandedCallId] = useState<string | null>(null)
+
+  // Fetch granular audited call details when modal is opened
+  useEffect(() => {
+    if (!callDetailModal?.open || !callDetailModal.agent) {
+      setModalCalls([])
+      return
+    }
+    setModalCallTab(callDetailModal.type)
+    setModalCallSearch("")
+    setExpandedCallId(null)
+
+    const fetchModalCalls = async () => {
+      try {
+        setModalCallsLoading(true)
+        const params = new URLSearchParams({
+          record_id: String(callDetailModal.agent.recordId || ""),
+          emp_id: callDetailModal.agent.id || "",
+          name: callDetailModal.agent.name || "",
+          date: callDetailModal.date || "",
+          type: "all",
+        })
+        const res = await fetch(`/api/sales-call-audit/calls?${params.toString()}`)
+        if (res.ok) {
+          const json = await res.json()
+          if (json.success && Array.isArray(json.data)) {
+            setModalCalls(json.data)
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load call details", e)
+      } finally {
+        setModalCallsLoading(false)
+      }
+    }
+
+    fetchModalCalls()
+  }, [callDetailModal])
 
   // HR Action Dialog
   const [actionDialogOpen, setActionDialogOpen] = useState(false)
@@ -263,13 +359,16 @@ export default function SalesCallAuditPage() {
     fetchData()
   }, [fetchData])
 
-  // Transform raw DB rows into structured date groups
+  // Transform raw DB rows into structured date groups (applying role-based user filtering)
   const auditDays = useMemo<AuditDay[]>(() => {
     if (!dbRecords.length) return []
 
     const groups: Record<string, { label: string; agents: AgentAudit[] }> = {}
 
     dbRecords.forEach(row => {
+      // If user is not HR or Admin, only show their own records
+      if (!isUserRecord(row.emp_id, row.name)) return
+
       const { dateKey, label } = formatDateKey(row.time_stamp || row.created_at)
       if (!groups[dateKey]) {
         groups[dateKey] = { label, agents: [] }
@@ -317,12 +416,12 @@ export default function SalesCallAuditPage() {
     }))
 
     return result
-  }, [dbRecords])
+  }, [dbRecords, isUserRecord])
 
-  // Automatically expand all dates on initial load
+  // Automatically expand only the first (latest) date on initial load (Accordion behavior)
   useEffect(() => {
     if (auditDays.length > 0 && expandedDates.size === 0) {
-      setExpandedDates(new Set(auditDays.map(d => d.date)))
+      setExpandedDates(new Set([auditDays[0].date]))
     }
   }, [auditDays, expandedDates.size])
 
@@ -330,12 +429,13 @@ export default function SalesCallAuditPage() {
   const uniqueAgents = useMemo(() => {
     const map = new Map<string, { id: string; name: string }>()
     dbRecords.forEach(r => {
+      if (!isUserRecord(r.emp_id, r.name)) return
       if (r.emp_id && !map.has(r.emp_id)) {
         map.set(r.emp_id, { id: r.emp_id, name: r.name || r.emp_id })
       }
     })
     return Array.from(map.values())
-  }, [dbRecords])
+  }, [dbRecords, isUserRecord])
 
   // Filtered dataset
   const filteredDays = useMemo(() => {
@@ -443,11 +543,13 @@ export default function SalesCallAuditPage() {
     })
   }, [dbRecords, selectedYear])
 
+  // Single-Accordion toggle behavior: Only ONE date row can be open at a time
   const toggleDate = (date: string) => {
     setExpandedDates(previous => {
-      const next = new Set(previous)
-      next.has(date) ? next.delete(date) : next.add(date)
-      return next
+      if (previous.has(date)) {
+        return new Set() // Collapse if already open
+      }
+      return new Set([date]) // Expand ONLY this date, automatically closing all others
     })
   }
 
@@ -823,8 +925,8 @@ export default function SalesCallAuditPage() {
             <button
               onClick={() => setViewMode("table")}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${viewMode === "table"
-                  ? "bg-white text-slate-800 shadow-sm"
-                  : "text-slate-500 hover:text-slate-800"
+                ? "bg-white text-slate-800 shadow-sm"
+                : "text-slate-500 hover:text-slate-800"
                 }`}
             >
               <TableProperties className="w-3.5 h-3.5" />
@@ -833,8 +935,8 @@ export default function SalesCallAuditPage() {
             <button
               onClick={() => setViewMode("analytics")}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${viewMode === "analytics"
-                  ? "bg-white text-slate-800 shadow-sm"
-                  : "text-slate-500 hover:text-slate-800"
+                ? "bg-white text-slate-800 shadow-sm"
+                : "text-slate-500 hover:text-slate-800"
                 }`}
             >
               <BarChart3 className="w-3.5 h-3.5" />
@@ -1024,9 +1126,6 @@ export default function SalesCallAuditPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-5 py-4 bg-gradient-to-r from-slate-50 via-white to-blue-50 border-b border-slate-200">
           <div>
             <h3 className="text-sm font-bold text-slate-900">Date-Wise Employee Call Audit Summary</h3>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Live records from <code className="font-mono text-blue-700 bg-blue-50 px-1 py-0.5 rounded">daily_sales_reports_log_fms</code>. Click an employee to view detailed score breakdown.
-            </p>
           </div>
           <Badge variant="outline" className="self-start sm:self-auto bg-white border-slate-200 text-slate-700">
             <Calendar className="mr-1.5 h-3.5 w-3.5 text-blue-600" />
@@ -1140,7 +1239,7 @@ export default function SalesCallAuditPage() {
                                   <TableHead className="text-center text-white font-semibold">Outcome</TableHead>
                                   <TableHead className="text-white font-semibold">HR Action Status</TableHead>
                                   <TableHead className="text-white font-semibold">Delay (HR)</TableHead>
-                                  <TableHead className="text-right text-white font-semibold">Action</TableHead>
+                                  {isHrOrAdmin && <TableHead className="text-right text-white font-semibold">Action</TableHead>}
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
@@ -1177,12 +1276,42 @@ export default function SalesCallAuditPage() {
                                         </Badge>
                                       </TableCell>
                                       <TableCell className="text-center font-semibold text-slate-800">
-                                        {agent.calls}
+                                        <button
+                                          type="button"
+                                          onClick={event => {
+                                            event.stopPropagation()
+                                            setCallDetailModal({ open: true, type: "all", agent, date: day.date })
+                                          }}
+                                          className="hover:underline hover:text-blue-700 transition cursor-pointer"
+                                          title="Click to view full call audit details"
+                                        >
+                                          {agent.calls}
+                                        </button>
                                       </TableCell>
                                       <TableCell className="text-center">
-                                        <span className="text-emerald-700 font-bold">{agent.good}</span>
+                                        <button
+                                          type="button"
+                                          onClick={event => {
+                                            event.stopPropagation()
+                                            setCallDetailModal({ open: true, type: "good", agent, date: day.date })
+                                          }}
+                                          className="inline-flex items-center text-emerald-700 font-bold hover:bg-emerald-100 hover:text-emerald-900 px-1.5 py-0.5 rounded cursor-pointer transition-colors shadow-xs"
+                                          title="Click to view Good Calls details"
+                                        >
+                                          {agent.good}
+                                        </button>
                                         <span className="text-slate-400 mx-1">/</span>
-                                        <span className="text-rose-700 font-bold">{agent.bad}</span>
+                                        <button
+                                          type="button"
+                                          onClick={event => {
+                                            event.stopPropagation()
+                                            setCallDetailModal({ open: true, type: "bad", agent, date: day.date })
+                                          }}
+                                          className="inline-flex items-center text-rose-700 font-bold hover:bg-rose-100 hover:text-rose-900 px-1.5 py-0.5 rounded cursor-pointer transition-colors shadow-xs"
+                                          title="Click to view Bad Calls details"
+                                        >
+                                          {agent.bad}
+                                        </button>
                                       </TableCell>
                                       <TableCell className="text-center font-bold text-indigo-700">
                                         {agent.score.toFixed(2)} / 5
@@ -1224,27 +1353,29 @@ export default function SalesCallAuditPage() {
                                           "—"
                                         )}
                                       </TableCell>
-                                      <TableCell className="text-right">
-                                        <Button
-                                          size="sm"
-                                          onClick={event => {
-                                            event.stopPropagation()
-                                            openAction(day.date, agent)
-                                          }}
-                                          className={
-                                            hasAction
-                                              ? "bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 text-xs h-8 cursor-pointer shadow-sm font-semibold"
-                                              : "bg-blue-600 hover:bg-blue-700 text-white text-xs h-8 cursor-pointer shadow-sm font-bold"
-                                          }
-                                        >
-                                          {hasAction ? (
-                                            <CheckCircle2 className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
-                                          ) : (
-                                            <ClipboardCheck className="mr-1.5 h-3.5 w-3.5" />
-                                          )}
-                                          {hasAction ? "View Details" : "Take Action"}
-                                        </Button>
-                                      </TableCell>
+                                      {isHrOrAdmin && (
+                                        <TableCell className="text-right">
+                                          <Button
+                                            size="sm"
+                                            onClick={event => {
+                                              event.stopPropagation()
+                                              openAction(day.date, agent)
+                                            }}
+                                            className={
+                                              hasAction
+                                                ? "bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 text-xs h-8 cursor-pointer shadow-sm font-semibold"
+                                                : "bg-blue-600 hover:bg-blue-700 text-white text-xs h-8 cursor-pointer shadow-sm font-bold"
+                                            }
+                                          >
+                                            {hasAction ? (
+                                              <CheckCircle2 className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
+                                            ) : (
+                                              <ClipboardCheck className="mr-1.5 h-3.5 w-3.5" />
+                                            )}
+                                            {hasAction ? "View Details" : "Take Action"}
+                                          </Button>
+                                        </TableCell>
+                                      )}
                                     </TableRow>
                                   )
                                 })}
@@ -1330,11 +1461,10 @@ export default function SalesCallAuditPage() {
                           variant={currentPage === page ? "default" : "outline"}
                           size="sm"
                           onClick={() => setCurrentPage(page)}
-                          className={`h-8 w-8 p-0 text-xs font-bold cursor-pointer ${
-                            currentPage === page
-                              ? "bg-blue-600 text-white hover:bg-blue-700"
-                              : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
-                          }`}
+                          className={`h-8 w-8 p-0 text-xs font-bold cursor-pointer ${currentPage === page
+                            ? "bg-blue-600 text-white hover:bg-blue-700"
+                            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                            }`}
                         >
                           {page}
                         </Button>
@@ -1391,27 +1521,29 @@ export default function SalesCallAuditPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                onClick={() => openAction(selectedAgent.date, selectedAgent.agent)}
-                className={
-                  selectedAgent.agent.hrVerifyStatus || selectedAgent.agent.hrActionForCalling
-                    ? "bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 text-xs shadow-sm font-semibold cursor-pointer"
-                    : "bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold cursor-pointer"
-                }
-              >
-                {selectedAgent.agent.hrVerifyStatus || selectedAgent.agent.hrActionForCalling ? (
-                  <>
-                    <CheckCircle2 className="mr-1.5 h-4 w-4 text-emerald-600" />
-                    View HR Action
-                  </>
-                ) : (
-                  <>
-                    <ClipboardCheck className="mr-1.5 h-4 w-4" />
-                    HR Action Form
-                  </>
-                )}
-              </Button>
+              {isHrOrAdmin && (
+                <Button
+                  size="sm"
+                  onClick={() => openAction(selectedAgent.date, selectedAgent.agent)}
+                  className={
+                    selectedAgent.agent.hrVerifyStatus || selectedAgent.agent.hrActionForCalling
+                      ? "bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 text-xs shadow-sm font-semibold cursor-pointer"
+                      : "bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold cursor-pointer"
+                  }
+                >
+                  {selectedAgent.agent.hrVerifyStatus || selectedAgent.agent.hrActionForCalling ? (
+                    <>
+                      <CheckCircle2 className="mr-1.5 h-4 w-4 text-emerald-600" />
+                      View HR Action
+                    </>
+                  ) : (
+                    <>
+                      <ClipboardCheck className="mr-1.5 h-4 w-4" />
+                      HR Action Form
+                    </>
+                  )}
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="outline"
@@ -1515,7 +1647,7 @@ export default function SalesCallAuditPage() {
         </div>
       )}
 
-      {/* ─── Monthly Aggregate Summary ────────────────────────────────────────── */}
+      {/* ─── Monthly Aggregate Summary ────────────────────────────────────────── 
       <div className="bg-white rounded-xl border border-slate-200 shadow-md overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-5 py-4 bg-gradient-to-r from-slate-50 via-white to-indigo-50 border-b border-slate-200">
           <div>
@@ -1572,6 +1704,7 @@ export default function SalesCallAuditPage() {
           </Table>
         </div>
       </div>
+      
 
       {/* ─── HR Action Modal (Persisted to Database) ────────────────────────────── */}
       <Dialog open={actionDialogOpen} onOpenChange={setActionDialogOpen}>
@@ -1652,8 +1785,8 @@ export default function SalesCallAuditPage() {
                   onChange={e => setVerifyStatus(e.target.value)}
                   placeholder="e.g. Half Day – Call Audit FAIL, Verified, etc."
                   className={`h-10 text-xs ${isReadOnly
-                      ? "bg-slate-100/90 text-slate-900 font-semibold border-slate-200 cursor-not-allowed opacity-90"
-                      : "border-slate-300 bg-white"
+                    ? "bg-slate-100/90 text-slate-900 font-semibold border-slate-200 cursor-not-allowed opacity-90"
+                    : "border-slate-300 bg-white"
                     }`}
                 />
               </div>
@@ -1675,8 +1808,8 @@ export default function SalesCallAuditPage() {
                   onChange={e => setCallingAction(e.target.value)}
                   placeholder="e.g. Half day leave Updated on Pagarbook"
                   className={`h-10 text-xs ${isReadOnly
-                      ? "bg-slate-100/90 text-slate-900 font-semibold border-slate-200 cursor-not-allowed opacity-90"
-                      : "border-slate-300 bg-white"
+                    ? "bg-slate-100/90 text-slate-900 font-semibold border-slate-200 cursor-not-allowed opacity-90"
+                    : "border-slate-300 bg-white"
                     }`}
                 />
               </div>
@@ -1700,10 +1833,10 @@ export default function SalesCallAuditPage() {
                 onChange={event => setRemarks(event.target.value)}
                 placeholder={isReadOnly ? "No remarks entered" : "Enter mandatory HR remarks, coaching advice, or verification notes..."}
                 className={`text-xs min-h-[75px] resize-none ${isReadOnly
-                    ? "bg-slate-100/90 text-slate-900 font-medium border-slate-200 cursor-not-allowed opacity-90"
-                    : !remarks.trim()
-                      ? "border-slate-300 bg-slate-50/50"
-                      : "border-blue-400 bg-white shadow-sm"
+                  ? "bg-slate-100/90 text-slate-900 font-medium border-slate-200 cursor-not-allowed opacity-90"
+                  : !remarks.trim()
+                    ? "border-slate-300 bg-slate-50/50"
+                    : "border-blue-400 bg-white shadow-sm"
                   }`}
               />
             </div>
@@ -1723,8 +1856,8 @@ export default function SalesCallAuditPage() {
 
               <div
                 className={`grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl border p-3.5 transition-colors ${!isReadOnly && !halfDayLeave && !pagarbookUpdated
-                    ? "border-amber-300 bg-amber-50/40"
-                    : "border-slate-200 bg-slate-50/70"
+                  ? "border-amber-300 bg-amber-50/40"
+                  : "border-slate-200 bg-slate-50/70"
                   }`}
               >
                 {/* Checkbox 1: Updated in Master Attendance Tracker */}
@@ -1828,6 +1961,397 @@ export default function SalesCallAuditPage() {
               )}
             </div>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Good / Bad Call Quality Breakdown Modal Dialog ──────────────────────── */}
+      <Dialog
+        open={Boolean(callDetailModal?.open)}
+        onOpenChange={open => !open && setCallDetailModal(null)}
+      >
+        <DialogContent className="max-h-[92vh] sm:max-w-4xl p-0 gap-0 rounded-2xl border border-slate-200 shadow-2xl flex flex-col overflow-hidden bg-white">
+          {callDetailModal && (
+            <>
+              {/* Header */}
+              <div
+                className={`flex-shrink-0 p-5 text-white ${callDetailModal.type === "good"
+                  ? "bg-gradient-to-r from-emerald-600 via-teal-700 to-emerald-800"
+                  : callDetailModal.type === "bad"
+                    ? "bg-gradient-to-r from-rose-600 via-rose-700 to-red-800"
+                    : "bg-gradient-to-r from-blue-600 via-indigo-700 to-blue-800"
+                  }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white shadow-md flex-shrink-0">
+                      {callDetailModal.type === "good" ? (
+                        <ThumbsUp className="h-6 w-6" />
+                      ) : callDetailModal.type === "bad" ? (
+                        <ThumbsDown className="h-6 w-6" />
+                      ) : (
+                        <Headphones className="h-6 w-6" />
+                      )}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <DialogTitle className="text-lg font-bold text-white leading-tight">
+                          {callDetailModal.type === "good"
+                            ? "Good Quality Calls Breakdown & Logs"
+                            : callDetailModal.type === "bad"
+                              ? "Deficient Calls & Quality Audit Logs"
+                              : "Complete Call Audit Breakdown & Logs"}
+                        </DialogTitle>
+                        <Badge
+                          className={
+                            callDetailModal.type === "good"
+                              ? "bg-emerald-500/90 text-white text-[10px] font-bold border border-emerald-300/40"
+                              : callDetailModal.type === "bad"
+                                ? "bg-rose-500/90 text-white text-[10px] font-bold border border-rose-300/40"
+                                : "bg-white/20 text-white text-[10px] font-bold border border-white/30"
+                          }
+                        >
+                          {callDetailModal.type === "good"
+                            ? `${callDetailModal.agent.good} Good Calls`
+                            : callDetailModal.type === "bad"
+                              ? `${callDetailModal.agent.bad} Bad Calls`
+                              : `${callDetailModal.agent.calls} Total Calls`}
+                        </Badge>
+                      </div>
+                      <DialogDescription className="text-xs text-white/80 mt-0.5">
+                        Individual call evaluations for {callDetailModal.agent.name} on {callDetailModal.date}
+                      </DialogDescription>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sub-header meta bar */}
+                <div className="mt-4 pt-3 border-t border-white/20 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="h-6 w-6 rounded-full bg-white text-slate-800 font-bold flex items-center justify-center text-[10px]">
+                      {callDetailModal.agent.initials}
+                    </span>
+                    <span className="font-semibold text-white">{callDetailModal.agent.name}</span>
+                    <span className="text-white/70 font-mono text-[11px]">({callDetailModal.agent.id})</span>
+                    <span className="text-white/80 text-[10px] bg-white/10 px-1.5 py-0.5 rounded">
+                      {callDetailModal.agent.designation}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="bg-white/15 px-2 py-0.5 rounded text-[11px] text-white">
+                      Avg Score: <strong>{callDetailModal.agent.score.toFixed(2)} / 5</strong>
+                    </span>
+                    <span
+                      className={
+                        callDetailModal.agent.result === "Pass"
+                          ? "bg-emerald-500 text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-xs"
+                          : "bg-rose-500 text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-xs"
+                      }
+                    >
+                      {callDetailModal.agent.result.toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Filter Tabs & Search Bar */}
+              <div className="p-4 bg-slate-100/80 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="flex items-center gap-1.5 bg-white p-1 rounded-lg border border-slate-200 shadow-xs w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => setModalCallTab("all")}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${modalCallTab === "all"
+                      ? "bg-slate-800 text-white shadow-xs"
+                      : "text-slate-600 hover:bg-slate-100"
+                      }`}
+                  >
+                    All Calls ({modalCalls.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModalCallTab("good")}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${modalCallTab === "good"
+                      ? "bg-emerald-600 text-white shadow-xs"
+                      : "text-emerald-700 hover:bg-emerald-50"
+                      }`}
+                  >
+                    <ThumbsUp className="h-3.5 w-3.5" />
+                    Good Calls ({callDetailModal.agent.good})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModalCallTab("bad")}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${modalCallTab === "bad"
+                      ? "bg-rose-600 text-white shadow-xs"
+                      : "text-rose-700 hover:bg-rose-50"
+                      }`}
+                  >
+                    <ThumbsDown className="h-3.5 w-3.5" />
+                    Bad Calls ({callDetailModal.agent.bad})
+                  </button>
+                </div>
+
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                  <input
+                    type="text"
+                    value={modalCallSearch}
+                    onChange={e => setModalCallSearch(e.target.value)}
+                    placeholder="Search client, lead, notes..."
+                    className="w-full h-8 pl-8 pr-3 text-xs bg-white border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-xs"
+                  />
+                  {modalCallSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setModalCallSearch("")}
+                      className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Body: List of Detailed Calls */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5 text-xs bg-slate-50">
+                {modalCallsLoading ? (
+                  <div className="py-16 text-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-2" />
+                    <p className="text-xs font-semibold text-slate-600">Loading call recordings & audit evaluation logs...</p>
+                  </div>
+                ) : modalCalls.length === 0 ? (
+                  <div className="py-16 text-center bg-white rounded-xl border border-slate-200 p-8">
+                    <Headphones className="h-10 w-10 text-slate-300 mx-auto mb-2" />
+                    <p className="font-semibold text-slate-700 text-sm">No individual calls found for this date</p>
+                    <p className="text-xs text-slate-400 mt-1">Audit metrics were aggregated for this reporting batch.</p>
+                  </div>
+                ) : (
+                  (() => {
+                    const filtered = modalCalls.filter(call => {
+                      if (modalCallTab === "good" && call.qualityType !== "good") return false
+                      if (modalCallTab === "bad" && call.qualityType !== "bad") return false
+                      if (modalCallSearch.trim()) {
+                        const q = modalCallSearch.toLowerCase()
+                        const match =
+                          (call.callId && call.callId.toLowerCase().includes(q)) ||
+                          (call.leadId && call.leadId.toLowerCase().includes(q)) ||
+                          (call.clientName && call.clientName.toLowerCase().includes(q)) ||
+                          (call.clientPhone && call.clientPhone.toLowerCase().includes(q)) ||
+                          (call.statedOutcome && call.statedOutcome.toLowerCase().includes(q)) ||
+                          (call.auditorObservation && call.auditorObservation.toLowerCase().includes(q))
+                        if (!match) return false
+                      }
+                      return true
+                    })
+
+                    if (filtered.length === 0) {
+                      return (
+                        <div className="py-12 text-center bg-white rounded-xl border border-slate-200 p-6">
+                          <Search className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                          <p className="font-bold text-slate-700 text-xs">No calls match "{modalCallSearch}" in {modalCallTab} filter</p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setModalCallSearch("")
+                              setModalCallTab("all")
+                            }}
+                            className="mt-3 text-xs h-7 border-slate-300 cursor-pointer"
+                          >
+                            Reset filters
+                          </Button>
+                        </div>
+                      )
+                    }
+
+                    return filtered.map((call, idx) => {
+                      const isGood = call.qualityType === "good"
+                      const isExpanded = expandedCallId === call.callId
+
+                      return (
+                        <div
+                          key={call.callId || idx}
+                          className={`bg-white rounded-xl border transition-all duration-200 shadow-xs hover:shadow-sm overflow-hidden ${isGood
+                            ? "border-emerald-200/80 hover:border-emerald-300"
+                            : "border-rose-200/80 hover:border-rose-300"
+                            }`}
+                        >
+                          {/* Call Card Header */}
+                          <div
+                            className={`p-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 border-b ${isGood ? "bg-emerald-50/40 border-emerald-100" : "bg-rose-50/40 border-rose-100"
+                              }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div
+                                className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-xs ${isGood
+                                  ? "bg-emerald-600 text-white"
+                                  : "bg-rose-600 text-white"
+                                  }`}
+                              >
+                                {isGood ? <ThumbsUp className="h-4 w-4" /> : <ThumbsDown className="h-4 w-4" />}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-slate-900 text-xs">{call.clientName}</span>
+                                  <span className="text-[11px] text-slate-400 font-mono">({call.clientPhone})</span>
+                                  <Badge
+                                    className={`text-[10px] font-bold px-1.5 py-0.2 ${isGood
+                                      ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                      : "bg-rose-100 text-rose-800 border-rose-300"
+                                      }`}
+                                  >
+                                    {isGood ? "GOOD CALL" : "BAD CALL"}
+                                  </Badge>
+                                </div>
+                                <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono mt-0.5">
+                                  <span className="font-semibold text-slate-700">{call.callId}</span>
+                                  <span>•</span>
+                                  <span>{call.leadId}</span>
+                                  <span>•</span>
+                                  <span className="inline-flex items-center gap-1 text-slate-600">
+                                    <Clock className="h-3 w-3 text-slate-400" />
+                                    {call.callTime} ({call.callDuration})
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2.5 justify-end">
+                              <div className="text-right">
+                                <span className="text-[10px] text-slate-400 uppercase font-semibold">Call Score</span>
+                                <div
+                                  className={`text-sm font-bold ${isGood ? "text-emerald-700" : "text-rose-700"
+                                    }`}
+                                >
+                                  {call.avgScore ? Number(call.avgScore).toFixed(2) : "—"} / 5.0
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setExpandedCallId(isExpanded ? null : call.callId)}
+                                className="h-7 px-2 text-[11px] border-slate-200 text-slate-700 hover:bg-slate-100 cursor-pointer"
+                              >
+                                {isExpanded ? "Hide Metrics" : "6 Metrics"}
+                                {isExpanded ? (
+                                  <ChevronDown className="h-3.5 w-3.5 ml-1" />
+                                ) : (
+                                  <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Call Card Body */}
+                          <div className="p-3.5 space-y-2.5">
+                            {/* Stated vs Verified Outcomes */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                              <div>
+                                <span className="text-[10px] font-bold uppercase text-slate-400">Agent Stated Outcome:</span>
+                                <p className="font-semibold text-slate-800 mt-0.5">{call.statedOutcome || "—"}</p>
+                              </div>
+                              <div>
+                                <span className="text-[10px] font-bold uppercase text-slate-400">Auditor Evaluation:</span>
+                                <p
+                                  className={`font-semibold mt-0.5 ${isGood ? "text-emerald-700" : "text-rose-700 font-bold"
+                                    }`}
+                                >
+                                  {call.verifiedOutcome || "—"}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Auditor Observation */}
+                            {call.auditorObservation && (
+                              <div className="text-xs text-slate-700 bg-white p-2.5 rounded-lg border border-slate-100">
+                                <span className="font-bold text-slate-900 block mb-0.5">Auditor Quality Finding:</span>
+                                <p className="text-slate-600 leading-relaxed">{call.auditorObservation}</p>
+                              </div>
+                            )}
+
+                            {/* Strengths & Deficiencies Tags */}
+                            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                              {call.strengths &&
+                                call.strengths.map((str: string, sIdx: number) => (
+                                  <span
+                                    key={sIdx}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                  >
+                                    <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                                    {str}
+                                  </span>
+                                ))}
+                              {call.deficiencies &&
+                                call.deficiencies.map((def: string, dIdx: number) => (
+                                  <span
+                                    key={dIdx}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200"
+                                  >
+                                    <AlertCircle className="h-3 w-3 text-rose-600" />
+                                    {def}
+                                  </span>
+                                ))}
+                            </div>
+
+                            {/* Collapsible 6 Parameters for This Specific Call */}
+                            {isExpanded && (
+                              <div className="mt-3 pt-3 border-t border-slate-200 bg-slate-50/70 p-3 rounded-lg space-y-2 animate-in fade-in duration-200">
+                                <div className="flex items-center justify-between text-[11px] font-bold text-slate-800">
+                                  <span className="flex items-center gap-1">
+                                    <ListChecks className="h-3.5 w-3.5 text-blue-600" />
+                                    Specific Call Parameter Breakdown
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 font-mono">Scores out of 5.0</span>
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+                                  {[
+                                    { label: "Product Knowledge", val: call.productKnowledge },
+                                    { label: "Customer Understanding", val: call.customerUnderstanding },
+                                    { label: "Communication Skills", val: call.communicationSkills },
+                                    { label: "Objection Handling", val: call.objectionHandling },
+                                    { label: "Closing Skills", val: call.closingSkills },
+                                    { label: "Tone & Volume", val: call.toneVolume },
+                                  ].map((p, pIdx) => {
+                                    const num = Number(p.val || 0)
+                                    return (
+                                      <div key={pIdx} className="bg-white p-2 rounded border border-slate-200 shadow-2xs">
+                                        <span className="text-[9px] font-semibold text-slate-500 uppercase block truncate">
+                                          {p.label}
+                                        </span>
+                                        <span
+                                          className={`font-bold text-xs ${num >= 3.5 ? "text-emerald-700" : num >= 2.5 ? "text-amber-700" : "text-rose-700"
+                                            }`}
+                                        >
+                                          {num.toFixed(1)} / 5.0
+                                        </span>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })
+                  })()
+                )}
+              </div>
+
+              {/* Footer */}
+              <DialogFooter className="flex-shrink-0 px-5 sm:px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex flex-row items-center justify-between">
+                <span className="text-[11px] text-slate-500 font-mono">
+                  Agent ID: {callDetailModal.agent.id} • Date: {callDetailModal.date}
+                </span>
+                <Button
+                  size="sm"
+                  onClick={() => setCallDetailModal(null)}
+                  className="bg-slate-800 hover:bg-slate-900 text-white text-xs px-5 shadow-sm font-semibold cursor-pointer"
+                >
+                  Close
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>

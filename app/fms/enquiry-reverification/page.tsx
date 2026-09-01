@@ -43,6 +43,47 @@ import {
     Users
 } from "lucide-react"
 
+function isAudioRecordingUrl(url: any): boolean {
+    if (!url) return false
+    const str = String(url).trim().toLowerCase()
+    if (!str.startsWith("http://") && !str.startsWith("https://")) return false
+
+    // Exclude known non-audio landing pages, paths, or CRM internal routes
+    if (
+        str.includes("/fms/ppc") ||
+        str.includes("/fms/") ||
+        str.includes("ayurvedic-treatment") ||
+        str.includes("preventive-health") ||
+        str.includes("kairalihealingvillage.com") ||
+        str.includes("kairali.com")
+    ) {
+        if (
+            !str.endsWith(".mp3") &&
+            !str.endsWith(".wav") &&
+            !str.endsWith(".ogg") &&
+            !str.endsWith(".m4a") &&
+            !str.includes("recording") &&
+            !str.includes("audiostream")
+        ) {
+            return false
+        }
+    }
+
+    // Must have audio extension or known audio host
+    return (
+        str.includes(".mp3") ||
+        str.includes(".wav") ||
+        str.includes(".ogg") ||
+        str.includes(".m4a") ||
+        str.includes("kstorage") ||
+        str.includes("squadiq") ||
+        str.includes("recording") ||
+        str.includes("knowlarity") ||
+        str.includes("dialer") ||
+        str.includes("appsheet.com") ||
+        str.includes("audiostream")
+    )
+}
 
 export default function EnquiryReverificationPage() {
     const { user, isLoading, hasPermission } = useAuth()
@@ -1285,7 +1326,7 @@ export default function EnquiryReverificationPage() {
                                             {enq.notes || "—"}
                                         </td>
                                         <td className="py-3 px-4 border-r border-slate-100">
-                                            {enq.ivr_url ? (
+                                            {isAudioRecordingUrl(enq.ivr_url) ? (
                                                 <a href={enq.ivr_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-blue-600 hover:text-blue-800 hover:underline">
                                                     Play Recording <ExternalLink className="h-3 w-3" />
                                                 </a>
@@ -1351,7 +1392,7 @@ export default function EnquiryReverificationPage() {
                                         <td className="py-3 px-4 font-mono font-medium text-slate-500 border-r border-slate-100">{enq.uid}</td>
                                         <td className={`py-3 px-4 font-bold border-r border-slate-100 max-w-[110px] truncate ${getCompanyColorClass(enq.company_belongs_to)}`} title={enq.company_belongs_to || ""}>{enq.company_belongs_to || "—"}</td>
                                         <td className="py-3 px-4 border-r border-slate-100">
-                                            {enq.appsheet_call_recording_url ? (
+                                            {isAudioRecordingUrl(enq.appsheet_call_recording_url) ? (
                                                 <a href={enq.appsheet_call_recording_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-indigo-600 hover:text-indigo-800 hover:underline">
                                                     Appsheet Rec <ExternalLink className="h-3 w-3" />
                                                 </a>
@@ -2070,7 +2111,7 @@ export default function EnquiryReverificationPage() {
                                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                                         <div className="border border-[#e2e8f0] rounded-xl bg-white p-[10px_14px]">
                                                             <div className="text-[10px] font-bold tracking-[0.7px] uppercase text-[#94a3b8] mb-1">IVR Recording URL</div>
-                                                            {selectedEnquiry.ivr_url ? (
+                                                            {isAudioRecordingUrl(selectedEnquiry.ivr_url) ? (
                                                                 <a href={selectedEnquiry.ivr_url} target="_blank" rel="noreferrer" className="text-xs font-bold text-[#4f46e5] hover:underline inline-flex items-center gap-1 mt-1 border border-[#c7d2fe] bg-[#eef2ff] px-2.5 py-1 rounded-md">
                                                                     Listen IVR Call <ExternalLink className="h-3 w-3" />
                                                                 </a>

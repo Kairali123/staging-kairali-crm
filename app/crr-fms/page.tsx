@@ -1963,10 +1963,10 @@ export default function CRRCallingProcessPage() {
                                             Total Guests
                                         </p>
                                         <p className="text-3xl font-extrabold text-slate-900 leading-none mb-2">
-                                            {rows.length}
+                                            {guests.length}
                                         </p>
                                         <p className="text-[10px] text-blue-600 font-semibold mt-1">
-                                            {rows.length === guests.length ? "▲ In active pipeline" : `Filtered from ${guests.length}`}
+                                            ▲ In active pipeline
                                         </p>
                                     </div>
 

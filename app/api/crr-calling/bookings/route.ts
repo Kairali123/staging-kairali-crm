@@ -185,7 +185,7 @@ export async function GET(req: NextRequest) {
             new Set(
                 processRows
                     .flatMap((r) => {
-                        const rawKeys = [r.booking_id, r.booking_no, r.reservation_id, r.uid].filter(Boolean).map(String);
+                        const rawKeys = [r.booking_id, r.booking_no, r.reservation_id].filter(Boolean).map(String);
                         const variations: string[] = [];
                         for (const k of rawKeys) {
                             variations.push(k);
@@ -205,19 +205,27 @@ export async function GET(req: NextRequest) {
         let checkinMap = new Map<string, any>();
         if (checkinKeys.length > 0) {
             const [chkRows] = await pool.query<any[]>(
-                `SELECT * FROM ktahv_checkinmasterfms WHERE reservation_id IN (?) OR TRIM(reservation_id) IN (?)`,
+                `SELECT * FROM ktahv_checkinmasterfms WHERE reservation_id IN (?) OR TRIM(reservation_id) IN (?) ORDER BY id DESC`,
                 [checkinKeys, checkinKeys]
             );
             if (chkRows) {
+                const bashaChk = chkRows.find((r) => String(r.reservation_id || "").includes("9335"));
+                if (bashaChk) {
+                    console.log("[DEBUG BASHA CHKROW FULL OBJECT]:", JSON.stringify(bashaChk));
+                }
                 for (const chk of chkRows) {
                     if (chk.reservation_id) {
                         const raw = String(chk.reservation_id).trim();
-                        checkinMap.set(raw.toLowerCase(), chk);
-                        checkinMap.set(raw, chk);
-                        checkinMap.set(normalizeKey(raw), chk);
-                    }
-                    if (chk.id) {
-                        checkinMap.set(String(chk.id), chk);
+                        const norm = normalizeKey(raw);
+                        const spaceVar = raw.replace(/-/g, " ").trim();
+                        const dashVar = raw.replace(/\s+/g, "-").trim();
+
+                        const keysToAdd = [raw, raw.toLowerCase(), norm, spaceVar, spaceVar.toLowerCase(), dashVar, dashVar.toLowerCase()];
+                        for (const k of keysToAdd) {
+                            if (k && !checkinMap.has(k)) {
+                                checkinMap.set(k, chk);
+                            }
+                        }
                     }
                 }
             }
@@ -312,15 +320,28 @@ export async function GET(req: NextRequest) {
                 checkinMap.get(String(row.booking_no || "").trim().toLowerCase()) ||
                 checkinMap.get(normalizeKey(row.booking_no)) ||
                 checkinMap.get(String(row.reservation_id || "").trim()) ||
-                checkinMap.get(normalizeKey(row.reservation_id)) ||
-                checkinMap.get(uid) ||
-                checkinMap.get(normalizeKey(uid));
+                checkinMap.get(normalizeKey(row.reservation_id));
+
+            if (bookingId.includes("9335") || String(row.client_name || "").toLowerCase().includes("basha")) {
+                console.log("[DEBUG 9335 BASHA]", {
+                    bookingId,
+                    row_stage8_call_date_planned: row.stage8_call_date_planned,
+                    row_stage8_task_done_actual: row.stage8_task_done_actual,
+                    row_stage7_referals_details: row.stage7_referals_details,
+                    checkin_found: !!checkin,
+                    checkin_stage5_planned: checkin?.stage5_planned,
+                    checkin_stage5_actual_referral: checkin?.stage5_actual_referral,
+                    checkin_stage5_referral_taken_status: checkin?.stage5_referral_taken_status,
+                    checkin_stage5_doer: checkin?.stage5_doer,
+                    checkin_stage5_doer_remarks: checkin?.stage5_doer_remarks,
+                });
+            }
 
             const bookingTakenBy = String(row.booking_taken_by || "").trim();
 
             // Stage 1: Arrival Welcome on Pickup (CrrCalling / CrrProcess)
             const c1 = findCallingRow(uid, "Welcome Call");
-            const s1Planned = row.stage1_call_date_planned || c1?.planned || row.check_in_date || null;
+            const s1Planned = c1?.planned || row.stage1_call_date_planned || row.check_in_date || null;
             const s1Actual = c1?.actual || row.stage1_task_done_actual || null;
             const s1ToShow = parseToShow(c1?.to_show);
             const hasS1Data = Boolean(s1Actual || (c1 && (c1.status || c1.outcome_remarks || c1.did_they_achieve_the_outcomes_planned_for)));
@@ -377,7 +398,7 @@ export async function GET(req: NextRequest) {
 
             // Stage 5: Online Rating & Review Request (CrrCalling / CrrProcess Col AU)
             const c5 = findCallingRow(uid, "Call after landing, seek feedback") || findCallingRow(uid, "rating");
-            const s5Planned = row.stage4_rating_request_call_date_planned || c5?.planned || null;
+            const s5Planned = c5?.planned || row.stage4_rating_request_call_date_planned || null;
             const s5Actual = c5?.actual || row.stage4_task_done_actual || null;
             const s5ToShow = parseToShow(c5?.to_show);
             const hasS5Data = Boolean(s5Actual || (c5 && (c5.status || c5.rating_status || c5.outcome_remarks || c5.remarks_why_not_given_ratings)));
@@ -395,7 +416,7 @@ export async function GET(req: NextRequest) {
 
             // Stage 6: Safe Return Confirmation (CrrCalling / CrrProcess Col BA)
             const c6 = findCallingRow(uid, "Time to Return") || findCallingRow(uid, "Safe Return");
-            const s6Planned = row.stage6_call_date_planned || c6?.planned || null;
+            const s6Planned = c6?.planned || row.stage6_call_date_planned || null;
             const s6Actual = c6?.actual || row.stage6_task_done_actual || null;
             const s6ToShow = parseToShow(c6?.to_show);
             const hasS6Data = Boolean(s6Actual || (c6 && (c6.status || c6.stay_feedback || c6.outcome_remarks)));
@@ -410,7 +431,7 @@ export async function GET(req: NextRequest) {
 
             // Stage 7: Result Tracking & Health Progress Check (CrrCalling / CrrProcess Col BQ)
             const c7 = findCallingRow(uid, "Result and Progress Since Return") || findCallingRow(uid, "Result and Progress");
-            const s7Planned = row.stage7_call_date_planned || c7?.planned || null;
+            const s7Planned = c7?.planned || row.stage7_call_date_planned || null;
             const s7Actual = c7?.actual || row.stage7_task_done_actual || null;
             const s7ToShow = parseToShow(c7?.to_show);
             const hasS7Data = Boolean(s7Actual || (c7 && (c7.status || c7.outcome_remarks || c7.did_they_achieve_the_outcomes_planned_for)));
