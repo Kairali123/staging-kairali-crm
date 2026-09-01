@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getPool } from "@/lib/db"
-import { getSessionUser, hasSalesCallAuditReadAccess } from "@/lib/authz"
+import {
+  getSalesCallAuditIdentity,
+  getSalesCallAuditScope,
+  getSessionUser,
+  hasSalesCallAuditPageAccess,
+  isRowInSalesCallAuditScope,
+} from "@/lib/authz"
 
 export const dynamic = "force-dynamic"
 
@@ -96,9 +102,18 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    if (user && !hasSalesCallAuditReadAccess(user)) {
+    if (user && !hasSalesCallAuditPageAccess(user)) {
       return NextResponse.json(
-        { success: false, error: "Forbidden: Insufficient permissions." },
+        { success: false, error: "Forbidden: sales_call_audit.view permission required." },
+        { status: 403, headers: noStoreHeaders }
+      )
+    }
+
+    // Drill-down is data, so it needs a data scope, not just page access.
+    const scope = user ? getSalesCallAuditScope(user) : "all"
+    if (scope === "none") {
+      return NextResponse.json(
+        { success: false, error: "Forbidden: sales_call_audit.viewSelf or sales_call_audit.viewAll permission required." },
         { status: 403, headers: noStoreHeaders }
       )
     }
@@ -129,6 +144,29 @@ export async function GET(req: NextRequest) {
       if (rows && rows.length > 0) parentRow = rows[0]
     }
 
+    // A `viewSelf` holder must not read another agent's calls by passing their
+    // emp_id in the query string, so the resolved record is scope-checked and the
+    // downstream lookup is pinned to the session's own identity.
+    let scopedEmpId = empId
+    let scopedName = name
+    if (scope === "self") {
+      const identity = getSalesCallAuditIdentity(user)
+      if (!identity.employeeId && !identity.name) {
+        return NextResponse.json(
+          { success: false, error: "Forbidden: session carries no employee identity to scope this request." },
+          { status: 403, headers: noStoreHeaders }
+        )
+      }
+      if (parentRow && !isRowInSalesCallAuditScope(user, parentRow)) {
+        return NextResponse.json(
+          { success: false, error: "Forbidden: this audit record belongs to another employee." },
+          { status: 403, headers: noStoreHeaders }
+        )
+      }
+      scopedEmpId = identity.employeeId || empId
+      scopedName = identity.name || name
+    }
+
     // 2. Check if kairali_sales_metric_bot_for_ho has specific call rows for this agent & date
     let rawBotRows: any[] = []
     try {
@@ -137,7 +175,9 @@ export async function GET(req: NextRequest) {
          WHERE (sales_person_id = ? OR sales_person_name LIKE ?)
          ${date ? "AND DATE(timestamp) = DATE(?)" : ""}
          ORDER BY timestamp DESC LIMIT 200`,
-        date ? [empId, `%${name || empId}%`, date] : [empId, `%${name || empId}%`]
+        date
+          ? [scopedEmpId, `%${scopedName || scopedEmpId}%`, date]
+          : [scopedEmpId, `%${scopedName || scopedEmpId}%`]
       )
       rawBotRows = metricRows || []
     } catch (e: any) {

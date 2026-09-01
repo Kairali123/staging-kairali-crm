@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getPool } from "@/lib/db"
-import { getSessionUser, hasSalesCallAuditReadAccess, hasSalesCallAuditWriteAccess } from "@/lib/authz"
+import {
+  getSalesCallAuditIdentity,
+  getSalesCallAuditScope,
+  getSessionUser,
+  hasSalesCallAuditPageAccess,
+  hasSalesCallAuditWriteAccess,
+  isRowInSalesCallAuditScope,
+} from "@/lib/authz"
 
 export const dynamic = "force-dynamic"
 
@@ -53,10 +60,23 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    if (user && !hasSalesCallAuditReadAccess(user)) {
+    if (user && !hasSalesCallAuditPageAccess(user)) {
       return NextResponse.json(
-        { success: false, error: "Forbidden: sales_call_audit.view or sales_call_audit.read permission required." },
+        { success: false, error: "Forbidden: sales_call_audit.view permission required." },
         { status: 403, headers: noStoreHeaders }
+      )
+    }
+
+    // Scope is the data axis, separate from page access. A session holding only
+    // `view` reaches the page and reads no rows, so answer 200 with an empty set
+    // rather than 403 — the page is allowed to render, there is just nothing in
+    // it. `scope` is echoed so the UI can say why the table is empty.
+    // Dev sessions with no cookie keep the pre-existing unauthenticated path.
+    const scope = user ? getSalesCallAuditScope(user) : "all"
+    if (scope === "none") {
+      return NextResponse.json(
+        { success: true, data: [], count: 0, scope },
+        { headers: noStoreHeaders }
       )
     }
 
@@ -81,6 +101,32 @@ export async function GET(req: NextRequest) {
     `
     const params: any[] = []
     const conditions: string[] = []
+
+    // `viewSelf` is enforced here, in SQL, not in the browser. Before this the
+    // route returned every row to every reader and the page narrowed them in a
+    // `useMemo`, so anyone could read the whole team out of the network tab.
+    if (scope === "self") {
+      const { employeeId, name } = getSalesCallAuditIdentity(user)
+      if (!employeeId && !name) {
+        // Self-scoped but the session carries no identity to match on. Matching
+        // nothing is the only safe reading; matching everything would invert the
+        // permission.
+        return NextResponse.json(
+          { success: true, data: [], count: 0, scope },
+          { headers: noStoreHeaders }
+        )
+      }
+      if (employeeId && name) {
+        conditions.push("(emp_id = ? OR name = ?)")
+        params.push(employeeId, name)
+      } else if (employeeId) {
+        conditions.push("emp_id = ?")
+        params.push(employeeId)
+      } else {
+        conditions.push("name = ?")
+        params.push(name)
+      }
+    }
 
     if (empId && empId !== "all") {
       conditions.push("(emp_id = ? OR name LIKE ?)")
@@ -136,6 +182,7 @@ export async function GET(req: NextRequest) {
       success: true,
       data: records,
       count: records.length,
+      scope,
     }, { headers: noStoreHeaders })
   } catch (error: any) {
     console.error("[sales-call-audit-api] Error fetching data:", error)
@@ -191,6 +238,40 @@ export async function POST(req: NextRequest) {
     }
 
     const pool = await getPool()
+
+    // `write` says the session may save; it does not say *which* rows. Resolve
+    // the target and confirm it falls inside the reader's scope, so a `viewSelf`
+    // holder cannot edit a colleague's record by posting its id.
+    if (user) {
+      const writeScope = getSalesCallAuditScope(user)
+      if (writeScope === "none") {
+        return NextResponse.json(
+          { success: false, error: "Forbidden: sales_call_audit.viewSelf or sales_call_audit.viewAll permission required to act on a record." },
+          { status: 403, headers: noStoreHeaders }
+        )
+      }
+
+      if (writeScope === "self") {
+        const [targetRows] = await pool.query<any[]>(
+          `SELECT emp_id, name FROM daily_sales_reports_log_fms WHERE ${id ? "id = ?" : "mid = ?"} LIMIT 1`,
+          [id ? id : mid]
+        )
+        const target = Array.isArray(targetRows) && targetRows.length > 0 ? targetRows[0] : null
+        if (!target) {
+          return NextResponse.json(
+            { success: false, error: "Audit record not found" },
+            { status: 404, headers: noStoreHeaders }
+          )
+        }
+        if (!isRowInSalesCallAuditScope(user, target)) {
+          return NextResponse.json(
+            { success: false, error: "Forbidden: this audit record belongs to another employee." },
+            { status: 403, headers: noStoreHeaders }
+          )
+        }
+      }
+    }
+
     const now = new Date()
     const actorName = String(hr_name || user?.name || user?.email || "HR Verifier").slice(0, 150)
 

@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from "next/server"
 import type { RowDataPacket } from "mysql2"
 import { z } from "zod"
 
-import { getSessionUser, hasPermission } from "@/lib/authz"
+import {
+  getSalesCallAuditIdentity,
+  getSalesCallAuditScope,
+  getSessionUser,
+  hasSalesCallAuditPageAccess,
+  hasSalesCallAuditWriteAccess,
+} from "@/lib/authz"
 import { getPool } from "@/lib/db"
-
-const READ_PERMISSION = "sales_call_audit.read"
-const WRITE_PERMISSION = "sales_call_audit.write"
 
 const actionSchema = z.object({
   auditDate: z.string().regex(/^\d{2}-\d{2}-\d{4}$/),
@@ -57,17 +60,40 @@ function storageUnavailable() {
 export async function GET(request: NextRequest) {
   const user = getSessionUser(request)
   if (!user) return denied(401, "Unauthorized")
-  if (!hasPermission(user, READ_PERMISSION)) return denied(403, "Sales call audit read permission required")
+  if (!hasSalesCallAuditPageAccess(user)) return denied(403, "Sales call audit view permission required")
+
+  // This route previously required the literal `sales_call_audit.read`, while the
+  // page and the sibling routes accepted `.view` — the mismatch recorded as #48.
+  // Both now resolve through the same scope helper.
+  const scope = getSalesCallAuditScope(user)
+  if (scope === "none") {
+    return NextResponse.json({ actions: [], scope }, { headers: { "Cache-Control": "private, no-store" } })
+  }
 
   try {
     const pool = await getPool()
-    const [rows] = await pool.query<ActionRow[]>(
-      `SELECT audit_date, employee_id, verify_status, calling_action, remarks,
-              half_day_leave, pagarbook_updated, updated_at
-         FROM sales_call_audit_hr_actions
-        ORDER BY updated_at DESC
-        LIMIT 1000`,
-    )
+    const { employeeId, name } = getSalesCallAuditIdentity(user)
+    if (scope === "self" && !employeeId && !name) {
+      return NextResponse.json({ actions: [], scope }, { headers: { "Cache-Control": "private, no-store" } })
+    }
+
+    const [rows] = scope === "self"
+      ? await pool.query<ActionRow[]>(
+          `SELECT audit_date, employee_id, verify_status, calling_action, remarks,
+                  half_day_leave, pagarbook_updated, updated_at
+             FROM sales_call_audit_hr_actions
+            WHERE employee_id = ?
+            ORDER BY updated_at DESC
+            LIMIT 1000`,
+          [employeeId || name],
+        )
+      : await pool.query<ActionRow[]>(
+          `SELECT audit_date, employee_id, verify_status, calling_action, remarks,
+                  half_day_leave, pagarbook_updated, updated_at
+             FROM sales_call_audit_hr_actions
+            ORDER BY updated_at DESC
+            LIMIT 1000`,
+        )
 
     return NextResponse.json({
       actions: rows.map((row) => ({
@@ -80,6 +106,7 @@ export async function GET(request: NextRequest) {
         pagarbookUpdated: Boolean(row.pagarbook_updated),
         savedAt: new Date(row.updated_at).toISOString(),
       })),
+      scope,
     }, { headers: { "Cache-Control": "private, no-store" } })
   } catch {
     return storageUnavailable()
@@ -89,11 +116,29 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   const user = getSessionUser(request)
   if (!user) return denied(401, "Unauthorized")
-  if (!hasPermission(user, WRITE_PERMISSION)) return denied(403, "Sales call audit write permission required")
+  if (!hasSalesCallAuditWriteAccess(user)) return denied(403, "Sales call audit write permission required")
+
+  // Write is scope-bound: `write` says this session may save, the scope says
+  // which rows it may save against.
+  const scope = getSalesCallAuditScope(user)
+  if (scope === "none") {
+    return denied(403, "Sales call audit viewSelf or viewAll permission required to act on a record")
+  }
 
   const parsed = actionSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid HR action payload" }, { status: 400 })
+  }
+
+  if (scope === "self") {
+    const { employeeId, name } = getSalesCallAuditIdentity(user)
+    const target = parsed.data.employeeId.trim().toLowerCase()
+    const ownsTarget =
+      (employeeId && target === employeeId.toLowerCase()) ||
+      (name && target === name.toLowerCase())
+    if (!ownsTarget) {
+      return denied(403, "This audit record belongs to another employee")
+    }
   }
 
   try {

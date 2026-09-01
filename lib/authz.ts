@@ -315,18 +315,110 @@ export function hasAccountsTrackerAccess(user: unknown): boolean {
   )
 }
 
-export function hasSalesCallAuditReadAccess(user: unknown): boolean {
+// ── Sales Call Audit: page access, data scope, and write are three axes ──────
+//
+// Owner ruling (2026-09-01): this page has four *composable* permissions, not a
+// ladder. A user may hold any combination.
+//
+//   sales_call_audit.view      — may open the page. Grants no data.
+//   sales_call_audit.viewSelf  — may see their own rows. Read-only.
+//   sales_call_audit.viewAll   — may see every row. Read-only.
+//   sales_call_audit.write     — may save HR actions. Grants no data.
+//
+// So `view` is the door, `viewSelf`/`viewAll` decide how much data comes through
+// it, and `write` decides whether saving works. `view` alone is a real state:
+// the page renders with zero rows.
+//
+// This replaces `hasSalesCallAuditReadAccess`/`hasSalesCallAuditWriteAccess`,
+// which had one permission for two audiences and let `.view` grant writes (#48).
+// The self/all vocabulary is the one already used by `SERVER_ACTION_PERMISSIONS`
+// below for `ktahvPage` and `villaPage`.
+export const SALES_CALL_AUDIT_VIEW = 'sales_call_audit.view'
+export const SALES_CALL_AUDIT_VIEW_SELF = 'sales_call_audit.viewSelf'
+export const SALES_CALL_AUDIT_VIEW_ALL = 'sales_call_audit.viewAll'
+export const SALES_CALL_AUDIT_WRITE = 'sales_call_audit.write'
+
+// Pre-split spelling. It meant "see the dashboard data", so it maps to viewAll
+// rather than being dropped, and no session that works today stops working.
+const SALES_CALL_AUDIT_LEGACY_READ = 'sales_call_audit.read'
+
+// `super_admin` does everything here, by owner ruling, regardless of permissions.
+//
+// Deliberately *not* `hasAdminRole`, which also admits plain `admin`: under the
+// four-permission model `admin` goes through grants like everyone else. Matching
+// folds case and separators — and accepts the unseparated `superadmin` — because
+// `lib/db-auth.ts:178` copies `role` out of the database verbatim, so the stored
+// spelling is not guaranteed. `super_admin` is the canonical value.
+function isSalesCallAuditSuperAdmin(user: unknown): boolean {
+  const role = isRecord(user) ? user.role : undefined
+  if (typeof role !== 'string') return false
+  const folded = role.trim().toLowerCase().replace(/[\s\-_]+/g, '')
+  return folded === 'superadmin'
+}
+
+// How much of the table this session may read.
+//
+//   'all'  — every row
+//   'self' — only rows whose employee identity matches the session
+//   'none' — no rows. The page may still open if `view` is held.
+//
+// `viewAll` wins when both scope permissions are held: the scope is their union.
+export type SalesCallAuditScope = 'all' | 'self' | 'none'
+
+export function getSalesCallAuditScope(user: unknown): SalesCallAuditScope {
+  if (isSalesCallAuditSuperAdmin(user)) return 'all'
+  if (hasAnyPermission(user, [SALES_CALL_AUDIT_VIEW_ALL, SALES_CALL_AUDIT_LEGACY_READ])) return 'all'
+  if (hasPermission(user, SALES_CALL_AUDIT_VIEW_SELF)) return 'self'
+  return 'none'
+}
+
+// May this session open the page at all? Holding a scope implies the door: a
+// grant of `viewAll` without `view` is a mis-grant, not a reason to 403 someone
+// out of data they were explicitly given.
+export function hasSalesCallAuditPageAccess(user: unknown): boolean {
+  if (isSalesCallAuditSuperAdmin(user)) return true
   return (
-    hasAnyPermission(user, ['sales_call_audit.view', 'sales_call_audit.read']) ||
-    hasAdminRole(user, 'lower')
+    hasPermission(user, SALES_CALL_AUDIT_VIEW) ||
+    getSalesCallAuditScope(user) !== 'none'
   )
 }
 
+// May this session save HR actions? Only `write` grants this — never `view`.
+//
+// Write is also scope-bound, which this predicate does not answer on its own:
+// see `isRowInSalesCallAuditScope`. `write` with scope 'none' can reach no row.
 export function hasSalesCallAuditWriteAccess(user: unknown): boolean {
-  return (
-    hasAnyPermission(user, ['sales_call_audit.write', 'sales_call_audit.view']) ||
-    hasAdminRole(user, 'lower')
-  )
+  if (isSalesCallAuditSuperAdmin(user)) return true
+  return hasPermission(user, SALES_CALL_AUDIT_WRITE)
+}
+
+// The identities a 'self'-scoped session may act as. `employeeId` is the join key
+// against `daily_sales_reports_log_fms.emp_id` (`lib/db-auth.ts:218`); `name` is
+// the fallback for rows that carry no employee id.
+export function getSalesCallAuditIdentity(user: unknown): { employeeId: string; name: string } {
+  const employeeId = isRecord(user) && typeof user.employeeId === 'string' ? user.employeeId.trim() : ''
+  const name = isRecord(user) && typeof user.name === 'string' ? user.name.trim() : ''
+  return { employeeId, name }
+}
+
+// Is one row readable/writable by this session? The row-level companion to
+// `getSalesCallAuditScope`, so a 'self' session cannot reach another employee's
+// record by posting its id.
+export function isRowInSalesCallAuditScope(
+  user: unknown,
+  row: { emp_id?: string | null; name?: string | null }
+): boolean {
+  const scope = getSalesCallAuditScope(user)
+  if (scope === 'all') return true
+  if (scope === 'none') return false
+
+  const { employeeId, name } = getSalesCallAuditIdentity(user)
+  const rowEmpId = String(row.emp_id ?? '').trim()
+  const rowName = String(row.name ?? '').trim()
+
+  if (employeeId && rowEmpId) return rowEmpId.toLowerCase() === employeeId.toLowerCase()
+  if (name && rowName) return rowName.toLowerCase() === name.toLowerCase()
+  return false
 }
 
 export function hasDialShreeSummaryAccess(user: unknown): boolean {

@@ -45,8 +45,11 @@ const pagePermissions: Record<string, string> = {
   '/google-adword-reports': 'google_adword_report.view',
   '/calls/reports': 'calls_report.view',
   '/sales/reports': 'sales_report.view',
+  // `sales_call_audit.view` is page access only — the data itself is gated
+  // server-side by `viewSelf`/`viewAll`, so this key deliberately does not name a
+  // scope. The email template is a whole-team artifact, so it names `viewAll`.
   '/sales-call-audit': 'sales_call_audit.view',
-  '/sales-call-audit/email-template': 'sales_call_audit.view',
+  '/sales-call-audit/email-template': 'sales_call_audit.viewAll',
   // M6: these were `/voicecall/data?tab=received` and `?tab=sent`, which
   // `usePathname()` can never produce. The pages the two tabs became are
   // `/voicecall/data/received` and `/voicecall/data/sent`, and each already calls
@@ -84,6 +87,11 @@ const isRestricted = (pathname: string) => {
   }
 
   const exactRestricted = [
+    // Both keys above were previously unreachable: `pagePermissions` is only
+    // consulted for paths listed here, so the audit page enforced nothing
+    // client-side. Listing them makes the `view` grant actually gate the page.
+    '/sales-call-audit',
+    '/sales-call-audit/email-template',
     '/helpdesk',
     '/meet',
     '/performance',

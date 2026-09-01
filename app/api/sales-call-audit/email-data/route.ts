@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getPool } from "@/lib/db"
-import { getSessionUser, hasSalesCallAuditReadAccess } from "@/lib/authz"
+import { getSalesCallAuditScope, getSessionUser, hasSalesCallAuditPageAccess } from "@/lib/authz"
 
 export const dynamic = "force-dynamic"
 
@@ -62,9 +62,20 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    if (user && !hasSalesCallAuditReadAccess(user)) {
+    if (user && !hasSalesCallAuditPageAccess(user)) {
       return NextResponse.json(
-        { success: false, error: "Forbidden: sales_call_audit.view or sales_call_audit.read permission required." },
+        { success: false, error: "Forbidden: sales_call_audit.view permission required." },
+        { status: 403, headers: noStoreHeaders }
+      )
+    }
+
+    // This endpoint aggregates the whole team into one report — team averages,
+    // a failed-employee count, and a per-employee table. There is no self-scoped
+    // version of that artifact, so it requires `viewAll` outright rather than
+    // handing a `viewSelf` holder their colleagues' figures.
+    if (user && getSalesCallAuditScope(user) !== "all") {
+      return NextResponse.json(
+        { success: false, error: "Forbidden: sales_call_audit.viewAll permission required for team audit metrics." },
         { status: 403, headers: noStoreHeaders }
       )
     }

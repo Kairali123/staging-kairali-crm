@@ -1682,6 +1682,14 @@ export const PERMISSION_GROUPS: {
       { key: "sales_report.view", label: "Sales Report", description: "Revenue statistics and sales conversion data" },
       { key: "sales_calling.view", label: "Sales Calling Master", description: "Calling schedules, daily master lists & status" },
       { key: "riya_sharma.view", label: "Riya Sharma Portal", description: "Agent dedicated conversion tracking" },
+      // Sales Call Audit is four composable permissions, not one. `view` opens
+      // the page and grants no data; `viewSelf`/`viewAll` decide how much data
+      // comes through it; `write` decides whether HR actions can be saved. Grant
+      // `view` alongside a scope — `view` on its own renders an empty table.
+      { key: "sales_call_audit.view", label: "Sales Call Audit — Open Page", description: "Open the audit page. Grants no data on its own; pair with Own Data or All Data" },
+      { key: "sales_call_audit.viewSelf", label: "Sales Call Audit — Own Data", description: "See only their own audit scorecard, read-only" },
+      { key: "sales_call_audit.viewAll", label: "Sales Call Audit — All Data", description: "See every agent's audit records and team reports, read-only" },
+      { key: "sales_call_audit.write", label: "Sales Call Audit — HR Actions", description: "Save HR verification, remarks and attendance actions on visible records" },
     ],
   },
   {

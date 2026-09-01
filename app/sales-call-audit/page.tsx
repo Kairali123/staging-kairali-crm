@@ -214,41 +214,28 @@ export default function SalesCallAuditPage() {
   const [savingAction, setSavingAction] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<string>("")
 
-  // Determine if the logged-in user is HR or Admin (Super Admin / Admin / HR Manager)
-  const isHrOrAdmin = useMemo(() => {
+  // Which rows this session received. The server decides this from
+  // `sales_call_audit.viewSelf` / `.viewAll` and reports it on the response, so
+  // the page no longer filters rows itself: what arrives is already in scope.
+  //
+  // This replaces a client-side `isUserRecord` filter that narrowed the table in
+  // a `useMemo` while the API returned every row regardless — anyone could read
+  // the whole team out of the network tab (#48).
+  const [scope, setScope] = useState<"all" | "self" | "none">("none")
+  const [accessError, setAccessError] = useState<string>("")
+
+  // Saving HR actions is its own permission. `sales_call_audit.view` used to
+  // imply it; now only `.write` grants it, and `super_admin` keeps blanket
+  // access by owner ruling.
+  const canWrite = useMemo(() => {
     if (!user) return false
-    const role = String(user.role || "").toLowerCase()
-    const dept = String(user.department || "").toLowerCase()
-    return (
-      role === "super_admin" ||
-      role === "admin" ||
-      role === "hr_manager" ||
-      role === "hr" ||
-      role === "hr_executive" ||
-      dept === "hr" ||
-      dept === "administration" ||
+    const role = String(user.role || "").trim().toLowerCase().replace(/[\s\-_]+/g, "")
+    if (role === "superadmin") return true
+    return Boolean(
       user.permissions?.includes("all") ||
-      user.permissions?.includes("sales_call_audit.admin") ||
-      user.permissions?.includes("hr.admin")
+      user.permissions?.includes("sales_call_audit.write")
     )
   }, [user])
-
-  // Helper to determine if a record belongs to the logged-in user (for regular users)
-  const isUserRecord = useCallback(
-    (empId?: string | null, name?: string | null) => {
-      if (isHrOrAdmin) return true
-      if (!user) return true // fallback during session load
-      const uEmp = String(user.employeeId || "").trim().toLowerCase()
-      const uName = String(user.name || "").trim().toLowerCase()
-      const eId = String(empId || "").trim().toLowerCase()
-      const eName = String(name || "").trim().toLowerCase()
-
-      if (uEmp && eId && (eId === uEmp || eId.includes(uEmp) || uEmp.includes(eId))) return true
-      if (uName && eName && (eName.includes(uName) || uName.includes(eName))) return true
-      return false
-    },
-    [isHrOrAdmin, user]
-  )
 
   // Filter States
   const [employeeFilter, setEmployeeFilter] = useState("all")
@@ -329,13 +316,29 @@ export default function SalesCallAuditPage() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true)
+      setAccessError("")
       const res = await fetch("/api/sales-call-audit")
+
+      // A permission failure is a state to render, not an error to toast: the
+      // user reached the page legitimately and simply holds no data scope.
+      if (res.status === 401 || res.status === 403) {
+        const body = await res.json().catch(() => null)
+        setDbRecords([])
+        setScope("none")
+        setAccessError(
+          body?.error ||
+            "You do not have permission to view sales call audit data."
+        )
+        return
+      }
+
       if (!res.ok) {
         throw new Error(`Failed to fetch audit data (status: ${res.status})`)
       }
       const json = await res.json()
       if (json.success && Array.isArray(json.data)) {
         setDbRecords(json.data)
+        setScope(json.scope === "all" || json.scope === "self" ? json.scope : "none")
         const now = new Date()
         setLastUpdated(
           now.toLocaleDateString("en-GB", {
@@ -366,9 +369,6 @@ export default function SalesCallAuditPage() {
     const groups: Record<string, { label: string; agents: AgentAudit[] }> = {}
 
     dbRecords.forEach(row => {
-      // If user is not HR or Admin, only show their own records
-      if (!isUserRecord(row.emp_id, row.name)) return
-
       const { dateKey, label } = formatDateKey(row.time_stamp || row.created_at)
       if (!groups[dateKey]) {
         groups[dateKey] = { label, agents: [] }
@@ -416,7 +416,7 @@ export default function SalesCallAuditPage() {
     }))
 
     return result
-  }, [dbRecords, isUserRecord])
+  }, [dbRecords])
 
   // Automatically expand only the first (latest) date on initial load (Accordion behavior)
   useEffect(() => {
@@ -429,13 +429,12 @@ export default function SalesCallAuditPage() {
   const uniqueAgents = useMemo(() => {
     const map = new Map<string, { id: string; name: string }>()
     dbRecords.forEach(r => {
-      if (!isUserRecord(r.emp_id, r.name)) return
       if (r.emp_id && !map.has(r.emp_id)) {
         map.set(r.emp_id, { id: r.emp_id, name: r.name || r.emp_id })
       }
     })
     return Array.from(map.values())
-  }, [dbRecords, isUserRecord])
+  }, [dbRecords])
 
   // Filtered dataset
   const filteredDays = useMemo(() => {
@@ -802,6 +801,31 @@ export default function SalesCallAuditPage() {
           </div>
         </div>
       </div>
+
+      {/* ─── Data Scope Notice ──────────────────────────────────────────────────── */}
+      {/* `sales_call_audit.view` opens this page but grants no rows, so the empty
+          table needs to say why rather than looking like a loading failure. */}
+      {!loading && (accessError || scope === "none") && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 shadow-sm px-4 sm:px-5 py-4 flex items-start gap-3">
+          <ShieldAlert className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-amber-900">No audit data available for your account</h2>
+            <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+              {accessError ||
+                "You can open this page, but you have not been granted a data scope. Ask an administrator for “Sales Call Audit — Own Data” to see your own scorecard, or “All Data” to see the team."}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!loading && scope === "self" && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 shadow-sm px-4 sm:px-5 py-3 flex items-center gap-3">
+          <Info className="h-4 w-4 text-blue-600 flex-shrink-0" />
+          <p className="text-xs text-blue-800">
+            You are viewing your own audit records only. Team-wide figures require the “All Data” permission.
+          </p>
+        </div>
+      )}
 
       {/* ─── Filters & Search ───────────────────────────────────────────────────── */}
       <div className="rounded-xl border border-slate-200 bg-white shadow-md overflow-hidden relative">
@@ -1239,7 +1263,7 @@ export default function SalesCallAuditPage() {
                                   <TableHead className="text-center text-white font-semibold">Outcome</TableHead>
                                   <TableHead className="text-white font-semibold">HR Action Status</TableHead>
                                   <TableHead className="text-white font-semibold">Delay (HR)</TableHead>
-                                  {isHrOrAdmin && <TableHead className="text-right text-white font-semibold">Action</TableHead>}
+                                  {canWrite && <TableHead className="text-right text-white font-semibold">Action</TableHead>}
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
@@ -1353,7 +1377,7 @@ export default function SalesCallAuditPage() {
                                           "—"
                                         )}
                                       </TableCell>
-                                      {isHrOrAdmin && (
+                                      {canWrite && (
                                         <TableCell className="text-right">
                                           <Button
                                             size="sm"
@@ -1521,7 +1545,7 @@ export default function SalesCallAuditPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {isHrOrAdmin && (
+              {canWrite && (
                 <Button
                   size="sm"
                   onClick={() => openAction(selectedAgent.date, selectedAgent.agent)}

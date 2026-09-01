@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import nodemailer from "nodemailer"
-import { getSessionUser, hasSalesCallAuditReadAccess } from "@/lib/authz"
+import { getSalesCallAuditScope, getSessionUser, hasSalesCallAuditPageAccess } from "@/lib/authz"
 
 export const dynamic = "force-dynamic"
 
@@ -16,9 +16,18 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    if (user && !hasSalesCallAuditReadAccess(user)) {
+    if (user && !hasSalesCallAuditPageAccess(user)) {
       return NextResponse.json(
-        { success: false, error: "Forbidden: sales_call_audit permissions required." },
+        { success: false, error: "Forbidden: sales_call_audit.view permission required." },
+        { status: 403 }
+      )
+    }
+
+    // The message body is the whole team's scorecard, so sending it requires the
+    // permission to see the whole team.
+    if (user && getSalesCallAuditScope(user) !== "all") {
+      return NextResponse.json(
+        { success: false, error: "Forbidden: sales_call_audit.viewAll permission required to send the team audit report." },
         { status: 403 }
       )
     }
