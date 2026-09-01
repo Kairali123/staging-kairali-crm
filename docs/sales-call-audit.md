@@ -12,12 +12,43 @@ control generates a short synthetic browser tone; it is not a production call re
 
 ## Access control
 
-- `sales_call_audit.read` is required for the dashboard, email preview, and action reads.
-- `sales_call_audit.write` is required for HR verification and attendance-action writes.
-- The existing `all` wildcard continues to grant both permissions.
+Owner ruling, 2026-09-01: four **composable** permissions, not a ladder. A user may hold
+any combination. Page access, data scope, and write capability are three separate axes.
 
-Both the client route guard and the API route enforce these dedicated permissions. The
-API additionally verifies the signed `kairali_user` session cookie on every request.
+| Permission | Grants |
+|---|---|
+| `sales_call_audit.view` | Opens the page. Grants **no data**. |
+| `sales_call_audit.viewSelf` | Own rows only, read-only. |
+| `sales_call_audit.viewAll` | Every row, read-only. |
+| `sales_call_audit.write` | Save HR actions on rows already in scope. |
+
+- `view` alone is a valid state: the page renders with an empty table and an explanatory
+  notice. It is not an error.
+- `viewAll` supersedes `viewSelf` when both are held; the scope is their union.
+- **Write is scope-bound.** `write` says a session may save, the scope says which rows it
+  may save against, so a `viewSelf` holder cannot edit a colleague's record by posting its
+  id. `write` with no scope reaches no row and is refused.
+- `role === "super_admin"` does everything here regardless of permissions. Plain `admin`
+  no longer bypasses — it goes through grants like every other role.
+- The `all` wildcard continues to grant everything.
+- `sales_call_audit.read` is the pre-split spelling and is honoured as `viewAll`, so no
+  session that works today stops working.
+
+`viewSelf` is enforced **server-side in SQL**, matched on the session's `employeeId`
+(`lib/db-auth.ts`) against `daily_sales_reports_log_fms.emp_id`. It was previously a
+client-side `useMemo` filter over a response that contained every row, which meant any
+reader could recover the whole team from the network tab.
+
+Team-wide artifacts — `/api/sales-call-audit/email-data` and `/send-email` — require
+`viewAll` outright, because there is no self-scoped version of a team average, a
+failed-employee count, or a per-employee table.
+
+The client route guard gates the page on `view`, and the email template on `viewAll`. The
+API verifies the signed `kairali_user` session cookie on every request and re-derives the
+scope server-side; the client gate is a redirect, never the enforcement boundary.
+
+All four permissions are grantable from the Users admin screen under
+**Sales & Call Management**.
 
 ## Durable HR action storage
 
