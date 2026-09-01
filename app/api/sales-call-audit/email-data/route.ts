@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getPool } from "@/lib/db"
+import { getSessionUser, hasSalesCallAuditReadAccess } from "@/lib/authz"
 
 export const dynamic = "force-dynamic"
+
+const noStoreHeaders = {
+  "Cache-Control": "private, no-store, no-cache, must-revalidate",
+  "Pragma": "no-cache",
+}
 
 export interface AgentAuditMetric {
   id: string
@@ -45,6 +51,23 @@ function formatDateDisplay(dateStr: string): string {
 
 export async function GET(req: NextRequest) {
   try {
+    const user = getSessionUser(req)
+    const isDev = process.env.NODE_ENV === "development"
+
+    if (!user && !isDev) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized: Please log in to access sales call audit metrics." },
+        { status: 401, headers: noStoreHeaders }
+      )
+    }
+
+    if (user && !hasSalesCallAuditReadAccess(user)) {
+      return NextResponse.json(
+        { success: false, error: "Forbidden: sales_call_audit.view or sales_call_audit.read permission required." },
+        { status: 403, headers: noStoreHeaders }
+      )
+    }
+
     const pool = await getPool()
     const url = new URL(req.url)
     let selectedDate = url.searchParams.get("date")

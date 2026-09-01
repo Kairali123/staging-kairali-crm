@@ -315,6 +315,34 @@ export function hasAccountsTrackerAccess(user: unknown): boolean {
   )
 }
 
+export function hasSalesCallAuditReadAccess(user: unknown): boolean {
+  return (
+    hasAnyPermission(user, ['sales_call_audit.view', 'sales_call_audit.read']) ||
+    hasAdminRole(user, 'lower')
+  )
+}
+
+export function hasSalesCallAuditWriteAccess(user: unknown): boolean {
+  return (
+    hasAnyPermission(user, ['sales_call_audit.write', 'sales_call_audit.view']) ||
+    hasAdminRole(user, 'lower')
+  )
+}
+
+export function hasDialShreeSummaryAccess(user: unknown): boolean {
+  return (
+    hasAnyPermission(user, ['dialshree_summary.view', 'dialshree_menu.view', 'dialshree_sent.view', 'ai_voice_sent.view']) ||
+    hasAdminRole(user, 'lower')
+  )
+}
+
+export function hasDialShreeSentAccess(user: unknown): boolean {
+  return (
+    hasAnyPermission(user, ['dialshree_sent.view', 'dialshree_menu.view', 'ai_voice_sent.view']) ||
+    hasAdminRole(user, 'lower')
+  )
+}
+
 const SERVER_ACTION_PERMISSIONS: Record<string, Record<string, readonly string[]>> = {
   ktahvPage: {
     sales_agent: ['viewSelf', 'editSelf', 'cancelSelf', 'approvalSelf', 'collectionSelf', 'arrivalFlightSelf', 'departureFlightSelf'],

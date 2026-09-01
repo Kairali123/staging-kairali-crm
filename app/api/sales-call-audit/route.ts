@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getPool } from "@/lib/db"
+import { getSessionUser, hasSalesCallAuditReadAccess, hasSalesCallAuditWriteAccess } from "@/lib/authz"
 
 export const dynamic = "force-dynamic"
+
+const noStoreHeaders = {
+  "Cache-Control": "private, no-store, no-cache, must-revalidate",
+  "Pragma": "no-cache",
+}
 
 export type SalesCallAuditRecord = {
   id: number
@@ -37,18 +43,48 @@ export type SalesCallAuditRecord = {
 
 export async function GET(req: NextRequest) {
   try {
+    const user = getSessionUser(req)
+    const isDev = process.env.NODE_ENV === "development"
+
+    if (!user && !isDev) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized: Please log in to view sales call audit data." },
+        { status: 401, headers: noStoreHeaders }
+      )
+    }
+
+    if (user && !hasSalesCallAuditReadAccess(user)) {
+      return NextResponse.json(
+        { success: false, error: "Forbidden: sales_call_audit.view or sales_call_audit.read permission required." },
+        { status: 403, headers: noStoreHeaders }
+      )
+    }
+
     const pool = await getPool()
     const url = new URL(req.url)
     const empId = url.searchParams.get("emp_id")
     const outcome = url.searchParams.get("outcome")
+    const limitParam = parseInt(url.searchParams.get("limit") || "500", 10)
+    const limit = Math.min(Math.max(isNaN(limitParam) ? 500 : limitParam, 1), 1000)
 
-    let query = "SELECT * FROM daily_sales_reports_log_fms"
+    let query = `
+      SELECT 
+        id, time_stamp, emp_id, name, designation, mid, daily_fail_pass,
+        total_calls_audited, good_calls, bad_calls, product_knowledge,
+        customer_understanding, communication_skills, objection_handling,
+        closing_skills, tone_volume, avg_score, planned_management, actual_hr,
+        time_delay_hr, hr_name, hr_verify_status, hr_action_for_calling_fail_pass,
+        other_remarks, updated_in_master_attendance_tracker, updated_in_pagarbook,
+        update_master_attendance_tracker, update_status_of_account_fms,
+        created_at, updated_at
+      FROM daily_sales_reports_log_fms
+    `
     const params: any[] = []
     const conditions: string[] = []
 
     if (empId && empId !== "all") {
-      conditions.push("emp_id = ?")
-      params.push(empId)
+      conditions.push("(emp_id = ? OR name LIKE ?)")
+      params.push(empId, `%${empId}%`)
     }
 
     if (outcome && outcome !== "all") {
@@ -60,13 +96,11 @@ export async function GET(req: NextRequest) {
       query += " WHERE " + conditions.join(" AND ")
     }
 
-    query += " ORDER BY time_stamp DESC, id DESC"
+    query += " ORDER BY time_stamp DESC, id DESC LIMIT ?"
+    params.push(limit)
 
     const [rows] = await pool.query(query, params)
-    const records = rows as any[]
-
-    // Process and cast numerical fields
-    const formattedRecords: SalesCallAuditRecord[] = records.map(row => ({
+    const records = (rows as any[]).map(row => ({
       id: Number(row.id),
       time_stamp: row.time_stamp ? new Date(row.time_stamp).toISOString() : null,
       emp_id: row.emp_id || "",
@@ -91,18 +125,18 @@ export async function GET(req: NextRequest) {
       hr_verify_status: row.hr_verify_status || null,
       hr_action_for_calling_fail_pass: row.hr_action_for_calling_fail_pass || null,
       other_remarks: row.other_remarks || null,
-      hr_level_whatsapp_update_status_to_sales: row.hr_level_whatsapp_update_status_to_sales || null,
-      update_master_attendance_tracker: row.update_master_attendance_tracker || null,
-      update_status_of_account_fms: row.update_status_of_account_fms || null,
+      hr_level_whatsapp_update_status_to_sales: null,
+      update_master_attendance_tracker: row.update_master_attendance_tracker || row.updated_in_master_attendance_tracker || null,
+      update_status_of_account_fms: row.update_status_of_account_fms || row.updated_in_pagarbook || null,
       created_at: row.created_at ? new Date(row.created_at).toISOString() : null,
       updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : null,
     }))
 
     return NextResponse.json({
       success: true,
-      data: formattedRecords,
-      count: formattedRecords.length,
-    })
+      data: records,
+      count: records.length,
+    }, { headers: noStoreHeaders })
   } catch (error: any) {
     console.error("[sales-call-audit-api] Error fetching data:", error)
     return NextResponse.json(
@@ -110,7 +144,7 @@ export async function GET(req: NextRequest) {
         success: false,
         error: error?.message || "Failed to fetch sales call audit reports",
       },
-      { status: 500 }
+      { status: 500, headers: noStoreHeaders }
     )
   }
 }
@@ -120,6 +154,23 @@ const GAS_SALES_CALL_AUDIT_URL =
 
 export async function POST(req: NextRequest) {
   try {
+    const user = getSessionUser(req)
+    const isDev = process.env.NODE_ENV === "development"
+
+    if (!user && !isDev) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized: Please log in to record HR actions." },
+        { status: 401, headers: noStoreHeaders }
+      )
+    }
+
+    if (user && !hasSalesCallAuditWriteAccess(user)) {
+      return NextResponse.json(
+        { success: false, error: "Forbidden: sales_call_audit.write permission required." },
+        { status: 403, headers: noStoreHeaders }
+      )
+    }
+
     const body = await req.json()
     const {
       id,
@@ -135,12 +186,13 @@ export async function POST(req: NextRequest) {
     if (!id && !mid) {
       return NextResponse.json(
         { success: false, error: "Record ID or MID is required to update HR action" },
-        { status: 400 }
+        { status: 400, headers: noStoreHeaders }
       )
     }
 
     const pool = await getPool()
     const now = new Date()
+    const actorName = String(hr_name || user?.name || user?.email || "HR Verifier").slice(0, 150)
 
     const updateQuery = `
       UPDATE daily_sales_reports_log_fms
@@ -162,7 +214,7 @@ export async function POST(req: NextRequest) {
       other_remarks || null,
       update_master_attendance_tracker || "No",
       update_status_of_account_fms || "No",
-      hr_name || null,
+      actorName,
       now,
       now,
       id ? id : mid,
@@ -197,7 +249,7 @@ export async function POST(req: NextRequest) {
         other_remarks: other_remarks || body.remarks || "",
         update_master_attendance_tracker: update_master_attendance_tracker || (body.halfDayLeave ? "Yes" : "No"),
         update_status_of_account_fms: update_status_of_account_fms || (body.pagarbookUpdated ? "Yes" : "No"),
-        hr_name: hr_name || body.hr_name || "HR Admin",
+        hr_name: actorName,
         actual_hr: now.toISOString(),
         updated_at: now.toISOString(),
       }
@@ -227,7 +279,7 @@ export async function POST(req: NextRequest) {
       sheetSynced,
       sheetResponse,
       updated_at: now.toISOString(),
-    })
+    }, { headers: noStoreHeaders })
   } catch (error: any) {
     console.error("[sales-call-audit-api] Error saving HR action:", error)
     return NextResponse.json(
@@ -235,7 +287,7 @@ export async function POST(req: NextRequest) {
         success: false,
         error: error?.message || "Failed to update HR action",
       },
-      { status: 500 }
+      { status: 500, headers: noStoreHeaders }
     )
   }
 }

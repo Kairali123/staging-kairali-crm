@@ -203,8 +203,25 @@ function mapRcvdRow(row: any, i: number) {
     };
 }
 
+import { cookies } from 'next/headers';
+import { getSessionUser, hasDialShreeSummaryAccess } from '@/lib/authz';
+
 export async function fetchDialShreeTableData(filters?: { dateFrom?: string; dateTo?: string; company?: string; source?: string }) {
     try {
+        try {
+            const cookieStore = await cookies();
+            const userCookie = cookieStore.get('kairali_user')?.value;
+            if (userCookie) {
+                const user = getSessionUser(userCookie);
+                if (user && !hasDialShreeSummaryAccess(user)) {
+                    console.warn('[dialshree-summary] Unauthorized access attempt');
+                    return [];
+                }
+            }
+        } catch {
+            // Invocation outside request context
+        }
+
         const pool = await getPool();
         const selectedCompany = normalizeCompanyFilter(filters?.company);
         const selectedSource = normalizeSourceFilter(filters?.source);
@@ -243,6 +260,7 @@ export async function fetchDialShreeTableData(filters?: { dateFrom?: string; dat
             FROM dialshree_kairali_sent
             WHERE ${sentWhere}
             ORDER BY id DESC
+            LIMIT 5000
         `;
 
         const receivedQuery = `
@@ -262,6 +280,7 @@ export async function fetchDialShreeTableData(filters?: { dateFrom?: string; dat
             FROM lead_fms
             WHERE ${rcvdWhere}
             ORDER BY sl_no DESC
+            LIMIT 5000
         `;
 
         const [sentRows]: any = await pool.query(sentQuery, paramsSent);

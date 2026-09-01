@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import {
   Area,
@@ -20,7 +20,10 @@ import {
   Calendar,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   CircleAlert,
   ClipboardCheck,
   Clock,
@@ -213,6 +216,10 @@ export default function SalesCallAuditPage() {
   const [viewMode, setViewMode] = useState<"table" | "analytics">("table")
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear())
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(5)
+
   // HR Action Dialog
   const [actionDialogOpen, setActionDialogOpen] = useState(false)
   const [actionTarget, setActionTarget] = useState<{ date: string; agent: AgentAudit } | null>(null)
@@ -351,6 +358,29 @@ export default function SalesCallAuditPage() {
       }),
     }))
   }, [auditDays, dateFilter, employeeFilter, resultFilter, search])
+
+  // Reset pagination on filter or search changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [employeeFilter, resultFilter, dateFilter, search, pageSize])
+
+  // Pagination calculation
+  const totalPages = Math.max(1, Math.ceil(filteredDays.length / pageSize))
+  const paginatedDays = useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return filteredDays.slice(start, start + pageSize)
+  }, [filteredDays, currentPage, pageSize])
+
+  // Auto-expand paginated dates on page change
+  useEffect(() => {
+    if (paginatedDays.length > 0) {
+      setExpandedDates(prev => {
+        const next = new Set(prev)
+        paginatedDays.forEach(d => next.add(d.date))
+        return next
+      })
+    }
+  }, [paginatedDays])
 
   // Aggregate KPIs calculated from live DB data
   const allFilteredAgents = filteredDays.flatMap(day => day.agents)
@@ -1033,7 +1063,7 @@ export default function SalesCallAuditPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredDays.map(day => {
+                {paginatedDays.map(day => {
                   const isOpen = expandedDates.has(day.date)
                   const pass = day.agents.filter(agent => agent.result === "Pass").length
                   const fail = day.agents.filter(agent => agent.result === "Fail").length
@@ -1228,6 +1258,112 @@ export default function SalesCallAuditPage() {
                 })}
               </TableBody>
             </Table>
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {!loading && filteredDays.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3.5 bg-slate-50 border-t border-slate-200">
+            <div className="flex items-center gap-2 text-xs text-slate-600">
+              <span className="font-medium text-slate-500">Dates per page:</span>
+              <select
+                value={pageSize}
+                onChange={e => {
+                  setPageSize(Number(e.target.value))
+                  setCurrentPage(1)
+                }}
+                className="bg-white border border-slate-300 rounded px-2 py-1 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
+              >
+                <option value={3}>3 dates</option>
+                <option value={5}>5 dates</option>
+                <option value={10}>10 dates</option>
+                <option value={20}>20 dates</option>
+                <option value={50}>50 dates</option>
+              </select>
+              <span className="text-slate-300 mx-1">|</span>
+              <span>
+                Showing <strong className="text-slate-800">{Math.min((currentPage - 1) * pageSize + 1, filteredDays.length)}</strong> to{" "}
+                <strong className="text-slate-800">{Math.min(currentPage * pageSize, filteredDays.length)}</strong> of{" "}
+                <strong className="text-slate-800">{filteredDays.length}</strong> dates ({allFilteredAgents.length} total records)
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                className="h-8 px-2 text-xs border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
+                title="First Page"
+              >
+                <ChevronsLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="h-8 px-2.5 text-xs border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
+              >
+                <ChevronLeft className="h-4 w-4 mr-1" />
+                Prev
+              </Button>
+
+              <div className="flex items-center gap-1 px-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(page => {
+                    return (
+                      page === 1 ||
+                      page === totalPages ||
+                      Math.abs(page - currentPage) <= 1
+                    )
+                  })
+                  .map((page, idx, arr) => {
+                    const prevPage = arr[idx - 1]
+                    const showEllipsis = prevPage && page - prevPage > 1
+
+                    return (
+                      <Fragment key={page}>
+                        {showEllipsis && <span className="text-xs text-slate-400 px-1">...</span>}
+                        <Button
+                          variant={currentPage === page ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setCurrentPage(page)}
+                          className={`h-8 w-8 p-0 text-xs font-bold cursor-pointer ${
+                            currentPage === page
+                              ? "bg-blue-600 text-white hover:bg-blue-700"
+                              : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                          }`}
+                        >
+                          {page}
+                        </Button>
+                      </Fragment>
+                    )
+                  })}
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="h-8 px-2.5 text-xs border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
+              >
+                Next
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+                className="h-8 px-2 text-xs border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
+                title="Last Page"
+              >
+                <ChevronsRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         )}
       </div>

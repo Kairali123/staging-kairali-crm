@@ -106,3 +106,8 @@ eventId,timestamp,action,outcome,actor,target,sourceIp,correlationId,context
 "ef38ce1e-abb9-471a-8f9f-36cba56e3ed3","2026-08-31T06:53:38.080Z","page.access_denied","denied","","/dialShree/summary","::1","0b6f2c60-1a91-499d-af44-adebea73fa30","{""reason"":""missing_session""}"
 "f382f2af-77f1-4b3f-9424-2b6e2be6f876","2026-08-31T07:06:28.160Z","api.access_denied","denied","","/api/dialshree/summary","::1","490e6cf3-8669-43ae-9861-dfd1b6ff72c8","{""reason"":""missing_session""}"
 "aeda5bec-67e2-4c80-a343-3471a6e2c488","2026-08-31T12:05:17.030Z","api.access_denied","denied","","/api/crr-calling/bookings","::1","38bb2508-21d1-42c4-8e2e-04b7e2a8ed7d","{""reason"":""missing_session""}"
+"86d60d08-f2cc-4774-b13f-029d0d38bdba","2026-09-01T05:35:03.210Z","auth.logout","success","developer3@kairali.com","","::1","9358f9d5-ce10-4d4b-9e44-fafa252b70e9","{""sessionRevoked"":true}"
+"32d740df-480a-41a5-b3c0-7f708017342d","2026-09-01T05:35:05.062Z","api.access_denied","denied","","/api/auth/me","::1","ba3165d2-793e-48c4-a2b5-055037143b74","{""reason"":""missing_session""}"
+"3e32cf0c-8f8b-4d04-a047-9f5a8e52589d","2026-09-01T05:35:10.013Z","auth.logout","success","","","::1","b7ffe67e-bff6-4a0a-9647-42c5f6dcb8cf","{""sessionRevoked"":false}"
+"f1534d20-01bb-47ab-ae7d-f118daf798e7","2026-09-01T05:35:11.300Z","api.access_denied","denied","","/api/auth/me","::1","f928e668-4dd5-4667-b571-01148165da49","{""reason"":""missing_session""}"
+"62c08c95-2273-4d85-a25b-d9a553230172","2026-09-01T05:38:07.669Z","auth.login","success","developer5@kairali.com","","::1","e8cac5ce-0709-4411-9335-6bfb4abd60fb","{}"
