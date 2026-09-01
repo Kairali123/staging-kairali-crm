@@ -1,0 +1,900 @@
+/* BookingForm.css — Kairali KTAHV Booking Form Styles */
+/* Scoped to .kairali-booking-form to prevent CSS leakage into CRM */
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
+@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css');
+
+/* ─── Design Tokens ─────────────────────────────────────────────────── */
+.kairali-booking-form {
+  --k-green: #1e3a5f;
+  --k-green-mid: #254D3A;
+  --k-green-light: #2e6b4f;
+  --k-gold: #C9A84C;
+  --k-gold-hover: #b8943a;
+  --k-gold-light: #f5eacf;
+  --k-bg: #f7f8f6;
+  --k-white: #ffffff;
+  --k-text: #1a1a1a;
+  --k-text-muted: #6b7280;
+  --k-border: #d1d5db;
+  --k-radius: 8px;
+  --k-shadow: 0 2px 8px rgba(0, 0, 0, .10);
+  --k-shadow-md: 0 4px 16px rgba(0, 0, 0, .14);
+  --k-danger: #d32f2f;
+  --k-success: #2e7d32;
+  --k-info: #1565c0;
+
+  font-family: 'DM Sans', sans-serif;
+  background: var(--k-bg);
+  color: var(--k-text);
+  min-height: 100vh;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Inner content wrapper — holds the form body with padding, while the hero
+   banner above it bleeds edge-to-edge via its negative margins (mirrors the
+   Meeting Insights page structure). */
+.kairali-booking-form .kbf-content {
+  padding: 4px 16px 60px;
+}
+
+/* ─── Loader Overlay ─────────────────────────────────────────────────── */
+.kairali-booking-form .kbf-loader {
+  position: fixed;
+  inset: 0;
+  background: rgba(27, 58, 43, .85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  gap: 16px;
+}
+
+.kairali-booking-form .kbf-loader-spinner {
+  width: 52px;
+  height: 52px;
+  border: 5px solid rgba(201, 168, 76, .3);
+  border-top-color: var(--k-gold);
+  border-radius: 50%;
+  animation: kbf-spin .8s linear infinite;
+}
+
+.kairali-booking-form .kbf-loader-text {
+  color: var(--k-gold-light);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+/* ─── Thank You Modal ────────────────────────────────────────────────── */
+.kairali-booking-form .kbf-thankyou-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, .55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 20px;
+}
+
+.kairali-booking-form .kbf-thankyou-modal {
+  background: #fff;
+  border-radius: 14px;
+  padding: 40px 36px 28px;
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .25);
+  animation: kbf-thankyou-pop .25s ease-out;
+}
+
+@keyframes kbf-thankyou-pop {
+  from {
+    transform: scale(.92);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.kairali-booking-form .kbf-thankyou-icon {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: #d5f3e0;
+  color: #16a34a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  margin: 0 auto 20px;
+}
+
+.kairali-booking-form .kbf-thankyou-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 8px;
+}
+
+.kairali-booking-form .kbf-thankyou-msg {
+  font-size: 14.5px;
+  color: #6b7280;
+  line-height: 1.5;
+  margin: 0 0 24px;
+}
+
+.kairali-booking-form .kbf-thankyou-btn {
+  background: #16a34a;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  transition: background .2s;
+}
+
+.kairali-booking-form .kbf-thankyou-btn:hover {
+  background: #15803d;
+}
+
+.kairali-booking-form .kbf-thankyou-countdown {
+  font-size: 12.5px;
+  color: #9ca3af;
+  margin: 14px 0 0;
+}
+
+@keyframes kbf-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ─── Banner ─────────────────────────────────────────────────────────── */
+.kairali-booking-form .kbf-banner {
+  width: 100%;
+  max-height: 200px;
+  object-fit: cover;
+  border-radius: var(--k-radius) var(--k-radius) 0 0;
+}
+
+/* ─── Page Wrapper ───────────────────────────────────────────────────── */
+/* kbf-wrapper removed — padding now lives directly on .kairali-booking-form
+   (see Design Tokens block above) so the form fills the full available width. */
+
+/* ─── Form Type Toggle ───────────────────────────────────────────────── */
+.kairali-booking-form .kbf-type-toggle {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  padding: 20px 0 10px;
+}
+
+.kairali-booking-form .kbf-type-btn {
+  padding: 10px 28px;
+  border: 2px solid var(--k-gold);
+  background: transparent;
+  color: var(--k-gold);
+  border-radius: 50px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: all .2s;
+}
+
+.kairali-booking-form .kbf-type-btn.active,
+.kairali-booking-form .kbf-type-btn:hover:not(:disabled) {
+  background: var(--k-gold);
+  color: var(--k-green);
+}
+
+.kairali-booking-form .kbf-type-btn:disabled {
+  background: transparent;
+  border-color: var(--k-border);
+  color: var(--k-text-muted);
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ─── Step Tabs ─────────────────────────────────────────────────────── */
+.kairali-booking-form .kbf-step-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 0 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(30, 58, 95);
+  border-bottom: 2px solid var(--k-border);
+  margin-bottom: 24px;
+}
+
+.kairali-booking-form .kbf-step-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--k-text-muted);
+  cursor: not-allowed;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: all .2s;
+  user-select: none;
+}
+
+.kairali-booking-form .kbf-step-tab.enabled {
+  cursor: pointer;
+  color: var(--k-green);
+}
+
+.kairali-booking-form .kbf-step-tab.active {
+  color: white;
+  background: #1e3a5f;
+  border-radius: 6px 6px 0 0;
+  border-bottom-color: #1e3a5f;
+  font-weight: 600;
+}
+
+.kairali-booking-form .kbf-step-tab.enabled:hover:not(.active) {
+  color: white;
+  background: #1e3a5f;
+  border-radius: 6px 6px 0 0;
+}
+
+.kairali-booking-form .kbf-step-tab i {
+  font-size: 14px;
+}
+
+/* ─── Step Card ─────────────────────────────────────────────────────── */
+.kairali-booking-form .kbf-card {
+  background: var(--k-white);
+  border-radius: var(--k-radius);
+  box-shadow: var(--k-shadow);
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+/* .kairali-booking-form .kbf-card-header {
+  background: linear-gradient(135deg, var(--k-green) 0%, var(--k-green-mid) 100%);
+  padding: 18px 24px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--k-white);
+} */
+
+.kairali-booking-form .kbf-card-header {
+  background: linear-gradient(to right, #eff6ff, #fff, #eef2ff);
+  padding: 12px 18px;
+  border-bottom: 1px solid #e2e8f0;
+  align-items: center;
+  /* justify-content: space-between; */
+  color: #1e3a5f;
+  gap: 10px;
+  display: flex;
+}
+
+.kairali-booking-form .kbf-card-step-no {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #1e3a5f;
+  color: white;
+  font-weight: 700;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.kairali-booking-form .kbf-card-header h2 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e3a5f;
+  text-transform: uppercase;
+}
+
+.kairali-booking-form .kbf-card-header i {
+  font-size: 20px;
+  color: #1e3a5f;
+}
+
+.kairali-booking-form .kbf-card-body {
+  padding: 24px;
+}
+
+/* ─── Form Grid ─────────────────────────────────────────────────────── */
+.kairali-booking-form .kbf-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+  margin-bottom: 18px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.kairali-booking-form .kbf-row1 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  margin-bottom: 18px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 3-column layout rows */
+.kairali-booking-form .kbf-row.cols-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* 2-column layout rows */
+.kairali-booking-form .kbf-row.cols-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+/* 1-column layout rows */
+.kairali-booking-form .kbf-row.cols-1 {
+  grid-template-columns: 1fr;
+}
+
+.kairali-booking-form .kbf-col-full {
+  grid-column: 1 / -1;
+}
+
+.kairali-booking-form .kbf-col-full.kbf-group {
+  grid-column: 1 / -1;
+}
+
+.kairali-booking-form .kbf-col-2 {
+  grid-column: span 2;
+}
+
+.kairali-booking-form .kbf-col-2.kbf-group {
+  grid-column: span 2;
+}
+
+/* ─── Form Controls ─────────────────────────────────────────────────── */
+.kairali-booking-form .kbf-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kairali-booking-form .kbf-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--k-text);
+}
+
+.kairali-booking-form .kbf-label.required::after {
+  content: ' *';
+  color: var(--k-danger);
+}
+
+.kairali-booking-form .kbf-input,
+.kairali-booking-form .kbf-select,
+.kairali-booking-form .kbf-textarea {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1.5px solid var(--k-border);
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: 'DM Sans', sans-serif;
+  color: var(--k-text);
+  background: var(--k-white);
+  transition: border-color .2s, box-shadow .2s;
+  box-sizing: border-box;
+}
+
+.kairali-booking-form .kbf-input:focus,
+.kairali-booking-form .kbf-select:focus,
+.kairali-booking-form .kbf-textarea:focus {
+  outline: none;
+  border-color: var(--k-green);
+  box-shadow: 0 0 0 3px rgba(27, 58, 43, .1);
+}
+
+.kairali-booking-form .kbf-input.error,
+.kairali-booking-form .kbf-select.error {
+  border-color: var(--k-danger);
+}
+
+.kairali-booking-form .kbf-input:disabled,
+.kairali-booking-form .kbf-select:disabled {
+  background: #f0f0f0;
+  color: #888;
+  cursor: not-allowed;
+}
+
+.kairali-booking-form .kbf-input[readonly] {
+  background: #fafafa;
+  cursor: default;
+}
+
+.kairali-booking-form .kbf-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.kairali-booking-form .kbf-error-text {
+  color: var(--k-danger);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.kairali-booking-form .kbf-info-text {
+  color: var(--k-text-muted);
+  font-size: 11px;
+  margin-top: 2px;
+  font-style: italic;
+}
+
+/* ─── Radio / Checkbox row ───────────────────────────────────────────── */
+.kairali-booking-form .kbf-radio-group {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding-top: 4px;
+}
+
+.kairali-booking-form .kbf-radio-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.kairali-booking-form .kbf-radio-label input[type="radio"],
+.kairali-booking-form .kbf-radio-label input[type="checkbox"] {
+  accent-color: var(--k-green);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
+/* ─── Country Code + Number Row ─────────────────────────────────────── */
+.kairali-booking-form .kbf-phone-row {
+  display: flex;
+  gap: 8px;
+}
+
+.kairali-booking-form .kbf-phone-row .kbf-select {
+  min-width: 130px;
+  width: auto;
+  max-width: 165px;
+  flex-shrink: 0;
+  flex-grow: 0;
+}
+
+.kairali-booking-form .kbf-phone-row .kbf-input {
+  flex: 1;
+}
+
+/* ─── Room Capacity Banner ───────────────────────────────────────────── */
+.kairali-booking-form .kbf-capacity-bar {
+  background: #e8f5e9;
+  border-left: 4px solid var(--k-success);
+  padding: 12px 16px;
+  border-radius: 0 6px 6px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--k-success);
+  margin: 12px 0;
+}
+
+.kairali-booking-form .kbf-capacity-bar.warning {
+  background: #fff3e0;
+  border-left-color: #e65100;
+  color: #e65100;
+}
+
+.kairali-booking-form .kbf-capacity-bar.danger {
+  background: #ffebee;
+  border-left-color: var(--k-danger);
+  color: var(--k-danger);
+}
+
+/* ─── Guest Section Panel ────────────────────────────────────────────── */
+.kairali-booking-form .kbf-guest-panel {
+  border: 1px solid var(--k-border);
+  border-radius: var(--k-radius);
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.kairali-booking-form .kbf-guest-panel-header {
+  background: linear-gradient(to right, #0b8578, #0c988f, #4e88b5, #7a2df3);
+  border-bottom: 1px solid var(--k-border);
+  padding: 10px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  font-size: 14px;
+  color: white;
+}
+
+.kairali-booking-form .kbf-guest-panel-body {
+  padding: 16px;
+}
+
+/* ─── Add/Remove Guest Buttons ───────────────────────────────────────── */
+.kairali-booking-form .kbf-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  background: linear-gradient(to right, #1e3a5f, #1d4ed8);
+  color: var(--k-white);
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .2s;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.kairali-booking-form .kbf-add-btn:hover {
+  background: var(--k-green-mid);
+}
+
+.kairali-booking-form .kbf-remove-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  background: white;
+  color: var(--k-danger);
+  border: 1.5px solid var(--k-danger);
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: all .2s;
+}
+
+.kairali-booking-form .kbf-remove-btn:hover {
+  background: var(--k-danger);
+  color: white;
+}
+
+/* ─── Copy from Primary Button ───────────────────────────────────────── */
+.kairali-booking-form .kbf-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  background: white;
+  color: var(--k-green);
+  border: 1.5px solid var(--k-green);
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: all .2s;
+}
+
+.kairali-booking-form .kbf-copy-btn:hover {
+  background: var(--k-green);
+  color: white;
+}
+
+/* ─── Health Info Textarea Full Width ─────────────────────────────────── */
+.kairali-booking-form .kbf-health-textarea {
+  width: 100%;
+  min-height: 100px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+/* ─── Payment Breakdown Table ────────────────────────────────────────── */
+.kairali-booking-form .kbf-payment-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.kairali-booking-form .kbf-payment-table th {
+  background: var(--k-green);
+  color: var(--k-white);
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 600;
+}
+
+.kairali-booking-form .kbf-payment-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--k-border);
+  vertical-align: middle;
+}
+
+.kairali-booking-form .kbf-payment-table tr:last-child td {
+  border-bottom: none;
+}
+
+.kairali-booking-form .kbf-payment-table .kbf-total-row td {
+  font-weight: 700;
+  color: var(--k-green);
+  background: var(--k-gold-light);
+}
+
+.kairali-booking-form .kbf-payment-table input,
+.kairali-booking-form .kbf-payment-table select {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--k-border);
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: 'DM Sans', sans-serif;
+}
+
+/* ─── Section Divider ────────────────────────────────────────────────── */
+.kairali-booking-form .kbf-section-divider {
+  border: none;
+  border-top: 1.5px solid var(--k-border);
+  margin: 20px 0;
+}
+
+.kairali-booking-form .kbf-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--k-green);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kairali-booking-form .kbf-section-title i {
+  color: #183172;
+}
+
+/* ─── Screenshot Upload ───────────────────────────────────────────────── */
+.kairali-booking-form .kbf-file-upload {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.kairali-booking-form .kbf-file-name {
+  font-size: 13px;
+  color: var(--k-text-muted);
+  font-style: italic;
+}
+
+/* ─── Lock/Checkbox Toggle Row ────────────────────────────────────────── */
+.kairali-booking-form .kbf-lock-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--k-text-muted);
+  cursor: pointer;
+}
+
+.kairali-booking-form .kbf-lock-row input {
+  accent-color: #1e3a5f;
+}
+
+/* ─── Navigation Buttons ──────────────────────────────────────────────── */
+.kairali-booking-form .kbf-nav-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1.5px solid var(--k-border);
+  margin-top: 8px;
+}
+
+.kairali-booking-form .kbf-btn-prev {
+  padding: 10px 24px;
+  background: transparent;
+  border: 2px solid var(--k-border);
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--k-text-muted);
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: all .2s;
+}
+
+.kairali-booking-form .kbf-btn-prev:hover {
+  border-color: var(--k-green);
+  color: var(--k-green);
+}
+
+.kairali-booking-form .kbf-btn-next,
+.kairali-booking-form .kbf-btn-submit {
+  padding: 10px 28px;
+  background: linear-gradient(to right, rgb(30, 58, 95), rgb(29, 78, 216));
+  border: none;
+  border-radius: 6px;
+  color: var(--k-white);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: opacity .2s, transform .1s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kairali-booking-form .kbf-btn-next:hover,
+.kairali-booking-form .kbf-btn-submit:hover {
+  opacity: .9;
+}
+
+.kairali-booking-form .kbf-btn-next:active,
+.kairali-booking-form .kbf-btn-submit:active {
+  transform: scale(.98);
+}
+
+.kairali-booking-form .kbf-btn-submit {
+  background: linear-gradient(to right, rgb(30, 58, 95), rgb(29, 78, 216));
+  color: white;
+}
+
+/* ─── Alert / Info Box ────────────────────────────────────────────────── */
+.kairali-booking-form .kbf-alert {
+  padding: 12px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.kairali-booking-form .kbf-alert.success {
+  background: #e8f5e9;
+  color: var(--k-success);
+}
+
+.kairali-booking-form .kbf-alert.error {
+  background: #ffebee;
+  color: var(--k-danger);
+}
+
+.kairali-booking-form .kbf-alert.info {
+  background: #e3f2fd;
+  color: var(--k-info);
+}
+
+.kairali-booking-form .kbf-alert.warning {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+/* ─── Review Summary ──────────────────────────────────────────────────── */
+.kairali-booking-form .kbf-review-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.kairali-booking-form .kbf-review-table th {
+  background: #1e3a5f;
+  color: var(--k-white);
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.kairali-booking-form .kbf-review-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--k-border);
+}
+
+.kairali-booking-form .kbf-review-table td:first-child {
+  font-weight: 500;
+  color: var(--k-text-muted);
+  width: 40%;
+}
+
+/* ─── Pax Amount Inputs ───────────────────────────────────────────────── */
+.kairali-booking-form .kbf-pax-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.kairali-booking-form .kbf-pax-row label {
+  min-width: 60px;
+  color: var(--k-text-muted);
+}
+
+/* ─── Responsive ──────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .kairali-booking-form .kbf-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .kairali-booking-form .kbf-row.cols-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .kairali-booking-form .kbf-col-2 {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 768px) {
+  .kairali-booking-form .kbf-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .kairali-booking-form .kbf-row.cols-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .kairali-booking-form .kbf-col-2 {
+    grid-column: span 2;
+  }
+
+  .kairali-booking-form .kbf-card-body {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+
+  .kairali-booking-form .kbf-row,
+  .kairali-booking-form .kbf-row.cols-3,
+  .kairali-booking-form .kbf-row.cols-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .kairali-booking-form .kbf-col-2 {
+    grid-column: 1;
+  }
+
+  .kairali-booking-form .kbf-type-btn {
+    padding: 8px 18px;
+    font-size: 13px;
+  }
+
+  .kairali-booking-form .kbf-step-tab {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .kairali-booking-form .kbf-step-tab i {
+    display: none;
+  }
+}
+
+/* Disabled submit button — applies at ALL screen sizes, not just mobile */
+.kairali-booking-form .kbf-btn-submit:disabled,
+.kairali-booking-form .kbf-btn-submit[disabled] {
+  background: #9ca3af !important;
+  /* gray-400 */
+  border-color: #9ca3af !important;
+  color: #f3f4f6 !important;
+  cursor: not-allowed !important;
+  opacity: 0.75;
+  pointer-events: none;
+  /* extra safety: blocks clicks at the CSS layer too */
+}

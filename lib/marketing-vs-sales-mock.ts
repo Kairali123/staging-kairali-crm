@@ -1,0 +1,312 @@
+export const marketingVsSalesMockData = {
+  kpis: {
+    totalLeads: 21865,
+    convertedLeads: 4469,
+    conversionRate: 0.204,
+    revenueINR: 13925149,
+    roiPct: 10,
+    trends: {
+      totalLeads: [1800, 1850, 1905, 2000, 2055, 2100, 2200, 2300, 2400, 2500, 2600, 2560],
+      convertedLeads: [360, 365, 372, 390, 400, 410, 430, 445, 460, 470, 485, 482],
+      revenueINR: [
+        850000, 900000, 950000, 980000, 1000000, 1050000, 1100000, 1200000, 1300000, 1450000, 1600000, 1550000,
+      ],
+    },
+    planVsActual: {
+      totalLeads: { plan: 21500, actual: 21865 },
+      convertedLeads: { plan: 4400, actual: 4469 },
+      revenueINR: { plan: 13800000, actual: 13925149 },
+      conversionRate: { plan: 0.2, actual: 0.204 },
+      roiPct: { plan: 9, actual: 10 },
+    },
+    mom: {
+      totalLeads: 2.1,
+      convertedLeads: 1.8,
+      conversionRate: 0.4,
+      revenueINR: 3.2,
+      roiPct: 0.5,
+    },
+  },
+  channels: [
+    {
+      id: "facebook_ads",
+      label: "Facebook/Instagram Ads",
+      metrics: {
+        leads: { plan: 4200, actual: 4350, deltaPct: 3.6 },
+        converted: { plan: 780, actual: 820, deltaPct: 5.1 },
+        conversionRate: { plan: 18.5, actual: 18.9, deltaPct: 2.2 },
+        revenueINR: { plan: 2400000, actual: 2480000, deltaPct: 3.3 },
+        roiPct: { plan: 12, actual: 13, deltaPct: 8.3 },
+      },
+      trend12mo: [17, 17.5, 18, 18.2, 18.5, 18.8, 19, 19.2, 19.1, 18.9, 19.0, 18.9],
+    },
+    {
+      id: "ivr",
+      label: "IVR",
+      metrics: {
+        leads: { plan: 3000, actual: 2950, deltaPct: -1.7 },
+        converted: { plan: 600, actual: 575, deltaPct: -4.2 },
+        conversionRate: { plan: 20, actual: 19.5, deltaPct: -2.5 },
+        revenueINR: { plan: 1800000, actual: 1740000, deltaPct: -3.3 },
+        roiPct: { plan: 10, actual: 9, deltaPct: -10 },
+      },
+      trend12mo: [20.2, 20, 19.8, 19.7, 19.6, 19.5, 19.5, 19.6, 19.6, 19.5, 19.5, 19.5],
+    },
+    {
+      id: "website_organic",
+      label: "Website (Organic)",
+      metrics: {
+        leads: { plan: 3600, actual: 3705, deltaPct: 2.9 },
+        converted: { plan: 750, actual: 770, deltaPct: 2.7 },
+        conversionRate: { plan: 20.8, actual: 20.8, deltaPct: 0 },
+        revenueINR: { plan: 2100000, actual: 2140000, deltaPct: 1.9 },
+        roiPct: { plan: 15, actual: 15, deltaPct: 0 },
+      },
+      trend12mo: [20, 20.1, 20.2, 20.5, 20.7, 20.8, 20.8, 20.9, 21, 20.9, 20.8, 20.8],
+    },
+    {
+      id: "google_ppc",
+      label: "Google PPC",
+      metrics: {
+        leads: { plan: 3800, actual: 3920, deltaPct: 3.2 },
+        converted: { plan: 710, actual: 740, deltaPct: 4.2 },
+        conversionRate: { plan: 18.7, actual: 18.9, deltaPct: 1.1 },
+        revenueINR: { plan: 2300000, actual: 2370000, deltaPct: 3.0 },
+        roiPct: { plan: 11, actual: 12, deltaPct: 9.1 },
+      },
+      trend12mo: [18.2, 18.3, 18.5, 18.6, 18.7, 18.8, 18.9, 19, 19, 18.9, 18.9, 18.9],
+    },
+    {
+      id: "reference",
+      label: "Reference",
+      metrics: {
+        leads: { plan: 1600, actual: 1580, deltaPct: -1.3 },
+        converted: { plan: 520, actual: 510, deltaPct: -1.9 },
+        conversionRate: { plan: 32.5, actual: 32.3, deltaPct: -0.6 },
+        revenueINR: { plan: 1450000, actual: 1430000, deltaPct: -1.4 },
+        roiPct: { plan: 20, actual: 19, deltaPct: -5 },
+      },
+      trend12mo: [31.5, 31.9, 32, 32.1, 32.2, 32.3, 32.5, 32.6, 32.4, 32.4, 32.3, 32.3],
+    },
+    {
+      id: "priya_sharma",
+      label: "Priya Sharma",
+      metrics: {
+        leads: { plan: 900, actual: 940, deltaPct: 4.4 },
+        converted: { plan: 260, actual: 275, deltaPct: 5.8 },
+        conversionRate: { plan: 28.9, actual: 29.3, deltaPct: 1.4 },
+        revenueINR: { plan: 780000, actual: 820000, deltaPct: 5.1 },
+        roiPct: { plan: 16, actual: 17, deltaPct: 6.3 },
+      },
+      trend12mo: [28, 28.2, 28.5, 28.8, 29, 29.1, 29.3, 29.4, 29.4, 29.3, 29.3, 29.3],
+    },
+    {
+      id: "online_order",
+      label: "Online Order",
+      metrics: {
+        leads: { plan: 1200, actual: 1180, deltaPct: -1.7 },
+        converted: { plan: 300, actual: 290, deltaPct: -3.3 },
+        conversionRate: { plan: 25, actual: 24.6, deltaPct: -1.6 },
+        revenueINR: { plan: 520000, actual: 505000, deltaPct: -2.9 },
+        roiPct: { plan: 9, actual: 8, deltaPct: -11.1 },
+      },
+      trend12mo: [25.2, 25.1, 25, 24.9, 24.8, 24.7, 24.7, 24.6, 24.6, 24.6, 24.6, 24.6],
+    },
+    {
+      id: "travel_agent",
+      label: "Travel Agent",
+      metrics: {
+        leads: { plan: 1600, actual: 1500, deltaPct: -6.3 },
+        converted: { plan: 320, actual: 300, deltaPct: -6.3 },
+        conversionRate: { plan: 20, actual: 20, deltaPct: 0 },
+        revenueINR: { plan: 880000, actual: 820000, deltaPct: -6.8 },
+        roiPct: { plan: 7, actual: 6, deltaPct: -14.3 },
+      },
+      trend12mo: [20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20],
+    },
+    {
+      id: "offline_advertising",
+      label: "Offline Advertising",
+      metrics: {
+        leads: { plan: 900, actual: 860, deltaPct: -4.4 },
+        converted: { plan: 135, actual: 125, deltaPct: -7.4 },
+        conversionRate: { plan: 15, actual: 14.5, deltaPct: -3.3 },
+        revenueINR: { plan: 380000, actual: 360000, deltaPct: -5.3 },
+        roiPct: { plan: 5, actual: 4, deltaPct: -20 },
+      },
+      trend12mo: [15.2, 15.1, 15, 14.9, 14.8, 14.7, 14.6, 14.6, 14.6, 14.5, 14.5, 14.5],
+    },
+    {
+      id: "events_workshops",
+      label: "Seminar/Webinar/Events/Workshop",
+      metrics: {
+        leads: { plan: 1100, actual: 1200, deltaPct: 9.1 },
+        converted: { plan: 250, actual: 280, deltaPct: 12 },
+        conversionRate: { plan: 22.7, actual: 23.3, deltaPct: 2.6 },
+        revenueINR: { plan: 600000, actual: 680000, deltaPct: 13.3 },
+        roiPct: { plan: 10, actual: 12, deltaPct: 20 },
+      },
+      trend12mo: [21, 21.5, 22, 22.2, 22.5, 22.8, 23, 23.2, 23.4, 23.5, 23.3, 23.3],
+    },
+    {
+      id: "third_party",
+      label: "Third Party Website",
+      metrics: {
+        leads: { plan: 950, actual: 980, deltaPct: 3.2 },
+        converted: { plan: 170, actual: 180, deltaPct: 5.9 },
+        conversionRate: { plan: 17.9, actual: 18.4, deltaPct: 2.8 },
+        revenueINR: { plan: 420000, actual: 445000, deltaPct: 6.0 },
+        roiPct: { plan: 8, actual: 9, deltaPct: 12.5 },
+      },
+      trend12mo: [17.2, 17.4, 17.6, 17.8, 18, 18.2, 18.3, 18.4, 18.4, 18.4, 18.4, 18.4],
+    },
+    {
+      id: "others",
+      label: "Others",
+      metrics: {
+        leads: { plan: 465, actual: 500, deltaPct: 7.5 },
+        converted: { plan: 135, actual: 154, deltaPct: 14.1 },
+        conversionRate: { plan: 29, actual: 30.8, deltaPct: 6.2 },
+        revenueINR: { plan: 250000, actual: 290000, deltaPct: 16 },
+        roiPct: { plan: 9, actual: 11, deltaPct: 22.2 },
+      },
+      trend12mo: [28, 28.5, 29, 29.2, 29.5, 29.9, 30.5, 30.8, 31, 30.9, 30.8, 30.8],
+    },
+  ],
+  overview: {
+    channelPerformance: [
+      { channelId: "facebook_ads", channel: "Facebook/Instagram Ads", totalLeads: 4350, convertedLeads: 820 },
+      { channelId: "ivr", channel: "IVR", totalLeads: 2950, convertedLeads: 575 },
+      { channelId: "website_organic", channel: "Website (Organic)", totalLeads: 3705, convertedLeads: 770 },
+      { channelId: "google_ppc", channel: "Google PPC", totalLeads: 3920, convertedLeads: 740 },
+      { channelId: "reference", channel: "Reference", totalLeads: 1580, convertedLeads: 510 },
+      {
+        channelId: "events_workshops",
+        channel: "Seminar/Webinar/Events/Workshop",
+        totalLeads: 1200,
+        convertedLeads: 280,
+      },
+    ],
+    funnel: { total: 21567, qualified: 4445, converted: 1786, followups: 500 },
+    geo: [
+      { state: "Kerala", leads: 5200, converted: 1100, revenueINR: 3200000 },
+      { state: "Karnataka", leads: 3800, converted: 760, revenueINR: 2100000 },
+      { state: "Maharashtra", leads: 4500, converted: 880, revenueINR: 2600000 },
+      { state: "Delhi", leads: 2600, converted: 530, revenueINR: 1500000 },
+      { state: "Tamil Nadu", leads: 2400, converted: 480, revenueINR: 1300000 },
+      { state: "Telangana", leads: 1600, converted: 340, revenueINR: 820000 },
+    ],
+  },
+  planning: {
+    leads: [
+      { period: "Jan", plan: 1800, actual: 1850 },
+      { period: "Feb", plan: 1850, actual: 1880 },
+      { period: "Mar", plan: 1900, actual: 1915 },
+      { period: "Apr", plan: 1950, actual: 2000 },
+      { period: "May", plan: 2000, actual: 2055 },
+      { period: "Jun", plan: 2050, actual: 2100 },
+      { period: "Jul", plan: 2100, actual: 2200 },
+      { period: "Aug", plan: 2200, actual: 2300 },
+      { period: "Sep", plan: 2300, actual: 2400 },
+      { period: "Oct", plan: 2400, actual: 2500 },
+      { period: "Nov", plan: 2500, actual: 2600 },
+      { period: "Dec", plan: 2550, actual: 2560 },
+    ],
+    leadsAndConversion: [
+      { period: "Jan", leadsPlan: 1800, leadsActual: 1850, convPlan: 360, convActual: 370 },
+      { period: "Feb", leadsPlan: 1850, leadsActual: 1880, convPlan: 365, convActual: 375 },
+      { period: "Mar", leadsPlan: 1900, leadsActual: 1915, convPlan: 372, convActual: 380 },
+      { period: "Apr", leadsPlan: 1950, leadsActual: 2000, convPlan: 390, convActual: 400 },
+      { period: "May", leadsPlan: 2000, leadsActual: 2055, convPlan: 400, convActual: 410 },
+      { period: "Jun", leadsPlan: 2050, leadsActual: 2100, convPlan: 410, convActual: 420 },
+      { period: "Jul", leadsPlan: 2100, leadsActual: 2200, convPlan: 420, convActual: 440 },
+      { period: "Aug", leadsPlan: 2200, leadsActual: 2300, convPlan: 440, convActual: 455 },
+      { period: "Sep", leadsPlan: 2300, leadsActual: 2400, convPlan: 460, convActual: 470 },
+      { period: "Oct", leadsPlan: 2400, leadsActual: 2500, convPlan: 480, convActual: 490 },
+      { period: "Nov", leadsPlan: 2500, leadsActual: 2600, convPlan: 500, convActual: 510 },
+      { period: "Dec", leadsPlan: 2550, leadsActual: 2560, convPlan: 510, convActual: 509 },
+    ],
+  },
+  perf: {
+    leadsVsRevenue: [
+      { date: "2025-01-01", leads: 60, revenueINR: 48000 },
+      { date: "2025-02-01", leads: 62, revenueINR: 52000 },
+      { date: "2025-03-01", leads: 65, revenueINR: 56000 },
+      { date: "2025-04-01", leads: 70, revenueINR: 60000 },
+      { date: "2025-05-01", leads: 72, revenueINR: 64000 },
+      { date: "2025-06-01", leads: 75, revenueINR: 68000 },
+      { date: "2025-07-01", leads: 78, revenueINR: 72000 },
+      { date: "2025-08-01", leads: 82, revenueINR: 78000 },
+      { date: "2025-09-01", leads: 85, revenueINR: 82000 },
+      { date: "2025-10-01", leads: 88, revenueINR: 90000 },
+      { date: "2025-11-01", leads: 92, revenueINR: 98000 },
+      { date: "2025-12-01", leads: 90, revenueINR: 95000 },
+    ],
+  },
+  trends: {
+    monthly: [
+      { month: "Jan", leadsPlan: 1800, leadsActual: 1850, convPlan: 360, convActual: 370 },
+      { month: "Feb", leadsPlan: 1850, leadsActual: 1880, convPlan: 365, convActual: 375 },
+      { month: "Mar", leadsPlan: 1900, leadsActual: 1915, convPlan: 372, convActual: 380 },
+      { month: "Apr", leadsPlan: 1950, leadsActual: 2000, convPlan: 390, convActual: 400 },
+      { month: "May", leadsPlan: 2000, leadsActual: 2055, convPlan: 400, convActual: 410 },
+      { month: "Jun", leadsPlan: 2050, leadsActual: 2100, convPlan: 410, convActual: 420 },
+      { month: "Jul", leadsPlan: 2100, leadsActual: 2200, convPlan: 420, convActual: 440 },
+      { month: "Aug", leadsPlan: 2200, leadsActual: 2300, convPlan: 440, convActual: 455 },
+      { month: "Sep", leadsPlan: 2300, leadsActual: 2400, convPlan: 460, convActual: 470 },
+      { month: "Oct", leadsPlan: 2400, leadsActual: 2500, convPlan: 480, convActual: 490 },
+      { month: "Nov", leadsPlan: 2500, leadsActual: 2600, convPlan: 500, convActual: 510 },
+      { month: "Dec", leadsPlan: 2550, leadsActual: 2560, convPlan: 510, convActual: 509 },
+    ],
+    quarterly: [
+      { fy: "FY2023", quarter: "Q1", leadsPlan: 5200, leadsActual: 5150, convPlan: 1040, convActual: 1020 },
+      { fy: "FY2023", quarter: "Q2", leadsPlan: 5400, leadsActual: 5450, convPlan: 1080, convActual: 1100 },
+      { fy: "FY2023", quarter: "Q3", leadsPlan: 5600, leadsActual: 5650, convPlan: 1120, convActual: 1130 },
+      { fy: "FY2023", quarter: "Q4", leadsPlan: 5800, leadsActual: 5750, convPlan: 1160, convActual: 1140 },
+      { fy: "FY2024", quarter: "Q1", leadsPlan: 6000, leadsActual: 6050, convPlan: 1200, convActual: 1210 },
+      { fy: "FY2024", quarter: "Q2", leadsPlan: 6200, leadsActual: 6180, convPlan: 1240, convActual: 1230 },
+      { fy: "FY2024", quarter: "Q3", leadsPlan: 6400, leadsActual: 6450, convPlan: 1280, convActual: 1290 },
+      { fy: "FY2024", quarter: "Q4", leadsPlan: 6600, leadsActual: 6580, convPlan: 1320, convActual: 1310 },
+      { fy: "FY2025", quarter: "Q1", leadsPlan: 6800, leadsActual: 6850, convPlan: 1360, convActual: 1370 },
+      { fy: "FY2025", quarter: "Q2", leadsPlan: 7000, leadsActual: 7050, convPlan: 1400, convActual: 1410 },
+      { fy: "FY2025", quarter: "Q3", leadsPlan: 7200, leadsActual: 7150, convPlan: 1440, convActual: 1420 },
+      { fy: "FY2025", quarter: "Q4", leadsPlan: 7400, leadsActual: 7350, convPlan: 1480, convActual: 1470 },
+    ],
+  },
+  revenue: {
+    bySource: [
+      { source: "Facebook/Instagram Ads", revenueINR: 2480000 },
+      { source: "Google PPC", revenueINR: 2370000 },
+      { source: "Website (Organic)", revenueINR: 2140000 },
+      { source: "Reference", revenueINR: 1430000 },
+      { source: "Priya Sharma", revenueINR: 820000 },
+      { source: "Travel Agent", revenueINR: 820000 },
+      { source: "Seminar/Webinar/Events/Workshop", revenueINR: 680000 },
+      { source: "Third Party Website", revenueINR: 445000 },
+      { source: "Online Order", revenueINR: 505000 },
+      { source: "Offline Advertising", revenueINR: 360000 },
+      { source: "Others", revenueINR: 290000 },
+    ],
+  },
+}
+
+// Helper formatters
+export const formatCurrency = (value: number) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(value)
+
+export const formatPercent = (value: number) =>
+  new Intl.NumberFormat("en-IN", {
+    maximumFractionDigits: 1,
+  }).format(value) + "%"
+
+export const formatPercentDecimal = (value: number) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "percent",
+    maximumFractionDigits: 1,
+  }).format(value)
+
+export const formatNumber = (value: number) => new Intl.NumberFormat("en-IN").format(value)

@@ -1,0 +1,40 @@
+[
+  {
+    "Lead_ID": "20260420_0fdbf268",
+    "Rejection_Reason": "test",
+    "Business_Name": "test",
+    "Contact_Person": "Amitesh Jha",
+    "Email": "test@gmail.com",
+    "Phone": "7700853538",
+    "Country": "India",
+    "Category": "G",
+    "Client_Stage": "",
+    "Priority": "",
+    "Assigned_To": "Harpal Singh",
+    "Potential_Business_Rs": "5000000",
+    "Rejected_By_Name": "Satyam Kumar",
+    "Rejected_By_ID": "10",
+    "Timestamp": "2026-04-20T08:34:38.868Z",
+    "Rejected_At": "2026-04-20T08:34:38.850Z",
+    "_rowIndex": 2
+  },
+  {
+    "Lead_ID": "20260420_f5531648",
+    "Rejection_Reason": "test",
+    "Business_Name": "TEST",
+    "Contact_Person": "Varun Chauhan Designer Kairali",
+    "Email": "designer@kairali.com",
+    "Phone": "8700236209",
+    "Country": "India",
+    "Category": "M",
+    "Client_Stage": "",
+    "Priority": "",
+    "Assigned_To": "Harpal Singh",
+    "Potential_Business_Rs": "100000",
+    "Rejected_By_Name": "Satyam Kumar",
+    "Rejected_By_ID": "10",
+    "Timestamp": "2026-04-20T06:17:42.525Z",
+    "Rejected_At": "2026-04-20T06:17:42.510Z",
+    "_rowIndex": 3
+  }
+]

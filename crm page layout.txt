@@ -1,0 +1,330 @@
+"use client"
+
+import React, { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { DashboardLayout } from "@/components/dashboard-layout"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useAuth } from "@/hooks/use-auth"
+import Loader from "@/components/Loader"
+import { Badge } from "@/components/ui/badge"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
+  Users,
+  Search,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Calendar,
+  CheckCircle,
+  TableIcon,
+  Filter,
+  RefreshCw,
+  FileText,
+  AlertCircle,
+  Check,
+  XCircle,
+  ExternalLink,
+  PhoneCall
+} from "lucide-react"
+
+export default function EnquiryReverificationPage() {
+  const { user, isLoading, hasPermission } = useAuth()
+  const router = useRouter()
+
+  // State variables matching the leads/assign style
+  const [searchInput, setSearchInput] = useState("")
+  const [dateFilter, setDateFilter] = useState<
+    "all" | "today" | "yesterday" | "this_week" | "last_week" |
+    "this_month" | "last_month" | "this_year" | "last_year" | "custom"
+  >("this_week")
+  
+  const [selectedCompany, setSelectedCompany] = useState("ALL")
+  const [sourceFilter, setSourceFilter] = useState("all")
+  const [priorityFilter, setPriorityFilter] = useState("all")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [customDateRange, setCustomDateRange] = useState({ start: "", end: "" })
+  
+  const [isFilterFetching, setIsFilterFetching] = useState(false)
+  const [totalEnquiries, setTotalEnquiries] = useState(0)
+
+  // Redirect if not authenticated or lacks permission
+  useEffect(() => {
+    if (!isLoading && !user) {
+      router.push("/dashboard")
+    }
+  }, [user, isLoading, router])
+
+  if (isLoading || !user) {
+    return <Loader isLoading={true} contentOnly />
+  }
+
+  return (
+    <>
+      <Loader isLoading={isFilterFetching} contentOnly />
+      <div className="space-y-6">
+        
+        {/* Hero Header Section with Back Button */}
+        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 border-b border-blue-500 shadow-[0_8px_30px_rgba(59,130,246,0.35)] rounded-lg overflow-hidden">
+          <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
+
+            {/* Back Button */}
+            <button
+              onClick={() => window.history.back()}
+              className="mb-4 flex items-center gap-2 rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur-sm border border-white/20 hover:bg-white/20 transition-colors"
+            >
+              ← Back
+            </button>
+
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+
+              {/* Left Section - Title */}
+              <div className="space-y-3 w-full">
+                <div className="flex items-start sm:items-center gap-4">
+
+                  {/* Icon Container */}
+                  <div className="h-12 w-12 sm:h-14 sm:w-14 lg:h-16 lg:w-16 bg-white/20 backdrop-blur-sm rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg border border-white/30 flex-shrink-0">
+                    <CheckCircle className="h-6 w-6 sm:h-7 sm:w-7 lg:h-9 lg:w-9 text-white" />
+                  </div>
+
+                  {/* Title & Subtitle */}
+                  <div className="min-w-0 flex-1">
+                    <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white tracking-tight leading-tight break-words">
+                      Enquiry Reverification Hub
+                    </h1>
+                    <p className="text-sm sm:text-base lg:text-lg text-white/90 mt-1 sm:mt-2 font-medium">
+                      Reverify, audit and follow up on inbound customer enquiries
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Section - KPI Card */}
+              <div className="flex w-full lg:w-auto justify-start lg:justify-end">
+                <div className="w-full sm:w-auto text-left sm:text-right bg-white/10 backdrop-blur-sm rounded-lg p-3 sm:p-4 border border-white/20">
+                  <p className="text-xs uppercase tracking-wide text-white/70 font-semibold mb-1">
+                    Total Enquiries
+                  </p>
+                  <p className="text-3xl sm:text-4xl font-bold text-white tabular-nums">
+                    {totalEnquiries}
+                  </p>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        {/* Advanced Filters Card */}
+        <div className="mt-2">
+          <div className="rounded-xl border border-slate-200 bg-white shadow-md">
+
+            {/* HEADER */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-4 sm:px-5 py-4 bg-gradient-to-r from-blue-100 via-white to-indigo-100 border-b border-slate-200">
+
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-700 flex items-center justify-center shadow-md border border-blue-700/30">
+                  <Search className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                </div>
+
+                <div>
+                  <h3 className="text-sm sm:text-base font-semibold text-slate-900 leading-tight">
+                    Filters & Search
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Locate and refine enquiries for reverification
+                  </p>
+                </div>
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSearchInput("")
+                  setDateFilter("this_week")
+                  setSelectedCompany("ALL")
+                  setSourceFilter("all")
+                  setPriorityFilter("all")
+                  setStatusFilter("all")
+                  setCustomDateRange({ start: "", end: "" })
+                }}
+                className="w-full sm:w-auto bg-white border-slate-300 text-slate-700 font-medium hover:bg-blue-100"
+              >
+                Clear Filters
+              </Button>
+            </div>
+
+            {/* CONTENT */}
+            <div className="px-4 sm:px-5 py-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+
+                {/* SEARCH */}
+                <div className="flex flex-col gap-1.5 lg:col-span-2">
+                  <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Search Enquiries
+                  </label>
+                  <Input
+                    placeholder="Search by ID, name, email, phone..."
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    className="h-10 w-full rounded-md border-gray-300"
+                  />
+                </div>
+
+                {/* DATE RANGE */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Date Range
+                  </label>
+                  <Select value={dateFilter} onValueChange={setDateFilter}>
+                    <SelectTrigger className="h-10 w-full rounded-md border-gray-300">
+                      <SelectValue placeholder="All Dates" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="today">Today</SelectItem>
+                      <SelectItem value="yesterday">Yesterday</SelectItem>
+                      <SelectItem value="this_week">This Week</SelectItem>
+                      <SelectItem value="last_week">Last Week</SelectItem>
+                      <SelectItem value="this_month">This Month</SelectItem>
+                      <SelectItem value="last_month">Last Month</SelectItem>
+                      <SelectItem value="this_year">This Year</SelectItem>
+                      <SelectItem value="last_year">Last Year</SelectItem>
+                      <SelectItem value="custom">Custom</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* COMPANY */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Company
+                  </label>
+                  <Select value={selectedCompany} onValueChange={setSelectedCompany}>
+                    <SelectTrigger className="h-10 w-full rounded-md border-gray-300">
+                      <SelectValue placeholder="All Companies" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">All</SelectItem>
+                      <SelectItem value="KTAHV">KTAHV</SelectItem>
+                      <SelectItem value="KAPPL">KAPPL</SelectItem>
+                      <SelectItem value="VILLARAAG">VILLARAAG</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* SOURCE */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Source
+                  </label>
+                  <Select value={sourceFilter} onValueChange={setSourceFilter}>
+                    <SelectTrigger className="h-10 w-full rounded-md border-gray-300">
+                      <SelectValue placeholder="All Sources" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="facebook">Facebook</SelectItem>
+                      <SelectItem value="google">Google</SelectItem>
+                      <SelectItem value="website">Website</SelectItem>
+                      <SelectItem value="others">Others</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* REVERIFICATION STATUS */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Reverify Status
+                  </label>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="h-10 w-full rounded-md border-gray-300">
+                      <SelectValue placeholder="All Statuses" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="verified">Verified</SelectItem>
+                      <SelectItem value="failed">Failed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+              </div>
+
+              {/* CUSTOM DATE RANGE */}
+              {dateFilter === "custom" && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-200">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Start Date
+                    </label>
+                    <Input
+                      type="date"
+                      value={customDateRange.start}
+                      onChange={(e) =>
+                        setCustomDateRange({ ...customDateRange, start: e.target.value })
+                      }
+                      className="h-10 w-full rounded-md border-gray-300"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      End Date
+                    </label>
+                    <Input
+                      type="date"
+                      value={customDateRange.end}
+                      onChange={(e) =>
+                        setCustomDateRange({ ...customDateRange, end: e.target.value })
+                      }
+                      className="h-10 w-full rounded-md border-gray-300"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Data Table / Content Shell */}
+        <div className="rounded-xl border border-slate-200 bg-white shadow-md overflow-hidden">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-4 sm:px-5 py-4 bg-gradient-to-r from-slate-50 via-white to-blue-50/20 border-b border-slate-200">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-blue-100 flex items-center justify-center border border-blue-200">
+                <TableIcon className="w-4 h-4 sm:w-5 sm:h-5 text-blue-700" />
+              </div>
+              <div>
+                <h3 className="text-sm sm:text-base font-semibold text-slate-900 leading-tight">
+                  Enquiries List
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Pending reverification queue
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-8 text-center text-slate-500 flex flex-col items-center justify-center gap-2">
+            <FileText className="h-12 w-12 text-slate-300" />
+            <p className="font-semibold text-slate-700">No Enquiry Data Displayed</p>
+            <p className="text-xs text-slate-400 max-w-md">
+              The layout is ready. In the next step, we will implement the data fetching mechanism and the interactive reverification data table here.
+            </p>
+          </div>
+        </div>
+
+      </div>
+    </>
+  )
+}

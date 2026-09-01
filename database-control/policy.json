@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "program": "CARMA-DB",
+  "sprintWorkingDays": 5,
+  "discoverAllRegisteredSystemsEveryDay": true,
+  "minimumDailyCases": 25,
+  "workWavesPerDay": 3,
+  "caseLimit": null,
+  "humanDecisionLimit": null,
+  "ownerMayExpandCaseCount": true,
+  "ownerMayTakeAdditionalDecisions": true,
+  "maxAutomaticWritesPerRun": 10,
+  "companyQueues": ["KAPPL", "KTAHV", "Cross-company", "Unmapped"],
+  "roles": {
+    "accountableOwner": {
+      "name": "Satyam",
+      "github": "chauhansatyam",
+      "emailRole": "established_satyam_addresses"
+    },
+    "independentVerifier": {
+      "name": "Sunaj",
+      "github": "Kairali123",
+      "emailRole": "sysadmin"
+    },
+    "sponsor": {
+      "name": "Abhilash",
+      "github": "AbhilashKairali",
+      "notification": "material_escalation_and_final_digest"
+    },
+    "automationOwner": {
+      "name": "CARMA-DB AI"
+    }
+  },
+  "confidence": {
+    "automaticRepositoryWriteMinimum": 0.95,
+    "independentReviewMinimum": 0.75
+  },
+  "automaticActions": [
+    "read_only_repository_scan",
+    "read_only_metadata_scan",
+    "rank_and_classify",
+    "prepare_evidence_packet",
+    "draft_query_or_application_patch",
+    "update_repository_metadata",
+    "run_regression_tests",
+    "create_backup_manifest",
+    "open_or_update_github_issue",
+    "open_draft_pull_request",
+    "monitor_post_change_health"
+  ],
+  "automaticRepositoryWriteControls": {
+    "productionDatabaseWriteAllowed": false,
+    "backupRequired": true,
+    "rollbackRequired": true,
+    "regressionTestRequired": true,
+    "auditEventRequired": true,
+    "allowedClasses": [
+      "repository_metadata",
+      "documentation",
+      "tested_query_code_repair",
+      "tested_database_observability_code",
+      "test_and_fixture_repair"
+    ]
+  },
+  "repositoryControlChecks": {
+    "requiredWorkflow": "CARMA-DB repository control",
+    "deploymentPreviewRequired": false,
+    "deploymentChecksAffectRepositoryControlApproval": false,
+    "rulesetEnforcementIssue": 11
+  },
+  "satyamDecisions": [
+    "business_priority",
+    "data_semantics",
+    "schema_intent",
+    "acceptable_performance",
+    "rollout_acceptance",
+    "final_carma_db_approval"
+  ],
+  "independentReviewRequired": [
+    "query_semantics_change",
+    "schema_column_index_or_constraint_change",
+    "migration_change",
+    "production_data_correction",
+    "permission_or_grant_change",
+    "credential_or_environment_change",
+    "backup_or_restore_operation",
+    "firewall_or_network_change"
+  ],
+  "prohibitedAutomaticActions": [
+    "production_data_write",
+    "production_schema_write",
+    "delete_business_data",
+    "change_database_privileges",
+    "rotate_credentials",
+    "change_firewall_rules",
+    "destructive_migration",
+    "publish_internal_data",
+    "unverified_low_confidence_repair"
+  ],
+  "communication": {
+    "decisionSlaWorkingHours": 8,
+    "staleEscalationHours": 24,
+    "dailyDashboard": true,
+    "maximumEmailMessagesPerLocalDay": 1,
+    "notifyOn": [
+      "decision_required",
+      "verification_required",
+      "blocked",
+      "material_status_change",
+      "completed"
+    ],
+    "suppressRoutineProgressNotifications": true
+  }
+}

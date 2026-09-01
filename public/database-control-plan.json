@@ -1,0 +1,1614 @@
+{
+  "schemaVersion": 1,
+  "program": "CARMA-DB",
+  "generatedAt": "2026-08-18T11:48:51.143Z",
+  "phase": "asset_discovery",
+  "mode": "repository_autopilot_production_database_writes_disabled",
+  "inventory": {
+    "registeredSystems": 51,
+    "seenSystems": 51,
+    "registeredAssets": 126,
+    "repositoryVisibleDatabaseObjects": 75,
+    "discoveryCompleteSystems": 0,
+    "discoveryRemainingSystems": 51,
+    "discoveryWave": [
+      {
+        "systemId": "DBS-D4490043",
+        "company": "KTAHV",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-3DBA2C77",
+        "company": "KTAHV",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-B5525E88",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-67B84ACF",
+        "company": "Cross-company",
+        "pendingChecks": 5,
+        "missingCoverage": [
+          "table_or_view",
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-E17CF94A",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-F6CC67CC",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-7FD51E10",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-9BE79677",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-604E8C24",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-CDBD032D",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-534FCE10",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-386C7B78",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-C4181D50",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-0E7BC39C",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-68A46805",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-16B8C2ED",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-BD5FE90D",
+        "company": "KTAHV",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-55544F28",
+        "company": "Cross-company",
+        "pendingChecks": 5,
+        "missingCoverage": [
+          "table_or_view",
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-E3746F45",
+        "company": "Cross-company",
+        "pendingChecks": 5,
+        "missingCoverage": [
+          "table_or_view",
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-4A39C82C",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-4D5456C1",
+        "company": "KTAHV",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-30342BB0",
+        "company": "KTAHV",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-D83BFAF6",
+        "company": "KTAHV",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-DD3085B4",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-3A916059",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-3DE0B3CE",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-7902580C",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-1A374D28",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-7D52BAD5",
+        "company": "KTAHV",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-93EC7EE7",
+        "company": "KTAHV",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-66932D7C",
+        "company": "KTAHV",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-7C748DCE",
+        "company": "KTAHV",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-8ACF6547",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-722F89C4",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-AA9B7AED",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-A0EDD3C1",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-99B720EC",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-6B3D0FE4",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-A9A91D72",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-CB31C680",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-A9338A73",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-449F2E58",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-9F5DD25B",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-75370A82",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-D9B1921B",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-293AB1E8",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-F02E5D8B",
+        "company": "KTAHV",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-840496FE",
+        "company": "KTAHV",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-30A2E049",
+        "company": "Cross-company",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-6C34A11E",
+        "company": "KTAHV",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      },
+      {
+        "systemId": "DBS-8F4891B2",
+        "company": "KTAHV",
+        "pendingChecks": 4,
+        "missingCoverage": [
+          "schema_keys_relationships",
+          "indexes_constraints",
+          "backup_restore",
+          "monitoring_alerting_owner_runbook"
+        ]
+      }
+    ],
+    "repairGate": "Repair promotion is blocked until all eight discovery categories and Satyam's completeness attestation are recorded."
+  },
+  "sprint": {
+    "expectedFirstPassWorkingDays": 5,
+    "workWavesPerDay": 3,
+    "minimumDailyCases": 25,
+    "caseLimit": null,
+    "ownerMayExpandCaseCount": true
+  },
+  "controls": {
+    "minimumDailyCases": 25,
+    "caseLimit": null,
+    "humanDecisionLimit": null,
+    "ownerMayExpandCaseCount": true,
+    "ownerMayTakeAdditionalDecisions": true,
+    "automaticRepositoryWriteMinimumConfidence": 0.95,
+    "productionDatabaseWritesAllowed": false
+  },
+  "ownership": {
+    "accountableOwner": {
+      "github": "chauhansatyam"
+    },
+    "independentVerifier": {
+      "github": "Kairali123"
+    },
+    "sponsor": {
+      "github": "AbhilashKairali"
+    },
+    "automationOwner": {
+      "name": "CARMA-DB AI"
+    }
+  },
+  "companyQueues": {
+    "KAPPL": {
+      "total": 0,
+      "discoveryComplete": 0,
+      "remaining": 0,
+      "totalRemaining": 0,
+      "dailyTarget": 0,
+      "top": []
+    },
+    "KTAHV": {
+      "total": 14,
+      "discoveryComplete": 0,
+      "remaining": 14,
+      "totalRemaining": 14,
+      "dailyTarget": 14,
+      "top": [
+        {
+          "systemId": "DBS-D4490043",
+          "riskScore": 100
+        },
+        {
+          "systemId": "DBS-3DBA2C77",
+          "riskScore": 100
+        },
+        {
+          "systemId": "DBS-BD5FE90D",
+          "riskScore": 100
+        },
+        {
+          "systemId": "DBS-4D5456C1",
+          "riskScore": 65
+        },
+        {
+          "systemId": "DBS-30342BB0",
+          "riskScore": 65
+        }
+      ]
+    },
+    "Cross-company": {
+      "total": 37,
+      "discoveryComplete": 0,
+      "remaining": 37,
+      "totalRemaining": 37,
+      "dailyTarget": 37,
+      "top": [
+        {
+          "systemId": "DBS-B5525E88",
+          "riskScore": 100
+        },
+        {
+          "systemId": "DBS-67B84ACF",
+          "riskScore": 100
+        },
+        {
+          "systemId": "DBS-E17CF94A",
+          "riskScore": 100
+        },
+        {
+          "systemId": "DBS-F6CC67CC",
+          "riskScore": 100
+        },
+        {
+          "systemId": "DBS-7FD51E10",
+          "riskScore": 100
+        }
+      ]
+    },
+    "Unmapped": {
+      "total": 0,
+      "discoveryComplete": 0,
+      "remaining": 0,
+      "totalRemaining": 0,
+      "dailyTarget": 0,
+      "top": []
+    }
+  },
+  "preflight": [
+    {
+      "systemId": "DBS-D4490043",
+      "company": "KTAHV",
+      "priority": "P1",
+      "riskScore": 100,
+      "writeCapable": true,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-3DBA2C77",
+      "company": "KTAHV",
+      "priority": "P1",
+      "riskScore": 100,
+      "writeCapable": true,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-B5525E88",
+      "company": "Cross-company",
+      "priority": "P1",
+      "riskScore": 100,
+      "writeCapable": true,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-67B84ACF",
+      "company": "Cross-company",
+      "priority": "P1",
+      "riskScore": 100,
+      "writeCapable": true,
+      "missingCoverage": [
+        "table_or_view",
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete table_or_view evidence"
+    },
+    {
+      "systemId": "DBS-E17CF94A",
+      "company": "Cross-company",
+      "priority": "P1",
+      "riskScore": 100,
+      "writeCapable": true,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-F6CC67CC",
+      "company": "Cross-company",
+      "priority": "P1",
+      "riskScore": 100,
+      "writeCapable": true,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-7FD51E10",
+      "company": "Cross-company",
+      "priority": "P1",
+      "riskScore": 100,
+      "writeCapable": true,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-9BE79677",
+      "company": "Cross-company",
+      "priority": "P1",
+      "riskScore": 100,
+      "writeCapable": true,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-604E8C24",
+      "company": "Cross-company",
+      "priority": "P1",
+      "riskScore": 100,
+      "writeCapable": true,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-CDBD032D",
+      "company": "Cross-company",
+      "priority": "P1",
+      "riskScore": 100,
+      "writeCapable": true,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-534FCE10",
+      "company": "Cross-company",
+      "priority": "P1",
+      "riskScore": 100,
+      "writeCapable": true,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-386C7B78",
+      "company": "Cross-company",
+      "priority": "P1",
+      "riskScore": 100,
+      "writeCapable": true,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-C4181D50",
+      "company": "Cross-company",
+      "priority": "P1",
+      "riskScore": 100,
+      "writeCapable": true,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-0E7BC39C",
+      "company": "Cross-company",
+      "priority": "P1",
+      "riskScore": 100,
+      "writeCapable": true,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-68A46805",
+      "company": "Cross-company",
+      "priority": "P1",
+      "riskScore": 100,
+      "writeCapable": true,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-16B8C2ED",
+      "company": "Cross-company",
+      "priority": "P1",
+      "riskScore": 100,
+      "writeCapable": true,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-BD5FE90D",
+      "company": "KTAHV",
+      "priority": "P1",
+      "riskScore": 100,
+      "writeCapable": true,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-55544F28",
+      "company": "Cross-company",
+      "priority": "P2",
+      "riskScore": 68,
+      "writeCapable": false,
+      "missingCoverage": [
+        "table_or_view",
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete table_or_view evidence"
+    },
+    {
+      "systemId": "DBS-E3746F45",
+      "company": "Cross-company",
+      "priority": "P2",
+      "riskScore": 68,
+      "writeCapable": false,
+      "missingCoverage": [
+        "table_or_view",
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete table_or_view evidence"
+    },
+    {
+      "systemId": "DBS-4A39C82C",
+      "company": "Cross-company",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-4D5456C1",
+      "company": "KTAHV",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-30342BB0",
+      "company": "KTAHV",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-D83BFAF6",
+      "company": "KTAHV",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-DD3085B4",
+      "company": "Cross-company",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-3A916059",
+      "company": "Cross-company",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-3DE0B3CE",
+      "company": "Cross-company",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-7902580C",
+      "company": "Cross-company",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-1A374D28",
+      "company": "Cross-company",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-7D52BAD5",
+      "company": "KTAHV",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-93EC7EE7",
+      "company": "KTAHV",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-66932D7C",
+      "company": "KTAHV",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-7C748DCE",
+      "company": "KTAHV",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-8ACF6547",
+      "company": "Cross-company",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-722F89C4",
+      "company": "Cross-company",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-AA9B7AED",
+      "company": "Cross-company",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-A0EDD3C1",
+      "company": "Cross-company",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-99B720EC",
+      "company": "Cross-company",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-6B3D0FE4",
+      "company": "Cross-company",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-A9A91D72",
+      "company": "Cross-company",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-CB31C680",
+      "company": "Cross-company",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-A9338A73",
+      "company": "Cross-company",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-449F2E58",
+      "company": "Cross-company",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-9F5DD25B",
+      "company": "Cross-company",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-75370A82",
+      "company": "Cross-company",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-D9B1921B",
+      "company": "Cross-company",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-293AB1E8",
+      "company": "Cross-company",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-F02E5D8B",
+      "company": "KTAHV",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-840496FE",
+      "company": "KTAHV",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-30A2E049",
+      "company": "Cross-company",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-6C34A11E",
+      "company": "KTAHV",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    },
+    {
+      "systemId": "DBS-8F4891B2",
+      "company": "KTAHV",
+      "priority": "P2",
+      "riskScore": 65,
+      "writeCapable": false,
+      "missingCoverage": [
+        "schema_keys_relationships",
+        "indexes_constraints",
+        "backup_restore",
+        "monitoring_alerting_owner_runbook"
+      ],
+      "suggestedAction": "Complete schema_keys_relationships evidence"
+    }
+  ],
+  "humanDecisionBatch": [],
+  "activeCase": {
+    "systemId": "DBS-D4490043",
+    "company": "KTAHV",
+    "priority": "P1",
+    "riskScore": 100,
+    "writeCapable": true,
+    "missingCoverage": [
+      "schema_keys_relationships",
+      "indexes_constraints",
+      "backup_restore",
+      "monitoring_alerting_owner_runbook"
+    ],
+    "suggestedAction": "Complete schema_keys_relationships evidence"
+  },
+  "dailyProgress": {
+    "localDate": "2026-08-18",
+    "minimumTarget": 25,
+    "advancedCount": 45,
+    "minimumMet": true,
+    "remainingToMinimum": 0,
+    "caseLimit": null,
+    "ownerMayExpandCaseCount": true,
+    "advancedSystemIds": [
+      "DBS-293AB1E8",
+      "DBS-F02E5D8B",
+      "DBS-840496FE",
+      "DBS-30A2E049",
+      "DBS-6C34A11E",
+      "DBS-8F4891B2",
+      "DBS-D4490043",
+      "DBS-3DBA2C77",
+      "DBS-B5525E88",
+      "DBS-67B84ACF",
+      "DBS-E17CF94A",
+      "DBS-F6CC67CC",
+      "DBS-7FD51E10",
+      "DBS-9BE79677",
+      "DBS-604E8C24",
+      "DBS-CDBD032D",
+      "DBS-534FCE10",
+      "DBS-386C7B78",
+      "DBS-C4181D50",
+      "DBS-0E7BC39C",
+      "DBS-68A46805",
+      "DBS-16B8C2ED",
+      "DBS-BD5FE90D",
+      "DBS-55544F28",
+      "DBS-E3746F45",
+      "DBS-4A39C82C",
+      "DBS-4D5456C1",
+      "DBS-30342BB0",
+      "DBS-D83BFAF6",
+      "DBS-DD3085B4",
+      "DBS-3A916059",
+      "DBS-3DE0B3CE",
+      "DBS-7902580C",
+      "DBS-1A374D28",
+      "DBS-7D52BAD5",
+      "DBS-93EC7EE7",
+      "DBS-66932D7C",
+      "DBS-7C748DCE",
+      "DBS-8ACF6547",
+      "DBS-722F89C4",
+      "DBS-AA9B7AED",
+      "DBS-A0EDD3C1",
+      "DBS-99B720EC",
+      "DBS-6B3D0FE4",
+      "DBS-A9A91D72"
+    ],
+    "advancementsBySystemId": {
+      "DBS-293AB1E8": "live_control_evidence_request_ready",
+      "DBS-F02E5D8B": "live_control_evidence_request_ready",
+      "DBS-840496FE": "live_control_evidence_request_ready",
+      "DBS-30A2E049": "live_control_evidence_request_ready",
+      "DBS-6C34A11E": "live_control_evidence_request_ready",
+      "DBS-8F4891B2": "live_control_evidence_request_ready",
+      "DBS-D4490043": "live_control_reconciliation_packet_ready",
+      "DBS-3DBA2C77": "live_control_reconciliation_packet_ready",
+      "DBS-B5525E88": "live_control_reconciliation_packet_ready",
+      "DBS-67B84ACF": "live_control_reconciliation_packet_ready",
+      "DBS-E17CF94A": "live_control_reconciliation_packet_ready",
+      "DBS-F6CC67CC": "live_control_reconciliation_packet_ready",
+      "DBS-7FD51E10": "live_control_reconciliation_packet_ready",
+      "DBS-9BE79677": "live_control_reconciliation_packet_ready",
+      "DBS-604E8C24": "live_control_reconciliation_packet_ready",
+      "DBS-CDBD032D": "live_control_reconciliation_packet_ready",
+      "DBS-534FCE10": "live_control_reconciliation_packet_ready",
+      "DBS-386C7B78": "live_control_reconciliation_packet_ready",
+      "DBS-C4181D50": "live_control_reconciliation_packet_ready",
+      "DBS-0E7BC39C": "live_control_reconciliation_packet_ready",
+      "DBS-68A46805": "live_control_reconciliation_packet_ready",
+      "DBS-16B8C2ED": "live_control_reconciliation_packet_ready",
+      "DBS-BD5FE90D": "live_control_reconciliation_packet_ready",
+      "DBS-55544F28": "live_control_reconciliation_packet_ready",
+      "DBS-E3746F45": "live_control_reconciliation_packet_ready",
+      "DBS-4A39C82C": "live_control_reconciliation_packet_ready",
+      "DBS-4D5456C1": "live_control_reconciliation_packet_ready",
+      "DBS-30342BB0": "live_control_reconciliation_packet_ready",
+      "DBS-D83BFAF6": "live_control_reconciliation_packet_ready",
+      "DBS-DD3085B4": "live_control_reconciliation_packet_ready",
+      "DBS-3A916059": "live_control_reconciliation_packet_ready",
+      "DBS-3DE0B3CE": "live_control_reconciliation_packet_ready",
+      "DBS-7902580C": "live_control_reconciliation_packet_ready",
+      "DBS-1A374D28": "live_control_reconciliation_packet_ready",
+      "DBS-7D52BAD5": "live_control_reconciliation_packet_ready",
+      "DBS-93EC7EE7": "live_control_reconciliation_packet_ready",
+      "DBS-66932D7C": "live_control_reconciliation_packet_ready",
+      "DBS-7C748DCE": "live_control_reconciliation_packet_ready",
+      "DBS-8ACF6547": "live_control_reconciliation_packet_ready",
+      "DBS-722F89C4": "live_control_reconciliation_packet_ready",
+      "DBS-AA9B7AED": "live_control_reconciliation_packet_ready",
+      "DBS-A0EDD3C1": "live_control_reconciliation_packet_ready",
+      "DBS-99B720EC": "live_control_reconciliation_packet_ready",
+      "DBS-6B3D0FE4": "live_control_reconciliation_packet_ready",
+      "DBS-A9A91D72": "live_control_reconciliation_packet_ready"
+    },
+    "waveRuns": [
+      {
+        "generatedAt": "2026-08-18T03:47:11.613Z",
+        "advancedCount": 6,
+        "advancedSystemIds": [
+          "DBS-293AB1E8",
+          "DBS-F02E5D8B",
+          "DBS-840496FE",
+          "DBS-30A2E049",
+          "DBS-6C34A11E",
+          "DBS-8F4891B2"
+        ],
+        "note": "Repository-only control packets advanced; no live database or production mutation performed"
+      },
+      {
+        "generatedAt": "2026-08-18T03:49:07.307Z",
+        "advancedCount": 19,
+        "advancedSystemIds": [
+          "DBS-D4490043",
+          "DBS-3DBA2C77",
+          "DBS-B5525E88",
+          "DBS-67B84ACF",
+          "DBS-E17CF94A",
+          "DBS-F6CC67CC",
+          "DBS-7FD51E10",
+          "DBS-9BE79677",
+          "DBS-604E8C24",
+          "DBS-CDBD032D",
+          "DBS-534FCE10",
+          "DBS-386C7B78",
+          "DBS-C4181D50",
+          "DBS-0E7BC39C",
+          "DBS-68A46805",
+          "DBS-16B8C2ED",
+          "DBS-BD5FE90D",
+          "DBS-55544F28",
+          "DBS-E3746F45"
+        ],
+        "note": "Repository-only control packets advanced; no live database or production mutation performed"
+      },
+      {
+        "generatedAt": "2026-08-18T07:46:57.721Z",
+        "advancedCount": 10,
+        "advancedSystemIds": [
+          "DBS-4A39C82C",
+          "DBS-4D5456C1",
+          "DBS-30342BB0",
+          "DBS-D83BFAF6",
+          "DBS-DD3085B4",
+          "DBS-3A916059",
+          "DBS-3DE0B3CE",
+          "DBS-7902580C",
+          "DBS-1A374D28",
+          "DBS-7D52BAD5"
+        ],
+        "note": "Repository-only control packets advanced; no live database or production mutation performed"
+      },
+      {
+        "generatedAt": "2026-08-18T11:48:50.980Z",
+        "advancedCount": 10,
+        "advancedSystemIds": [
+          "DBS-93EC7EE7",
+          "DBS-66932D7C",
+          "DBS-7C748DCE",
+          "DBS-8ACF6547",
+          "DBS-722F89C4",
+          "DBS-AA9B7AED",
+          "DBS-A0EDD3C1",
+          "DBS-99B720EC",
+          "DBS-6B3D0FE4",
+          "DBS-A9A91D72"
+        ],
+        "note": "Repository-only control packets advanced; no live database or production mutation performed"
+      }
+    ]
+  },
+  "communication": {
+    "decisionSlaWorkingHours": 8,
+    "staleEscalationHours": 24,
+    "dailyDashboard": true,
+    "maximumEmailMessagesPerLocalDay": 1,
+    "notifyOn": [
+      "decision_required",
+      "verification_required",
+      "blocked",
+      "material_status_change",
+      "completed"
+    ],
+    "suppressRoutineProgressNotifications": true
+  }
+}

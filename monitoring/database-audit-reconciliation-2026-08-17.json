@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "program": "CARMA-DB",
+  "generatedAt": "2026-08-17T07:52:00Z",
+  "source": "Authenticated Satyam read-only Stage 1 QA/QC submission and controlled audit workbook",
+  "evidenceBoundary": "Sanitized aggregate control evidence only; production database name, object names, rows, credentials, unrestricted SQL and sensitive metadata are excluded",
+  "auditMode": "read_only",
+  "approvalGate": "hold_qa_qc_only",
+  "productionDatabaseWritesPerformed": false,
+  "aggregateEvidence": {
+    "baseTables": 152,
+    "columns": 3949,
+    "declaredForeignKeysChecked": 101,
+    "declaredForeignKeyOrphans": 0
+  },
+  "issueReconciliation": [
+    {
+      "finding": "excessive_privileges_for_audit_identity",
+      "status": "confirmed_control_failure",
+      "githubIssue": 6,
+      "action": "updated_existing_issue"
+    },
+    {
+      "finding": "future_dated_value_anomalies",
+      "status": "confirmed_anomaly_business_validity_unresolved",
+      "githubIssue": 19,
+      "action": "created_issue"
+    },
+    {
+      "finding": "missing_primary_key_controls",
+      "status": "confirmed_schema_control_gap",
+      "githubIssue": 20,
+      "action": "created_issue"
+    },
+    {
+      "finding": "zero_row_table_completeness",
+      "status": "confirmed_anomaly_business_expectation_unresolved",
+      "githubIssue": 21,
+      "action": "created_issue"
+    },
+    {
+      "finding": "negative_numeric_value_anomalies",
+      "status": "confirmed_anomaly_business_validity_unresolved",
+      "githubIssue": 22,
+      "action": "created_issue"
+    },
+    {
+      "finding": "duplicate_index_signatures",
+      "status": "confirmed_schema_hygiene_finding",
+      "githubIssue": 23,
+      "action": "created_issue"
+    },
+    {
+      "finding": "sensitive_like_column_classification_gap",
+      "status": "confirmed_evidence_gap_name_based_candidates_only",
+      "githubIssue": 24,
+      "action": "created_issue"
+    }
+  ],
+  "positiveEvidence": [
+    {
+      "control": "declared_foreign_key_orphans",
+      "result": "none_observed_in_101_checked_relationships",
+      "issueCreated": false
+    }
+  ],
+  "limitations": [
+    "Aggregate audit evidence is not yet mapped to all 51 repository-visible consumers",
+    "Future dates, negative values and empty tables require authoritative business rules before they are called invalid data",
+    "Name-based sensitive-column candidates do not prove that every column contains sensitive values",
+    "No Stage 2 remediation is authorized"
+  ]
+}

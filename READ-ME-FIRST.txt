@@ -1,0 +1,19 @@
+YOUR FIRST AI HUMAN — NO TECHNICAL SETUP REQUIRED
+
+You do not need Terminal, Python, PowerShell, Git, GitHub, or VS Code.
+
+1. Keep one untouched copy of this starter folder.
+2. Make a duplicate and rename the duplicate for one job.
+3. Open the ChatGPT desktop app and sign in.
+4. Choose Codex.
+5. Open Projects and add the duplicated folder as a local project.
+6. Start New chat.
+7. Ask Codex: "Read START-HERE.md and walk me through it one click at a time. I am a complete beginner."
+
+Mac folders are created in Finder: Documents > File > New Folder.
+Windows folders are created in File Explorer: Documents > New > Folder.
+
+Official setup help:
+https://learn.chatgpt.com/docs/app
+https://learn.chatgpt.com/docs/quickstart
+https://learn.chatgpt.com/docs/windows/windows-app

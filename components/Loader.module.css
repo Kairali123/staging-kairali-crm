@@ -1,0 +1,70 @@
+.loaderWrapper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(255, 255, 255, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.loader {
+  position: relative;
+  width: 120px;
+  height: 120px;
+}
+
+.spinner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 16px solid #f3f3f3;
+  border-top: 16px solid #048023;
+  border-radius: 50%;
+  animation: spin 2s linear infinite;
+}
+
+.loader img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-48%, -48%);
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  z-index: 2;
+}
+
+/* Content-area only loader — skips sidebar and header */
+.loaderWrapperContent {
+  position: fixed;
+  top: 64px;   /* header h-16 = 64px */
+  left: 0;     /* mobile: no sidebar */
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 39; /* below header z-40 and sidebar z-50 */
+}
+
+@media (min-width: 1024px) {
+  .loaderWrapperContent {
+    left: 256px; /* desktop: skip sidebar lg:w-64 = 256px */
+  }
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
