@@ -8,13 +8,18 @@ interface BackButtonProps {
   className?: string
   variant?: "default" | "outline" | "ghost" | "link" | "destructive" | "secondary"
   size?: "default" | "sm" | "lg" | "icon"
+  customBackUrl?: string
 }
 
-export function BackButton({ className = "", variant = "outline", size = "sm" }: BackButtonProps) {
+export function BackButton({ className = "", variant = "outline", size = "sm", customBackUrl }: BackButtonProps) {
   const router = useRouter()
 
   const handleBack = () => {
-    router.back()
+    if (customBackUrl) {
+      router.push(customBackUrl)
+    } else {
+      router.back()
+    }
   }
 
   return (

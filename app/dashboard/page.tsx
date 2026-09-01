@@ -242,6 +242,14 @@ const allCards: QuickCard[] = [
     icon: "📘",
     desc: "Manage MR FMS",
     permission: "mr-fms.view",
+  },
+  {
+    type: "other",
+    name: "Sales Call Audit",
+    href: "/sales-call-audit",
+    icon: "📞",
+    desc: "Audit and analyze sales calls",
+    permission: "sales_call_audit.view",
   }
 
 ]
