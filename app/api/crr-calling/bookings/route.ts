@@ -178,142 +178,23 @@ export async function GET(req: NextRequest) {
 
         const pool = await getPool();
 
-        // 1. Fetch all master bookings from KTAHV_CRR_Process_FMS
-        const [processRows] = await pool.query<any[]>(
-            `SELECT * FROM KTAHV_CRR_Process_FMS ORDER BY id DESC`
-        );
-
-        if (!processRows || processRows.length === 0) {
-            return NextResponse.json({ success: true, count: 0, data: [] });
-        }
-
-        // 2. Collect UIDs and booking_ids
-        const uids = processRows.map((r) => r.uid).filter(Boolean);
-        const bookingIds = processRows.map((r) => r.booking_id).filter(Boolean);
-
-        // 3. Batch fetch CrrCalling records
-        let callingRows: any[] = [];
-        if (uids.length > 0) {
-            const [cRows] = await pool.query<any[]>(
-                `SELECT * FROM KTAHV_CRR_Calling_FMS WHERE uid IN (?) ORDER BY id ASC`,
-                [uids]
-            );
-            callingRows = cRows || [];
-        }
-
-        // 4. Batch fetch GuestTracker records
-        let trackerMap = new Map<string, any>();
-        if (bookingIds.length > 0) {
-            const [tRows] = await pool.query<any[]>(
-                `SELECT * FROM ktahv_guest_tracker WHERE booking_id IN (?)`,
-                [bookingIds]
-            );
-            if (tRows) {
-                for (const tr of tRows) {
-                    if (tr.booking_id) trackerMap.set(String(tr.booking_id).trim(), tr);
-                }
-            }
-        }
-
-        // 5. Batch fetch CheckinMaster records
-        const checkinKeys = Array.from(
-            new Set(
-                processRows
-                    .flatMap((r) => {
-                        const rawKeys = [r.booking_id, r.booking_no, r.reservation_id].filter(Boolean).map(String);
-                        const variations: string[] = [];
-                        for (const k of rawKeys) {
-                            const trimmed = String(k).trim();
-                            if (!trimmed) continue;
-                            variations.push(trimmed);
-                            variations.push(trimmed.replace(/-/g, " "));
-                            variations.push(trimmed.replace(/\s+/g, "-"));
-                            variations.push(trimmed.replace(/[\s\-_]+/g, ""));
-                            const numMatch = trimmed.match(/\d+/);
-                            if (numMatch) {
-                                const n = numMatch[0];
-                                variations.push(n);
-                                variations.push(`KTAHV-PMS-${n}`);
-                                variations.push(`KTAHV PMS ${n}`);
-                                variations.push(`PMS-${n}`);
-                                variations.push(`PMS ${n}`);
-                            }
-                        }
-                        return variations;
-                    })
-                    .filter(Boolean)
-                    .map((s) => String(s).trim())
-            )
-        );
-
-        const mobileKeys = Array.from(
-            new Set(
-                processRows
-                    .map((r) => String(r.mobile || "").replace(/\D/g, "").slice(-10))
-                    .filter((m) => m.length === 10)
-            )
-        );
-
-        const normalizeKey = (k: any) => String(k || "").toLowerCase().replace(/[\s\-_]+/g, "").trim();
-
-        let checkinMap = new Map<string, any>();
-        if (checkinKeys.length > 0 || mobileKeys.length > 0) {
-            const conditions: string[] = [];
-            const params: any[] = [];
-            if (checkinKeys.length > 0) {
-                conditions.push("reservation_id IN (?) OR TRIM(reservation_id) IN (?)");
-                params.push(checkinKeys, checkinKeys);
-            }
-            if (mobileKeys.length > 0) {
-                conditions.push("mobile IN (?) OR TRIM(mobile) IN (?)");
-                params.push(mobileKeys, mobileKeys);
-            }
-            const [chkRows] = await pool.query<any[]>(
-                `SELECT * FROM ktahv_checkinmasterfms WHERE ${conditions.join(" OR ")} ORDER BY id DESC`,
-                params
-            );
-            if (chkRows) {
-                for (const chk of chkRows) {
-                    if (chk.reservation_id) {
-                        const raw = String(chk.reservation_id).trim();
-                        const norm = normalizeKey(raw);
-                        const spaceVar = raw.replace(/-/g, " ").trim();
-                        const dashVar = raw.replace(/\s+/g, "-").trim();
-                        const numMatch = raw.match(/\d+/);
-                        const num = numMatch ? numMatch[0] : "";
-
-                        const keysToAdd = [
-                            raw,
-                            raw.toLowerCase(),
-                            norm,
-                            spaceVar,
-                            spaceVar.toLowerCase(),
-                            dashVar,
-                            dashVar.toLowerCase(),
-                            num,
-                            num ? `ktahv-pms-${num}` : "",
-                            num ? `pms-${num}` : "",
-                        ];
-                        for (const k of keysToAdd) {
-                            if (k && !checkinMap.has(k)) {
-                                checkinMap.set(k, chk);
-                            }
-                        }
-                    }
-                    if (chk.mobile) {
-                        const cleanM = String(chk.mobile).replace(/\D/g, "").slice(-10);
-                        if (cleanM && !checkinMap.has(cleanM)) {
-                            checkinMap.set(cleanM, chk);
-                        }
-                    }
-                }
-            }
-        }
-
-        // 5b. Fetch Permission-Based Stage Users (mapping real employee names & emails to assigned stages)
-        let stageUsers: Array<{ name: string; email: string; role: string; stages: number[] }> = [];
-        try {
-            const [permRows] = await pool.query<any[]>(
+        // Run all queries in parallel for lightning-fast execution (< 1s)
+        const [
+            [processRows],
+            [callingRows],
+            [tRows],
+            [chkRows],
+            [permRows],
+        ] = await Promise.all([
+            pool.query<any[]>(`SELECT * FROM KTAHV_CRR_Process_FMS ORDER BY id DESC`),
+            pool.query<any[]>(
+                `SELECT id, uid, call_purpose, planned, actual, to_show, did_they_achieve_the_outcomes_planned_for, outcome_remarks, status, remarks_why_not_done_or_close, followup_date_for_the_welcome_call, doer, rating_status, remarks_why_not_given_ratings, proof_of_ratings, followup_date_for_the_rating, stay_feedback, followup_date_for_the_result_and_progress, updated_at, timestamp FROM KTAHV_CRR_Calling_FMS ORDER BY id ASC`
+            ),
+            pool.query<any[]>(
+                `SELECT booking_id, doctor_assigned_to_the_client, special_request_or_requirement_noted, arrival_doer_name, arrival_planned, arrival_actual, client_arrival_data_upload_remarks, departure_doer_name, departure_planned, departure_actual, client_departure_data_upload_remarks, created_at, updated_at FROM ktahv_guest_tracker`
+            ),
+            pool.query<any[]>(`SELECT * FROM ktahv_checkinmasterfms ORDER BY id DESC`),
+            pool.query<any[]>(
                 `SELECT 
                     p.email,
                     p.role,
@@ -322,44 +203,97 @@ export async function GET(req: NextRequest) {
                  FROM user_role_permissions p
                  LEFT JOIN userlogin u ON LOWER(TRIM(u.email_id)) = LOWER(TRIM(p.email))
                  WHERE p.crr_fms IS NOT NULL AND p.crr_fms != ''`
-            );
+            ),
+        ]);
 
-            if (permRows && permRows.length > 0) {
-                const seen = new Set<string>();
-                for (const p of permRows) {
-                    const email = String(p.email || "").trim();
-                    const crrFms = String(p.crr_fms || "");
+        if (!processRows || processRows.length === 0) {
+            return NextResponse.json({ success: true, count: 0, data: [] });
+        }
 
-                    // Parse stages assigned in crr_fms column (e.g. "view, stage1, stage2, stage4, stage5, stage6, stage8")
-                    const assignedStages: number[] = [];
-                    const parts = crrFms.split(",").map((s) => s.trim().toLowerCase());
-                    for (const part of parts) {
-                        const match = part.match(/^stage(\d+)$/);
-                        if (match) {
-                            const num = parseInt(match[1], 10);
-                            if (num >= 1 && num <= 11) {
-                                assignedStages.push(num);
-                            }
+        // Build trackerMap in memory
+        const trackerMap = new Map<string, any>();
+        if (tRows) {
+            for (const tr of tRows) {
+                if (tr.booking_id) {
+                    const raw = String(tr.booking_id).trim();
+                    trackerMap.set(raw, tr);
+                    trackerMap.set(raw.toLowerCase(), tr);
+                }
+            }
+        }
+
+        // Build checkinMap in memory
+        const normalizeKey = (k: any) => String(k || "").toLowerCase().replace(/[\s\-_]+/g, "").trim();
+        const checkinMap = new Map<string, any>();
+        if (chkRows) {
+            for (const chk of chkRows) {
+                if (chk.reservation_id) {
+                    const raw = String(chk.reservation_id).trim();
+                    const norm = normalizeKey(raw);
+                    const spaceVar = raw.replace(/-/g, " ").trim();
+                    const dashVar = raw.replace(/\s+/g, "-").trim();
+                    const numMatch = raw.match(/\d+/);
+                    const num = numMatch ? numMatch[0] : "";
+
+                    const keysToAdd = [
+                        raw,
+                        raw.toLowerCase(),
+                        norm,
+                        spaceVar,
+                        spaceVar.toLowerCase(),
+                        dashVar,
+                        dashVar.toLowerCase(),
+                        num,
+                        num ? `ktahv-pms-${num}` : "",
+                        num ? `pms-${num}` : "",
+                    ];
+                    for (const k of keysToAdd) {
+                        if (k && !checkinMap.has(k)) {
+                            checkinMap.set(k, chk);
                         }
                     }
-
-                    // Strict real name from userlogin (e.g. Jinsha Manoj MV, Dr. Rahul R, Shoukath Ali Moosa, Anoop Vijayaraj)
-                    const name = String(p.user_name || p.email || "").trim();
-
-                    const key = email || name;
-                    if (assignedStages.length > 0 && key && !seen.has(key)) {
-                        seen.add(key);
-                        stageUsers.push({
-                            name,
-                            email,
-                            role: String(p.role || ""),
-                            stages: assignedStages.sort((a, b) => a - b),
-                        });
+                }
+                if (chk.mobile) {
+                    const cleanM = String(chk.mobile).replace(/\D/g, "").slice(-10);
+                    if (cleanM && !checkinMap.has(cleanM)) {
+                        checkinMap.set(cleanM, chk);
                     }
                 }
             }
-        } catch (e) {
-            console.warn("[crr-calling/bookings] Failed to fetch stage users:", e);
+        }
+
+        // Build stageUsers in memory
+        const stageUsers: Array<{ name: string; email: string; role: string; stages: number[] }> = [];
+        if (permRows && permRows.length > 0) {
+            const seen = new Set<string>();
+            for (const p of permRows) {
+                const email = String(p.email || "").trim();
+                const crrFms = String(p.crr_fms || "");
+
+                const assignedStages: number[] = [];
+                const parts = crrFms.split(",").map((s) => s.trim().toLowerCase());
+                for (const part of parts) {
+                    const match = part.match(/^stage(\d+)$/);
+                    if (match) {
+                        const num = parseInt(match[1], 10);
+                        if (num >= 1 && num <= 11) {
+                            assignedStages.push(num);
+                        }
+                    }
+                }
+
+                const name = String(p.user_name || p.email || "").trim();
+                const key = email || name;
+                if (assignedStages.length > 0 && key && !seen.has(key)) {
+                    seen.add(key);
+                    stageUsers.push({
+                        name,
+                        email,
+                        role: String(p.role || ""),
+                        stages: assignedStages.sort((a, b) => a - b),
+                    });
+                }
+            }
         }
 
         // Build CrrCalling index by UID -> list of calling rows

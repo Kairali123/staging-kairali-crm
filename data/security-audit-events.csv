@@ -169,3 +169,5 @@ eventId,timestamp,action,outcome,actor,target,sourceIp,correlationId,context
 "b2fbe373-0b3b-4d93-bb6e-38d94e883d40","2026-09-02T07:30:27.395Z","api.access_denied","denied","","/api/debug-checkin","::1","52cd2770-9181-4f2e-891f-3a52adda7825","{""reason"":""missing_session""}"
 "a516e44b-da4b-4d5b-8c64-0a0682a791f8","2026-09-02T07:39:37.461Z","api.access_denied","denied","","/api/meetings/debug-checkin","::1","23ad769c-1a17-4200-b47f-f4b40d5559d0","{""reason"":""missing_session""}"
 "962bd538-fa6d-44d4-ad1f-82d6e1afbef2","2026-09-02T07:39:37.477Z","api.access_denied","denied","","/api/meetings/debug-checkin","::1","71279287-d530-4cd6-a1b4-7e3d40c22337","{""reason"":""missing_session""}"
+"19850193-bafe-4cdf-99f1-9dcd0e71cc07","2026-09-02T11:42:13.337Z","page.access_denied","denied","","/crr-fms","::1","525a257d-fee7-478b-b0e5-64a26a83a498","{""reason"":""missing_session""}"
+"3133fd2d-2d66-416a-b277-7125684b1530","2026-09-02T11:42:13.540Z","page.access_denied","denied","","/crr-fms","::1","e15f9fd0-78a7-4467-a7e6-cfcac8cb4449","{""reason"":""missing_session""}"

@@ -378,7 +378,7 @@ export function useCrrBookings() {
         setError(null);
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
 
         try {
             const res = await fetch("/api/crr-calling/bookings", {
