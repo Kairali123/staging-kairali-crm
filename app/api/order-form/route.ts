@@ -99,18 +99,24 @@ export async function POST(req: NextRequest) {
     return error(503, 'SECURITY_SERVICE_UNAVAILABLE', 'Order security service is temporarily unavailable.', correlationId)
   }
 
-  const upstreamUrl = process.env.ORDER_FORM_APPS_SCRIPT_URL?.trim()
+  const upstreamUrl = process.env.ORDER_FORM_APPS_SCRIPT_URL?.trim() || 'https://kappl-primary-order-form.vercel.app/api/order-form'
   const serverSecret = process.env.ORDER_FORM_APPS_SCRIPT_SECRET?.trim()
-  if (!upstreamUrl || !serverSecret) {
+
+  const isDirectAppsScript = upstreamUrl.includes('script.google.com')
+  if (isDirectAppsScript && !serverSecret) {
     await auditOrderFormAction({ req, user, action, outcome: 'failure', correlationId, targetId: targetId(body), errorCode: 'NOT_CONFIGURED' })
     return error(503, 'NOT_CONFIGURED', 'Order service is not configured.', correlationId)
   }
 
   try {
+    const payloadBody = isDirectAppsScript
+      ? JSON.stringify({ ...body, _serverSecret: serverSecret })
+      : JSON.stringify(body)
+
     const upstreamResponse = await fetch(upstreamUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ ...body, _serverSecret: serverSecret }),
+      headers: { 'Content-Type': 'application/json;charset=utf-8' },
+      body: payloadBody,
       redirect: 'follow',
       cache: 'no-store',
       signal: AbortSignal.timeout(28_000),
