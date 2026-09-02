@@ -1,12 +1,19 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { LoaderCircle } from "lucide-react"
 
 const PRIMARY_ORDER_FORM_URL = "/new-order-fms/primary-order-form/app/index.html"
 
 export default function PrimaryOrderFormPage() {
   const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false)
+    }, 4000)
+    return () => clearTimeout(timer)
+  }, [])
 
   return (
     <div className="relative -m-4 min-h-[calc(100dvh-4rem)] bg-slate-100 sm:-m-6 lg:-m-8">
