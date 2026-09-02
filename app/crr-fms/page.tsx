@@ -436,17 +436,27 @@ export default function CRRCallingProcessPage() {
         return STAGES.filter((s) => userAccessibleStages.includes(s.no));
     }, [isAdminRole, userAccessibleStages]);
 
+    const [search, setSearch] = useState("");
+    const [stageFilter, setStageFilter] = useState<string>("all");
+    const [statusFilter, setStatusFilter] = useState<string>("all");
+    const [respFilter, setRespFilter] = useState<string>("all");
+
     /**
      * Determines whether an individual record is COMPLETED or PENDING.
      * Evaluated strictly per Guest/Booking/Record ID:
      * - Cancelled bookings: always false (never classified as Completed).
-     * - Admin / Super Admin: true ONLY if ALL 11 required workflow stages are Complete.
-     * - Normal user: true if ALL accessible stages to that user are Complete.
-     *   Non-accessible stages outside user's permission do NOT affect the user's completion status.
+     * - When stageFilter !== "all": true if that specific stage is Complete.
+     * - When stageFilter === "all":
+     *   - Admin / Super Admin: true ONLY if ALL 11 required workflow stages are Complete.
+     *   - Normal user: true if ALL accessible stages to that user are Complete.
      */
     const isRecordCompleted = useCallback((g: Guest): boolean => {
         if (isBookingCancelled(g)) {
             return false;
+        }
+        if (stageFilter !== "all") {
+            const stageNum = Number(stageFilter);
+            return g.stageStatus[stageNum - 1] === "Complete";
         }
         if (isAdminRole) {
             return STAGES.every((s) => g.stageStatus[s.no - 1] === "Complete");
@@ -455,7 +465,7 @@ export default function CRRCallingProcessPage() {
             return false;
         }
         return userAccessibleStages.every((stageNo) => g.stageStatus[stageNo - 1] === "Complete");
-    }, [isAdminRole, userAccessibleStages]);
+    }, [stageFilter, isAdminRole, userAccessibleStages]);
 
     const responsiblePersonOptions = useMemo(() => {
         if (isAdminRole) return responsiblePersonList;
@@ -468,11 +478,6 @@ export default function CRRCallingProcessPage() {
         );
         return me.length > 0 ? me : responsiblePersonList;
     }, [responsiblePersonList, isAdminRole, user]);
-
-    const [search, setSearch] = useState("");
-    const [stageFilter, setStageFilter] = useState<string>("all");
-    const [statusFilter, setStatusFilter] = useState<string>("all");
-    const [respFilter, setRespFilter] = useState<string>("all");
 
     useEffect(() => {
         if (user && !isAdminRole) {
@@ -683,10 +688,10 @@ export default function CRRCallingProcessPage() {
         [dateRangeFilter, customStartDate, customEndDate]
     );
 
-    /* ---------- FILTERED (& SORTED) ROWS ---------- */
-    const rows = useMemo(() => {
+    /* ---------- OVERALL ACCESSIBLE RECORDS (Before Stage & Status Filtering) ---------- */
+    const overallRecords = useMemo(() => {
         const s = search.toLowerCase();
-        const filtered = guests.filter((g) => {
+        return guests.filter((g) => {
             if (s) {
                 const matches =
                     String(g.name ?? "").toLowerCase().includes(s) ||
@@ -712,6 +717,19 @@ export default function CRRCallingProcessPage() {
                     if (!isRelevant) return false;
                 }
             }
+            if (dateRangeStart || dateRangeEnd) {
+                const gDate = parseDMY(g.timestamp);
+                if (isNaN(gDate.getTime())) return false; // no valid date → can't match an active range
+                if (dateRangeStart && gDate < dateRangeStart) return false;
+                if (dateRangeEnd && gDate > dateRangeEnd) return false;
+            }
+            return true;
+        });
+    }, [guests, search, respFilter, dateRangeStart, dateRangeEnd, responsiblePersonList]);
+
+    /* ---------- FILTERED (& SORTED) ROWS (Stage & Status Filtered) ---------- */
+    const rows = useMemo(() => {
+        const filtered = overallRecords.filter((g) => {
             if (stageFilter !== "all") {
                 const stageNum = Number(stageFilter);
                 const isComplete = g.stageStatus[stageNum - 1] === "Complete";
@@ -733,12 +751,6 @@ export default function CRRCallingProcessPage() {
                 if (statusFilter === "complete" && (!isRecordCompleted(g) || isBookingCancelled(g))) return false;
                 if (statusFilter === "cancelled" && !isBookingCancelled(g)) return false;
             }
-            if (dateRangeStart || dateRangeEnd) {
-                const gDate = parseDMY(g.timestamp);
-                if (isNaN(gDate.getTime())) return false; // no valid date → can't match an active range
-                if (dateRangeStart && gDate < dateRangeStart) return false;
-                if (dateRangeEnd && gDate > dateRangeEnd) return false;
-            }
             return true;
         });
 
@@ -752,7 +764,7 @@ export default function CRRCallingProcessPage() {
         }
 
         return filtered;
-    }, [guests, search, stageFilter, respFilter, statusFilter, dateRangeStart, dateRangeEnd, sortColumn, sortDirection, responsiblePersonList, isRecordCompleted]);
+    }, [overallRecords, stageFilter, statusFilter, sortColumn, sortDirection, isRecordCompleted]);
 
     // Reset to page 1 whenever the filtered result set changes shape
     useEffect(() => {
@@ -828,6 +840,14 @@ export default function CRRCallingProcessPage() {
     // Record-level separation into Pending and Completed:
     const pendingRows = useMemo(() => {
         if (statusFilter === "complete") return [];
+        if (statusFilter === "cancelled") {
+            // Cancelled bookings show in the Pending table
+            return rows.filter((g) => isBookingCancelled(g));
+        }
+        if (statusFilter === "pending") {
+            return rows.filter((g) => !isRecordCompleted(g) && !isBookingCancelled(g));
+        }
+        // statusFilter === "all": cancelled records are shown in the Pending table
         return rows.filter((g) => !isRecordCompleted(g));
     }, [rows, isRecordCompleted, statusFilter]);
 
@@ -870,17 +890,23 @@ export default function CRRCallingProcessPage() {
     const isStageCompleted = (g: Guest, stageNo: number) =>
         !isBookingCancelled(g) && g.stageStatus[stageNo - 1] === "Complete";
 
-    const pendingCount = pendingRows.length;
-    const completeCount = completedRows.length;
+    const activePendingCount = rows.filter((g) => !isRecordCompleted(g) && !isBookingCancelled(g)).length;
+    const pendingCount = statusFilter === "complete" || statusFilter === "cancelled" ? 0 : activePendingCount;
+    const completeCount = statusFilter === "pending" || statusFilter === "cancelled" ? 0 : completedRows.length;
 
     // "Actionable now" = the subset of pendingRows that is already unlocked
     const actionablePendingCount = pendingRows.filter((g) => {
         if (isBookingCancelled(g)) return false;
+        if (stageFilter !== "all") {
+            const stageNum = Number(stageFilter);
+            return g.stageStatus[stageNum - 1] !== "Complete" && !isStageLocked(g, stageNum);
+        }
         const stagesToCheck = isAdminRole ? STAGES.map((s) => s.no) : userAccessibleStages;
         return stagesToCheck.some((n) => g.stageStatus[n - 1] !== "Complete" && !isStageLocked(g, n));
     }).length;
 
-    const cancelledCount = rows.filter((g) => isBookingCancelled(g)).length;
+    const cancelledCount = statusFilter === "pending" || statusFilter === "complete" ? 0 : rows.filter((g) => isBookingCancelled(g)).length;
+    const totalPipelineCount = overallRecords.length;
     const referralsGeneratedCount = rows.filter(
         (g) => g.referralCollection?.referralTakenStatus === "Yes"
     ).length;
@@ -1841,7 +1867,7 @@ export default function CRRCallingProcessPage() {
                                 <h3 className="text-sm sm:text-base font-bold text-slate-900 leading-tight">{title}</h3>
                                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border shadow-2xs ${badgeClass}`}>
                                     <span>{tableRows.length} {tableRows.length === 1 ? "Record" : "Records"}</span>
-                                    {isPendingTable && totalPendingStageTasks !== tableRows.length && (
+                                    {isPendingTable && totalPendingStageTasks > 0 && totalPendingStageTasks !== tableRows.length && (
                                         <span className="text-[11px] font-semibold text-amber-800">
                                             · {totalPendingStageTasks} Stage Tasks
                                         </span>
@@ -2670,7 +2696,7 @@ export default function CRRCallingProcessPage() {
                                             Total Guests
                                         </p>
                                         <p className="text-3xl font-extrabold text-slate-900 leading-none mb-2">
-                                            {guests.length}
+                                            {totalPipelineCount}
                                         </p>
                                         <p className="text-[10px] text-blue-600 font-semibold mt-1">
                                             ▲ In active pipeline
