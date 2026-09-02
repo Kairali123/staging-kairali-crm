@@ -73,8 +73,38 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
+
+// The HR action modal's two picklists. These strings are written verbatim to
+// `daily_sales_reports_log_fms.hr_verify_status` and
+// `.hr_action_for_calling_fail_pass`, and they drive a half-day attendance
+// deduction downstream — so HR picks from a fixed vocabulary rather than typing,
+// which is what let spelling variants into the column before.
+//
+// One option each, by owner instruction. Adding a value here is all that is
+// needed to widen either list; see `withCurrentValue` for how a value already
+// saved on a row is kept selectable even when it is not in these lists.
+const HR_VERIFY_STATUS_OPTIONS = ["Half Day \u2013 Call Audit FAIL"] as const
+const HR_CALLING_ACTION_OPTIONS = ["Half day leave Updated on Pagarbook"] as const
+
+// A `Select` renders an empty trigger for a value that is not among its items,
+// which on a read-only row would silently blank a figure HR already recorded.
+// So whatever the row currently holds is always offered, appended to the list.
+// That covers rows saved before these lists existed and the "No action required"
+// default `openAction` still applies to a PASS row.
+function withCurrentValue(options: readonly string[], current: string): string[] {
+  const trimmed = (current || "").trim()
+  if (!trimmed || options.includes(trimmed)) return [...options]
+  return [...options, trimmed]
+}
 
 type AuditResult = "Pass" | "Fail"
 type EmailStatus = "Sent" | "Not Sent"
@@ -1802,17 +1832,25 @@ export default function SalesCallAuditPage() {
                     <span className="text-[10px] text-rose-500 font-normal">Required</span>
                   )}
                 </Label>
-                <Input
+                <Select
                   value={verifyStatus}
                   disabled={isReadOnly}
-                  readOnly={isReadOnly}
-                  onChange={e => setVerifyStatus(e.target.value)}
-                  placeholder="e.g. Half Day – Call Audit FAIL, Verified, etc."
-                  className={`h-10 text-xs ${isReadOnly
+                  onValueChange={setVerifyStatus}
+                >
+                  <SelectTrigger className={`h-10 text-xs ${isReadOnly
                     ? "bg-slate-100/90 text-slate-900 font-semibold border-slate-200 cursor-not-allowed opacity-90"
                     : "border-slate-300 bg-white"
-                    }`}
-                />
+                    }`}>
+                    <SelectValue placeholder="Select HR verify status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {withCurrentValue(HR_VERIFY_STATUS_OPTIONS, verifyStatus).map(option => (
+                      <SelectItem key={option} value={option} className="text-xs">
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Field 2: HR Action for Calling Fail/Pass */}
@@ -1825,17 +1863,25 @@ export default function SalesCallAuditPage() {
                     <span className="text-[10px] text-rose-500 font-normal">Required</span>
                   )}
                 </Label>
-                <Input
+                <Select
                   value={callingAction}
                   disabled={isReadOnly}
-                  readOnly={isReadOnly}
-                  onChange={e => setCallingAction(e.target.value)}
-                  placeholder="e.g. Half day leave Updated on Pagarbook"
-                  className={`h-10 text-xs ${isReadOnly
+                  onValueChange={setCallingAction}
+                >
+                  <SelectTrigger className={`h-10 text-xs ${isReadOnly
                     ? "bg-slate-100/90 text-slate-900 font-semibold border-slate-200 cursor-not-allowed opacity-90"
                     : "border-slate-300 bg-white"
-                    }`}
-                />
+                    }`}>
+                    <SelectValue placeholder="Select HR action" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {withCurrentValue(HR_CALLING_ACTION_OPTIONS, callingAction).map(option => (
+                      <SelectItem key={option} value={option} className="text-xs">
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 

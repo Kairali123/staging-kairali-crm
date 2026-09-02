@@ -349,7 +349,7 @@ const SALES_CALL_AUDIT_LEGACY_READ = 'sales_call_audit.read'
 // folds case and separators — and accepts the unseparated `superadmin` — because
 // `lib/db-auth.ts:178` copies `role` out of the database verbatim, so the stored
 // spelling is not guaranteed. `super_admin` is the canonical value.
-function isSalesCallAuditSuperAdmin(user: unknown): boolean {
+export function isSalesCallAuditSuperAdmin(user: unknown): boolean {
   const role = isRecord(user) ? user.role : undefined
   if (typeof role !== 'string') return false
   const folded = role.trim().toLowerCase().replace(/[\s\-_]+/g, '')

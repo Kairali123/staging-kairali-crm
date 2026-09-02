@@ -386,11 +386,10 @@ export default function CRRCallingProcessPage() {
         { name: "Dr. Rahul R", email: "doctor@ktahv.com", role: "doctor", stages: [3, 7] },
         { name: "Shoukath Ali Moosa", email: "fom@ktahv.com", role: "fom", stages: [9, 10] },
         { name: "Anoop Vijayaraj", email: "gm.hv@kairali.com", role: "gm", stages: [11] },
-        { name: "Abhilash Sir", email: "test@kairali.com", role: "test", stages: [1, 2, 6, 7] },
     ], []);
 
     const responsiblePersonList = useMemo(() => {
-        const list = (stageUsers || []).map((u) => ({ ...u, stages: [...u.stages] }));
+        const list = (stageUsers || []).map((u) => ({ ...u, stages: [...(u.stages || [])] }));
         for (const def of DEFAULT_STAGE_USERS) {
             const existing = list.find(
                 (u) =>
@@ -406,7 +405,8 @@ export default function CRRCallingProcessPage() {
                 existing.stages = Array.from(combined).sort((a, b) => a - b);
             }
         }
-        return list;
+        // Only include persons who have active assigned stages
+        return list.filter((u) => u.stages && u.stages.length > 0);
     }, [stageUsers, DEFAULT_STAGE_USERS]);
 
     // Stages accessible to the logged-in user.
@@ -436,17 +436,27 @@ export default function CRRCallingProcessPage() {
         return STAGES.filter((s) => userAccessibleStages.includes(s.no));
     }, [isAdminRole, userAccessibleStages]);
 
+    const [search, setSearch] = useState("");
+    const [stageFilter, setStageFilter] = useState<string>("all");
+    const [statusFilter, setStatusFilter] = useState<string>("all");
+    const [respFilter, setRespFilter] = useState<string>("all");
+
     /**
      * Determines whether an individual record is COMPLETED or PENDING.
      * Evaluated strictly per Guest/Booking/Record ID:
      * - Cancelled bookings: always false (never classified as Completed).
-     * - Admin / Super Admin: true ONLY if ALL 11 required workflow stages are Complete.
-     * - Normal user: true if ALL accessible stages to that user are Complete.
-     *   Non-accessible stages outside user's permission do NOT affect the user's completion status.
+     * - When stageFilter !== "all": true if that specific stage is Complete.
+     * - When stageFilter === "all":
+     *   - Admin / Super Admin: true ONLY if ALL 11 required workflow stages are Complete.
+     *   - Normal user: true if ALL accessible stages to that user are Complete.
      */
     const isRecordCompleted = useCallback((g: Guest): boolean => {
         if (isBookingCancelled(g)) {
             return false;
+        }
+        if (stageFilter !== "all") {
+            const stageNum = Number(stageFilter);
+            return g.stageStatus[stageNum - 1] === "Complete";
         }
         if (isAdminRole) {
             return STAGES.every((s) => g.stageStatus[s.no - 1] === "Complete");
@@ -455,7 +465,7 @@ export default function CRRCallingProcessPage() {
             return false;
         }
         return userAccessibleStages.every((stageNo) => g.stageStatus[stageNo - 1] === "Complete");
-    }, [isAdminRole, userAccessibleStages]);
+    }, [stageFilter, isAdminRole, userAccessibleStages]);
 
     const responsiblePersonOptions = useMemo(() => {
         if (isAdminRole) return responsiblePersonList;
@@ -468,11 +478,6 @@ export default function CRRCallingProcessPage() {
         );
         return me.length > 0 ? me : responsiblePersonList;
     }, [responsiblePersonList, isAdminRole, user]);
-
-    const [search, setSearch] = useState("");
-    const [stageFilter, setStageFilter] = useState<string>("all");
-    const [statusFilter, setStatusFilter] = useState<string>("all");
-    const [respFilter, setRespFilter] = useState<string>("all");
 
     useEffect(() => {
         if (user && !isAdminRole) {
@@ -683,10 +688,10 @@ export default function CRRCallingProcessPage() {
         [dateRangeFilter, customStartDate, customEndDate]
     );
 
-    /* ---------- FILTERED (& SORTED) ROWS ---------- */
-    const rows = useMemo(() => {
+    /* ---------- OVERALL ACCESSIBLE RECORDS (Before Stage & Status Filtering) ---------- */
+    const overallRecords = useMemo(() => {
         const s = search.toLowerCase();
-        const filtered = guests.filter((g) => {
+        return guests.filter((g) => {
             if (s) {
                 const matches =
                     String(g.name ?? "").toLowerCase().includes(s) ||
@@ -712,6 +717,19 @@ export default function CRRCallingProcessPage() {
                     if (!isRelevant) return false;
                 }
             }
+            if (dateRangeStart || dateRangeEnd) {
+                const gDate = parseDMY(g.timestamp);
+                if (isNaN(gDate.getTime())) return false; // no valid date → can't match an active range
+                if (dateRangeStart && gDate < dateRangeStart) return false;
+                if (dateRangeEnd && gDate > dateRangeEnd) return false;
+            }
+            return true;
+        });
+    }, [guests, search, respFilter, dateRangeStart, dateRangeEnd, responsiblePersonList]);
+
+    /* ---------- FILTERED (& SORTED) ROWS (Stage & Status Filtered) ---------- */
+    const rows = useMemo(() => {
+        const filtered = overallRecords.filter((g) => {
             if (stageFilter !== "all") {
                 const stageNum = Number(stageFilter);
                 const isComplete = g.stageStatus[stageNum - 1] === "Complete";
@@ -733,12 +751,6 @@ export default function CRRCallingProcessPage() {
                 if (statusFilter === "complete" && (!isRecordCompleted(g) || isBookingCancelled(g))) return false;
                 if (statusFilter === "cancelled" && !isBookingCancelled(g)) return false;
             }
-            if (dateRangeStart || dateRangeEnd) {
-                const gDate = parseDMY(g.timestamp);
-                if (isNaN(gDate.getTime())) return false; // no valid date → can't match an active range
-                if (dateRangeStart && gDate < dateRangeStart) return false;
-                if (dateRangeEnd && gDate > dateRangeEnd) return false;
-            }
             return true;
         });
 
@@ -752,7 +764,7 @@ export default function CRRCallingProcessPage() {
         }
 
         return filtered;
-    }, [guests, search, stageFilter, respFilter, statusFilter, dateRangeStart, dateRangeEnd, sortColumn, sortDirection, responsiblePersonList, isRecordCompleted]);
+    }, [overallRecords, stageFilter, statusFilter, sortColumn, sortDirection, isRecordCompleted]);
 
     // Reset to page 1 whenever the filtered result set changes shape
     useEffect(() => {
@@ -828,6 +840,14 @@ export default function CRRCallingProcessPage() {
     // Record-level separation into Pending and Completed:
     const pendingRows = useMemo(() => {
         if (statusFilter === "complete") return [];
+        if (statusFilter === "cancelled") {
+            // Cancelled bookings show in the Pending table
+            return rows.filter((g) => isBookingCancelled(g));
+        }
+        if (statusFilter === "pending") {
+            return rows.filter((g) => !isRecordCompleted(g) && !isBookingCancelled(g));
+        }
+        // statusFilter === "all": cancelled records are shown in the Pending table
         return rows.filter((g) => !isRecordCompleted(g));
     }, [rows, isRecordCompleted, statusFilter]);
 
@@ -870,17 +890,23 @@ export default function CRRCallingProcessPage() {
     const isStageCompleted = (g: Guest, stageNo: number) =>
         !isBookingCancelled(g) && g.stageStatus[stageNo - 1] === "Complete";
 
-    const pendingCount = pendingRows.length;
-    const completeCount = completedRows.length;
+    const activePendingCount = rows.filter((g) => !isRecordCompleted(g) && !isBookingCancelled(g)).length;
+    const pendingCount = statusFilter === "complete" || statusFilter === "cancelled" ? 0 : activePendingCount;
+    const completeCount = statusFilter === "pending" || statusFilter === "cancelled" ? 0 : completedRows.length;
 
     // "Actionable now" = the subset of pendingRows that is already unlocked
     const actionablePendingCount = pendingRows.filter((g) => {
         if (isBookingCancelled(g)) return false;
+        if (stageFilter !== "all") {
+            const stageNum = Number(stageFilter);
+            return g.stageStatus[stageNum - 1] !== "Complete" && !isStageLocked(g, stageNum);
+        }
         const stagesToCheck = isAdminRole ? STAGES.map((s) => s.no) : userAccessibleStages;
         return stagesToCheck.some((n) => g.stageStatus[n - 1] !== "Complete" && !isStageLocked(g, n));
     }).length;
 
-    const cancelledCount = rows.filter((g) => isBookingCancelled(g)).length;
+    const cancelledCount = statusFilter === "pending" || statusFilter === "complete" ? 0 : rows.filter((g) => isBookingCancelled(g)).length;
+    const totalPipelineCount = overallRecords.length;
     const referralsGeneratedCount = rows.filter(
         (g) => g.referralCollection?.referralTakenStatus === "Yes"
     ).length;
@@ -1115,7 +1141,7 @@ export default function CRRCallingProcessPage() {
         if (!isAdminRole && isStageLocked(activeGuest, 3)) return;
         if (isStage3Complete) return; // completed stage is read-only
         if (!isModalFormComplete() || modalSaved) return;
-        
+
         const guestId = activeGuest.id;
         const targetId = activeGuest.uid || activeGuest.bookingId;
         const data = {
@@ -1152,7 +1178,7 @@ export default function CRRCallingProcessPage() {
         if (!activeDriverArrivalGuest) return;
         if (!isAdminRole && isStageLocked(activeDriverArrivalGuest, 9)) return;
         if (isStage9Complete) return;
-        
+
         const guestId = activeDriverArrivalGuest.id;
         const targetId = activeDriverArrivalGuest.uid || activeDriverArrivalGuest.bookingId;
 
@@ -1186,7 +1212,7 @@ export default function CRRCallingProcessPage() {
         if (!activeDriverDepartureGuest) return;
         if (!isAdminRole && isStageLocked(activeDriverDepartureGuest, 10)) return;
         if (isStage10Complete) return;
-        
+
         const guestId = activeDriverDepartureGuest.id;
         const targetId = activeDriverDepartureGuest.uid || activeDriverDepartureGuest.bookingId;
 
@@ -1841,7 +1867,7 @@ export default function CRRCallingProcessPage() {
                                 <h3 className="text-sm sm:text-base font-bold text-slate-900 leading-tight">{title}</h3>
                                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border shadow-2xs ${badgeClass}`}>
                                     <span>{tableRows.length} {tableRows.length === 1 ? "Record" : "Records"}</span>
-                                    {isPendingTable && totalPendingStageTasks !== tableRows.length && (
+                                    {isPendingTable && totalPendingStageTasks > 0 && totalPendingStageTasks !== tableRows.length && (
                                         <span className="text-[11px] font-semibold text-amber-800">
                                             · {totalPendingStageTasks} Stage Tasks
                                         </span>
@@ -2341,13 +2367,12 @@ export default function CRRCallingProcessPage() {
                                         <button
                                             key={i}
                                             onClick={() => setCurPage(i)}
-                                            className={`h-9 w-9 sm:h-8 sm:w-8 rounded-md text-xs font-semibold transition-all ${
-                                                i === cur
+                                            className={`h-9 w-9 sm:h-8 sm:w-8 rounded-md text-xs font-semibold transition-all ${i === cur
                                                     ? (isPendingTable
                                                         ? 'bg-amber-600 text-white shadow-md border border-amber-700'
                                                         : 'bg-emerald-600 text-white shadow-md border border-emerald-700')
                                                     : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
-                                            }`}
+                                                }`}
                                         >{i}</button>
                                     );
                                 }
@@ -2670,7 +2695,7 @@ export default function CRRCallingProcessPage() {
                                             Total Guests
                                         </p>
                                         <p className="text-3xl font-extrabold text-slate-900 leading-none mb-2">
-                                            {guests.length}
+                                            {totalPipelineCount}
                                         </p>
                                         <p className="text-[10px] text-blue-600 font-semibold mt-1">
                                             ▲ In active pipeline
@@ -2811,22 +2836,20 @@ export default function CRRCallingProcessPage() {
                                     <button
                                         type="button"
                                         onClick={() => setRecordsViewTab("both")}
-                                        className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                                            recordsViewTab === "both"
+                                        className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${recordsViewTab === "both"
                                                 ? "bg-slate-800 text-white shadow-xs font-bold"
                                                 : "text-slate-600 hover:text-slate-900"
-                                        }`}
+                                            }`}
                                     >
                                         Both Tables ({rows.length})
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => setRecordsViewTab("pending")}
-                                        className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                                            recordsViewTab === "pending"
+                                        className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${recordsViewTab === "pending"
                                                 ? "bg-amber-500 text-white shadow-xs font-bold"
                                                 : "text-slate-600 hover:text-amber-700"
-                                        }`}
+                                            }`}
                                     >
                                         <Clock className="w-3.5 h-3.5" />
                                         Pending ({pendingRows.length})
@@ -2834,11 +2857,10 @@ export default function CRRCallingProcessPage() {
                                     <button
                                         type="button"
                                         onClick={() => setRecordsViewTab("completed")}
-                                        className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                                            recordsViewTab === "completed"
+                                        className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${recordsViewTab === "completed"
                                                 ? "bg-emerald-600 text-white shadow-xs font-bold"
                                                 : "text-slate-600 hover:text-emerald-700"
-                                        }`}
+                                            }`}
                                     >
                                         <CheckCircle2 className="w-3.5 h-3.5" />
                                         Completed ({completedRows.length})
@@ -2851,9 +2873,8 @@ export default function CRRCallingProcessPage() {
                                         variant={viewMode === "table" ? "secondary" : "outline"}
                                         size="sm"
                                         onClick={() => setViewMode("table")}
-                                        className={`font-semibold shadow-2xs ${
-                                            viewMode === "table" ? "" : "border-slate-300 text-slate-700 hover:bg-slate-50"
-                                        }`}
+                                        className={`font-semibold shadow-2xs ${viewMode === "table" ? "" : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                                            }`}
                                     >
                                         <Users className="h-3.5 w-3.5 mr-1.5" />
                                         Table View
@@ -2862,9 +2883,8 @@ export default function CRRCallingProcessPage() {
                                         variant={viewMode === "chart" ? "secondary" : "outline"}
                                         size="sm"
                                         onClick={() => setViewMode("chart")}
-                                        className={`font-semibold shadow-2xs ${
-                                            viewMode === "chart" ? "" : "border-slate-300 text-slate-700 hover:bg-slate-50"
-                                        }`}
+                                        className={`font-semibold shadow-2xs ${viewMode === "chart" ? "" : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                                            }`}
                                     >
                                         <BarChart3 className="h-3.5 w-3.5 mr-1.5" />
                                         Chart View
@@ -2894,177 +2914,126 @@ export default function CRRCallingProcessPage() {
                         ) : (
                             <div className="rounded-xl border border-slate-200 bg-white shadow-md overflow-hidden">
                                 <div className="px-4 sm:px-6 py-6 bg-slate-50/60">
-                                {rows.length === 0 ? (
-                                    <div className="text-center py-16 text-sm text-slate-400">
-                                        No data to chart for the current filters.
-                                    </div>
-                                ) : (
-                                    <div className="space-y-6">
-                                        {/* Journey Status Distribution: donut + role breakdown */}
-                                        <div className="rounded-xl border border-slate-200 bg-white shadow-md overflow-hidden">
-                                            <div className="flex items-center gap-3 px-4 sm:px-5 py-3.5 bg-gradient-to-r from-blue-100 via-white to-indigo-100 border-b border-slate-200">
-                                                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-700 flex items-center justify-center shadow-md border border-blue-700/30 shrink-0">
-                                                    <TrendingUp className="w-4 h-4 text-white" />
-                                                </div>
-                                                <div>
-                                                    <h4 className="text-sm font-semibold text-slate-900 leading-tight">Journey Status Distribution</h4>
-                                                    <p className="text-xs text-slate-500 mt-0.5">Active vs. completed journeys, and active workload by responsible role</p>
-                                                </div>
-                                            </div>
-                                            <div className="p-5 sm:p-6 grid grid-cols-1 lg:grid-cols-5 gap-8">
-                                                {/* Donut */}
-                                                <div className="lg:col-span-2 flex flex-col items-center justify-center gap-5">
-                                                    <div className="relative w-40 h-40 shrink-0">
-                                                        <div
-                                                            className="w-40 h-40 rounded-full shadow-inner"
-                                                            style={{
-                                                                background: `conic-gradient(#f59e0b 0% ${(chartData.totalActive / chartData.totalAll) * 100}%, #10b981 ${(chartData.totalActive / chartData.totalAll) * 100}% 100%)`,
-                                                            }}
-                                                        />
-                                                        <div className="absolute inset-[14px] rounded-full bg-white shadow-[inset_0_0_0_1px_rgba(15,23,42,0.06)] flex flex-col items-center justify-center">
-                                                            <span className="text-2xl font-extrabold text-slate-900 leading-none">{chartData.totalActive + chartData.totalComplete}</span>
-                                                            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mt-1">Guests</span>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex gap-6">
-                                                        <div className="flex items-center gap-2 text-sm">
-                                                            <span className="w-2.5 h-2.5 rounded-sm bg-amber-500 shrink-0" />
-                                                            <span className="text-slate-600">Active</span>
-                                                            <span className="font-bold text-slate-900">{chartData.totalActive}</span>
-                                                        </div>
-                                                        <div className="flex items-center gap-2 text-sm">
-                                                            <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 shrink-0" />
-                                                            <span className="text-slate-600">Completed</span>
-                                                            <span className="font-bold text-slate-900">{chartData.totalComplete}</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {/* Role breakdown */}
-                                                <div className="lg:col-span-3 flex flex-col justify-center gap-5">
-                                                    {(
-                                                        [
-                                                            { key: "GRE", label: "Guest Relations Executive (GRE)", icon: PhoneCall, from: "from-sky-500", to: "to-sky-600" },
-                                                            { key: "Doctor", label: "Doctor", icon: Award, from: "from-teal-500", to: "to-teal-600" },
-                                                            { key: "FO", label: "Front Office (FO)", icon: Briefcase, from: "from-purple-500", to: "to-purple-600" },
-                                                            { key: "GM", label: "General Manager (GM)", icon: ClipboardCheck, from: "from-amber-500", to: "to-amber-600" },
-                                                        ] as const
-                                                    ).map((r) => {
-                                                        const value = chartData.respCounts[r.key] ?? 0;
-                                                        const pct = chartData.totalActive > 0 ? (value / chartData.totalActive) * 100 : 0;
-                                                        const Icon = r.icon;
-                                                        return (
-                                                            <div key={r.key} className="flex items-center gap-4">
-                                                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white shrink-0 bg-gradient-to-br ${r.from} ${r.to} shadow-sm`}>
-                                                                    <Icon className="w-4.5 h-4.5" />
-                                                                </div>
-                                                                <div className="flex-1 min-w-0">
-                                                                    <div className="flex items-center justify-between mb-1.5 gap-2">
-                                                                        <span className="text-xs font-bold uppercase tracking-wide text-slate-500 truncate">{r.label}</span>
-                                                                        <span className="text-sm font-extrabold text-slate-900 shrink-0">
-                                                                            {value} <span className="text-xs font-medium text-slate-400">({pct.toFixed(0)}%)</span>
-                                                                        </span>
-                                                                    </div>
-                                                                    <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                                                                        <div
-                                                                            className={`h-full rounded-full bg-gradient-to-r ${r.from} ${r.to} transition-all`}
-                                                                            style={{ width: `${value === 0 ? 0 : Math.max(pct, 4)}%` }}
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
+                                    {rows.length === 0 ? (
+                                        <div className="text-center py-16 text-sm text-slate-400">
+                                            No data to chart for the current filters.
                                         </div>
-
-                                        {/* Pending Actions by Stage */}
-                                        <div className="rounded-xl border border-slate-200 bg-white shadow-md overflow-hidden">
-                                            <div className="flex items-center gap-3 px-4 sm:px-5 py-3.5 bg-gradient-to-r from-blue-100 via-white to-indigo-100 border-b border-slate-200">
-                                                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-700 flex items-center justify-center shadow-md border border-blue-700/30 shrink-0">
-                                                    <BarChart3 className="w-4 h-4 text-white" />
-                                                </div>
-                                                <div>
-                                                    <h4 className="text-sm font-semibold text-slate-900 leading-tight">Pending Actions by Stage</h4>
-                                                    <p className="text-xs text-slate-500 mt-0.5">Unlocked and awaiting action, across all 8 stages</p>
-                                                </div>
-                                            </div>
-                                            <div className="p-3 sm:p-4">
-                                                {STAGES.map((s, idx) => {
-                                                    const value = chartData.stagePending[idx] ?? 0;
-                                                    const pct = (value / chartData.maxStagePending) * 100;
-                                                    return (
-                                                        <div
-                                                            key={s.no}
-                                                            className={`flex items-center gap-3 sm:gap-4 rounded-lg px-2 sm:px-3 py-2.5 ${idx % 2 === 0 ? "bg-slate-50/70" : ""}`}
-                                                        >
-                                                            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-slate-800 text-white text-[10px] sm:text-[11px] font-bold flex items-center justify-center shrink-0">
-                                                                {s.no}
-                                                            </div>
-                                                            <div className="w-32 sm:w-72 shrink-0 text-xs font-semibold text-slate-700 truncate" title={s.name}>
-                                                                {s.name}
-                                                            </div>
-                                                            <div className="flex-1 h-2.5 rounded-full bg-slate-100 overflow-hidden">
-                                                                <div
-                                                                    className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all"
-                                                                    style={{ width: `${value === 0 ? 0 : Math.max(pct, 3)}%` }}
-                                                                />
-                                                            </div>
-                                                            <div className="w-12 shrink-0 text-right">
-                                                                <span className="inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                                                                    {value}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-
-                                        {/* Top Pending Workload by Employee */}
-                                        {chartData.employeeTotals.length > 0 && (
+                                    ) : (
+                                        <div className="space-y-6">
+                                            {/* Journey Status Distribution: donut + role breakdown */}
                                             <div className="rounded-xl border border-slate-200 bg-white shadow-md overflow-hidden">
                                                 <div className="flex items-center gap-3 px-4 sm:px-5 py-3.5 bg-gradient-to-r from-blue-100 via-white to-indigo-100 border-b border-slate-200">
-                                                    <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 flex items-center justify-center shadow-md border border-orange-600/30 shrink-0">
-                                                        <Award className="w-4 h-4 text-white" />
+                                                    <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-700 flex items-center justify-center shadow-md border border-blue-700/30 shrink-0">
+                                                        <TrendingUp className="w-4 h-4 text-white" />
                                                     </div>
                                                     <div>
-                                                        <h4 className="text-sm font-semibold text-slate-900 leading-tight">Top Pending Workload by Employee</h4>
-                                                        <p className="text-xs text-slate-500 mt-0.5">Highest actionable-pending count, summed across all stages</p>
+                                                        <h4 className="text-sm font-semibold text-slate-900 leading-tight">Journey Status Distribution</h4>
+                                                        <p className="text-xs text-slate-500 mt-0.5">Active vs. completed journeys, and active workload by responsible role</p>
+                                                    </div>
+                                                </div>
+                                                <div className="p-5 sm:p-6 grid grid-cols-1 lg:grid-cols-5 gap-8">
+                                                    {/* Donut */}
+                                                    <div className="lg:col-span-2 flex flex-col items-center justify-center gap-5">
+                                                        <div className="relative w-40 h-40 shrink-0">
+                                                            <div
+                                                                className="w-40 h-40 rounded-full shadow-inner"
+                                                                style={{
+                                                                    background: `conic-gradient(#f59e0b 0% ${(chartData.totalActive / chartData.totalAll) * 100}%, #10b981 ${(chartData.totalActive / chartData.totalAll) * 100}% 100%)`,
+                                                                }}
+                                                            />
+                                                            <div className="absolute inset-[14px] rounded-full bg-white shadow-[inset_0_0_0_1px_rgba(15,23,42,0.06)] flex flex-col items-center justify-center">
+                                                                <span className="text-2xl font-extrabold text-slate-900 leading-none">{chartData.totalActive + chartData.totalComplete}</span>
+                                                                <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mt-1">Guests</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex gap-6">
+                                                            <div className="flex items-center gap-2 text-sm">
+                                                                <span className="w-2.5 h-2.5 rounded-sm bg-amber-500 shrink-0" />
+                                                                <span className="text-slate-600">Active</span>
+                                                                <span className="font-bold text-slate-900">{chartData.totalActive}</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-2 text-sm">
+                                                                <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 shrink-0" />
+                                                                <span className="text-slate-600">Completed</span>
+                                                                <span className="font-bold text-slate-900">{chartData.totalComplete}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Role breakdown */}
+                                                    <div className="lg:col-span-3 flex flex-col justify-center gap-5">
+                                                        {(
+                                                            [
+                                                                { key: "GRE", label: "Guest Relations Executive (GRE)", icon: PhoneCall, from: "from-sky-500", to: "to-sky-600" },
+                                                                { key: "Doctor", label: "Doctor", icon: Award, from: "from-teal-500", to: "to-teal-600" },
+                                                                { key: "FO", label: "Front Office (FO)", icon: Briefcase, from: "from-purple-500", to: "to-purple-600" },
+                                                                { key: "GM", label: "General Manager (GM)", icon: ClipboardCheck, from: "from-amber-500", to: "to-amber-600" },
+                                                            ] as const
+                                                        ).map((r) => {
+                                                            const value = chartData.respCounts[r.key] ?? 0;
+                                                            const pct = chartData.totalActive > 0 ? (value / chartData.totalActive) * 100 : 0;
+                                                            const Icon = r.icon;
+                                                            return (
+                                                                <div key={r.key} className="flex items-center gap-4">
+                                                                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white shrink-0 bg-gradient-to-br ${r.from} ${r.to} shadow-sm`}>
+                                                                        <Icon className="w-4.5 h-4.5" />
+                                                                    </div>
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <div className="flex items-center justify-between mb-1.5 gap-2">
+                                                                            <span className="text-xs font-bold uppercase tracking-wide text-slate-500 truncate">{r.label}</span>
+                                                                            <span className="text-sm font-extrabold text-slate-900 shrink-0">
+                                                                                {value} <span className="text-xs font-medium text-slate-400">({pct.toFixed(0)}%)</span>
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                                                                            <div
+                                                                                className={`h-full rounded-full bg-gradient-to-r ${r.from} ${r.to} transition-all`}
+                                                                                style={{ width: `${value === 0 ? 0 : Math.max(pct, 4)}%` }}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Pending Actions by Stage */}
+                                            <div className="rounded-xl border border-slate-200 bg-white shadow-md overflow-hidden">
+                                                <div className="flex items-center gap-3 px-4 sm:px-5 py-3.5 bg-gradient-to-r from-blue-100 via-white to-indigo-100 border-b border-slate-200">
+                                                    <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-700 flex items-center justify-center shadow-md border border-blue-700/30 shrink-0">
+                                                        <BarChart3 className="w-4 h-4 text-white" />
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="text-sm font-semibold text-slate-900 leading-tight">Pending Actions by Stage</h4>
+                                                        <p className="text-xs text-slate-500 mt-0.5">Unlocked and awaiting action, across all 8 stages</p>
                                                     </div>
                                                 </div>
                                                 <div className="p-3 sm:p-4">
-                                                    {chartData.employeeTotals.map((e, i) => {
-                                                        const pct = (e.total / chartData.maxEmployee) * 100;
-                                                        const initials = e.emp
-                                                            .split(/\s+/)
-                                                            .filter(Boolean)
-                                                            .slice(0, 2)
-                                                            .map((w) => w[0])
-                                                            .join("")
-                                                            .toUpperCase();
+                                                    {STAGES.map((s, idx) => {
+                                                        const value = chartData.stagePending[idx] ?? 0;
+                                                        const pct = (value / chartData.maxStagePending) * 100;
                                                         return (
                                                             <div
-                                                                key={e.emp}
-                                                                className={`flex items-center gap-3 sm:gap-4 rounded-lg px-2 sm:px-3 py-2.5 ${i % 2 === 0 ? "bg-slate-50/70" : ""}`}
+                                                                key={s.no}
+                                                                className={`flex items-center gap-3 sm:gap-4 rounded-lg px-2 sm:px-3 py-2.5 ${idx % 2 === 0 ? "bg-slate-50/70" : ""}`}
                                                             >
-                                                                <div className="w-5 sm:w-6 text-[11px] font-bold text-slate-400 text-center shrink-0">#{i + 1}</div>
-                                                                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-slate-600 to-slate-800 text-white text-[11px] font-bold flex items-center justify-center shrink-0">
-                                                                    {initials || "—"}
+                                                                <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-slate-800 text-white text-[10px] sm:text-[11px] font-bold flex items-center justify-center shrink-0">
+                                                                    {s.no}
                                                                 </div>
-                                                                <div className="w-24 sm:w-56 shrink-0 text-xs font-semibold text-slate-700 truncate" title={e.emp}>
-                                                                    {e.emp}
+                                                                <div className="w-32 sm:w-72 shrink-0 text-xs font-semibold text-slate-700 truncate" title={s.name}>
+                                                                    {s.name}
                                                                 </div>
                                                                 <div className="flex-1 h-2.5 rounded-full bg-slate-100 overflow-hidden">
                                                                     <div
-                                                                        className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500 transition-all"
-                                                                        style={{ width: `${e.total === 0 ? 0 : Math.max(pct, 3)}%` }}
+                                                                        className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all"
+                                                                        style={{ width: `${value === 0 ? 0 : Math.max(pct, 3)}%` }}
                                                                     />
                                                                 </div>
                                                                 <div className="w-12 shrink-0 text-right">
-                                                                    <span className="inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                                                                        {e.total}
+                                                                    <span className="inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                                                        {value}
                                                                     </span>
                                                                 </div>
                                                             </div>
@@ -3072,9 +3041,60 @@ export default function CRRCallingProcessPage() {
                                                     })}
                                                 </div>
                                             </div>
-                                        )}
-                                    </div>
-                                )}
+
+                                            {/* Top Pending Workload by Employee */}
+                                            {chartData.employeeTotals.length > 0 && (
+                                                <div className="rounded-xl border border-slate-200 bg-white shadow-md overflow-hidden">
+                                                    <div className="flex items-center gap-3 px-4 sm:px-5 py-3.5 bg-gradient-to-r from-blue-100 via-white to-indigo-100 border-b border-slate-200">
+                                                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 flex items-center justify-center shadow-md border border-orange-600/30 shrink-0">
+                                                            <Award className="w-4 h-4 text-white" />
+                                                        </div>
+                                                        <div>
+                                                            <h4 className="text-sm font-semibold text-slate-900 leading-tight">Top Pending Workload by Employee</h4>
+                                                            <p className="text-xs text-slate-500 mt-0.5">Highest actionable-pending count, summed across all stages</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="p-3 sm:p-4">
+                                                        {chartData.employeeTotals.map((e, i) => {
+                                                            const pct = (e.total / chartData.maxEmployee) * 100;
+                                                            const initials = e.emp
+                                                                .split(/\s+/)
+                                                                .filter(Boolean)
+                                                                .slice(0, 2)
+                                                                .map((w) => w[0])
+                                                                .join("")
+                                                                .toUpperCase();
+                                                            return (
+                                                                <div
+                                                                    key={e.emp}
+                                                                    className={`flex items-center gap-3 sm:gap-4 rounded-lg px-2 sm:px-3 py-2.5 ${i % 2 === 0 ? "bg-slate-50/70" : ""}`}
+                                                                >
+                                                                    <div className="w-5 sm:w-6 text-[11px] font-bold text-slate-400 text-center shrink-0">#{i + 1}</div>
+                                                                    <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-slate-600 to-slate-800 text-white text-[11px] font-bold flex items-center justify-center shrink-0">
+                                                                        {initials || "—"}
+                                                                    </div>
+                                                                    <div className="w-24 sm:w-56 shrink-0 text-xs font-semibold text-slate-700 truncate" title={e.emp}>
+                                                                        {e.emp}
+                                                                    </div>
+                                                                    <div className="flex-1 h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                                                                        <div
+                                                                            className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500 transition-all"
+                                                                            style={{ width: `${e.total === 0 ? 0 : Math.max(pct, 3)}%` }}
+                                                                        />
+                                                                    </div>
+                                                                    <div className="w-12 shrink-0 text-right">
+                                                                        <span className="inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                                                            {e.total}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -3282,8 +3302,8 @@ export default function CRRCallingProcessPage() {
                                     <RotateCcw className="h-4 w-4 text-emerald-500" />
                                     <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-600">Safe Return Call Details</h4>
                                     <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${isStage6Complete ? 'text-slate-500 bg-slate-100' :
-                                            isStage6Processing ? 'text-amber-700 bg-amber-100' :
-                                                'text-emerald-400 bg-emerald-100'
+                                        isStage6Processing ? 'text-amber-700 bg-amber-100' :
+                                            'text-emerald-400 bg-emerald-100'
                                         }`}>
                                         {isStage6Complete ? "Read Only" : isStage6Processing ? "Processing" : "Fill in below"}
                                     </span>
@@ -3504,8 +3524,8 @@ export default function CRRCallingProcessPage() {
                                     <Send className="h-4 w-4 text-orange-500" />
                                     <h4 className="text-xs font-bold uppercase tracking-wider text-orange-600">Rating &amp; Review Details</h4>
                                     <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${isStage5Complete ? 'text-slate-500 bg-slate-100' :
-                                            isStage5Processing ? 'text-amber-700 bg-amber-100' :
-                                                'text-orange-400 bg-orange-100'
+                                        isStage5Processing ? 'text-amber-700 bg-amber-100' :
+                                            'text-orange-400 bg-orange-100'
                                         }`}>
                                         {isStage5Complete ? "Read Only" : isStage5Processing ? "Processing" : "Fill in below"}
                                     </span>
@@ -4288,8 +4308,8 @@ export default function CRRCallingProcessPage() {
                                     <TrendingUp className="h-4 w-4 text-purple-500" />
                                     <h4 className="text-xs font-bold uppercase tracking-wider text-purple-600">Result &amp; Health Progress Details</h4>
                                     <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${isStage7Complete ? 'text-slate-500 bg-slate-100' :
-                                            isStage7Processing ? 'text-amber-700 bg-amber-100' :
-                                                'text-purple-400 bg-purple-100'
+                                        isStage7Processing ? 'text-amber-700 bg-amber-100' :
+                                            'text-purple-400 bg-purple-100'
                                         }`}>
                                         {isStage7Complete ? "Read Only" : isStage7Processing ? "Processing" : "Fill in below"}
                                     </span>

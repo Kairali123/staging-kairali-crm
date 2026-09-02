@@ -53,6 +53,16 @@ export default function SalesCallAuditEmailTemplatePage() {
     )
   }, [user])
 
+  // Only a super_admin may dispatch the report. HR managers keep `viewAll` and so
+  // still read every figure on this page, but the send is a super_admin action:
+  // the mail instructs HR to dock half a day's attendance per FAIL. Folded the
+  // same way `lib/authz.ts` folds it, because `role` is copied out of the
+  // database verbatim and the stored spelling is not guaranteed.
+  const canSendReport = useMemo(() => {
+    const folded = String(user?.role || "").trim().toLowerCase().replace(/[\s\-_]+/g, "")
+    return folded === "superadmin"
+  }, [user])
+
   const isUserRecord = useCallback(
     (empId?: string | null, name?: string | null) => {
       if (isHrOrAdmin) return true
@@ -126,8 +136,9 @@ export default function SalesCallAuditEmailTemplatePage() {
       const res = await fetch("/api/sales-call-audit/send-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        // No recipient is sent: the server resolves To/Cc from AUDIT_REPORT_TO and
+        // AUDIT_REPORT_CC, so the client cannot redirect the report.
         body: JSON.stringify({
-          to: "sysadmin@kairali.com",
           date: selectedDate,
           displayDate,
           metrics,
@@ -135,9 +146,19 @@ export default function SalesCallAuditEmailTemplatePage() {
         }),
       })
       const json = await res.json()
-      if (json.success) {
-        toast.success(`Report successfully sent to sysadmin@kairali.com!`, {
+      if (json.success && json.smtpDispatched) {
+        const cc = Array.isArray(json.cc) && json.cc.length > 0 ? ` (cc: ${json.cc.join(", ")})` : ""
+        toast.success(`Report successfully sent to ${json.recipient}${cc}`, {
           description: `Dispatched ${employees.length} employee audit records for ${displayDate}`,
+        })
+      } else if (json.success) {
+        // The route answers 200 even when SMTP is unconfigured or the dispatch
+        // threw, so `success` alone only means the request was handled. Nothing
+        // left the server here; HR must not read this as a delivered report.
+        toast.error("Report was NOT sent", {
+          description: json.smtpError
+            ? `Mail server error: ${json.smtpError}`
+            : "Email is not configured on the server. Contact IT before acting on this report.",
         })
       } else {
         toast.error(json.error || "Failed to send email report")
@@ -216,20 +237,22 @@ export default function SalesCallAuditEmailTemplatePage() {
                 Refresh
               </Button>
 
-              {/* Send Email Button */}
-              <Button
-                size="sm"
-                onClick={handleSendEmail}
-                disabled={sendingEmail || !data}
-                className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold shadow-md cursor-pointer border border-emerald-400/40"
-              >
-                {sendingEmail ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="mr-2 h-4 w-4" />
-                )}
-                {sendingEmail ? "Sending..." : "Send to sysadmin@kairali.com"}
-              </Button>
+              {/* Send Email Button — super_admin only */}
+              {canSendReport && (
+                <Button
+                  size="sm"
+                  onClick={handleSendEmail}
+                  disabled={sendingEmail || !data}
+                  className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold shadow-md cursor-pointer border border-emerald-400/40"
+                >
+                  {sendingEmail ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="mr-2 h-4 w-4" />
+                  )}
+                  {sendingEmail ? "Sending..." : "Send Report"}
+                </Button>
+              )}
 
               <Button
                 variant="outline"
@@ -397,18 +420,20 @@ export default function SalesCallAuditEmailTemplatePage() {
                   Open consolidated audit report
                 </Link>
               </Button>
-              <Button
-                onClick={handleSendEmail}
-                disabled={sendingEmail || !data}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer shadow-sm"
-              >
-                {sendingEmail ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="mr-2 h-4 w-4" />
-                )}
-                {sendingEmail ? "Sending..." : "Send Report to sysadmin@kairali.com"}
-              </Button>
+              {canSendReport && (
+                <Button
+                  onClick={handleSendEmail}
+                  disabled={sendingEmail || !data}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer shadow-sm"
+                >
+                  {sendingEmail ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="mr-2 h-4 w-4" />
+                  )}
+                  {sendingEmail ? "Sending..." : "Send Report to HR"}
+                </Button>
+              )}
             </div>
 
             <div className="border-t border-slate-200 pt-5 leading-6">

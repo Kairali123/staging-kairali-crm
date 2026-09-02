@@ -351,11 +351,15 @@ export default function CrrStageViewModal({
             case 2: {
                 const remarks = (savedData.doerRemarks as string) || (savedData.remarks as string) || "";
                 const qrScanned = (savedData.qrCodeScannedStatus as string) || (savedData.qrCodeViewed ? "Yes" : "");
+                const doer = (savedData.doer as string) || "";
+                const timeDelay = (savedData.timeDelay as string) || "";
 
                 return (
                     <>
                         <SectionGroup title="Guest Request & QR Management">
+                            {doer ? <FieldBox label="Responsible Doer" value={doer} badgeColor="#0284c7" /> : null}
                             <FieldBox label="QR Code Scanned" value={qrScanned || "Not Scanned"} badgeColor={qrScanned && qrScanned !== "Not Scanned" ? "#16a34a" : "#64748b"} />
+                            {timeDelay ? <FieldBox label="Time Delay" value={timeDelay} badgeColor="#f59e0b" /> : null}
                             <FieldBox label="Remarks / Complaint Details" value={remarks || "No remarks entered"} fullWidth />
                         </SectionGroup>
                     </>

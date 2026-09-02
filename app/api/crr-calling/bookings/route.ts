@@ -88,6 +88,21 @@ function isLockedDate(plannedVal: any): boolean {
     return todayStr < plannedStr;
 }
 
+// Ensure that "Actual / Done" dates cannot be in the future (today or past only)
+function isValidActualDate(val: any): boolean {
+    if (!val) return false;
+    const d = val instanceof Date ? val : new Date(val);
+    if (isNaN(d.getTime())) return false;
+    const todayStr = getISTDateString(new Date());
+    const dateStr = getISTDateString(d);
+    return dateStr <= todayStr;
+}
+
+function filterActualDate(val: any): any {
+    if (!val) return null;
+    return isValidActualDate(val) ? val : null;
+}
+
 const DOCTOR_EMAIL_MAP: Record<string, string> = {
     "Dr Deepu John": "drdeepu@ktahv.com",
     "Ashikha Raj": "ashikha@ktahv.com",
@@ -188,10 +203,21 @@ export async function GET(req: NextRequest) {
                         const rawKeys = [r.booking_id, r.booking_no, r.reservation_id].filter(Boolean).map(String);
                         const variations: string[] = [];
                         for (const k of rawKeys) {
-                            variations.push(k);
-                            variations.push(k.replace(/-/g, " "));
-                            variations.push(k.replace(/\s+/g, "-"));
-                            variations.push(k.replace(/[\s\-_]+/g, ""));
+                            const trimmed = String(k).trim();
+                            if (!trimmed) continue;
+                            variations.push(trimmed);
+                            variations.push(trimmed.replace(/-/g, " "));
+                            variations.push(trimmed.replace(/\s+/g, "-"));
+                            variations.push(trimmed.replace(/[\s\-_]+/g, ""));
+                            const numMatch = trimmed.match(/\d+/);
+                            if (numMatch) {
+                                const n = numMatch[0];
+                                variations.push(n);
+                                variations.push(`KTAHV-PMS-${n}`);
+                                variations.push(`KTAHV PMS ${n}`);
+                                variations.push(`PMS-${n}`);
+                                variations.push(`PMS ${n}`);
+                            }
                         }
                         return variations;
                     })
@@ -200,31 +226,64 @@ export async function GET(req: NextRequest) {
             )
         );
 
+        const mobileKeys = Array.from(
+            new Set(
+                processRows
+                    .map((r) => String(r.mobile || "").replace(/\D/g, "").slice(-10))
+                    .filter((m) => m.length === 10)
+            )
+        );
+
         const normalizeKey = (k: any) => String(k || "").toLowerCase().replace(/[\s\-_]+/g, "").trim();
 
         let checkinMap = new Map<string, any>();
-        if (checkinKeys.length > 0) {
+        if (checkinKeys.length > 0 || mobileKeys.length > 0) {
+            const conditions: string[] = [];
+            const params: any[] = [];
+            if (checkinKeys.length > 0) {
+                conditions.push("reservation_id IN (?) OR TRIM(reservation_id) IN (?)");
+                params.push(checkinKeys, checkinKeys);
+            }
+            if (mobileKeys.length > 0) {
+                conditions.push("mobile IN (?) OR TRIM(mobile) IN (?)");
+                params.push(mobileKeys, mobileKeys);
+            }
             const [chkRows] = await pool.query<any[]>(
-                `SELECT * FROM ktahv_checkinmasterfms WHERE reservation_id IN (?) OR TRIM(reservation_id) IN (?) ORDER BY id DESC`,
-                [checkinKeys, checkinKeys]
+                `SELECT * FROM ktahv_checkinmasterfms WHERE ${conditions.join(" OR ")} ORDER BY id DESC`,
+                params
             );
             if (chkRows) {
-                const bashaChk = chkRows.find((r) => String(r.reservation_id || "").includes("9335"));
-                if (bashaChk) {
-                    console.log("[DEBUG BASHA CHKROW FULL OBJECT]:", JSON.stringify(bashaChk));
-                }
                 for (const chk of chkRows) {
                     if (chk.reservation_id) {
                         const raw = String(chk.reservation_id).trim();
                         const norm = normalizeKey(raw);
                         const spaceVar = raw.replace(/-/g, " ").trim();
                         const dashVar = raw.replace(/\s+/g, "-").trim();
+                        const numMatch = raw.match(/\d+/);
+                        const num = numMatch ? numMatch[0] : "";
 
-                        const keysToAdd = [raw, raw.toLowerCase(), norm, spaceVar, spaceVar.toLowerCase(), dashVar, dashVar.toLowerCase()];
+                        const keysToAdd = [
+                            raw,
+                            raw.toLowerCase(),
+                            norm,
+                            spaceVar,
+                            spaceVar.toLowerCase(),
+                            dashVar,
+                            dashVar.toLowerCase(),
+                            num,
+                            num ? `ktahv-pms-${num}` : "",
+                            num ? `pms-${num}` : "",
+                        ];
                         for (const k of keysToAdd) {
                             if (k && !checkinMap.has(k)) {
                                 checkinMap.set(k, chk);
                             }
+                        }
+                    }
+                    if (chk.mobile) {
+                        const cleanM = String(chk.mobile).replace(/\D/g, "").slice(-10);
+                        if (cleanM && !checkinMap.has(cleanM)) {
+                            checkinMap.set(cleanM, chk);
                         }
                     }
                 }
@@ -312,6 +371,9 @@ export async function GET(req: NextRequest) {
             const uid = String(row.uid || "").trim();
             const bookingId = String(row.booking_id || "").trim();
             const tracker = trackerMap.get(bookingId) || trackerMap.get(bookingId.toLowerCase()) || trackerMap.get(normalizeKey(bookingId));
+            const num = String(bookingId || row.booking_no || row.reservation_id || "").match(/\d+/)?.[0] || "";
+            const cleanMobile = String(row.mobile || "").replace(/\D/g, "").slice(-10);
+
             const checkin =
                 checkinMap.get(bookingId) ||
                 checkinMap.get(bookingId.toLowerCase()) ||
@@ -320,7 +382,11 @@ export async function GET(req: NextRequest) {
                 checkinMap.get(String(row.booking_no || "").trim().toLowerCase()) ||
                 checkinMap.get(normalizeKey(row.booking_no)) ||
                 checkinMap.get(String(row.reservation_id || "").trim()) ||
-                checkinMap.get(normalizeKey(row.reservation_id));
+                checkinMap.get(normalizeKey(row.reservation_id)) ||
+                (num ? checkinMap.get(num) : null) ||
+                (num ? checkinMap.get(`ktahv-pms-${num}`) : null) ||
+                (num ? checkinMap.get(`pms-${num}`) : null) ||
+                (cleanMobile ? checkinMap.get(cleanMobile) : null);
 
             if (bookingId.includes("9335") || String(row.client_name || "").toLowerCase().includes("basha")) {
                 console.log("[DEBUG 9335 BASHA]", {
@@ -355,17 +421,56 @@ export async function GET(req: NextRequest) {
             } : (bookingTakenBy ? { doer: bookingTakenBy } : null);
 
             // Stage 2: Guest Request & Complaint Mgmt (Trigger: During Stay / Check-in to Check-out)
-            const s2Planned = checkin?.stage3_planned || row.stage2_planned || row.check_in_date || row.stage1_call_date_planned || null;
-            const s2Actual = checkin?.stage3_actual || row.stage2_actual || null;
-            const s2DoerRemarks = checkin?.stage3_doer_remarks || row.stage2_remarks || "";
-            const s2Doer = checkin?.stage3_doer || "";
+            // Note: In Checkedin Master FMS, STAGE-3 header maps to Stage 2: Guest Request & QR Code
+            const s2PlannedFromCheckin =
+                checkin?.stage3_planned ||
+                checkin?.stage_3_planned ||
+                checkin?.stage3_planned_date ||
+                checkin?.stage2_planned ||
+                checkin?.stage_2_planned ||
+                null;
+
+            const s2ActualFromCheckin =
+                checkin?.stage3_actual ||
+                checkin?.stage_3_actual ||
+                checkin?.stage3_task_done_actual ||
+                checkin?.stage3_actual_date ||
+                checkin?.stage2_actual ||
+                checkin?.stage_2_actual ||
+                null;
+
+            const s2DoerRemarks =
+                checkin?.stage3_doer_remarks ||
+                checkin?.stage_3_doer_remarks ||
+                checkin?.stage3_remarks ||
+                checkin?.stage2_doer_remarks ||
+                "";
+
+            const s2Doer =
+                checkin?.stage3_doer ||
+                checkin?.stage_3_doer ||
+                checkin?.stage3_doer_name ||
+                checkin?.stage2_doer ||
+                "";
+
+            const s2TimeDelay =
+                checkin?.stage3_time_delay ||
+                checkin?.stage_3_time_delay ||
+                "";
+
+            // CRITICAL FIX: Never fall back to row.stage2_planned or row.stage2_actual or row.stage2_remarks
+            // because those belong to Stage 3 (Doctor Next Visit Planning, Check-out + 1 day = 31 Jul 2026)!
+            // Stage 2 trigger is "During Stay" -> defaults to row.check_in_date
+            const s2Planned = s2PlannedFromCheckin || row.check_in_date || row.stage1_call_date_planned || null;
+            const s2Actual = s2ActualFromCheckin || null;
+
             const s2Saved = {
                 doerRemarks: s2DoerRemarks,
                 remarks: s2DoerRemarks,
                 doer: s2Doer,
-                timeDelay: checkin?.stage3_time_delay || "",
-                qrCodeScannedStatus: checkin?.stage2_qr_code_scanned_status_by_guest_or_not || "",
-                qrFeedback: checkin?.stage2_guest_feedback_after_scanning_ai_qr_code || "",
+                timeDelay: s2TimeDelay,
+                qrCodeScannedStatus: checkin?.stage2_qr_code_scanned_status_by_guest_or_not || checkin?.stage_2_qr_code_scanned_status_by_guest_or_not || "",
+                qrFeedback: checkin?.stage2_guest_feedback_after_scanning_ai_qr_code || checkin?.stage_2_guest_feedback_after_scanning_ai_qr_code || "",
                 testimonialFeedback: checkin?.stage2_guest_testinomial_feedback_received_through_html_form || "",
                 referralReceived: checkin?.stage2_referral_received_through_referral_html_form || "",
                 roomNo: checkin?.room_no || "",
@@ -503,32 +608,53 @@ export async function GET(req: NextRequest) {
                 doer: tracker?.doctor_assigned_to_the_client || bookingTakenBy,
             } : null;
 
-            const s2Completed = Boolean(s2Actual || (s2DoerRemarks && s2DoerRemarks.trim() !== ""));
-            const s2ActualDateDisplay = formatDMYDate(s2Actual) || (s2Completed ? formatDMYDate(checkin?.updated_at || checkin?.booking_date_time || s2Planned) : null);
+            const s1ActualValid = filterActualDate(s1Actual);
+            const s2ActualValid = filterActualDate(s2Actual);
+            const s3ActualValid = filterActualDate(s3Actual);
+            const s4ActualValid = filterActualDate(s4Actual);
+            const s5ActualValid = filterActualDate(s5Actual);
+            const s6ActualValid = filterActualDate(s6Actual);
+            const s7ActualValid = filterActualDate(s7Actual);
+            const s8ActualValid = filterActualDate(s8Actual);
+            const s9ActualValid = filterActualDate(s9Actual);
+            const s10ActualValid = filterActualDate(s10Actual);
+            const s11ActualValid = filterActualDate(s11Actual);
 
-            const s4Completed = Boolean(s4Actual || (s4DoerRemarks && s4DoerRemarks.trim() !== ""));
-            const s4ActualDateDisplay = formatDMYDate(s4Actual) || (s4Completed ? formatDMYDate(checkin?.updated_at || checkin?.booking_date_time || s4Planned) : null);
+            const s2Completed = Boolean(
+                s2ActualValid ||
+                (s2DoerRemarks && s2DoerRemarks.trim() !== "") ||
+                (s2Saved.qrCodeScannedStatus && s2Saved.qrCodeScannedStatus !== "Not Scanned" && s2Saved.qrCodeScannedStatus.trim() !== "")
+            );
+            const s2ActualDateDisplay = formatDMYDate(s2ActualValid) || (s2Completed ? formatDMYDate(filterActualDate(checkin?.updated_at || checkin?.booking_date_time)) : null);
 
-            const s8Completed = Boolean(s8Actual || (s8DoerRemarks && s8DoerRemarks.trim() !== "") || (s8ReferralTakenStatus && s8ReferralTakenStatus.trim() !== ""));
-            const s8ActualDateDisplay = formatDMYDate(s8Actual) || (s8Completed ? formatDMYDate(checkin?.updated_at || checkin?.booking_date_time || s8Planned) : null);
+            const s4Completed = Boolean(s4ActualValid || (s4DoerRemarks && s4DoerRemarks.trim() !== ""));
+            const s4ActualDateDisplay = formatDMYDate(s4ActualValid) || (s4Completed ? formatDMYDate(filterActualDate(checkin?.updated_at || checkin?.booking_date_time)) : null);
+
+            // Stage 8 is complete only if referral was actually taken and executed on or before today
+            const s8HasReferral = Boolean(
+                (s8ReferralTakenStatus && !["not taken", "no", ""].includes(s8ReferralTakenStatus.trim().toLowerCase())) ||
+                (s8DoerRemarks && s8DoerRemarks.trim() !== "")
+            );
+            const s8Completed = Boolean(s8ActualValid && s8HasReferral);
+            const s8ActualDateDisplay = s8Completed && s8ActualValid ? formatDMYDate(s8ActualValid) : null;
 
             const stages = [
                 // Stage 1: completed only when (actual or submitted data) + to_show=true; toShow & submitted fed through for Processing state
-                { stage: 1, available: true, locked: isLockedDate(s1Planned), plannedDate: formatDMYDate(s1Planned), completed: Boolean(s1Actual || hasS1Data) && s1ToShow, toShow: s1ToShow, submitted: hasS1Data, actualDate: formatDMYDate(s1Actual) || (hasS1Data ? formatDMYDate(c1?.updated_at || c1?.timestamp) : null), savedData: s1Saved },
+                { stage: 1, available: true, locked: isLockedDate(s1Planned), plannedDate: formatDMYDate(s1Planned), completed: Boolean(s1ActualValid || hasS1Data) && s1ToShow, toShow: s1ToShow, submitted: hasS1Data, actualDate: formatDMYDate(s1ActualValid) || (hasS1Data ? formatDMYDate(c1?.updated_at || c1?.timestamp) : null), savedData: s1Saved },
                 { stage: 2, available: true, locked: isLockedDate(s2Planned), plannedDate: formatDMYDate(s2Planned), completed: s2Completed, actualDate: s2ActualDateDisplay, savedData: s2Saved },
-                { stage: 3, available: true, locked: isLockedDate(s3Planned), plannedDate: formatDMYDate(s3Planned), completed: Boolean(s3Actual), actualDate: formatDMYDate(s3Actual), savedData: s3Saved },
+                { stage: 3, available: true, locked: isLockedDate(s3Planned), plannedDate: formatDMYDate(s3Planned), completed: Boolean(s3ActualValid), actualDate: formatDMYDate(s3ActualValid), savedData: s3Saved },
                 { stage: 4, available: true, locked: isLockedDate(s4Planned), plannedDate: formatDMYDate(s4Planned), completed: s4Completed, actualDate: s4ActualDateDisplay, savedData: s4Saved },
                 // Stage 5: two-phase
-                { stage: 5, available: true, locked: isLockedDate(s5Planned), plannedDate: formatDMYDate(s5Planned), completed: Boolean(s5Actual || hasS5Data) && s5ToShow, toShow: s5ToShow, submitted: hasS5Data, actualDate: formatDMYDate(s5Actual) || (hasS5Data ? formatDMYDate(c5?.updated_at || c5?.timestamp) : null), savedData: s5Saved },
+                { stage: 5, available: true, locked: isLockedDate(s5Planned), plannedDate: formatDMYDate(s5Planned), completed: Boolean(s5ActualValid || hasS5Data) && s5ToShow, toShow: s5ToShow, submitted: hasS5Data, actualDate: formatDMYDate(s5ActualValid) || (hasS5Data ? formatDMYDate(c5?.updated_at || c5?.timestamp) : null), savedData: s5Saved },
                 // Stage 6: two-phase
-                { stage: 6, available: true, locked: isLockedDate(s6Planned), plannedDate: formatDMYDate(s6Planned), completed: Boolean(s6Actual || hasS6Data) && s6ToShow, toShow: s6ToShow, submitted: hasS6Data, actualDate: formatDMYDate(s6Actual) || (hasS6Data ? formatDMYDate(c6?.updated_at || c6?.timestamp) : null), savedData: s6Saved },
+                { stage: 6, available: true, locked: isLockedDate(s6Planned), plannedDate: formatDMYDate(s6Planned), completed: Boolean(s6ActualValid || hasS6Data) && s6ToShow, toShow: s6ToShow, submitted: hasS6Data, actualDate: formatDMYDate(s6ActualValid) || (hasS6Data ? formatDMYDate(c6?.updated_at || c6?.timestamp) : null), savedData: s6Saved },
                 // Stage 7: two-phase
-                { stage: 7, available: true, locked: isLockedDate(s7Planned), plannedDate: formatDMYDate(s7Planned), completed: Boolean(s7Actual || hasS7Data) && s7ToShow, toShow: s7ToShow, submitted: hasS7Data, actualDate: formatDMYDate(s7Actual) || (hasS7Data ? formatDMYDate(c7?.updated_at || c7?.timestamp) : null), savedData: s7Saved },
+                { stage: 7, available: true, locked: isLockedDate(s7Planned), plannedDate: formatDMYDate(s7Planned), completed: Boolean(s7ActualValid || hasS7Data) && s7ToShow, toShow: s7ToShow, submitted: hasS7Data, actualDate: formatDMYDate(s7ActualValid) || (hasS7Data ? formatDMYDate(c7?.updated_at || c7?.timestamp) : null), savedData: s7Saved },
                 { stage: 8, available: true, locked: isLockedDate(s8Planned), plannedDate: formatDMYDate(s8Planned), completed: s8Completed, actualDate: s8ActualDateDisplay, savedData: s8Saved },
                 // Stages 9,10,11 — excluded from to_show rule, single-phase as before
-                { stage: 9, available: true, locked: isLockedDate(s9Planned), plannedDate: formatDMYDate(s9Planned), completed: Boolean(s9Actual), actualDate: formatDMYDate(s9Actual), savedData: s9Saved },
-                { stage: 10, available: true, locked: isLockedDate(s10Planned), plannedDate: formatDMYDate(s10Planned), completed: Boolean(s10Actual), actualDate: formatDMYDate(s10Actual), savedData: s10Saved },
-                { stage: 11, available: true, locked: isLockedDate(s11Planned), plannedDate: formatDMYDate(s11Planned), completed: Boolean(s11Actual), actualDate: formatDMYDate(s11Actual), savedData: s11Saved },
+                { stage: 9, available: true, locked: isLockedDate(s9Planned), plannedDate: formatDMYDate(s9Planned), completed: Boolean(s9ActualValid), actualDate: formatDMYDate(s9ActualValid), savedData: s9Saved },
+                { stage: 10, available: true, locked: isLockedDate(s10Planned), plannedDate: formatDMYDate(s10Planned), completed: Boolean(s10ActualValid), actualDate: formatDMYDate(s10ActualValid), savedData: s10Saved },
+                { stage: 11, available: true, locked: isLockedDate(s11Planned), plannedDate: formatDMYDate(s11Planned), completed: Boolean(s11ActualValid), actualDate: formatDMYDate(s11ActualValid), savedData: s11Saved },
             ];
 
             return {

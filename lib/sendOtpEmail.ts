@@ -21,8 +21,12 @@ export async function sendOtpEmail({
     process.env.SMTP_USER ||
     "admin@kairali.com";
 
+  // `.env` names this SMTP_PASSWORD; some deployments set SMTP_PASS. Accept both,
+  // otherwise the credential silently reads as absent and no mail is dispatched.
+  const smtpPass = process.env.SMTP_PASSWORD || process.env.SMTP_PASS;
+
   // If SMTP is configured, send actual email
-  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && smtpPass) {
     try {
       const transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST,
@@ -30,7 +34,7 @@ export async function sendOtpEmail({
         secure: process.env.SMTP_SECURE === "true" || process.env.SMTP_PORT === "465",
         auth: {
           user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
+          pass: smtpPass,
         },
       });
 
