@@ -1,3 +1,4 @@
+| 2026-09-02 | Staging Mode Active — Bypass Production Gates | Workspace is isolated for staging testing; normal local development and direct code edits proceed without CARMA-DB production gates | Developer | Earlier production-only restrictions |
 # DECISIONS
 
 | Date UTC | Decision | Reason | Who | Supersedes |
