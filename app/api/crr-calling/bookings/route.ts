@@ -17,6 +17,15 @@ const UPSTREAM_TIMEOUT_MS = 90_000;
 
 // Force dynamic execution — bookings/calls change frequently
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
+interface ServerBookingsCache {
+    data: any[];
+    stageUsers: any[];
+    timestamp: number;
+}
+let serverCache: ServerBookingsCache | null = null;
+const CACHE_TTL_MS = 30_000;
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -154,6 +163,17 @@ export async function GET(req: NextRequest) {
                 { success: false, error: "Access denied: Insufficient permissions" },
                 { status: 403 }
             );
+        }
+
+        const now = Date.now();
+        if (serverCache && (now - serverCache.timestamp) < CACHE_TTL_MS) {
+            return NextResponse.json({
+                success: true,
+                count: serverCache.data.length,
+                data: serverCache.data,
+                stageUsers: serverCache.stageUsers,
+                cached: true,
+            });
         }
 
         const pool = await getPool();
@@ -684,6 +704,12 @@ export async function GET(req: NextRequest) {
             };
         });
 
+        serverCache = {
+            data,
+            stageUsers,
+            timestamp: Date.now(),
+        };
+
         return NextResponse.json({
             success: true,
             count: data.length,
@@ -885,6 +911,7 @@ export async function POST(req: NextRequest) {
 
         // 4. Successful output
         console.log("[crr-calling/bookings] GAS saved successfully (HTTP 200)");
+        serverCache = null; // Invalidate server cache on update
         return NextResponse.json({
             success: true,
             message: "Stage data saved successfully",

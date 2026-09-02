@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import type { Guest, StageInfo, StageStatus } from "@/types/crr";
+import { LEADS_CACHE_CLEARED_EVENT } from "@/lib/leads-cache-control";
 
 /* =========================================================
    REQUIRED TYPE UPDATE — @/types/crr
@@ -317,17 +318,73 @@ function mapRow(row: GasBookingRow): Guest {
     };
 }
 
-export function useCrrBookings() {
-    const [guests, setGuests] = useState<Guest[]>([]);
-    const [stageUsers, setStageUsers] = useState<StageUser[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+const BOOKINGS_CACHE_KEY = "crr_fms_bookings_cache";
+const STAGE_USERS_CACHE_KEY = "crr_fms_stage_users_cache";
+let inMemoryBookingsCache: Guest[] | null = null;
+let inMemoryStageUsersCache: StageUser[] | null = null;
 
-    const fetchBookings = useCallback(async () => {
-        setLoading(true);
+function loadCachedBookings(): Guest[] | null {
+    if (inMemoryBookingsCache && inMemoryBookingsCache.length > 0) return inMemoryBookingsCache;
+    if (typeof window === "undefined") return null;
+    try {
+        const raw = localStorage.getItem(BOOKINGS_CACHE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+            inMemoryBookingsCache = parsed;
+            return parsed;
+        }
+    } catch {
+        // ignore
+    }
+    return null;
+}
+
+function loadCachedStageUsers(): StageUser[] | null {
+    if (inMemoryStageUsersCache && inMemoryStageUsersCache.length > 0) return inMemoryStageUsersCache;
+    if (typeof window === "undefined") return null;
+    try {
+        const raw = localStorage.getItem(STAGE_USERS_CACHE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+            inMemoryStageUsersCache = parsed;
+            return parsed;
+        }
+    } catch {
+        // ignore
+    }
+    return null;
+}
+
+export function useCrrBookings() {
+    const [guests, setGuests] = useState<Guest[]>(() => loadCachedBookings() || []);
+    const [stageUsers, setStageUsers] = useState<StageUser[]>(() => loadCachedStageUsers() || []);
+    const [loading, setLoading] = useState<boolean>(() => !loadCachedBookings());
+    const [isRevalidating, setIsRevalidating] = useState<boolean>(false);
+    const [error, setError] = useState<string | null>(null);
+    const isFetchingRef = useRef<boolean>(false);
+
+    const fetchBookings = useCallback(async (isManualRefresh = false) => {
+        if (isFetchingRef.current) return;
+        isFetchingRef.current = true;
+
+        const hasCache = Boolean(loadCachedBookings());
+        if (!hasCache || isManualRefresh) {
+            setLoading(true);
+        } else {
+            setIsRevalidating(true);
+        }
         setError(null);
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
         try {
-            const res = await fetch("/api/crr-calling/bookings", { cache: "no-store" });
+            const res = await fetch("/api/crr-calling/bookings", {
+                cache: "no-store",
+                signal: controller.signal,
+            });
             const json: GasBookingsResponse = await res.json();
 
             if (!res.ok || !json.success) {
@@ -337,11 +394,27 @@ export function useCrrBookings() {
             const mapped = json.data.map(mapRow).sort((a, b) => b.id - a.id);
             setGuests(mapped);
             setStageUsers(json.stageUsers || []);
-        } catch (err) {
+
+            // Save to memory and localStorage
+            inMemoryBookingsCache = mapped;
+            inMemoryStageUsersCache = json.stageUsers || [];
+            try {
+                localStorage.setItem(BOOKINGS_CACHE_KEY, JSON.stringify(mapped));
+                localStorage.setItem(STAGE_USERS_CACHE_KEY, JSON.stringify(json.stageUsers || []));
+            } catch {
+                // Storage quota exceeded or private mode
+            }
+        } catch (err: any) {
             console.error("[useCrrBookings] fetch failed:", err);
-            setError(err instanceof Error ? err.message : "Failed to load bookings");
+            const msg = err?.name === "AbortError"
+                ? "Request timed out. Displaying latest available data."
+                : (err instanceof Error ? err.message : "Failed to load bookings");
+            setError(msg);
         } finally {
+            clearTimeout(timeoutId);
             setLoading(false);
+            setIsRevalidating(false);
+            isFetchingRef.current = false;
         }
     }, []);
 
@@ -349,7 +422,20 @@ export function useCrrBookings() {
         fetchBookings();
     }, [fetchBookings]);
 
-    return { guests, setGuests, loading, error, refetch: fetchBookings, stageUsers };
+    useEffect(() => {
+        const handleClearCache = () => {
+            inMemoryBookingsCache = null;
+            inMemoryStageUsersCache = null;
+            try {
+                localStorage.removeItem(BOOKINGS_CACHE_KEY);
+                localStorage.removeItem(STAGE_USERS_CACHE_KEY);
+            } catch {}
+        };
+        window.addEventListener(LEADS_CACHE_CLEARED_EVENT, handleClearCache);
+        return () => window.removeEventListener(LEADS_CACHE_CLEARED_EVENT, handleClearCache);
+    }, []);
+
+    return { guests, setGuests, loading, isRevalidating, error, refetch: () => fetchBookings(true), stageUsers };
 }
 
 /* =========================================================

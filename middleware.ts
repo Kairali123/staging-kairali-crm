@@ -226,7 +226,7 @@ const protectedRoutes = [
 
 const SECURITY_HEADERS: readonly [string, string][] = [
   ['X-Content-Type-Options', 'nosniff'],
-  ['X-Frame-Options', 'DENY'],
+  ['X-Frame-Options', 'SAMEORIGIN'],
   ['Referrer-Policy', 'strict-origin-when-cross-origin'],
   [
     'Permissions-Policy',
@@ -234,7 +234,7 @@ const SECURITY_HEADERS: readonly [string, string][] = [
   ],
   [
     'Content-Security-Policy-Report-Only',
-    "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:",
+    "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self' https://vercel.live; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:",
   ],
 ]
 

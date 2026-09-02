@@ -334,7 +334,7 @@ const SCROLLABLE_HEADERS = [
    COMPONENT
 ========================================================= */
 export default function CRRCallingProcessPage() {
-    const { guests, setGuests, loading: guestsLoading, error: guestsError, refetch: refetchGuests, stageUsers } = useCrrBookings();
+    const { guests, setGuests, loading: guestsLoading, isRevalidating, error: guestsError, refetch: refetchGuests, stageUsers } = useCrrBookings();
 
     // ---------- REAL ROLE (from auth) — no manual switching, ever ----------
     const { user } = useAuth();
@@ -2448,6 +2448,20 @@ export default function CRRCallingProcessPage() {
                     <img src="/grouploader.gif" alt="Loading" className="h-65 w-65 object-contain" />
                     <p className="text-sm font-semibold text-emerald-600">Fetching latest bookings…</p>
                 </div>
+            ) : guestsError && guests.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-4 min-h-[50vh] px-6 text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600">
+                        <AlertTriangle className="w-8 h-8" />
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-800">Unable to load bookings</h3>
+                    <p className="text-sm text-slate-500 max-w-md">{guestsError}</p>
+                    <button
+                        onClick={() => refetchGuests()}
+                        className="px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition"
+                    >
+                        Retry Loading
+                    </button>
+                </div>
             ) : (
                 <div className="space-y-6 w-full pb-10 px-2 sm:px-3 lg:px-4">
                     {/* Hero Header Section with Back Button */}
@@ -2472,9 +2486,17 @@ export default function CRRCallingProcessPage() {
 
                                         {/* Title & Subtitle */}
                                         <div className="min-w-0 flex-1">
-                                            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white tracking-tight leading-tight break-words">
-                                                CRR Calling Process FMS
-                                            </h1>
+                                            <div className="flex items-center gap-3 flex-wrap">
+                                                <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white tracking-tight leading-tight break-words">
+                                                    CRR Calling Process FMS
+                                                </h1>
+                                                {isRevalidating && (
+                                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-white/20 text-white border border-white/30 animate-pulse">
+                                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                                        Syncing…
+                                                    </span>
+                                                )}
+                                            </div>
                                             <p className="text-sm sm:text-base lg:text-lg text-white/90 mt-1 sm:mt-2 font-medium">
                                                 Guest Relations & Retention • Post-Checkout Follow-up Tracking
                                             </p>
