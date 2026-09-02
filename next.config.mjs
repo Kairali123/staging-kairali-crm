@@ -48,6 +48,15 @@ const nextConfig = {
             : []),
         ],
       },
+      {
+        // The React order form is embedded by the authenticated CRM page on
+        // this same origin. Keep cross-origin framing blocked.
+        source: '/new-order-fms/primary-order-form/app/:path*',
+        headers: [
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'Content-Security-Policy-Report-Only', value: "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:" },
+        ],
+      },
     ]
   },
 }

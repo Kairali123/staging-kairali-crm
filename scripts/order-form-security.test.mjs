@@ -6,6 +6,7 @@ const route = readFileSync(new URL('../app/api/order-form/route.ts', import.meta
 const security = readFileSync(new URL('../lib/order-form-security.ts', import.meta.url), 'utf8')
 const policy = readFileSync(new URL('../lib/order-form-policy.ts', import.meta.url), 'utf8')
 const middleware = readFileSync(new URL('../middleware.ts', import.meta.url), 'utf8')
+const nextConfig = readFileSync(new URL('../next.config.mjs', import.meta.url), 'utf8')
 const page = readFileSync(new URL('../app/new-order-fms/primary-order-form/page.tsx', import.meta.url), 'utf8')
 const bundledIndex = readFileSync(new URL('../public/new-order-fms/primary-order-form/app/index.html', import.meta.url), 'utf8')
 
@@ -14,6 +15,16 @@ test('form and browser API stay on the authenticated CRM origin', () => {
   assert.doesNotMatch(page, /kappl-primary-order-form\.vercel\.app/)
   assert.match(bundledIndex, /\/new-order-fms\/primary-order-form\/app\/assets\//)
   assert.match(middleware, /pathname\.startsWith\('\/new-order-fms\/primary-order-form'\)/)
+})
+
+test('embedded form allows same-origin framing while cross-origin framing stays blocked', () => {
+  assert.match(middleware, /EMBEDDED_PRIMARY_ORDER_FORM_PATH = '\/new-order-fms\/primary-order-form\/app\/'/)
+  assert.match(middleware, /isEmbeddedPrimaryOrderForm[\s\S]*'SAMEORIGIN'/)
+  assert.match(middleware, /frame-ancestors 'self'/)
+  assert.match(nextConfig, /source: '\/new-order-fms\/primary-order-form\/app\/:path\*'/)
+  assert.match(nextConfig, /X-Frame-Options', value: 'SAMEORIGIN'/)
+  assert.match(nextConfig, /frame-ancestors 'self'/)
+  assert.doesNotMatch(nextConfig, /X-Frame-Options', value: '\*'/)
 })
 
 test('API enforces signed identity, same origin, client marker, and action authorization', () => {

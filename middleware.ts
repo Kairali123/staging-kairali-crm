@@ -238,9 +238,23 @@ const SECURITY_HEADERS: readonly [string, string][] = [
   ],
 ]
 
-function withSecurityHeaders(response: NextResponse): NextResponse {
+const EMBEDDED_PRIMARY_ORDER_FORM_PATH = '/new-order-fms/primary-order-form/app/'
+
+function withSecurityHeaders(response: NextResponse, pathname = ''): NextResponse {
+  const isEmbeddedPrimaryOrderForm = pathname.startsWith(EMBEDDED_PRIMARY_ORDER_FORM_PATH)
+
   for (const [key, value] of SECURITY_HEADERS) {
-    if (!response.headers.has(key)) response.headers.set(key, value)
+    const resolvedValue = isEmbeddedPrimaryOrderForm
+      ? key === 'X-Frame-Options'
+        ? 'SAMEORIGIN'
+        : key === 'Content-Security-Policy-Report-Only'
+          ? value.replace("frame-ancestors 'none'", "frame-ancestors 'self'")
+          : value
+      : value
+
+    // The bundled React form is intentionally framed only by this same-origin
+    // CRM page. SAMEORIGIN continues to block framing from other websites.
+    response.headers.set(key, resolvedValue)
   }
 
   if (process.env.NODE_ENV === 'production' && !response.headers.has('Strict-Transport-Security')) {
@@ -318,7 +332,8 @@ function apiUnauthorized(request: NextRequest, reason: 'missing_session' | 'inva
     NextResponse.json(
       { success: false, error: 'Unauthorized' },
       { status: 401, headers: { 'Cache-Control': 'private, no-store' } }
-    )
+    ),
+    request.nextUrl.pathname
   )
 }
 
@@ -330,7 +345,7 @@ export async function middleware(request: NextRequest) {
     const apiPath = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname
 
     if (isExemptApiPath(apiPath)) {
-      return withSecurityHeaders(NextResponse.next())
+      return withSecurityHeaders(NextResponse.next(), pathname)
     }
 
     // API callers get a JSON 401, never a redirect to the login page.
@@ -339,12 +354,12 @@ export async function middleware(request: NextRequest) {
       return apiUnauthorized(request, apiUser ? 'invalid_session' : 'missing_session')
     }
 
-    return withSecurityHeaders(NextResponse.next())
+    return withSecurityHeaders(NextResponse.next(), pathname)
   }
 
   // Skip middleware for public routes
   if (publicRoutes.includes(pathname)) {
-    return withSecurityHeaders(NextResponse.next())
+    return withSecurityHeaders(NextResponse.next(), pathname)
   }
 
   // Check if route is protected
@@ -363,7 +378,7 @@ export async function middleware(request: NextRequest) {
         sourceIp: getRequestSourceIp(request),
         context: { reason: 'missing_session' },
       })
-      return withSecurityHeaders(NextResponse.redirect(new URL('/', request.url)))
+      return withSecurityHeaders(NextResponse.redirect(new URL('/', request.url)), pathname)
     }
 
     // Verify the signed session — rejects missing, tampered, forged, or expired cookies
@@ -376,7 +391,7 @@ export async function middleware(request: NextRequest) {
         sourceIp: getRequestSourceIp(request),
         context: { reason: 'invalid_session' },
       })
-      return withSecurityHeaders(NextResponse.redirect(new URL('/', request.url)))
+      return withSecurityHeaders(NextResponse.redirect(new URL('/', request.url)), pathname)
     }
 
     if (
@@ -391,11 +406,11 @@ export async function middleware(request: NextRequest) {
         sourceIp: getRequestSourceIp(request),
         context: { reason: 'missing_new_order_fms_permission' },
       })
-      return withSecurityHeaders(NextResponse.redirect(new URL('/access-denied', request.url)))
+      return withSecurityHeaders(NextResponse.redirect(new URL('/access-denied', request.url)), pathname)
     }
   }
 
-  return withSecurityHeaders(NextResponse.next())
+  return withSecurityHeaders(NextResponse.next(), pathname)
 }
 
 // Configure which routes to run middleware on
