@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPool } from "@/lib/db";
 import { getSessionUserResult, hasDialShreeSentAccess } from "@/lib/authz";
+import fs from "fs";
+import path from "path";
+import os from "os";
 
 // ─── Cache Config ─────────────────────────────────────────────────────────────
 let memoryCache: any[] | null = null;
@@ -12,6 +15,7 @@ const noStoreHeaders = {
     "Pragma": "no-cache",
     "Expires": "0",
 };
+const MAX_SCAN_ROWS = 25000;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -157,8 +161,9 @@ export async function GET(request: NextRequest) {
         const { searchParams } = new URL(request.url);
         const force = searchParams.get("force") === "1";
         const leadId = searchParams.get("leadId");
-        const limitParam = parseInt(searchParams.get("limit") || "2500", 10);
-        const limit = Math.min(Math.max(isNaN(limitParam) ? 2500 : limitParam, 1), 5000);
+        const rawLimit = searchParams.get("limit");
+        const parsedLimit = rawLimit ? parseInt(rawLimit, 10) : NaN;
+        const limit = (!isNaN(parsedLimit) && parsedLimit > 0) ? Math.min(parsedLimit, MAX_SCAN_ROWS) : MAX_SCAN_ROWS;
 
         const pool = await getPool();
 
@@ -184,13 +189,33 @@ export async function GET(request: NextRequest) {
         }
 
         const now = Date.now();
+        const tmpFile = path.join(os.tmpdir(), "dialshree_sent_cache_v1.json");
 
         // 1. In-memory cache
         if (!force && memoryCache && memoryCache.length > 0 && now - lastFetchTime < CACHE_TTL) {
             return NextResponse.json(memoryCache, { headers: noStoreHeaders });
         }
 
-        // 2. Query MySQL bounded
+        // 2. Temp file cache
+        if (!force) {
+            try {
+                if (fs.existsSync(tmpFile)) {
+                    const stat = fs.statSync(tmpFile);
+                    if (now - stat.mtimeMs < CACHE_TTL) {
+                        const fileData = JSON.parse(fs.readFileSync(tmpFile, "utf8"));
+                        if (Array.isArray(fileData) && fileData.length > 0) {
+                            memoryCache = fileData;
+                            lastFetchTime = stat.mtimeMs;
+                            return NextResponse.json(fileData, { headers: noStoreHeaders });
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn("[dialshree-sent] File cache read error:", e);
+            }
+        }
+
+        // 3. Query MySQL bounded
         const [rows]: any = await pool.query(`
             SELECT
                 id, timestamp, enquiry_date_time, lead_id, name_of_client,
@@ -209,9 +234,14 @@ export async function GET(request: NextRequest) {
 
         const mapped = (rows as any[]).map(mapRow);
 
-        // 3. Save to memory cache
+        // 4. Save to cache
         memoryCache = mapped;
         lastFetchTime = Date.now();
+        try {
+            fs.writeFileSync(tmpFile, JSON.stringify(mapped));
+        } catch (e) {
+            console.warn("[dialshree-sent] File cache write error:", e);
+        }
 
         return NextResponse.json(mapped, { headers: noStoreHeaders });
 

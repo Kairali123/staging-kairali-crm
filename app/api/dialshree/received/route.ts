@@ -221,6 +221,9 @@ export async function GET(request: NextRequest) {
         const force = searchParams.get("force") === "1";
         const leadId = searchParams.get("leadId") || searchParams.get("initialId");
         const allRows = searchParams.get("allRows") === "1";
+        const rawLimit = searchParams.get("limit");
+        const parsedLimit = rawLimit ? parseInt(rawLimit, 10) : NaN;
+        const limit = (!isNaN(parsedLimit) && parsedLimit > 0) ? Math.min(parsedLimit, MAX_SCAN_ROWS) : MAX_SCAN_ROWS;
 
         // Query Call History for a single lead
         if (leadId && allRows) {
@@ -301,6 +304,7 @@ export async function GET(request: NextRequest) {
                     Conversion_Amount, send_lead_Date_Time, sheet_name
                 FROM lead_fms
                 ORDER BY sl_no DESC
+                LIMIT ${limit}
             `) as any[];
         } finally {
             connection.release();

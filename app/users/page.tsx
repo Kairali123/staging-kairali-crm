@@ -58,6 +58,7 @@ import {
   BarChart3,
   TrendingUp,
   Eye,
+  EyeOff,
   CheckCircle,
   TableIcon,
 } from "lucide-react"
@@ -1279,6 +1280,11 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
   const [activeTab, setActiveTab] = useState<"password" | "devices" | "sessions">("password")
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState<string | null>(null)
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [copiedCurrent, setCopiedCurrent] = useState(false)
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false)
   const [devices, setDevices] = useState<any[]>([])
   const [sessions, setSessions] = useState<any[]>([])
@@ -1292,6 +1298,7 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
         const data = await res.json()
         setDevices(data.devices || [])
         setSessions(data.sessions || [])
+        setCurrentPassword(data.currentPassword || null)
       }
     } catch {
       toast.error("Failed to load device details")
@@ -1301,8 +1308,14 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
   }, [user.id])
 
   useEffect(() => {
+    setNewPassword("")
+    setConfirmPassword("")
+    setShowNewPassword(false)
+    setShowConfirmPassword(false)
+    setShowCurrentPassword(false)
+    setCopiedCurrent(false)
     loadDetails()
-  }, [loadDetails])
+  }, [loadDetails, user.id])
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1334,6 +1347,8 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
       )
       setNewPassword("")
       setConfirmPassword("")
+      setShowNewPassword(false)
+      setShowConfirmPassword(false)
       loadDetails()
       onUpdated()
     } catch (err: any) {
@@ -1464,7 +1479,7 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
         {/* Tab Content */}
         <div className="p-6">
           {activeTab === "password" && (
-            <form onSubmit={handleResetPassword} className="space-y-4">
+            <form onSubmit={handleResetPassword} className="space-y-4" autoComplete="off">
               <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3.5 text-xs text-amber-900 flex items-start gap-2.5">
                 <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
                 <div>
@@ -1475,28 +1490,126 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
                 </div>
               </div>
 
+              {/* Super Admin Access: View Current Password */}
+              {currentPassword && (
+                <div className="rounded-xl border border-purple-200 bg-purple-50/60 p-3.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
+                      <KeyRound className="h-3.5 w-3.5 text-purple-600" />
+                      Current Password
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200">
+                        Super Admin Access
+                      </span>
+                    </Label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(currentPassword)
+                        setCopiedCurrent(true)
+                        toast.success("Current password copied to clipboard")
+                        setTimeout(() => setCopiedCurrent(false), 2000)
+                      }}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-700 hover:text-purple-900 transition-colors cursor-pointer"
+                    >
+                      {copiedCurrent ? (
+                        <>
+                          <Check className="h-3.5 w-3.5 text-green-600" />
+                          <span className="text-green-600">Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-3.5 w-3.5" />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Input
+                      type={showCurrentPassword ? "text" : "password"}
+                      value={currentPassword}
+                      readOnly
+                      className="h-10 rounded-lg text-sm pr-10 bg-white font-mono font-medium border-purple-200 text-gray-900 select-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCurrentPassword((prev) => !prev)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-purple-500 hover:text-purple-700 focus:outline-none transition-colors cursor-pointer"
+                      tabIndex={-1}
+                      aria-label={showCurrentPassword ? "Hide current password" : "Show current password"}
+                    >
+                      {showCurrentPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-1 border-t border-gray-100">
+                <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2">
+                  Change / Reset Password
+                </p>
+              </div>
+
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-gray-700">New Password</Label>
-                <Input
-                  type="password"
-                  placeholder="Enter new password (min. 6 characters)"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="h-10 rounded-lg text-sm"
-                  required
-                />
+                <div className="relative">
+                  <Input
+                    type={showNewPassword ? "text" : "password"}
+                    placeholder="Enter new password (min. 6 characters)"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="h-10 rounded-lg text-sm pr-10"
+                    autoComplete="new-password"
+                    name="admin-reset-new-password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword((prev) => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none transition-colors"
+                    tabIndex={-1}
+                    aria-label={showNewPassword ? "Hide password" : "Show password"}
+                  >
+                    {showNewPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-gray-700">Confirm New Password</Label>
-                <Input
-                  type="password"
-                  placeholder="Re-enter new password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="h-10 rounded-lg text-sm"
-                  required
-                />
+                <div className="relative">
+                  <Input
+                    type={showConfirmPassword ? "text" : "password"}
+                    placeholder="Re-enter new password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="h-10 rounded-lg text-sm pr-10"
+                    autoComplete="new-password"
+                    name="admin-reset-confirm-password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((prev) => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none transition-colors"
+                    tabIndex={-1}
+                    aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
               </div>
 
               <div className="pt-2 flex justify-end gap-2">

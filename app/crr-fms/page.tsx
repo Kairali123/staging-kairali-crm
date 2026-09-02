@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useAuth, type UserRole } from "@/hooks/use-auth";
 import { useCrrBookings, isStageLocked, getStagePlannedDate, getStageActualDate, getStageSavedData, getStageDoer, isBookingCancelled, saveStage } from "@/hooks/use-crr-bookings";
 import type {
@@ -381,16 +381,6 @@ export default function CRRCallingProcessPage() {
         );
     }, [user]);
 
-    // Non-admin assigned users see only their assigned stages in the stage filter dropdown
-    const userAssignedStages = useMemo<typeof STAGES>(() => {
-        if (isAdminRole) return STAGES;
-        const myEmail = (user?.email || "").toLowerCase().trim();
-        const su = stageUsers.find((u) => u.email.toLowerCase().trim() === myEmail);
-        const stageNums = su && su.stages.length > 0 ? su.stages : permittedStages;
-        if (stageNums.length === 0) return STAGES;
-        return STAGES.filter((s) => stageNums.includes(s.no));
-    }, [isAdminRole, user, stageUsers, permittedStages]);
-
     const DEFAULT_STAGE_USERS = useMemo(() => [
         { name: "Jinsha Manoj MV", email: "grm@ktahv.com", role: "grm", stages: [1, 2, 4, 5, 6, 8] },
         { name: "Dr. Rahul R", email: "doctor@ktahv.com", role: "doctor", stages: [3, 7] },
@@ -400,8 +390,72 @@ export default function CRRCallingProcessPage() {
     ], []);
 
     const responsiblePersonList = useMemo(() => {
-        return stageUsers && stageUsers.length > 0 ? stageUsers : DEFAULT_STAGE_USERS;
+        const list = (stageUsers || []).map((u) => ({ ...u, stages: [...u.stages] }));
+        for (const def of DEFAULT_STAGE_USERS) {
+            const existing = list.find(
+                (u) =>
+                    (u.email && def.email && u.email.toLowerCase().trim() === def.email.toLowerCase().trim()) ||
+                    (u.name && def.name && u.name.toLowerCase().trim() === def.name.toLowerCase().trim())
+            );
+            if (!existing) {
+                list.push({ ...def, stages: [...def.stages] });
+            } else if (!existing.stages || existing.stages.length === 0) {
+                existing.stages = [...def.stages];
+            } else {
+                const combined = new Set([...existing.stages, ...def.stages]);
+                existing.stages = Array.from(combined).sort((a, b) => a - b);
+            }
+        }
+        return list;
     }, [stageUsers, DEFAULT_STAGE_USERS]);
+
+    // Stages accessible to the logged-in user.
+    // Admin / Super Admin: all STAGES [1..11]
+    // Normal user: stages mapped to their email/name in responsiblePersonList or permittedStages (crr_fms.stageN)
+    const userAccessibleStages = useMemo<number[]>(() => {
+        if (isAdminRole) return STAGES.map((s) => s.no);
+        const myEmail = (user?.email || "").toLowerCase().trim();
+        const myName = (user?.name || "").toLowerCase().trim();
+        const su = responsiblePersonList.find(
+            (u) =>
+                (u.email && u.email.toLowerCase().trim() === myEmail) ||
+                (u.name && u.name.toLowerCase().trim() === myName)
+        );
+        const stageNumsSet = new Set<number>();
+        if (su && su.stages && su.stages.length > 0) {
+            su.stages.forEach((n) => stageNumsSet.add(n));
+        }
+        permittedStages.forEach((n) => stageNumsSet.add(n));
+        return Array.from(stageNumsSet).sort((a, b) => a - b);
+    }, [isAdminRole, user, responsiblePersonList, permittedStages]);
+
+    // Non-admin assigned users see only their assigned stages in the stage filter dropdown
+    const userAssignedStages = useMemo<typeof STAGES>(() => {
+        if (isAdminRole) return STAGES;
+        if (userAccessibleStages.length === 0) return STAGES;
+        return STAGES.filter((s) => userAccessibleStages.includes(s.no));
+    }, [isAdminRole, userAccessibleStages]);
+
+    /**
+     * Determines whether an individual record is COMPLETED or PENDING.
+     * Evaluated strictly per Guest/Booking/Record ID:
+     * - Cancelled bookings: always false (never classified as Completed).
+     * - Admin / Super Admin: true ONLY if ALL 11 required workflow stages are Complete.
+     * - Normal user: true if ALL accessible stages to that user are Complete.
+     *   Non-accessible stages outside user's permission do NOT affect the user's completion status.
+     */
+    const isRecordCompleted = useCallback((g: Guest): boolean => {
+        if (isBookingCancelled(g)) {
+            return false;
+        }
+        if (isAdminRole) {
+            return STAGES.every((s) => g.stageStatus[s.no - 1] === "Complete");
+        }
+        if (userAccessibleStages.length === 0) {
+            return false;
+        }
+        return userAccessibleStages.every((stageNo) => g.stageStatus[stageNo - 1] === "Complete");
+    }, [isAdminRole, userAccessibleStages]);
 
     const responsiblePersonOptions = useMemo(() => {
         if (isAdminRole) return responsiblePersonList;
@@ -454,10 +508,19 @@ export default function CRRCallingProcessPage() {
     const [activeGuestId, setActiveGuestId] = useState<number | null>(null);
 
     // pagination
-    const [currentPage, setCurrentPage] = useState(1);
+    // View mode and tables tab
     const [viewMode, setViewMode] = useState<"table" | "chart">("table");
-    const [itemsPerPage, setItemsPerPage] = useState(5);
-    const [gotoPage, setGotoPage] = useState("");
+    const [recordsViewTab, setRecordsViewTab] = useState<"both" | "pending" | "completed">("both");
+
+    // Pending records pagination
+    const [pendingPage, setPendingPage] = useState(1);
+    const [pendingItemsPerPage, setPendingItemsPerPage] = useState(5);
+    const [pendingGotoPage, setPendingGotoPage] = useState("");
+
+    // Completed records pagination
+    const [completedPage, setCompletedPage] = useState(1);
+    const [completedItemsPerPage, setCompletedItemsPerPage] = useState(5);
+    const [completedGotoPage, setCompletedGotoPage] = useState("");
 
     // modal edit fields
     const [modalDate, setModalDate] = useState("");
@@ -638,22 +701,21 @@ export default function CRRCallingProcessPage() {
                     String(g.takenBy ?? "").toLowerCase().includes(s);
                 if (!matches) return false;
             }
-            if (respFilter !== "all" && !g.allComplete) {
+            if (respFilter !== "all") {
                 const selectedPerson = responsiblePersonList.find(
                     (u) =>
                         (u.name && u.name.toLowerCase() === respFilter.toLowerCase()) ||
                         (u.email && u.email.toLowerCase() === respFilter.toLowerCase())
                 );
-                if (selectedPerson) {
-                    if (!selectedPerson.stages.includes(g.currentStage)) {
-                        return false;
-                    }
+                if (selectedPerson && selectedPerson.stages.length > 0) {
+                    const isRelevant = selectedPerson.stages.some((sNo) => sNo >= 1 && sNo <= 11);
+                    if (!isRelevant) return false;
                 }
             }
             if (stageFilter !== "all") {
                 const stageNum = Number(stageFilter);
                 const isComplete = g.stageStatus[stageNum - 1] === "Complete";
-                const isPending = !g.allComplete && !isBookingCancelled(g) && g.currentStage === stageNum;
+                const isPending = !isComplete && !isBookingCancelled(g);
                 const isCancelled = isBookingCancelled(g);
 
                 if (statusFilter === "complete") {
@@ -667,8 +729,8 @@ export default function CRRCallingProcessPage() {
                     if (!isComplete && !isPending && !isCancelled) return false;
                 }
             } else {
-                if (statusFilter === "pending" && (g.allComplete || isBookingCancelled(g))) return false;
-                if (statusFilter === "complete" && (!g.allComplete || isBookingCancelled(g))) return false;
+                if (statusFilter === "pending" && (isRecordCompleted(g) || isBookingCancelled(g))) return false;
+                if (statusFilter === "complete" && (!isRecordCompleted(g) || isBookingCancelled(g))) return false;
                 if (statusFilter === "cancelled" && !isBookingCancelled(g)) return false;
             }
             if (dateRangeStart || dateRangeEnd) {
@@ -690,12 +752,13 @@ export default function CRRCallingProcessPage() {
         }
 
         return filtered;
-    }, [guests, search, stageFilter, respFilter, statusFilter, dateRangeStart, dateRangeEnd, sortColumn, sortDirection]);
+    }, [guests, search, stageFilter, respFilter, statusFilter, dateRangeStart, dateRangeEnd, sortColumn, sortDirection, responsiblePersonList, isRecordCompleted]);
 
     // Reset to page 1 whenever the filtered result set changes shape
     useEffect(() => {
-        setCurrentPage(1);
-    }, [search, stageFilter, respFilter, statusFilter, dateRangeFilter, customStartDate, customEndDate, itemsPerPage]);
+        setPendingPage(1);
+        setCompletedPage(1);
+    }, [search, stageFilter, respFilter, statusFilter, dateRangeFilter, customStartDate, customEndDate, pendingItemsPerPage, completedItemsPerPage]);
 
     // Safety net: Radix Dropdown -> Dialog transitions can occasionally leave
     // `pointer-events: none` stuck on <body>, freezing the whole page (clicks
@@ -762,71 +825,61 @@ export default function CRRCallingProcessPage() {
     //     }
     // }, [activeGuestId, activeCallGuestId, activeDetailsGuestId, activeWelcomeGuestId, activeSafeReturnGuestId, activeFeedbackGuestId, activeReferralGuestId, activeRatingGuestId, activeResultProgressGuestId]);
 
-    // Pagination derived
-    const totalPages = Math.max(1, Math.ceil(rows.length / itemsPerPage));
-    const tableStartIndex = (currentPage - 1) * itemsPerPage;
-    const tableEndIndex = Math.min(tableStartIndex + itemsPerPage, rows.length);
-    const pagedRows = rows.slice(tableStartIndex, tableEndIndex);
+    // Record-level separation into Pending and Completed:
+    const pendingRows = useMemo(() => {
+        if (statusFilter === "complete") return [];
+        return rows.filter((g) => !isRecordCompleted(g));
+    }, [rows, isRecordCompleted, statusFilter]);
 
-    function handleGotoPage() {
-        const p = parseInt(gotoPage, 10);
-        if (!isNaN(p) && p >= 1 && p <= totalPages) {
-            setCurrentPage(p);
+    const completedRows = useMemo(() => {
+        if (statusFilter === "pending" || statusFilter === "cancelled") return [];
+        return rows.filter((g) => isRecordCompleted(g));
+    }, [rows, isRecordCompleted, statusFilter]);
+
+    // Pending pagination derived
+    const pendingTotalPages = Math.max(1, Math.ceil(pendingRows.length / pendingItemsPerPage));
+    const pendingStartIndex = (pendingPage - 1) * pendingItemsPerPage;
+    const pendingEndIndex = Math.min(pendingStartIndex + pendingItemsPerPage, pendingRows.length);
+    const pagedPendingRows = pendingRows.slice(pendingStartIndex, pendingEndIndex);
+
+    function handlePendingGotoPage() {
+        const p = parseInt(pendingGotoPage, 10);
+        if (!isNaN(p) && p >= 1 && p <= pendingTotalPages) {
+            setPendingPage(p);
         }
-        setGotoPage("");
+        setPendingGotoPage("");
     }
 
-    // KPIs are derived from the filtered/searched row set (`rows`), not the
-    // raw unfiltered `guests` list, so the numbers on screen always reflect
-    // whatever Search/Stage/Status/Responsible Person/Date filters are active.
-    // ---------- PENDING MODEL (reconciles all three tester rules) ----------
-    // Rule A (all-stages view):  Total Guests = Pending + Completed.
-    //   → Pending must be BOOKING-level there: bookings not complete & not
-    //     cancelled. (Completed includes cancelled, so the partition is exact.)
-    // Rule B (stage filter active): Pending KPI = pending rows in the table
-    //     = Stage Wise Pendings Report grand total.
-    //   → Pending is that stage's pending rows, lock IGNORED. The report
-    //     counts the same (booking, stage) pairs partitioned by doer
-    //     (unknown → "Unassigned"), so Σ(report cells) === KPI by construction.
-    // Note: with no stage filter, the report's grand total is per-STAGE
-    // workload (one booking can hold several pending stages) while the KPI is
-    // per-BOOKING — those two can never be equal at the same time as Rule A;
-    // they intentionally coincide exactly when a single stage is selected.
-    // Lock status is surfaced in the KPI subtitle, not in the counts:
-    // "N actionable now · M awaiting unlock".
+    // Completed pagination derived
+    const completedTotalPages = Math.max(1, Math.ceil(completedRows.length / completedItemsPerPage));
+    const completedStartIndex = (completedPage - 1) * completedItemsPerPage;
+    const completedEndIndex = Math.min(completedStartIndex + completedItemsPerPage, completedRows.length);
+    const pagedCompletedRows = completedRows.slice(completedStartIndex, completedEndIndex);
+
+    function handleCompletedGotoPage() {
+        const p = parseInt(completedGotoPage, 10);
+        if (!isNaN(p) && p >= 1 && p <= completedTotalPages) {
+            setCompletedPage(p);
+        }
+        setCompletedGotoPage("");
+    }
+
     const isStagePending = (g: Guest, stageNo: number) =>
-        !isBookingCancelled(g) && !g.allComplete && g.currentStage === stageNo;
+        !isBookingCancelled(g) && g.stageStatus[stageNo - 1] !== "Complete";
 
     const isStageCompleted = (g: Guest, stageNo: number) =>
         !isBookingCancelled(g) && g.stageStatus[stageNo - 1] === "Complete";
 
-    const pendingCount =
-        stageFilter !== "all"
-            ? rows.filter((g) => isStagePending(g, Number(stageFilter))).length
-            : rows.filter((g) => !g.allComplete && !isBookingCancelled(g)).length;
+    const pendingCount = pendingRows.length;
+    const completeCount = completedRows.length;
 
-    // "Actionable now" = the subset of pendingCount that is already unlocked.
-    //   stage view: rows whose selected stage is pending AND unlocked
-    //   all view:   pending bookings with ≥1 pending stage that is unlocked
-    const actionablePendingCount =
-        stageFilter !== "all"
-            ? rows.filter((g) => {
-                const n = Number(stageFilter);
-                return isStagePending(g, n) && !isStageLocked(g, n);
-            }).length
-            : rows.filter((g) => {
-                if (g.allComplete || isBookingCancelled(g)) return false;
-                for (let n = 1; n <= STAGES.length; n++) {
-                    if (g.stageStatus[n - 1] === "Pending" && !isStageLocked(g, n)) return true;
-                }
-                return false;
-            }).length;
-    // Cancelled bookings are auto-closed journeys — they are excluded from
-    // Pending, so they must be counted here or Total ≠ Pending + Completed.
-    const completeCount =
-        stageFilter !== "all"
-            ? rows.filter((g) => isStageCompleted(g, Number(stageFilter))).length
-            : rows.filter((g) => g.allComplete && !isBookingCancelled(g)).length;
+    // "Actionable now" = the subset of pendingRows that is already unlocked
+    const actionablePendingCount = pendingRows.filter((g) => {
+        if (isBookingCancelled(g)) return false;
+        const stagesToCheck = isAdminRole ? STAGES.map((s) => s.no) : userAccessibleStages;
+        return stagesToCheck.some((n) => g.stageStatus[n - 1] !== "Complete" && !isStageLocked(g, n));
+    }).length;
+
     const cancelledCount = rows.filter((g) => isBookingCancelled(g)).length;
     const referralsGeneratedCount = rows.filter(
         (g) => g.referralCollection?.referralTakenStatus === "Yes"
@@ -849,30 +902,31 @@ export default function CRRCallingProcessPage() {
         // Cancelled bookings are auto-closed: none of their stages count as pending.
         const activeRows = rows.filter((g) => !isBookingCancelled(g));
 
-        // A booking is pending at its active currentStage (1-indexed).
+        // A booking stage idx is pending if that stage is not Complete
         const isPendingTask = (g: Guest, idx: number) =>
-            !g.allComplete && g.currentStage === idx + 1;
+            !isBookingCancelled(g) && g.stageStatus[idx] !== "Complete";
 
-        // Stage totals across all active rows
-        const totals = new Array(STAGES.length).fill(0);
-        STAGES.forEach((s, idx) => {
-            if (stageFilter !== "all" && String(idx + 1) !== stageFilter) {
-                totals[idx] = 0;
-            } else {
-                totals[idx] = activeRows.filter((g) => isPendingTask(g, idx)).length;
-            }
-        });
-
-        // Use RBAC/permission assigned users strictly from database by email
-        const usersToDisplay = (stageUsers && stageUsers.length > 0) ? stageUsers : DEFAULT_STAGE_USERS;
+        // Use responsiblePersonList (which merges DB stageUsers with DEFAULT_STAGE_USERS)
+        const usersToDisplay = responsiblePersonList;
 
         const table = usersToDisplay.map((su) => {
+            // Determine effective stages for this user (including permittedStages if logged-in user)
+            const stageSet = new Set<number>(su.stages || []);
+            const isMe = user && (
+                (su.email && user.email && su.email.toLowerCase().trim() === user.email.toLowerCase().trim()) ||
+                (su.name && user.name && su.name.toLowerCase().trim() === user.name.toLowerCase().trim())
+            );
+            if (isMe) {
+                userAccessibleStages.forEach((s) => stageSet.add(s));
+            }
+            const effectiveStages = Array.from(stageSet);
+
             const counts = STAGES.map((s, idx) => {
                 const stageNo = idx + 1;
                 if (stageFilter !== "all" && String(stageNo) !== stageFilter) {
                     return 0;
                 }
-                if (!su.stages.includes(stageNo)) {
+                if (!effectiveStages.includes(stageNo)) {
                     return 0;
                 }
                 return activeRows.filter((g) => isPendingTask(g, idx)).length;
@@ -880,19 +934,26 @@ export default function CRRCallingProcessPage() {
             return { emp: su.name || su.email, email: su.email, counts };
         });
 
-        const currentUserName = (user?.name ?? "").toLowerCase();
-        const currentUserEmail = (user?.email ?? "").toLowerCase();
+        const currentUserName = (user?.name ?? "").toLowerCase().trim();
+        const currentUserEmail = (user?.email ?? "").toLowerCase().trim();
         const scopedTable = isAdminRole
             ? table
             : table.filter(
                 (r) =>
-                    r.emp.toLowerCase() === currentUserName ||
-                    (r.email && r.email.toLowerCase() === currentUserEmail)
+                    r.emp.toLowerCase().trim() === currentUserName ||
+                    (r.email && r.email.toLowerCase().trim() === currentUserEmail)
             );
 
+        // Compute column totals from the displayed scopedTable rows so Grand Total always matches the table rows exactly
         const scopedTotals = new Array(STAGES.length).fill(0);
         scopedTable.forEach((r) => {
             r.counts.forEach((c, idx) => { scopedTotals[idx] += c; });
+        });
+
+        // Stage totals across all active rows for admin
+        const adminTotals = new Array(STAGES.length).fill(0);
+        table.forEach((r) => {
+            r.counts.forEach((c, idx) => { adminTotals[idx] += c; });
         });
 
         // Sort descending: employee with the most pending tasks appears first
@@ -902,8 +963,12 @@ export default function CRRCallingProcessPage() {
             return sumB - sumA;
         });
 
-        return { table: sortedTable, totals: isAdminRole ? totals : scopedTotals };
-    }, [rows, stageFilter, isAdminRole, user, stageUsers, DEFAULT_STAGE_USERS]);
+        return { table: sortedTable, totals: isAdminRole ? adminTotals : scopedTotals };
+    }, [rows, stageFilter, isAdminRole, user, responsiblePersonList, userAccessibleStages]);
+
+    const totalPendingStageTasks = useMemo(() => {
+        return pendingReport.totals.reduce((a, b) => a + b, 0);
+    }, [pendingReport]);
 
     /* ---------- CHART VIEW DATA ---------- */
     // Derived purely from the same filtered `rows` / `pendingReport` used by
@@ -1001,12 +1066,24 @@ export default function CRRCallingProcessPage() {
     function clearFilters() {
         setSearch("");
         setStageFilter("all");
-        setRespFilter("all");
+        if (user && !isAdminRole) {
+            const myEmail = (user?.email || "").toLowerCase().trim();
+            const myName = (user?.name || "").toLowerCase().trim();
+            const match = responsiblePersonList.find(
+                (u) =>
+                    u.email.toLowerCase().trim() === myEmail ||
+                    u.name.toLowerCase().trim() === myName
+            );
+            setRespFilter(match ? (match.name || match.email) : "all");
+        } else {
+            setRespFilter("all");
+        }
         setDateRangeFilter("all");
         setCustomStartDate("");
         setCustomEndDate("");
         setStatusFilter("all");
-        setCurrentPage(1);
+        setPendingPage(1);
+        setCompletedPage(1);
     }
 
     function openModal(id: number) {
@@ -1706,6 +1783,636 @@ export default function CRRCallingProcessPage() {
         ]
         : [];
 
+    /* ---------- RENDER A RECORDS TABLE (Pending or Completed) ---------- */
+    const renderRecordsTable = (tableType: "pending" | "completed") => {
+        const isPendingTable = tableType === "pending";
+        const tableRows = isPendingTable ? pendingRows : completedRows;
+        const pagedList = isPendingTable ? pagedPendingRows : pagedCompletedRows;
+        const curPage = isPendingTable ? pendingPage : completedPage;
+        const setCurPage = isPendingTable ? setPendingPage : setCompletedPage;
+        const itemsPage = isPendingTable ? pendingItemsPerPage : completedItemsPerPage;
+        const setItemsPage = isPendingTable ? setPendingItemsPerPage : setCompletedItemsPerPage;
+        const totalP = isPendingTable ? pendingTotalPages : completedTotalPages;
+        const startIdx = isPendingTable ? pendingStartIndex : completedStartIndex;
+        const endIdx = isPendingTable ? pendingEndIndex : completedEndIndex;
+        const gotoP = isPendingTable ? pendingGotoPage : completedGotoPage;
+        const setGotoP = isPendingTable ? setPendingGotoPage : setCompletedGotoPage;
+        const onGoto = isPendingTable ? handlePendingGotoPage : handleCompletedGotoPage;
+
+        const title = isPendingTable ? "Pending Records" : "Completed Records";
+        const subtitle = isPendingTable
+            ? (isAdminRole
+                ? "Records where one or more required workflow stages are still pending"
+                : `Records where one or more of your accessible stages (${userAccessibleStages.map(n => `Stage ${n}`).join(", ")}) are pending`)
+            : (isAdminRole
+                ? "Records where all 11 required workflow stages are completed"
+                : `Records where all stages accessible to you (${userAccessibleStages.map(n => `Stage ${n}`).join(", ")}) are completed`);
+
+        const badgeClass = isPendingTable
+            ? "bg-amber-100 text-amber-800 border-amber-300"
+            : "bg-emerald-100 text-emerald-800 border-emerald-300";
+
+        const iconHeaderBg = isPendingTable
+            ? "bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 border-amber-600/30"
+            : "bg-gradient-to-br from-emerald-500 via-teal-500 to-emerald-600 border-emerald-600/30";
+
+        const headerGradient = isPendingTable
+            ? "bg-gradient-to-r from-amber-50 via-white to-orange-50 border-b border-amber-200"
+            : "bg-gradient-to-r from-emerald-50 via-white to-teal-50 border-b border-emerald-200";
+
+        const cardBorder = isPendingTable
+            ? "border-amber-200/90"
+            : "border-emerald-200/90";
+
+        return (
+            <div className={`rounded-xl border ${cardBorder} bg-white shadow-md overflow-hidden`}>
+                {/* Table Header */}
+                <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-4 sm:px-5 py-4 ${headerGradient}`}>
+                    <div className="flex items-center gap-3">
+                        <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center shadow-md border ${iconHeaderBg}`}>
+                            {isPendingTable ? (
+                                <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+                            ) : (
+                                <CheckCircle2 className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+                            )}
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <h3 className="text-sm sm:text-base font-bold text-slate-900 leading-tight">{title}</h3>
+                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border shadow-2xs ${badgeClass}`}>
+                                    <span>{tableRows.length} {tableRows.length === 1 ? "Record" : "Records"}</span>
+                                    {isPendingTable && totalPendingStageTasks !== tableRows.length && (
+                                        <span className="text-[11px] font-semibold text-amber-800">
+                                            · {totalPendingStageTasks} Stage Tasks
+                                        </span>
+                                    )}
+                                </span>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Mobile Swipe Hint */}
+                <div className="sm:hidden flex items-center justify-center gap-1.5 px-4 py-2 bg-slate-50 border-b border-slate-200 text-[11px] font-semibold text-slate-500">
+                    <ChevronRight className="h-3 w-3 rotate-180" />
+                    Swipe to see more
+                    <ChevronRight className="h-3 w-3" />
+                </div>
+
+                {/* Table Body */}
+                <div className="relative">
+                    <div
+                        className="overflow-x-auto overflow-y-visible w-full [scrollbar-width:thin]"
+                        style={{ WebkitOverflowScrolling: "touch", overscrollBehaviorX: "contain" }}
+                    >
+                        <table className="min-w-full divide-y divide-slate-200 text-xs" style={{ tableLayout: "fixed" }}>
+                            <thead className="sticky top-0 z-20 border-b-2 border-slate-400 shadow" style={{ backgroundColor: "#1e3a5f" }}>
+                                <tr className="border-b-2 border-slate-400">
+                                    <th
+                                        className={frozenCellClass("px-4 py-3.5 text-center text-[11px] font-bold text-white uppercase tracking-wider whitespace-nowrap", frozenColsSticky, "z-30")}
+                                        style={{
+                                            backgroundColor: "#1e3a5f",
+                                            ...frozenCellStyle(STICKY_COLS.timestamp.left, STICKY_COLS.timestamp.width, frozenColsSticky),
+                                        }}
+                                    >
+                                        Timestamp
+                                    </th>
+                                    <th
+                                        className={frozenCellClass("px-4 py-3.5 text-center text-[11px] font-bold text-white uppercase tracking-wider whitespace-nowrap cursor-pointer select-none hover:bg-slate-700/40 transition-colors", frozenColsSticky, "z-30")}
+                                        style={{
+                                            backgroundColor: "#1e3a5f",
+                                            ...frozenCellStyle(STICKY_COLS.bookingId.left, STICKY_COLS.bookingId.width, frozenColsSticky),
+                                        }}
+                                        onClick={() => handleSort("Booking ID")}
+                                    >
+                                        <span className="inline-flex items-center gap-1">
+                                            Booking ID
+                                            {sortColumn === "Booking ID" ? (
+                                                sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                            ) : (
+                                                <ArrowUpDown className="h-3 w-3 opacity-50" />
+                                            )}
+                                        </span>
+                                    </th>
+                                    <th
+                                        className="sticky z-30 px-4 py-3.5 text-center text-[11px] font-bold text-white uppercase tracking-wider whitespace-nowrap cursor-pointer select-none hover:bg-slate-700/40 transition-colors"
+                                        style={{
+                                            backgroundColor: "#1e3a5f",
+                                            ...frozenCellStyle(clientStickyLeft, clientStickyWidth, true, true),
+                                        }}
+                                        onClick={() => handleSort("Client Details")}
+                                    >
+                                        <span className="inline-flex items-center gap-1">
+                                            Client Details
+                                            {sortColumn === "Client Details" ? (
+                                                sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                            ) : (
+                                                <ArrowUpDown className="h-3 w-3 opacity-50" />
+                                            )}
+                                        </span>
+                                    </th>
+                                    {SCROLLABLE_HEADERS.map((h) => {
+                                        const sortable = !!SORT_ACCESSORS[h];
+                                        return (
+                                            <th
+                                                key={h}
+                                                className={`px-4 py-3.5 text-center text-[11px] font-bold text-white uppercase tracking-wider whitespace-nowrap ${sortable ? "cursor-pointer select-none hover:bg-slate-700/40 transition-colors" : ""}`}
+                                                style={{ backgroundColor: "#1e3a5f" }}
+                                                onClick={sortable ? () => handleSort(h) : undefined}
+                                            >
+                                                {sortable ? (
+                                                    <span className="inline-flex items-center gap-1">
+                                                        {h}
+                                                        {sortColumn === h ? (
+                                                            sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                                        ) : (
+                                                            <ArrowUpDown className="h-3 w-3 opacity-50" />
+                                                        )}
+                                                    </span>
+                                                ) : (
+                                                    h
+                                                )}
+                                            </th>
+                                        );
+                                    })}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {tableRows.length === 0 && (
+                                    <tr className="border-b border-slate-200">
+                                        <td colSpan={19} className="text-center py-10 text-slate-400 font-semibold text-sm">
+                                            {isPendingTable
+                                                ? "No pending records match the current filters."
+                                                : "No completed records match the current filters."}
+                                        </td>
+                                    </tr>
+                                )}
+                                {pagedList.map((g) => {
+                                    const stageObj = STAGES[Math.min(g.currentStage, STAGES.length) - 1];
+                                    return (
+                                        <tr key={g.id} className="group border-b border-slate-200 hover:bg-slate-50/80 transition-colors">
+                                            {/* Timestamp */}
+                                            <td
+                                                className={frozenCellClass("bg-white group-hover:bg-slate-50 px-4 py-3.5 text-center text-slate-700 whitespace-nowrap transition-colors", frozenColsSticky)}
+                                                style={frozenCellStyle(STICKY_COLS.timestamp.left, STICKY_COLS.timestamp.width, frozenColsSticky)}
+                                            >
+                                                {g.timestamp}
+                                            </td>
+                                            {/* Booking ID */}
+                                            <td
+                                                className={frozenCellClass("bg-white group-hover:bg-slate-50 px-4 py-3.5 text-center font-bold text-slate-900 whitespace-nowrap transition-colors", frozenColsSticky)}
+                                                style={frozenCellStyle(STICKY_COLS.bookingId.left, STICKY_COLS.bookingId.width, frozenColsSticky)}
+                                            >
+                                                {g.bookingId}
+                                            </td>
+                                            {/* Client Details */}
+                                            <td
+                                                className="sticky z-10 bg-white group-hover:bg-slate-50 px-4 py-3.5 text-left transition-colors overflow-hidden"
+                                                style={frozenCellStyle(clientStickyLeft, clientStickyWidth, true, true)}
+                                            >
+                                                <div className="font-bold text-slate-900 whitespace-nowrap">{g.name}</div>
+                                                <div className="text-[10px] text-slate-500 whitespace-nowrap mt-0.5">{g.mobile}</div>
+                                                <div className="text-[10px] text-blue-500 whitespace-nowrap hidden sm:block">{g.email}</div>
+                                            </td>
+                                            {/* Check-In */}
+                                            <td className="px-4 py-3.5 text-center text-slate-700 whitespace-nowrap">{g.checkin}</td>
+                                            {/* Check-Out */}
+                                            <td className="px-4 py-3.5 text-center text-slate-700 whitespace-nowrap">{g.checkout}</td>
+                                            {/* Days of Stay */}
+                                            <td className="px-4 py-3.5 text-center font-bold text-slate-900">{g.days}</td>
+                                            {/* Country */}
+                                            <td className="px-4 py-3.5 text-center text-slate-700 whitespace-nowrap">{g.country}</td>
+                                            {/* Gender */}
+                                            <td className="px-4 py-3.5 text-center text-slate-700 whitespace-nowrap">{g.gender}</td>
+                                            {/* Programme / Package */}
+                                            <td className="px-4 py-3.5 text-left align-top leading-snug text-slate-700 whitespace-normal break-words min-w-[220px] max-w-[280px]">{g.programme}</td>
+                                            {/* Room Details */}
+                                            <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                                                {(() => {
+                                                    const { category, occupancy } = parseRoomDetails(g.room);
+                                                    return (
+                                                        <div className="leading-tight">
+                                                            <div className="font-semibold text-slate-900">{category}</div>
+                                                            {occupancy && (
+                                                                <div className="text-[10px] text-slate-500 mt-0.5">{occupancy}</div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </td>
+                                            {/* PI NO */}
+                                            <td className="px-4 py-3.5 text-center text-slate-700 whitespace-nowrap">{g.bookingNo}</td>
+                                            {/* Booking Taken By */}
+                                            <td className="px-4 py-3.5 text-center text-slate-700 whitespace-nowrap">{g.takenBy}</td>
+                                            {/* Invoice Amt */}
+                                            <td className="px-4 py-3.5 text-center font-bold text-slate-900 whitespace-nowrap">{g.invoice}</td>
+                                            {/* PI Link */}
+                                            <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                                                {g.piLink && g.piLink !== "#" && g.piLink !== "-" && g.piLink.trim() !== "" ? (
+                                                    <a
+                                                        href={g.piLink}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-blue-600 hover:text-blue-800 font-semibold underline underline-offset-2 text-xs"
+                                                    >
+                                                        View PI
+                                                    </a>
+                                                ) : (
+                                                    <span className="text-slate-400 font-medium">_</span>
+                                                )}
+                                            </td>
+                                            {/* UID */}
+                                            <td className="px-4 py-3.5 text-center text-slate-700 whitespace-nowrap">{g.uid}</td>
+                                            {/* Booking Status */}
+                                            <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                                                {(() => {
+                                                    const displayBookingStatus = g.bookingStatus?.trim() ? g.bookingStatus : "Confirmed";
+                                                    const styles: Record<string, string> = {
+                                                        "Confirmed": "text-emerald-700 bg-emerald-50 border-emerald-200",
+                                                        "Checked Out": "text-slate-700 bg-slate-100 border-slate-300",
+                                                        "Cancelled": "text-red-700 bg-red-50 border-red-200",
+                                                    };
+                                                    const cls = styles[displayBookingStatus] || "text-slate-700 bg-slate-100 border-slate-300";
+                                                    return (
+                                                        <span className={`inline-flex items-center text-[10px] font-bold border px-2.5 py-0.5 rounded-md shadow-2xs ${cls}`}>
+                                                            {displayBookingStatus}
+                                                        </span>
+                                                    );
+                                                })()}
+                                            </td>
+
+                                            {/* Current Stage */}
+                                            <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                                                {g.allComplete ? (
+                                                    <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-md shadow-2xs">
+                                                        <span className="w-1.5 h-1.5 bg-emerald-600 rounded-full" />
+                                                        All Complete
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-md shadow-2xs">
+                                                        <span className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
+                                                        {stageObj.no}: {stageObj.name}
+                                                    </span>
+                                                )}
+                                                <div className="flex gap-0.5 mt-1.5 justify-center">
+                                                    {STAGES.map((s, idx) => {
+                                                        let cls = "w-3.5 h-1 rounded-xs transition-colors";
+                                                        if (g.stageStatus[idx] === "Complete") {
+                                                            cls += " bg-emerald-500";
+                                                        } else if (g.stageStatus[idx] === "Processing") {
+                                                            cls += " bg-amber-400 animate-pulse";
+                                                        } else if (idx === g.currentStage - 1 && !g.allComplete) {
+                                                            cls += " bg-amber-500";
+                                                        } else {
+                                                            cls += " bg-slate-200";
+                                                        }
+                                                        return <span key={s.no} className={cls} />;
+                                                    })}
+                                                </div>
+                                            </td>
+                                            {/* Action */}
+                                            <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                                                <div className="flex items-center justify-center gap-1.5">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => openViewModal(g.id, 1)}
+                                                        title="View All Stages & Filled Data"
+                                                        className="h-8 px-2.5 text-xs font-semibold text-blue-600 bg-blue-50/80 border-blue-200 hover:bg-blue-100 hover:text-blue-700 hover:border-blue-300 rounded-lg flex items-center gap-1 shadow-2xs"
+                                                    >
+                                                        <Eye className="h-3.5 w-3.5 text-blue-600" />
+                                                        <span>View</span>
+                                                    </Button>
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="h-8 w-8 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg"
+                                                            >
+                                                                <MoreVertical className="h-4 w-4" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end" className="w-60">
+                                                            {isBookingCancelled(g) && !isAdminRole ? (
+                                                                <DropdownMenuItem disabled className="gap-2.5 text-red-500 opacity-70">
+                                                                    <AlertTriangle className="h-4 w-4" />
+                                                                    Booking cancelled — stages closed
+                                                                </DropdownMenuItem>
+                                                            ) : (
+                                                                <>
+                                                                    {isBookingCancelled(g) && (
+                                                                        <div className="px-2.5 py-1.5 mx-1 my-1 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-md flex items-center gap-1.5">
+                                                                            <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                                                                            <span>Cancelled Booking (Admin Access)</span>
+                                                                        </div>
+                                                                    )}
+                                                                    {/* Stage 1 */}
+                                                                    {canEditStage(1) && (
+                                                                        <DropdownMenuItem
+                                                                            disabled={!isAdminRole && isStageLocked(g, 1) && g.stageStatus[0] !== "Complete"}
+                                                                            onSelect={(e) => {
+                                                                                e.preventDefault();
+                                                                                setTimeout(() => openWelcomeModal(g.id), 0);
+                                                                            }}
+                                                                            className="gap-2.5 text-sky-600 focus:text-sky-700 cursor-pointer disabled:opacity-40"
+                                                                        >
+                                                                            <Home className="h-4 w-4" />
+                                                                            Arrival Welcome on Pickup
+                                                                        </DropdownMenuItem>
+                                                                    )}
+                                                                    {/* Stage 2 */}
+                                                                    {canEditStage(2) && (
+                                                                        <DropdownMenuItem
+                                                                            disabled={!isAdminRole && isStageLocked(g, 2) && g.stageStatus[1] !== "Complete"}
+                                                                            onSelect={(e) => {
+                                                                                e.preventDefault();
+                                                                                setTimeout(() => openCallModal(g.id), 0);
+                                                                            }}
+                                                                            className="gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
+                                                                        >
+                                                                            <PhoneCall className="h-4 w-4" />
+                                                                            Guest Request &amp; Complaint Management
+                                                                        </DropdownMenuItem>
+                                                                    )}
+
+                                                                    {(canEditStage(1) || canEditStage(2)) && (canEditStage(3) || canEditStage(4) || canEditStage(5)) && <DropdownMenuSeparator />}
+
+                                                                    {/* Stage 3 */}
+                                                                    {canEditStage(3) && (
+                                                                        <DropdownMenuItem
+                                                                            disabled={!isAdminRole && isStageLocked(g, 3) && g.stageStatus[2] !== "Complete"}
+                                                                            onSelect={(e) => {
+                                                                                e.preventDefault();
+                                                                                setTimeout(() => openModal(g.id), 0);
+                                                                            }}
+                                                                            className="gap-2.5 text-blue-600 focus:text-blue-700 cursor-pointer disabled:opacity-40"
+                                                                        >
+                                                                            <Calendar className="h-4 w-4" />
+                                                                            Next Visit Planning &amp; Confirmation
+                                                                        </DropdownMenuItem>
+                                                                    )}
+                                                                    {/* Stage 4 */}
+                                                                    {canEditStage(4) && (
+                                                                        <DropdownMenuItem
+                                                                            disabled={!isAdminRole && isStageLocked(g, 4) && g.stageStatus[3] !== "Complete"}
+                                                                            onSelect={(e) => {
+                                                                                e.preventDefault();
+                                                                                setTimeout(() => openFeedbackModal(g.id), 0);
+                                                                            }}
+                                                                            className="gap-2.5 text-amber-600 focus:text-amber-700 cursor-pointer disabled:opacity-40"
+                                                                        >
+                                                                            <Star className="h-4 w-4" />
+                                                                            Guest Feedback &amp; Outcome Confirmation
+                                                                        </DropdownMenuItem>
+                                                                    )}
+                                                                    {/* Stage 5 */}
+                                                                    {canEditStage(5) && (
+                                                                        <DropdownMenuItem
+                                                                            disabled={!isAdminRole && isStageLocked(g, 5) && g.stageStatus[4] !== "Complete"}
+                                                                            onSelect={(e) => {
+                                                                                e.preventDefault();
+                                                                                setTimeout(() => openRatingModal(g.id), 0);
+                                                                            }}
+                                                                            className="gap-2.5 text-orange-600 focus:text-orange-700 cursor-pointer disabled:opacity-40"
+                                                                        >
+                                                                            <Send className="h-4 w-4" />
+                                                                            Online Rating &amp; Review Request
+                                                                        </DropdownMenuItem>
+                                                                    )}
+
+                                                                    {(canEditStage(1) || canEditStage(2) || canEditStage(3) || canEditStage(4) || canEditStage(5)) && (canEditStage(6) || canEditStage(7) || canEditStage(8)) && <DropdownMenuSeparator />}
+
+                                                                    {/* Stage 6 */}
+                                                                    {canEditStage(6) && (
+                                                                        <DropdownMenuItem
+                                                                            disabled={!isAdminRole && isStageLocked(g, 6) && g.stageStatus[5] !== "Complete"}
+                                                                            onSelect={(e) => {
+                                                                                e.preventDefault();
+                                                                                setTimeout(() => openSafeReturnModal(g.id), 0);
+                                                                            }}
+                                                                            className="gap-2.5 text-emerald-600 focus:text-emerald-700 cursor-pointer disabled:opacity-40"
+                                                                        >
+                                                                            <RotateCcw className="h-4 w-4" />
+                                                                            Safe Return Confirmation
+                                                                        </DropdownMenuItem>
+                                                                    )}
+                                                                    {/* Stage 7 */}
+                                                                    {canEditStage(7) && (
+                                                                        <DropdownMenuItem
+                                                                            disabled={!isAdminRole && isStageLocked(g, 7) && g.stageStatus[6] !== "Complete"}
+                                                                            onSelect={(e) => {
+                                                                                e.preventDefault();
+                                                                                setTimeout(() => openResultProgressModal(g.id), 0);
+                                                                            }}
+                                                                            className="gap-2.5 text-purple-600 focus:text-purple-700 cursor-pointer disabled:opacity-40"
+                                                                        >
+                                                                            <TrendingUp className="h-4 w-4" />
+                                                                            Result Tracking &amp; Health Progress Check
+                                                                        </DropdownMenuItem>
+                                                                    )}
+                                                                    {/* Stage 8 */}
+                                                                    {canEditStage(8) && (
+                                                                        <DropdownMenuItem
+                                                                            disabled={!isAdminRole && isStageLocked(g, 8) && g.stageStatus[7] !== "Complete"}
+                                                                            onSelect={(e) => {
+                                                                                e.preventDefault();
+                                                                                if (g.stageStatus[7] === "Complete") {
+                                                                                    setTimeout(() => openReferralModal(g.id), 0);
+                                                                                } else {
+                                                                                    window.open(buildReferralFormUrl(g.bookingId), "_blank", "noopener,noreferrer");
+                                                                                }
+                                                                            }}
+                                                                            className="gap-2.5 text-green-600 focus:text-green-700 cursor-pointer disabled:opacity-40"
+                                                                        >
+                                                                            <Users className="h-4 w-4" />
+                                                                            Referral Collection &amp; Lead Generation
+                                                                        </DropdownMenuItem>
+                                                                    )}
+
+                                                                    {(canEditStage(1) || canEditStage(2) || canEditStage(3) || canEditStage(4) || canEditStage(5) || canEditStage(6) || canEditStage(7) || canEditStage(8)) && (canEditStage(9) || canEditStage(10) || canEditStage(11)) && <DropdownMenuSeparator />}
+
+                                                                    {/* Stage 9 */}
+                                                                    {canEditStage(9) && (
+                                                                        <DropdownMenuItem
+                                                                            disabled={!isAdminRole && isStageLocked(g, 9) && g.stageStatus[8] !== "Complete"}
+                                                                            onSelect={(e) => {
+                                                                                e.preventDefault();
+                                                                                setTimeout(() => openDriverArrivalModal(g.id), 0);
+                                                                            }}
+                                                                            className="gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
+                                                                        >
+                                                                            <Briefcase className="h-4 w-4" />
+                                                                            Driver Assignment – Arrival Pickup
+                                                                        </DropdownMenuItem>
+                                                                    )}
+                                                                    {/* Stage 10 */}
+                                                                    {canEditStage(10) && (
+                                                                        <DropdownMenuItem
+                                                                            disabled={!isAdminRole && isStageLocked(g, 10) && g.stageStatus[9] !== "Complete"}
+                                                                            onSelect={(e) => {
+                                                                                e.preventDefault();
+                                                                                setTimeout(() => openDriverDepartureModal(g.id), 0);
+                                                                            }}
+                                                                            className="gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
+                                                                        >
+                                                                            <Briefcase className="h-4 w-4" />
+                                                                            Driver Assignment – Departure Drop
+                                                                        </DropdownMenuItem>
+                                                                    )}
+                                                                    {/* Stage 11 */}
+                                                                    {canEditStage(11) && (
+                                                                        <DropdownMenuItem
+                                                                            disabled={!isAdminRole && isStageLocked(g, 11) && g.stageStatus[10] !== "Complete"}
+                                                                            onSelect={(e) => {
+                                                                                e.preventDefault();
+                                                                                setTimeout(() => openRequirementVerificationModal(g.id), 0);
+                                                                            }}
+                                                                            className="gap-2.5 text-teal-600 focus:text-teal-700 cursor-pointer disabled:opacity-40"
+                                                                        >
+                                                                            <CheckCircle2 className="h-4 w-4" />
+                                                                            Guest Requirement Verification
+                                                                        </DropdownMenuItem>
+                                                                    )}
+
+                                                                    {![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].some((n) => canEditStage(n)) && (
+                                                                        <DropdownMenuItem disabled className="gap-2.5 text-slate-400 opacity-70">
+                                                                            No stage permissions assigned
+                                                                        </DropdownMenuItem>
+                                                                    )}
+                                                                </>
+                                                            )}
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div className="sm:hidden pointer-events-none absolute top-0 right-0 h-full w-8 bg-gradient-to-l from-white/90 to-transparent" />
+                </div>
+
+                {/* Pagination Footer */}
+                {tableRows.length > 0 && (
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 px-4 sm:px-6 py-4 border-t bg-gradient-to-r from-slate-50 to-blue-50">
+                        {/* Left Info */}
+                        <div className="flex items-center justify-center lg:justify-start gap-2 text-sm text-slate-600">
+                            <span>Showing</span>
+                            <span className="font-bold text-slate-800 bg-white border border-slate-200 px-2 py-0.5 rounded">
+                                {startIdx + 1}–{endIdx}
+                            </span>
+                            <span>of</span>
+                            <span className={`font-bold ${isPendingTable ? "text-amber-700" : "text-emerald-700"}`}>{tableRows.length}</span>
+                            <span>records</span>
+                        </div>
+
+                        {/* Center Page Numbers */}
+                        <div className="flex flex-wrap items-center justify-center gap-1.5">
+                            <Button
+                                size="sm" variant="outline"
+                                disabled={curPage === 1}
+                                onClick={() => setCurPage(1)}
+                                className="hidden sm:inline-flex h-9 w-9 sm:h-8 sm:w-8 p-0 text-xs"
+                            >«</Button>
+
+                            <Button
+                                size="sm" variant="outline"
+                                disabled={curPage === 1}
+                                onClick={() => setCurPage((p) => Math.max(1, p - 1))}
+                                className="h-9 sm:h-8 px-3 text-xs"
+                            >‹ Prev</Button>
+
+                            {(() => {
+                                const pages = [];
+                                const total = totalP;
+                                const cur = curPage;
+                                let start = Math.max(1, cur - 2);
+                                let end = Math.min(total, cur + 2);
+                                if (cur <= 3) end = Math.min(5, total);
+                                if (cur >= total - 2) start = Math.max(1, total - 4);
+
+                                if (start > 1) pages.push(<span key="s-ellipsis" className="px-1 text-slate-400">…</span>);
+                                for (let i = start; i <= end; i++) {
+                                    pages.push(
+                                        <button
+                                            key={i}
+                                            onClick={() => setCurPage(i)}
+                                            className={`h-9 w-9 sm:h-8 sm:w-8 rounded-md text-xs font-semibold transition-all ${
+                                                i === cur
+                                                    ? (isPendingTable
+                                                        ? 'bg-amber-600 text-white shadow-md border border-amber-700'
+                                                        : 'bg-emerald-600 text-white shadow-md border border-emerald-700')
+                                                    : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
+                                            }`}
+                                        >{i}</button>
+                                    );
+                                }
+                                if (end < total) pages.push(<span key="e-ellipsis" className="px-1 text-slate-400">…</span>);
+                                return pages;
+                            })()}
+
+                            <Button
+                                size="sm" variant="outline"
+                                disabled={curPage === totalP}
+                                onClick={() => setCurPage((p) => Math.min(totalP, p + 1))}
+                                className="h-9 sm:h-8 px-3 text-xs"
+                            >Next ›</Button>
+
+                            <Button
+                                size="sm" variant="outline"
+                                disabled={curPage === totalP}
+                                onClick={() => setCurPage(totalP)}
+                                className="hidden sm:inline-flex h-9 w-9 sm:h-8 sm:w-8 p-0 text-xs"
+                            >»</Button>
+                        </div>
+
+                        {/* Right - Rows per page & Go to page */}
+                        <div className="flex flex-wrap items-center justify-center lg:justify-end gap-4">
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm text-slate-500">Rows/page</span>
+                                <select
+                                    value={itemsPage}
+                                    onChange={(e) => {
+                                        setItemsPage(Number(e.target.value));
+                                        setCurPage(1);
+                                    }}
+                                    className="h-8 rounded-md border border-slate-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                                >
+                                    {[5, 10, 15, 25, 50, 100].map((size) => (
+                                        <option key={size} value={size}>{size}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm text-slate-500">Go to</span>
+                                <input
+                                    type="number"
+                                    min={1}
+                                    max={totalP}
+                                    value={gotoP}
+                                    onChange={(e) => setGotoP(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && onGoto()}
+                                    className="h-8 w-16 rounded-md border border-slate-300 px-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="#"
+                                />
+                                <Button
+                                    size="sm"
+                                    className={`h-8 text-xs px-3 text-white ${isPendingTable ? "bg-amber-600 hover:bg-amber-700" : "bg-emerald-600 hover:bg-emerald-700"}`}
+                                    onClick={onGoto}
+                                >Go</Button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
     /* =========================================================
        RENDER
     ========================================================= */
@@ -1970,16 +2677,16 @@ export default function CRRCallingProcessPage() {
                                         </p>
                                     </div>
 
-                                    {/* Pending Actions */}
+                                    {/* Pending Bookings */}
                                     <div className="bg-amber-50/70 border-2 border-amber-300 rounded-lg p-3 shadow-sm hover:shadow-md transition">
                                         <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700 leading-tight mb-2">
-                                            Pending Actions
+                                            Pending Bookings
                                         </p>
                                         <p className="text-3xl font-extrabold text-slate-900 leading-none mb-2">
                                             {pendingCount}
                                         </p>
                                         <p className="text-[10px] text-amber-600 font-semibold mt-1">
-                                            {actionablePendingCount} actionable now · {pendingCount - actionablePendingCount} awaiting unlock
+                                            {actionablePendingCount} actionable now · {totalPendingStageTasks} total stage tasks
                                         </p>
                                     </div>
 
@@ -2039,14 +2746,6 @@ export default function CRRCallingProcessPage() {
                                     <p className="text-xs text-slate-500 mt-0.5">Responsible-person-wise actionable pending count, per stage</p>
                                 </div>
                             </div>
-                            <div className="flex flex-wrap items-center gap-2">
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 shadow-sm">
-                                    Pending Bookings: <strong className="font-bold">{pendingCount}</strong>
-                                </span>
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-sm">
-                                    Total Stage Pendings: <strong className="font-bold">{pendingReport.totals.reduce((a, b) => a + b, 0)}</strong>
-                                </span>
-                            </div>
                         </div>
                         {/* Content */}
                         <div className="overflow-x-auto w-full">
@@ -2091,10 +2790,10 @@ export default function CRRCallingProcessPage() {
                         </div>
                     </div>
 
-                    {/* MAIN DATA TABLE */}
-                    <div ref={tableSectionRef} className="rounded-xl border border-slate-200 bg-white shadow-md mt-6">
-                        {/* Header */}
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-4 sm:px-5 py-4 bg-gradient-to-r from-blue-100 via-white to-indigo-100 border-b border-slate-200 rounded-t-xl">
+                    {/* MAIN DATA TABLES SECTION */}
+                    <div ref={tableSectionRef} className="mt-6 space-y-4">
+                        {/* Header bar: tabs & view mode toggle */}
+                        <div className="rounded-xl border border-slate-200 bg-white shadow-md p-4 bg-gradient-to-r from-blue-100 via-white to-indigo-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-700 flex items-center justify-center shadow-md border border-blue-700/30">
                                     <Users className="h-4 w-4 text-white" />
@@ -2102,36 +2801,81 @@ export default function CRRCallingProcessPage() {
                                 <div>
                                     <h3 className="text-sm sm:text-base font-semibold text-slate-900 leading-tight">Guest Follow-up Records</h3>
                                     <p className="text-xs text-slate-500 mt-0.5">
-                                        Showing guest follow-up records — click Open to view stage actions
+                                        Showing guest follow-up records separated into Pending and Completed
                                     </p>
                                 </div>
                             </div>
-                            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                                <Button
-                                    variant={viewMode === "table" ? "secondary" : "outline"}
-                                    size="sm"
-                                    onClick={() => setViewMode("table")}
-                                    className={`w-full sm:w-auto font-semibold shadow-sm ${viewMode === "table" ? "" : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                                {/* Table Selector Tabs */}
+                                <div className="flex items-center p-1 bg-white/90 border border-slate-300 rounded-lg shadow-2xs">
+                                    <button
+                                        type="button"
+                                        onClick={() => setRecordsViewTab("both")}
+                                        className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                                            recordsViewTab === "both"
+                                                ? "bg-slate-800 text-white shadow-xs font-bold"
+                                                : "text-slate-600 hover:text-slate-900"
                                         }`}
-                                >
-                                    <Users className="h-3.5 w-3.5 mr-1.5" />
-                                    Table View
-                                </Button>
-                                <Button
-                                    variant={viewMode === "chart" ? "secondary" : "outline"}
-                                    size="sm"
-                                    onClick={() => setViewMode("chart")}
-                                    className={`w-full sm:w-auto font-semibold shadow-sm ${viewMode === "chart" ? "" : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                                    >
+                                        Both Tables ({rows.length})
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setRecordsViewTab("pending")}
+                                        className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                                            recordsViewTab === "pending"
+                                                ? "bg-amber-500 text-white shadow-xs font-bold"
+                                                : "text-slate-600 hover:text-amber-700"
                                         }`}
-                                >
-                                    <BarChart3 className="h-3.5 w-3.5 mr-1.5" />
-                                    Chart View
-                                </Button>
+                                    >
+                                        <Clock className="w-3.5 h-3.5" />
+                                        Pending ({pendingRows.length})
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setRecordsViewTab("completed")}
+                                        className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                                            recordsViewTab === "completed"
+                                                ? "bg-emerald-600 text-white shadow-xs font-bold"
+                                                : "text-slate-600 hover:text-emerald-700"
+                                        }`}
+                                    >
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                        Completed ({completedRows.length})
+                                    </button>
+                                </div>
+
+                                {/* Table vs Chart View Toggle */}
+                                <div className="flex items-center gap-1.5">
+                                    <Button
+                                        variant={viewMode === "table" ? "secondary" : "outline"}
+                                        size="sm"
+                                        onClick={() => setViewMode("table")}
+                                        className={`font-semibold shadow-2xs ${
+                                            viewMode === "table" ? "" : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                                        }`}
+                                    >
+                                        <Users className="h-3.5 w-3.5 mr-1.5" />
+                                        Table View
+                                    </Button>
+                                    <Button
+                                        variant={viewMode === "chart" ? "secondary" : "outline"}
+                                        size="sm"
+                                        onClick={() => setViewMode("chart")}
+                                        className={`font-semibold shadow-2xs ${
+                                            viewMode === "chart" ? "" : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                                        }`}
+                                    >
+                                        <BarChart3 className="h-3.5 w-3.5 mr-1.5" />
+                                        Chart View
+                                    </Button>
+                                </div>
                             </div>
                         </div>
-                        {/* Error state for the live GAS-backed data */}
+
+                        {/* Error state */}
                         {guestsError && (
-                            <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 text-xs font-semibold text-red-600 bg-red-50 border-b border-red-200">
+                            <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-xl">
                                 <span className="flex items-center gap-2">
                                     <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                                     {guestsError}
@@ -2141,583 +2885,15 @@ export default function CRRCallingProcessPage() {
                                 </Button>
                             </div>
                         )}
+
                         {viewMode === "table" ? (
-                            <>
-                                {/* Mobile-only swipe hint — table keeps its columns but scrolls horizontally on small screens */}
-                                <div className="sm:hidden flex items-center justify-center gap-1.5 px-4 py-2 bg-slate-50 border-b border-slate-200 text-[11px] font-semibold text-slate-500">
-                                    <ChevronRight className="h-3 w-3 rotate-180" />
-                                    Swipe to see more
-                                    <ChevronRight className="h-3 w-3" />
-                                </div>
-                                {/* Content */}
-                                <div className="relative rounded-b-xl">
-                                    <div
-                                        className="overflow-x-auto overflow-y-visible w-full rounded-b-xl [scrollbar-width:thin]"
-                                        style={{ WebkitOverflowScrolling: "touch", overscrollBehaviorX: "contain" }}
-                                    >
-                                        <table className="min-w-full divide-y divide-slate-200 text-xs" style={{ tableLayout: "fixed" }}>
-                                            <thead className="sticky top-0 z-20 border-b-2 border-slate-400 shadow" style={{ backgroundColor: "#1e3a5f" }}>
-                                                <tr className="border-b-2 border-slate-400">
-                                                    {/* Frozen headers: Timestamp / Booking ID scroll away on mobile; only Client Details stays pinned */}
-                                                    <th
-                                                        className={frozenCellClass("px-4 py-3.5 text-center text-[11px] font-bold text-white uppercase tracking-wider whitespace-nowrap", frozenColsSticky, "z-30")}
-                                                        style={{
-                                                            backgroundColor: "#1e3a5f",
-                                                            ...frozenCellStyle(STICKY_COLS.timestamp.left, STICKY_COLS.timestamp.width, frozenColsSticky),
-                                                        }}
-                                                    >
-                                                        Timestamp
-                                                    </th>
-                                                    <th
-                                                        className={frozenCellClass("px-4 py-3.5 text-center text-[11px] font-bold text-white uppercase tracking-wider whitespace-nowrap cursor-pointer select-none hover:bg-slate-700/40 transition-colors", frozenColsSticky, "z-30")}
-                                                        style={{
-                                                            backgroundColor: "#1e3a5f",
-                                                            ...frozenCellStyle(STICKY_COLS.bookingId.left, STICKY_COLS.bookingId.width, frozenColsSticky),
-                                                        }}
-                                                        onClick={() => handleSort("Booking ID")}
-                                                    >
-                                                        <span className="inline-flex items-center gap-1">
-                                                            Booking ID
-                                                            {sortColumn === "Booking ID" ? (
-                                                                sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                                                            ) : (
-                                                                <ArrowUpDown className="h-3 w-3 opacity-50" />
-                                                            )}
-                                                        </span>
-                                                    </th>
-                                                    <th
-                                                        className="sticky z-30 px-4 py-3.5 text-center text-[11px] font-bold text-white uppercase tracking-wider whitespace-nowrap cursor-pointer select-none hover:bg-slate-700/40 transition-colors"
-                                                        style={{
-                                                            backgroundColor: "#1e3a5f",
-                                                            ...frozenCellStyle(clientStickyLeft, clientStickyWidth, true, true),
-                                                        }}
-                                                        onClick={() => handleSort("Client Details")}
-                                                    >
-                                                        <span className="inline-flex items-center gap-1">
-                                                            Client Details
-                                                            {sortColumn === "Client Details" ? (
-                                                                sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                                                            ) : (
-                                                                <ArrowUpDown className="h-3 w-3 opacity-50" />
-                                                            )}
-                                                        </span>
-                                                    </th>
-                                                    {/* Scrollable headers */}
-                                                    {SCROLLABLE_HEADERS.map((h) => {
-                                                        const sortable = !!SORT_ACCESSORS[h];
-                                                        return (
-                                                            <th
-                                                                key={h}
-                                                                className={`px-4 py-3.5 text-center text-[11px] font-bold text-white uppercase tracking-wider whitespace-nowrap ${sortable ? "cursor-pointer select-none hover:bg-slate-700/40 transition-colors" : ""}`}
-                                                                style={{ backgroundColor: "#1e3a5f" }}
-                                                                onClick={sortable ? () => handleSort(h) : undefined}
-                                                            >
-                                                                {sortable ? (
-                                                                    <span className="inline-flex items-center gap-1">
-                                                                        {h}
-                                                                        {sortColumn === h ? (
-                                                                            sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                                                                        ) : (
-                                                                            <ArrowUpDown className="h-3 w-3 opacity-50" />
-                                                                        )}
-                                                                    </span>
-                                                                ) : (
-                                                                    h
-                                                                )}
-                                                            </th>
-                                                        );
-                                                    })}
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {rows.length === 0 && (
-                                                    <tr className="border-b border-slate-200">
-                                                        <td colSpan={19} className="text-center py-8 text-slate-400 font-semibold text-sm">
-                                                            No records match the current filters.
-                                                        </td>
-                                                    </tr>
-                                                )}
-                                                {pagedRows.map((g) => {
-                                                    const stageObj = STAGES[Math.min(g.currentStage, STAGES.length) - 1];
-                                                    return (
-                                                        <tr key={g.id} className="group border-b border-slate-200 hover:bg-slate-50/80 transition-colors">
-                                                            {/* Timestamp — sticky on desktop, scrolls with the row on mobile */}
-                                                            <td
-                                                                className={frozenCellClass("bg-white group-hover:bg-slate-50 px-4 py-3.5 text-center text-slate-700 whitespace-nowrap transition-colors", frozenColsSticky)}
-                                                                style={frozenCellStyle(STICKY_COLS.timestamp.left, STICKY_COLS.timestamp.width, frozenColsSticky)}
-                                                            >
-                                                                {g.timestamp}
-                                                            </td>
-                                                            {/* Booking ID — sticky on desktop, scrolls with the row on mobile */}
-                                                            <td
-                                                                className={frozenCellClass("bg-white group-hover:bg-slate-50 px-4 py-3.5 text-center font-bold text-slate-900 whitespace-nowrap transition-colors", frozenColsSticky)}
-                                                                style={frozenCellStyle(STICKY_COLS.bookingId.left, STICKY_COLS.bookingId.width, frozenColsSticky)}
-                                                            >
-                                                                {g.bookingId}
-                                                            </td>
-                                                            {/* Client Details — always frozen (narrower on mobile to leave room to scroll) */}
-                                                            <td
-                                                                className="sticky z-10 bg-white group-hover:bg-slate-50 px-4 py-3.5 text-left transition-colors overflow-hidden"
-                                                                style={frozenCellStyle(clientStickyLeft, clientStickyWidth, true, true)}
-                                                            >
-                                                                <div className="font-bold text-slate-900 whitespace-nowrap">{g.name}</div>
-                                                                <div className="text-[10px] text-slate-500 whitespace-nowrap mt-0.5">{g.mobile}</div>
-                                                                <div className="text-[10px] text-blue-500 whitespace-nowrap hidden sm:block">{g.email}</div>
-                                                            </td>
-                                                            {/* Check-In */}
-                                                            <td className="px-4 py-3.5 text-center text-slate-700 whitespace-nowrap">{g.checkin}</td>
-                                                            {/* Check-Out */}
-                                                            <td className="px-4 py-3.5 text-center text-slate-700 whitespace-nowrap">{g.checkout}</td>
-                                                            {/* Days of Stay */}
-                                                            <td className="px-4 py-3.5 text-center font-bold text-slate-900">{g.days}</td>
-                                                            {/* Country */}
-                                                            <td className="px-4 py-3.5 text-center text-slate-700 whitespace-nowrap">{g.country}</td>
-                                                            {/* Gender */}
-                                                            <td className="px-4 py-3.5 text-center text-slate-700 whitespace-nowrap">{g.gender}</td>
-                                                            {/* Programme / Package */}
-                                                            <td className="px-4 py-3.5 text-left align-top leading-snug text-slate-700 whitespace-normal break-words min-w-[220px] max-w-[280px]">{g.programme}</td>
-                                                            {/* Room Details */}
-                                                            <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                                                                {(() => {
-                                                                    const { category, occupancy } = parseRoomDetails(g.room);
-                                                                    return (
-                                                                        <div className="leading-tight">
-                                                                            <div className="font-semibold text-slate-900">{category}</div>
-                                                                            {occupancy && (
-                                                                                <div className="text-[10px] text-slate-500 mt-0.5">{occupancy}</div>
-                                                                            )}
-                                                                        </div>
-                                                                    );
-                                                                })()}
-                                                            </td>
-                                                            {/* PI NO */}
-                                                            <td className="px-4 py-3.5 text-center text-slate-700 whitespace-nowrap">{g.bookingNo}</td>
-                                                            {/* Booking Taken By */}
-                                                            <td className="px-4 py-3.5 text-center text-slate-700 whitespace-nowrap">{g.takenBy}</td>
-                                                            {/* Invoice Amt */}
-                                                            <td className="px-4 py-3.5 text-center font-bold text-slate-900 whitespace-nowrap">{g.invoice}</td>
-                                                            {/* PI Link */}
-                                                            <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                                                                {g.piLink && g.piLink !== "#" && g.piLink !== "-" && g.piLink.trim() !== "" ? (
-                                                                    <a
-                                                                        href={g.piLink}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                        className="text-blue-600 hover:text-blue-800 font-semibold underline underline-offset-2 text-xs"
-                                                                    >
-                                                                        View PI
-                                                                    </a>
-                                                                ) : (
-                                                                    <span className="text-slate-400 font-medium">_</span>
-                                                                )}
-                                                            </td>
-                                                            {/* MID */}
-                                                            {/* <td className="px-4 py-3.5 text-center text-slate-700 whitespace-nowrap">{g.mid}</td> */}
-                                                            {/* UID */}
-                                                            <td className="px-4 py-3.5 text-center text-slate-700 whitespace-nowrap">{g.uid}</td>
-                                                            {/* Booking Status */}
-                                                            <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                                                                {(() => {
-                                                                    const displayBookingStatus = g.bookingStatus?.trim() ? g.bookingStatus : "Confirmed";
-                                                                    const styles: Record<string, string> = {
-                                                                        "Confirmed": "text-emerald-700 bg-emerald-50 border-emerald-200",
-                                                                        "Checked Out": "text-slate-700 bg-slate-100 border-slate-300",
-                                                                        "Cancelled": "text-red-700 bg-red-50 border-red-200",
-                                                                    };
-                                                                    const cls = styles[displayBookingStatus] || "text-slate-700 bg-slate-100 border-slate-300";
-                                                                    return (
-                                                                        <span className={`inline-flex items-center text-[10px] font-bold border px-2.5 py-0.5 rounded-md shadow-sm ${cls}`}>
-                                                                            {displayBookingStatus}
-                                                                        </span>
-                                                                    );
-                                                                })()}
-                                                            </td>
-
-                                                            {/* Current Stage */}
-                                                            <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                                                                {g.allComplete ? (
-                                                                    <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-md shadow-sm">
-                                                                        <span className="w-1.5 h-1.5 bg-emerald-600 rounded-full" />
-                                                                        All Complete
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-md shadow-sm">
-                                                                        <span className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
-                                                                        {stageObj.no}: {stageObj.name}
-                                                                    </span>
-                                                                )}
-                                                                <div className="flex gap-0.5 mt-1.5 justify-center">
-                                                                    {STAGES.map((s, idx) => {
-                                                                        // Each dot reflects that stage's OWN completion status —
-                                                                        // stages complete out of order (external forms/pipelines),
-                                                                        // so position-relative coloring would hide real progress.
-                                                                        let cls = "w-3.5 h-1 rounded-sm transition-colors";
-                                                                        if (g.stageStatus[idx] === "Complete") {
-                                                                            cls += " bg-emerald-500";
-                                                                        } else if (g.stageStatus[idx] === "Processing") {
-                                                                            cls += " bg-amber-400 animate-pulse";
-                                                                        } else if (idx === g.currentStage - 1 && !g.allComplete) {
-                                                                            cls += " bg-amber-500";
-                                                                        } else {
-                                                                            cls += " bg-slate-200";
-                                                                        }
-                                                                        return <span key={s.no} className={cls} />;
-                                                                    })}
-                                                                </div>
-                                                            </td>
-                                                            {/* Action */}
-                                                            <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                                                                <div className="flex items-center justify-center gap-1.5">
-                                                                    <Button
-                                                                        variant="outline"
-                                                                        size="sm"
-                                                                        onClick={() => openViewModal(g.id, 1)}
-                                                                        title="View All Stages & Filled Data"
-                                                                        className="h-8 px-2.5 text-xs font-semibold text-blue-600 bg-blue-50/80 border-blue-200 hover:bg-blue-100 hover:text-blue-700 hover:border-blue-300 rounded-lg flex items-center gap-1 shadow-xs"
-                                                                    >
-                                                                        <Eye className="h-3.5 w-3.5 text-blue-600" />
-                                                                        <span>View</span>
-                                                                    </Button>
-                                                                    <DropdownMenu>
-                                                                        <DropdownMenuTrigger asChild>
-                                                                            <Button
-                                                                                variant="ghost"
-                                                                                size="sm"
-                                                                                className="h-8 w-8 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg"
-                                                                            >
-                                                                                <MoreVertical className="h-4 w-4" />
-                                                                            </Button>
-                                                                        </DropdownMenuTrigger>
-                                                                        <DropdownMenuContent align="end" className="w-60">
-                                                                            {isBookingCancelled(g) && !isAdminRole ? (
-                                                                                /* (3) Cancelled booking — guest journey auto-closed, no stage actions for non-admin. */
-                                                                                <DropdownMenuItem disabled className="gap-2.5 text-red-500 opacity-70">
-                                                                                    <AlertTriangle className="h-4 w-4" />
-                                                                                    Booking cancelled — stages closed
-                                                                                </DropdownMenuItem>
-                                                                            ) : (
-                                                                                <>
-                                                                                    {isBookingCancelled(g) && (
-                                                                                        <div className="px-2.5 py-1.5 mx-1 my-1 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-md flex items-center gap-1.5">
-                                                                                            <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-                                                                                            <span>Cancelled Booking (Admin Access)</span>
-                                                                                        </div>
-                                                                                    )}
-                                                                                    {/* (4) Visibility = permission (no permission → hidden entirely).
-                                                                            Disabled = stage locked (planned date not reached).
-                                                                            Completed stages stay clickable to view saved data read-only. */}
-                                                                                    {/* Stage 1: Arrival Welcome on Pickup */}
-                                                                                    {canEditStage(1) && (
-                                                                                        <DropdownMenuItem
-                                                                                            disabled={!isAdminRole && isStageLocked(g, 1) && g.stageStatus[0] !== "Complete"}
-                                                                                            onSelect={(e) => {
-                                                                                                e.preventDefault();
-                                                                                                setTimeout(() => openWelcomeModal(g.id), 0);
-                                                                                            }}
-                                                                                            className="gap-2.5 text-sky-600 focus:text-sky-700 cursor-pointer disabled:opacity-40"
-                                                                                        >
-                                                                                            <Home className="h-4 w-4" />
-                                                                                            Arrival Welcome on Pickup
-                                                                                        </DropdownMenuItem>
-                                                                                    )}
-                                                                                    {/* Stage 2: Guest Request & Complaint Mgmt */}
-                                                                                    {canEditStage(2) && (
-                                                                                        <DropdownMenuItem
-                                                                                            disabled={!isAdminRole && isStageLocked(g, 2) && g.stageStatus[1] !== "Complete"}
-                                                                                            onSelect={(e) => {
-                                                                                                e.preventDefault();
-                                                                                                setTimeout(() => openCallModal(g.id), 0);
-                                                                                            }}
-                                                                                            className="gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
-                                                                                        >
-                                                                                            <PhoneCall className="h-4 w-4" />
-                                                                                            Guest Request &amp; Complaint Management
-                                                                                        </DropdownMenuItem>
-                                                                                    )}
-
-                                                                                    {(canEditStage(1) || canEditStage(2)) && (canEditStage(3) || canEditStage(4) || canEditStage(5)) && <DropdownMenuSeparator />}
-
-                                                                                    {/* Stage 3: Next Visit Planning & Confirmation */}
-                                                                                    {canEditStage(3) && (
-                                                                                        <DropdownMenuItem
-                                                                                            disabled={!isAdminRole && isStageLocked(g, 3) && g.stageStatus[2] !== "Complete"}
-                                                                                            onSelect={(e) => {
-                                                                                                e.preventDefault();
-                                                                                                setTimeout(() => openModal(g.id), 0);
-                                                                                            }}
-                                                                                            className="gap-2.5 text-blue-600 focus:text-blue-700 cursor-pointer disabled:opacity-40"
-                                                                                        >
-                                                                                            <Calendar className="h-4 w-4" />
-                                                                                            Next Visit Planning &amp; Confirmation
-                                                                                        </DropdownMenuItem>
-                                                                                    )}
-                                                                                    {/* Stage 4: Guest Feedback & Outcome Confirmation */}
-                                                                                    {canEditStage(4) && (
-                                                                                        <DropdownMenuItem
-                                                                                            disabled={!isAdminRole && isStageLocked(g, 4) && g.stageStatus[3] !== "Complete"}
-                                                                                            onSelect={(e) => {
-                                                                                                e.preventDefault();
-                                                                                                setTimeout(() => openFeedbackModal(g.id), 0);
-                                                                                            }}
-                                                                                            className="gap-2.5 text-amber-600 focus:text-amber-700 cursor-pointer disabled:opacity-40"
-                                                                                        >
-                                                                                            <Star className="h-4 w-4" />
-                                                                                            Guest Feedback &amp; Outcome Confirmation
-                                                                                        </DropdownMenuItem>
-                                                                                    )}
-                                                                                    {/* Stage 5: Online Rating & Review Request */}
-                                                                                    {canEditStage(5) && (
-                                                                                        <DropdownMenuItem
-                                                                                            disabled={!isAdminRole && isStageLocked(g, 5) && g.stageStatus[4] !== "Complete"}
-                                                                                            onSelect={(e) => {
-                                                                                                e.preventDefault();
-                                                                                                setTimeout(() => openRatingModal(g.id), 0);
-                                                                                            }}
-                                                                                            className="gap-2.5 text-orange-600 focus:text-orange-700 cursor-pointer disabled:opacity-40"
-                                                                                        >
-                                                                                            <Send className="h-4 w-4" />
-                                                                                            Online Rating &amp; Review Request
-                                                                                        </DropdownMenuItem>
-                                                                                    )}
-
-                                                                                    {(canEditStage(1) || canEditStage(2) || canEditStage(3) || canEditStage(4) || canEditStage(5)) && (canEditStage(6) || canEditStage(7) || canEditStage(8)) && <DropdownMenuSeparator />}
-
-                                                                                    {/* Stage 6: Safe Return Confirmation */}
-                                                                                    {canEditStage(6) && (
-                                                                                        <DropdownMenuItem
-                                                                                            disabled={!isAdminRole && isStageLocked(g, 6) && g.stageStatus[5] !== "Complete"}
-                                                                                            onSelect={(e) => {
-                                                                                                e.preventDefault();
-                                                                                                setTimeout(() => openSafeReturnModal(g.id), 0);
-                                                                                            }}
-                                                                                            className="gap-2.5 text-emerald-600 focus:text-emerald-700 cursor-pointer disabled:opacity-40"
-                                                                                        >
-                                                                                            <RotateCcw className="h-4 w-4" />
-                                                                                            Safe Return Confirmation
-                                                                                        </DropdownMenuItem>
-                                                                                    )}
-                                                                                    {/* Stage 7: Result Tracking & Health Progress Check */}
-                                                                                    {canEditStage(7) && (
-                                                                                        <DropdownMenuItem
-                                                                                            disabled={!isAdminRole && isStageLocked(g, 7) && g.stageStatus[6] !== "Complete"}
-                                                                                            onSelect={(e) => {
-                                                                                                e.preventDefault();
-                                                                                                setTimeout(() => openResultProgressModal(g.id), 0);
-                                                                                            }}
-                                                                                            className="gap-2.5 text-purple-600 focus:text-purple-700 cursor-pointer disabled:opacity-40"
-                                                                                        >
-                                                                                            <TrendingUp className="h-4 w-4" />
-                                                                                            Result Tracking &amp; Health Progress Check
-                                                                                        </DropdownMenuItem>
-                                                                                    )}
-                                                                                    {/* Stage 8: Referral Collection & Lead Generation */}
-                                                                                    {canEditStage(8) && (
-                                                                                        <DropdownMenuItem
-                                                                                            disabled={!isAdminRole && isStageLocked(g, 8) && g.stageStatus[7] !== "Complete"}
-                                                                                            onSelect={(e) => {
-                                                                                                e.preventDefault();
-                                                                                                if (g.stageStatus[7] === "Complete") {
-                                                                                                    setTimeout(() => openReferralModal(g.id), 0);
-                                                                                                } else {
-                                                                                                    window.open(buildReferralFormUrl(g.bookingId), "_blank", "noopener,noreferrer");
-                                                                                                }
-                                                                                            }}
-                                                                                            className="gap-2.5 text-green-600 focus:text-green-700 cursor-pointer disabled:opacity-40"
-                                                                                        >
-                                                                                            <Users className="h-4 w-4" />
-                                                                                            Referral Collection &amp; Lead Generation
-                                                                                        </DropdownMenuItem>
-                                                                                    )}
-
-                                                                                    {(canEditStage(1) || canEditStage(2) || canEditStage(3) || canEditStage(4) || canEditStage(5) || canEditStage(6) || canEditStage(7) || canEditStage(8)) && (canEditStage(9) || canEditStage(10) || canEditStage(11)) && <DropdownMenuSeparator />}
-
-                                                                                    {/* Stage 9: Driver Assignment – Arrival Pickup */}
-                                                                                    {canEditStage(9) && (
-                                                                                        <DropdownMenuItem
-                                                                                            disabled={!isAdminRole && isStageLocked(g, 9) && g.stageStatus[8] !== "Complete"}
-                                                                                            onSelect={(e) => {
-                                                                                                e.preventDefault();
-                                                                                                setTimeout(() => openDriverArrivalModal(g.id), 0);
-                                                                                            }}
-                                                                                            className="gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
-                                                                                        >
-                                                                                            <Briefcase className="h-4 w-4" />
-                                                                                            Driver Assignment – Arrival Pickup
-                                                                                        </DropdownMenuItem>
-                                                                                    )}
-
-                                                                                    {/* Stage 10: Driver Assignment – Departure Drop */}
-                                                                                    {canEditStage(10) && (
-                                                                                        <DropdownMenuItem
-                                                                                            disabled={!isAdminRole && isStageLocked(g, 10) && g.stageStatus[9] !== "Complete"}
-                                                                                            onSelect={(e) => {
-                                                                                                e.preventDefault();
-                                                                                                setTimeout(() => openDriverDepartureModal(g.id), 0);
-                                                                                            }}
-                                                                                            className="gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
-                                                                                        >
-                                                                                            <Briefcase className="h-4 w-4" />
-                                                                                            Driver Assignment – Departure Drop
-                                                                                        </DropdownMenuItem>
-                                                                                    )}
-
-                                                                                    {/* Stage 11: Guest Requirement Verification */}
-                                                                                    {canEditStage(11) && (
-                                                                                        <DropdownMenuItem
-                                                                                            disabled={!isAdminRole && isStageLocked(g, 11) && g.stageStatus[10] !== "Complete"}
-                                                                                            onSelect={(e) => {
-                                                                                                e.preventDefault();
-                                                                                                setTimeout(() => openRequirementVerificationModal(g.id), 0);
-                                                                                            }}
-                                                                                            className="gap-2.5 text-teal-600 focus:text-teal-700 cursor-pointer disabled:opacity-40"
-                                                                                        >
-                                                                                            <CheckCircle2 className="h-4 w-4" />
-                                                                                            Guest Requirement Verification
-                                                                                        </DropdownMenuItem>
-                                                                                    )}
-
-                                                                                    {/* Pure viewer (no stage permissions at all) */}
-                                                                                    {![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].some((n) => canEditStage(n)) && (
-                                                                                        <DropdownMenuItem disabled className="gap-2.5 text-slate-400 opacity-70">
-                                                                                            No stage permissions assigned
-                                                                                        </DropdownMenuItem>
-                                                                                    )}
-                                                                                </>
-                                                                            )}
-                                                                        </DropdownMenuContent>
-                                                                    </DropdownMenu>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                    {/* Right-edge fade — hints there's more content to scroll to on mobile */}
-                                    <div className="sm:hidden pointer-events-none absolute top-0 right-0 h-full w-8 bg-gradient-to-l from-white/90 to-transparent" />
-                                </div>
-
-                                {/* Pagination Footer */}
-                                {rows.length > 0 && (
-                                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 px-4 sm:px-6 py-4 border-t bg-gradient-to-r from-slate-50 to-blue-50">
-                                        {/* Left - Info */}
-                                        <div className="flex items-center justify-center lg:justify-start gap-2 text-sm text-slate-600">
-                                            <span>Showing</span>
-                                            <span className="font-bold text-slate-800 bg-white border border-slate-200 px-2 py-0.5 rounded">
-                                                {tableStartIndex + 1}–{tableEndIndex}
-                                            </span>
-                                            <span>of</span>
-                                            <span className="font-bold text-blue-700">{rows.length}</span>
-                                            <span>records</span>
-                                        </div>
-
-                                        {/* Center - Page Numbers */}
-                                        <div className="flex flex-wrap items-center justify-center gap-1.5">
-                                            {/* First page — hidden on the smallest screens to avoid crowding */}
-                                            <Button
-                                                size="sm" variant="outline"
-                                                disabled={currentPage === 1}
-                                                onClick={() => setCurrentPage(1)}
-                                                className="hidden sm:inline-flex h-9 w-9 sm:h-8 sm:w-8 p-0 text-xs"
-                                            >«</Button>
-
-                                            {/* Prev */}
-                                            <Button
-                                                size="sm" variant="outline"
-                                                disabled={currentPage === 1}
-                                                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                                                className="h-9 sm:h-8 px-3 text-xs"
-                                            >‹ Prev</Button>
-
-                                            {/* Page numbers */}
-                                            {(() => {
-                                                const pages = []
-                                                const total = totalPages
-                                                const cur = currentPage
-                                                let start = Math.max(1, cur - 2)
-                                                let end = Math.min(total, cur + 2)
-                                                if (cur <= 3) end = Math.min(5, total)
-                                                if (cur >= total - 2) start = Math.max(1, total - 4)
-
-                                                if (start > 1) pages.push(<span key="s-ellipsis" className="px-1 text-slate-400">…</span>)
-                                                for (let i = start; i <= end; i++) {
-                                                    pages.push(
-                                                        <button
-                                                            key={i}
-                                                            onClick={() => setCurrentPage(i)}
-                                                            className={`h-9 w-9 sm:h-8 sm:w-8 rounded-md text-xs font-semibold transition-all ${i === cur
-                                                                ? 'bg-blue-600 text-white shadow-md border border-blue-700'
-                                                                : 'bg-white text-slate-700 border border-slate-300 hover:bg-blue-50 hover:border-blue-300'
-                                                                }`}
-                                                        >{i}</button>
-                                                    )
-                                                }
-                                                if (end < total) pages.push(<span key="e-ellipsis" className="px-1 text-slate-400">…</span>)
-                                                return pages
-                                            })()}
-
-                                            {/* Next */}
-                                            <Button
-                                                size="sm" variant="outline"
-                                                disabled={currentPage === totalPages}
-                                                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                                                className="h-9 sm:h-8 px-3 text-xs"
-                                            >Next ›</Button>
-
-                                            {/* Last page — hidden on the smallest screens to avoid crowding */}
-                                            <Button
-                                                size="sm" variant="outline"
-                                                disabled={currentPage === totalPages}
-                                                onClick={() => setCurrentPage(totalPages)}
-                                                className="hidden sm:inline-flex h-9 w-9 sm:h-8 sm:w-8 p-0 text-xs"
-                                            >»</Button>
-                                        </div>
-
-                                        {/* Right - Rows per page & Go to page */}
-                                        <div className="flex flex-wrap items-center justify-center lg:justify-end gap-4">
-                                            {/* Rows per page */}
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-sm text-slate-500">Rows/page</span>
-                                                <select
-                                                    value={itemsPerPage}
-                                                    onChange={(e) => {
-                                                        setItemsPerPage(Number(e.target.value));
-                                                        setCurrentPage(1);
-                                                    }}
-                                                    className="h-8 rounded-md border border-slate-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                                                >
-                                                    {[5, 10, 15, 25, 50, 100].map((size) => (
-                                                        <option key={size} value={size}>{size}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-
-                                            {/* Go to page */}
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-sm text-slate-500">Go to</span>
-                                                <input
-                                                    type="number"
-                                                    min={1}
-                                                    max={totalPages}
-                                                    value={gotoPage}
-                                                    onChange={(e) => setGotoPage(e.target.value)}
-                                                    onKeyDown={(e) => e.key === 'Enter' && handleGotoPage()}
-                                                    className="h-8 w-16 rounded-md border border-slate-300 px-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="#"
-                                                />
-                                                <Button
-                                                    size="sm"
-                                                    className="h-8 bg-blue-600 hover:bg-blue-700 text-xs px-3"
-                                                    onClick={handleGotoPage}
-                                                >Go</Button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-                            </>
+                            <div className="space-y-6">
+                                {(recordsViewTab === "both" || recordsViewTab === "pending") && renderRecordsTable("pending")}
+                                {(recordsViewTab === "both" || recordsViewTab === "completed") && renderRecordsTable("completed")}
+                            </div>
                         ) : (
-                            <div className="px-4 sm:px-6 py-6 bg-slate-50/60 rounded-b-xl">
+                            <div className="rounded-xl border border-slate-200 bg-white shadow-md overflow-hidden">
+                                <div className="px-4 sm:px-6 py-6 bg-slate-50/60">
                                 {rows.length === 0 ? (
                                     <div className="text-center py-16 text-sm text-slate-400">
                                         No data to chart for the current filters.
@@ -2899,6 +3075,7 @@ export default function CRRCallingProcessPage() {
                                         )}
                                     </div>
                                 )}
+                                </div>
                             </div>
                         )}
                     </div>
