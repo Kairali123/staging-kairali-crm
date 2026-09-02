@@ -1,4 +1,4 @@
-| 2026-09-02 | Staging Mode Active — Bypass Production Gates | Workspace is isolated for staging testing; normal local development and direct code edits proceed without CARMA-DB production gates | Developer | Earlier production-only restrictions |
+
 # DECISIONS
 
 | Date UTC | Decision | Reason | Who | Supersedes |
@@ -12,4 +12,7 @@
 | 2026-08-25 | Issue #13 completion claim rejected pending full verification package (PR, checks, 69-item checklist, 61-route evidence, role checks, accessibility report) and Issue #32 remediation | Deployment success is not acceptance; reviewable PR, verified checks, and security cleanliness are mandatory | Abhilash K. Ramesh, via GitHub comment / email | None |
 | 2026-08-25 | Issue #32 plaintext OTP artifact must be removed from repository and code with leak prevention enforced without publishing token values | Eliminate credential/OTP leakage in codebase and repository | Abhilash K. Ramesh, via GitHub comment / email | None |
 | 2026-08-31 | Direct push to main remains strictly disabled under database-control policy. No self-attestation bypass; every merge requires: (1) one focused issue & small branch, (2) focused regression + full checks, (3) independent approval on latest push, (4) required checks passed and conversations resolved. Direct-push exception requires explicit owner decision on #11 with bounded scope/duration/rollback. Issues #47 (HR-action localStorage regression), #48 (Sales Call Audit permission mismatch), #49 (synthetic fixture boundary removed), and #50 (TypeScript check failure) must be resolved with independent evidence. | Prevent unverified/broken merges to main and enforce independent verification workflow | Abhilash K. Ramesh, via GitHub comment on PR #26 | None |
+
+| 2026-09-02 | Staging Mode Active — Bypass Production Gates | Workspace is isolated for staging testing; normal local development and direct code edits proceed without CARMA-DB production gates | Developer | Earlier production-only restrictions |
+
 
