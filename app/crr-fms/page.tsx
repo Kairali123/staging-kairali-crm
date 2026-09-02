@@ -386,11 +386,10 @@ export default function CRRCallingProcessPage() {
         { name: "Dr. Rahul R", email: "doctor@ktahv.com", role: "doctor", stages: [3, 7] },
         { name: "Shoukath Ali Moosa", email: "fom@ktahv.com", role: "fom", stages: [9, 10] },
         { name: "Anoop Vijayaraj", email: "gm.hv@kairali.com", role: "gm", stages: [11] },
-        { name: "Abhilash Sir", email: "test@kairali.com", role: "test", stages: [1, 2, 6, 7] },
     ], []);
 
     const responsiblePersonList = useMemo(() => {
-        const list = (stageUsers || []).map((u) => ({ ...u, stages: [...u.stages] }));
+        const list = (stageUsers || []).map((u) => ({ ...u, stages: [...(u.stages || [])] }));
         for (const def of DEFAULT_STAGE_USERS) {
             const existing = list.find(
                 (u) =>
@@ -406,7 +405,8 @@ export default function CRRCallingProcessPage() {
                 existing.stages = Array.from(combined).sort((a, b) => a - b);
             }
         }
-        return list;
+        // Only include persons who have active assigned stages
+        return list.filter((u) => u.stages && u.stages.length > 0);
     }, [stageUsers, DEFAULT_STAGE_USERS]);
 
     // Stages accessible to the logged-in user.
