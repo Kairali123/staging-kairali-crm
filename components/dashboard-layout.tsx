@@ -186,6 +186,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "KTAHV Accounts Tracker", href: "/accounts-tracker", icon: Receipt, permission: "accounts_tracker.view" },
     { name: "Partner Onboarding System", href: "/partners", icon: Building2, permission: "partners.view" },
     { name: "New Order FMS", href: "/new-order-fms", icon: FileText, permission: "new-order-fms.view" },
+    { name: "Primary Order Form", href: "/new-order-fms/primary-order-form", icon: FileText, permission: "new-order-fms.view" },
     { name: "MR FMS", href: "/MR-FMS", icon: FileText, permission: "mr-fms.view" },
     { name: "KTAHV CRR Calling FMS", href: "/crr-fms", icon: FileText, permission: "crr_fms.view" },
     { name: "KTAHV BOOKING FORM", href: "/fms/bookings/ktahv", icon: FileText, permission: "ktahv_booking_form.view", target: "_blank" },

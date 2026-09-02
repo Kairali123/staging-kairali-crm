@@ -77,6 +77,7 @@ const pagePermissions: Record<string, string> = {
   // matched. `app/fms/enquiry-reverification/page.tsx` is a real page and the
   // permission is unchanged — only the key is repaired.
   '/fms/enquiry-reverification': 'cold_enquiry_reverification.view',
+  '/new-order-fms/primary-order-form': 'new-order-fms.view',
 }
 
 const isRestricted = (pathname: string) => {

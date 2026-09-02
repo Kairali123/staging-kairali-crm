@@ -1766,7 +1766,7 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
 
 // ─── Permission Schema & Definitions ──────────────────────────────────────────
 
-export const PERMISSION_GROUPS: {
+const PERMISSION_GROUPS: {
   category: string
   description: string
   permissions: { key: string; label: string; description: string }[]
@@ -1864,7 +1864,7 @@ export const PERMISSION_GROUPS: {
   },
 ]
 
-export const ROLE_DEFAULT_PERMISSIONS: Record<string, string[]> = {
+const ROLE_DEFAULT_PERMISSIONS: Record<string, string[]> = {
   super_admin: ["all"],
   admin: [
     "dashboard.view",

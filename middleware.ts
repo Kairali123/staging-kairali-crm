@@ -178,6 +178,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifySessionCookieValue } from '@/lib/session'
 import { getRequestSourceIp, recordSecurityEvent } from '@/lib/security-audit'
+import { authorizeOrderFormAction } from '@/lib/order-form-policy'
 
 // Routes that don't need authentication
 const publicRoutes = ['/', '/access-denied']
@@ -229,7 +230,7 @@ const SECURITY_HEADERS: readonly [string, string][] = [
   ['Referrer-Policy', 'strict-origin-when-cross-origin'],
   [
     'Permissions-Policy',
-    'camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()',
+    'camera=(self), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()',
   ],
   [
     'Content-Security-Policy-Report-Only',
@@ -376,6 +377,21 @@ export async function middleware(request: NextRequest) {
         context: { reason: 'invalid_session' },
       })
       return withSecurityHeaders(NextResponse.redirect(new URL('/', request.url)))
+    }
+
+    if (
+      pathname.startsWith('/new-order-fms/primary-order-form') &&
+      !authorizeOrderFormAction(userData, 'getProducts')
+    ) {
+      recordSecurityEvent({
+        action: 'page.access_denied',
+        outcome: 'denied',
+        actor: typeof userData?.email === 'string' ? userData.email : null,
+        target: pathname,
+        sourceIp: getRequestSourceIp(request),
+        context: { reason: 'missing_new_order_fms_permission' },
+      })
+      return withSecurityHeaders(NextResponse.redirect(new URL('/access-denied', request.url)))
     }
   }
 
