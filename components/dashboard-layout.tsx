@@ -187,7 +187,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "DialShree Lead Qual.", icon: PhoneCall, permission: "dialshree_menu.view" },
     { name: "KTAHV Accounts Tracker", href: "/accounts-tracker", icon: Receipt, permission: "accounts_tracker.view" },
     { name: "Partner Onboarding System", href: "/partners", icon: Building2, permission: "partners.view" },
-    { name: "KAPPL New Order FMS", icon: FileText, permission: "new-order-fms.view" },
+    { name: "KAPPL New Order", icon: FileText, permission: "new-order-fms.view" },
     { name: "MR FMS", href: "/MR-FMS", icon: FileText, permission: "mr-fms.view" },
     { name: "KTAHV CRR Calling FMS", href: "/crr-fms", icon: FileText, permission: "crr_fms.view" },
     { name: "KTAHV BOOKING FORM", href: "/fms/bookings/ktahv", icon: FileText, permission: "ktahv_booking_form.view", target: "_blank" },
@@ -477,7 +477,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       )
     }
 
-    if (item.name === "KAPPL New Order FMS") {
+    if (item.name === "KAPPL New Order") {
       const isActive = pathname.startsWith("/new-order-fms")
       return (
         <div key={item.name}>
@@ -560,7 +560,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       "Calling Panel": "text-green-500", "Sales Report": "text-orange-500", "Calls Report": "text-green-500",
       Performance: "text-red-500", Reports: "text-purple-500", "Help Desk": "text-gray-500",
       "Sales Management": "text-orange-500", "Partner Onboarding System": "text-emerald-600",
-      "KAPPL New Order FMS": "text-emerald-600",
+      "KAPPL New Order": "text-emerald-600",
     }
     return colorMap[itemName] || "text-gray-500"
   }
