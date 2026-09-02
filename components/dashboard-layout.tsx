@@ -91,6 +91,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [portalHubExpanded, setPortalHubExpanded] = useState(false)
   const [voiceCallExpanded, setVoiceCallExpanded] = useState(false)
   const [dialShreeExpanded, setDialShreeExpanded] = useState(false)
+  const [newOrderFmsExpanded, setNewOrderFmsExpanded] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isClearingCache, setIsClearingCache] = useState(false)
   const [meetingsExpanded, setMeetingsExpanded] = useState(false)
@@ -132,6 +133,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (pathname.startsWith("/sales")) setSalesExpanded(true)
     if (pathname.startsWith("/voicecall")) setVoiceCallExpanded(true)
     if (pathname.startsWith("/dialShree") || pathname.startsWith("/dialshree")) setDialShreeExpanded(true)
+    if (pathname.startsWith("/new-order-fms")) setNewOrderFmsExpanded(true)
     if (pathname.startsWith("/meetings")) setMeetingsExpanded(true)
   }, [pathname])
 
@@ -185,8 +187,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "DialShree Lead Qual.", icon: PhoneCall, permission: "dialshree_menu.view" },
     { name: "KTAHV Accounts Tracker", href: "/accounts-tracker", icon: Receipt, permission: "accounts_tracker.view" },
     { name: "Partner Onboarding System", href: "/partners", icon: Building2, permission: "partners.view" },
-    { name: "New Order FMS", href: "/new-order-fms", icon: FileText, permission: "new-order-fms.view" },
-    { name: "Primary Order Form", href: "/new-order-fms/primary-order-form", icon: FileText, permission: "new-order-fms.view" },
+    { name: "KAPPL New Order FMS", icon: FileText, permission: "new-order-fms.view" },
     { name: "MR FMS", href: "/MR-FMS", icon: FileText, permission: "mr-fms.view" },
     { name: "KTAHV CRR Calling FMS", href: "/crr-fms", icon: FileText, permission: "crr_fms.view" },
     { name: "KTAHV BOOKING FORM", href: "/fms/bookings/ktahv", icon: FileText, permission: "ktahv_booking_form.view", target: "_blank" },
@@ -237,6 +238,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "🤝 Add New Partner Contact", description: "Partner contact onboarding", url: "https://script.google.com/macros/s/AKfycbzZx7Qb7mO4FhIkIMcILVsYk1DNsLM7ncmtpzqxBokcpX0_sbd6WeL8CFy82SlqDtdQAw/exec", permission: "partner_onboard_form.view" },
     { name: "📥 Media Download Centre", description: "Kairali media assets", url: "https://www.kairali.com/media-assets.html", permission: "portal_hub.view" },
   ]
+
+  const kapplNewOrderFmsSubMenu = [
+    { name: "New Order FMS", href: "/new-order-fms", icon: FileText, permission: "new-order-fms.view" },
+    { name: "Primary Order Form", href: "/new-order-fms/primary-order-form", icon: FileText, permission: "new-order-fms.view" },
+  ]
   // const meetingsSubMenu = [
   //   { name: "View Meetings", href: "/meetings", icon: StickyNote, description: "View all meetings" },
   //   { name: "Record Meeting", href: "/meetings/record", icon: Phone, description: "Record new meeting" },
@@ -255,6 +261,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   if (hasPermission("marketing.view")) marketingSubMenu.filter((s) => !("permission" in s) || hasPermission(s.permission)).forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
   if (hasPermission("employee.tools")) employeeSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
   if (hasPermission("doctor.consultation.view")) doctorConsultationSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
+  if (hasPermission("new-order-fms.view") || hasPermission("all")) kapplNewOrderFmsSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.name, icon: item.icon }))
   // Sales submenu entries currently point to pages that are not implemented.
   // Keep them out of the active search surface until real routes exist.
   // if (hasPermission("meetings.view")) meetingsSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
@@ -470,6 +477,48 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       )
     }
 
+    if (item.name === "KAPPL New Order FMS") {
+      const isActive = pathname.startsWith("/new-order-fms")
+      return (
+        <div key={item.name}>
+          <button
+            onClick={() => setNewOrderFmsExpanded(!newOrderFmsExpanded)}
+            className={`group flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${isActive
+              ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md"
+              : "text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"
+              }`}
+          >
+            <item.icon className={`mr-3 h-5 w-5 ${isActive ? "text-white" : "text-emerald-600"}`} />
+            {item.name}
+            {newOrderFmsExpanded
+              ? <ChevronDown className={`ml-auto h-4 w-4 ${isActive ? "text-white" : "text-gray-500"}`} />
+              : <ChevronRight className={`ml-auto h-4 w-4 ${isActive ? "text-white" : "text-gray-500"}`} />
+            }
+          </button>
+          {newOrderFmsExpanded && (
+            <div className="ml-6 mt-2 space-y-1">
+              {kapplNewOrderFmsSubMenu
+                .filter((s) => hasPermission(s.permission) || hasPermission("all"))
+                .map((subItem) => (
+                  <Link
+                    key={subItem.name}
+                    href={subItem.href}
+                    className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${pathname === subItem.href
+                      ? "bg-gradient-to-r from-emerald-50 to-teal-100 text-emerald-800 border-l-4 border-emerald-600 shadow-sm"
+                      : "text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"
+                      }`}
+                    onClick={() => isMobile && setSidebarOpen(false)}
+                  >
+                    <subItem.icon className={`mr-3 h-4 w-4 ${pathname === subItem.href ? "text-emerald-700" : "text-gray-500"}`} />
+                    {subItem.name}
+                  </Link>
+                ))}
+            </div>
+          )}
+        </div>
+      )
+    }
+
     if (item.name === "Unified Portal Hub") {
       return (
         <div key={item.name}>
@@ -511,6 +560,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       "Calling Panel": "text-green-500", "Sales Report": "text-orange-500", "Calls Report": "text-green-500",
       Performance: "text-red-500", Reports: "text-purple-500", "Help Desk": "text-gray-500",
       "Sales Management": "text-orange-500", "Partner Onboarding System": "text-emerald-600",
+      "KAPPL New Order FMS": "text-emerald-600",
     }
     return colorMap[itemName] || "text-gray-500"
   }
