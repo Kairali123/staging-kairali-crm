@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Download, Printer, TrendingUp, TrendingDown, TableIcon, BarChart3, ChevronUp, ChevronDown, Filter, Search, Award, Target, DollarSign, Activity, ChevronsUpDown, AlertCircle, XCircle, Calendar, ChevronRight } from "lucide-react"
+import { Download, Printer, TrendingUp, TrendingDown, TableIcon, BarChart3, ChevronUp, ChevronDown, Filter, Search, Award, Target, DollarSign, Activity, ChevronsUpDown, AlertCircle, XCircle, Calendar, ChevronRight, Trophy, Users, Sparkles } from "lucide-react"
 import { format } from "date-fns"
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, ReferenceLine, Cell, LabelList, Area, AreaChart } from "recharts"
 import type { SalesRow } from "@/hooks/useSalesData"
@@ -78,11 +78,11 @@ export default function SalesReportsPage() {
     </div>
   )
 
-  const { salesData, loading, error, refetch } = useSalesData()
+  const { salesData, loading, error, refetch, isRevalidating, cachedAt } = useSalesData()
   const isInitialLoad = useRef(true)
 
   useEffect(() => {
-    if (!loading && isInitialLoad.current && salesData.length > 0) {
+    if (isInitialLoad.current && salesData.length > 0) {
       const now = new Date()
       const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
       const months = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"]
@@ -93,7 +93,7 @@ export default function SalesReportsPage() {
       setCurrentPage(1)
       isInitialLoad.current = false
     }
-  }, [loading, salesData])
+  }, [salesData])
 
   const availableYears = useMemo(() =>
     Array.from(new Set(salesData.map(d => d.year))).sort(), [salesData])
@@ -103,24 +103,24 @@ export default function SalesReportsPage() {
     [salesData])
 
   const [showLoader, setShowLoader] = useState(false)
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
-  const loaderStartRef = useRef<number | null>(null)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(() => cachedAt || null)
 
   useEffect(() => {
-    if (loading) {
-      loaderStartRef.current = Date.now()
+    if (cachedAt) {
+      setLastUpdated(cachedAt)
+    }
+  }, [cachedAt])
+
+  useEffect(() => {
+    // Only show full blocking loader if we have ZERO data to show
+    if (loading && salesData.length === 0) {
       setShowLoader(true)
     } else {
-      const elapsed = Date.now() - (loaderStartRef.current || 0)
-      const minDisplay = 700
-      if (elapsed < minDisplay) {
-        const t = setTimeout(() => { setShowLoader(false); setLastUpdated(new Date()) }, minDisplay - elapsed)
-        return () => clearTimeout(t)
-      }
       setShowLoader(false)
-      setLastUpdated(new Date())
+      if (cachedAt) setLastUpdated(cachedAt)
+      else if (!lastUpdated) setLastUpdated(new Date())
     }
-  }, [loading])
+  }, [loading, salesData.length, cachedAt])
 
   useEffect(() => {
     if (showLoader) { document.body.style.overflow = "hidden"; window.scrollTo(0, 0) }
@@ -177,13 +177,19 @@ export default function SalesReportsPage() {
       case "today":
       case "this_week":
         setMonthFilter(currentMonth); setYearFilter(currentYear); break
+      case "yesterday": {
+        const yest = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
+        setMonthFilter(months[yest.getMonth()]); setYearFilter(yest.getFullYear().toString()); break
+      }
+      case "last_week": {
+        const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7)
+        setMonthFilter(months[d.getMonth()]); setYearFilter(d.getFullYear().toString()); break
+      }
       case "this_month": setMonthFilter(currentMonth); setYearFilter(currentYear); break
       case "last_month": {
         const d = new Date(now.getFullYear(), now.getMonth() - 1, 1)
         setMonthFilter(months[d.getMonth()]); setYearFilter(d.getFullYear().toString()); break
       }
-      case "this_quarter":
-      case "last_quarter":
       case "this_year":
         setMonthFilter("all"); setYearFilter(currentYear); break
       case "last_year": setMonthFilter("all"); setYearFilter((now.getFullYear() - 1).toString()); break
@@ -210,23 +216,31 @@ export default function SalesReportsPage() {
   const filteredData = useMemo(() => {
     const now = new Date()
     const currentYear = now.getFullYear().toString()
+    const currentMonthNum = String(now.getMonth() + 1).padStart(2, "0")
+    const todayDay = String(now.getDate()).padStart(2, "0")
 
-    // Quarter helper: returns { monthNums: string[], year: string }
-    const getQuarterMonths = (filter: string) => {
-      const m = now.getMonth() // 0-indexed
-      const currentQ = Math.floor(m / 3) // 0,1,2,3
-      if (filter === "this_quarter") {
-        const start = currentQ * 3
-        return { monthNums: _months.slice(start, start + 3).map(monthNameToNum), year: currentYear }
-      }
-      if (filter === "last_quarter") {
-        const prevQ = currentQ === 0 ? 3 : currentQ - 1
-        const prevYear = currentQ === 0 ? (now.getFullYear() - 1).toString() : currentYear
-        const start = prevQ * 3
-        return { monthNums: _months.slice(start, start + 3).map(monthNameToNum), year: prevYear }
-      }
-      return null
-    }
+    // Yesterday calculation
+    const yestDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
+    const yestDay = String(yestDate.getDate()).padStart(2, "0")
+    const yestMonth = String(yestDate.getMonth() + 1).padStart(2, "0")
+    const yestYear = String(yestDate.getFullYear())
+
+    // Week boundaries (Monday 00:00:00 to Sunday 23:59:59)
+    const dayOfWeek = now.getDay() // 0 = Sunday, 1 = Monday ... 6 = Saturday
+    const diffToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMon, 0, 0, 0, 0)
+    const endOfWeek = new Date(startOfWeek.getFullYear(), startOfWeek.getMonth(), startOfWeek.getDate() + 6, 23, 59, 59, 999)
+
+    // Last week boundaries
+    const startOfLastWeek = new Date(startOfWeek.getFullYear(), startOfWeek.getMonth(), startOfWeek.getDate() - 7, 0, 0, 0, 0)
+    const endOfLastWeek = new Date(startOfLastWeek.getFullYear(), startOfLastWeek.getMonth(), startOfLastWeek.getDate() + 6, 23, 59, 59, 999)
+
+    // Last month
+    const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const lastMonthNum = String(lastMonthDate.getMonth() + 1).padStart(2, "0")
+    const lastMonthYear = String(lastMonthDate.getFullYear())
+
+    const lastYear = String(now.getFullYear() - 1)
 
     return salesData.filter(row => {
       const matchesCompany = companyFilter === "all" || row.company === companyFilter
@@ -235,30 +249,63 @@ export default function SalesReportsPage() {
         row.empName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         row.company.toLowerCase().includes(searchQuery.toLowerCase())
 
-      let matchesDate = true
-      if (dateFilter === "custom" && customFromDate && customToDate) {
-        // row.date is "dd-mm-yyyy", parse to comparable Date
-        const [dd, mm, yyyy] = row.date.split("-")
-        const rowDate = new Date(Number(yyyy), Number(mm) - 1, Number(dd))
-        const fromDate = new Date(customFromDate); fromDate.setHours(0, 0, 0, 0)
-        const toDate = new Date(customToDate); toDate.setHours(23, 59, 59, 999)
-        matchesDate = rowDate >= fromDate && rowDate <= toDate
+      if (!matchesCompany || !matchesEmployee || !matchesSearch) return false
+
+      // ── Date Range Filter Mode ──
+      if (filterMode === "dateRange" || dateFilter !== "all") {
+        if (dateFilter === "today") {
+          return row.day === todayDay && row.month === currentMonthNum && row.year === currentYear
+        }
+
+        if (dateFilter === "yesterday") {
+          return row.day === yestDay && row.month === yestMonth && row.year === yestYear
+        }
+
+        if (dateFilter === "this_week" || dateFilter === "last_week") {
+          const [dd, mm, yyyy] = row.date.split("-")
+          const rowDate = new Date(Number(yyyy), Number(mm) - 1, Number(dd))
+          if (dateFilter === "this_week") {
+            return rowDate >= startOfWeek && rowDate <= endOfWeek
+          }
+          return rowDate >= startOfLastWeek && rowDate <= endOfLastWeek
+        }
+
+        if (dateFilter === "this_month") {
+          return row.month === currentMonthNum && row.year === currentYear
+        }
+
+        if (dateFilter === "last_month") {
+          return row.month === lastMonthNum && row.year === lastMonthYear
+        }
+
+        if (dateFilter === "this_year") {
+          return row.year === currentYear
+        }
+
+        if (dateFilter === "last_year") {
+          return row.year === lastYear
+        }
+
+        if (dateFilter === "custom" && customFromDate && customToDate) {
+          const [dd, mm, yyyy] = row.date.split("-")
+          const rowDate = new Date(Number(yyyy), Number(mm) - 1, Number(dd))
+          const fromDate = new Date(customFromDate); fromDate.setHours(0, 0, 0, 0)
+          const toDate = new Date(customToDate); toDate.setHours(23, 59, 59, 999)
+          return rowDate >= fromDate && rowDate <= toDate
+        }
+
+        if (dateFilter === "all") {
+          return true
+        }
       }
 
-      // Quarter filters — override monthFilter/yearFilter logic
-      if (dateFilter === "this_quarter" || dateFilter === "last_quarter") {
-        const q = getQuarterMonths(dateFilter)!
-        return matchesCompany && matchesEmployee && matchesSearch &&
-          q.monthNums.includes(row.month) && row.year === q.year
-      }
-
-      // monthFilter is a name like "JANUARY" — convert to "01" for comparison
+      // ── Month / Year Filter Mode ──
       const activeMonthNum = monthFilter !== "all" ? monthNameToNum(monthFilter) : "all"
-      const matchesMonth = dateFilter === "custom" ? true : activeMonthNum === "all" || row.month === activeMonthNum
-      const matchesYear = dateFilter === "custom" ? true : yearFilter === "all" || row.year === yearFilter
-      return matchesCompany && matchesEmployee && matchesSearch && matchesMonth && matchesYear && matchesDate
+      const matchesMonth = activeMonthNum === "all" || row.month === activeMonthNum
+      const matchesYear = yearFilter === "all" || row.year === yearFilter
+      return matchesMonth && matchesYear
     })
-  }, [salesData, monthFilter, yearFilter, companyFilter, employeeFilter, searchQuery, dateFilter, customFromDate, customToDate])
+  }, [salesData, monthFilter, yearFilter, companyFilter, employeeFilter, searchQuery, dateFilter, customFromDate, customToDate, filterMode])
 
   const handleSort = (column: keyof SalesRow | "rank") => {
     if (sortBy === column) setSortOrder(sortOrder === "asc" ? "desc" : "asc")
@@ -688,6 +735,66 @@ export default function SalesReportsPage() {
     return { planned, actual, unverified, cancelled, collection, variance, variancePercent: planned !== 0 ? (variance / planned) * 100 : 0 }
   }, [filteredDateGroups])
 
+  /* ─── Employee-wise Sales Performance Memo ─────────────────────────────── */
+  const employeeSalesPerformance = useMemo(() => {
+    if (!filteredData.length) return []
+
+    // Total actual sales of the currently filtered dataset
+    const totalActual = filteredData.reduce((s, r) => s + (r.actualSalesAmount || 0), 0)
+
+    const empMap = new Map<string, {
+      empName: string
+      plannedSales: number
+      actualSales: number
+    }>()
+
+    filteredData.forEach(row => {
+      const name = (row.empName || "").trim()
+      if (!name) return
+
+      if (!empMap.has(name)) {
+        empMap.set(name, {
+          empName: name,
+          plannedSales: 0,
+          actualSales: 0,
+        })
+      }
+
+      const item = empMap.get(name)!
+      item.plannedSales += (row.plannedSalesAmount || 0)
+      item.actualSales += (row.actualSalesAmount || 0)
+    })
+
+    const list = Array.from(empMap.values()).map(item => {
+      const variance = item.actualSales - item.plannedSales
+      const share = totalActual > 0 ? (item.actualSales / totalActual) * 100 : 0
+      return {
+        empName: item.empName,
+        plannedSales: item.plannedSales,
+        actualSales: item.actualSales,
+        share,
+        variance,
+      }
+    })
+
+    // Sort descending by actual sales (highest first)
+    list.sort((a, b) => {
+      if (b.actualSales !== a.actualSales) return b.actualSales - a.actualSales
+      if (b.plannedSales !== a.plannedSales) return b.plannedSales - a.plannedSales
+      return a.empName.localeCompare(b.empName)
+    })
+
+    return list
+  }, [filteredData])
+
+  const employeeGrandTotal = useMemo(() => {
+    const planned = employeeSalesPerformance.reduce((s, r) => s + r.plannedSales, 0)
+    const actual = employeeSalesPerformance.reduce((s, r) => s + r.actualSales, 0)
+    const variance = actual - planned
+    const share = employeeSalesPerformance.length > 0 && actual > 0 ? 100 : 0
+    return { planned, actual, share, variance }
+  }, [employeeSalesPerformance])
+
   // ── shared inline-style helper for Grand Total dark cells ──────────────────
   const GT_CELL = { backgroundColor: '#0f172a' } as React.CSSProperties
   const GT_STICKY_NAME = { ...GT_CELL, left: `${NAME_L}px`, boxShadow: SHADOW_R } as React.CSSProperties
@@ -717,7 +824,15 @@ export default function SalesReportsPage() {
                 {/* Last Updated card — full width pill on mobile, compact box on desktop */}
                 <div className="flex md:inline-flex items-center justify-center bg-white/15 backdrop-blur-sm border border-white/25 rounded-xl px-5 py-3 shadow-lg w-full md:w-auto">
                   <div className="text-center">
-                    <p className="text-xs text-white/80 font-semibold tracking-wide mb-1">Last Updated</p>
+                    <div className="flex items-center justify-center gap-1.5 mb-1">
+                      <p className="text-xs text-white/80 font-semibold tracking-wide">Last Updated</p>
+                      {isRevalidating && (
+                        <span className="inline-flex items-center gap-1 text-[10px] text-emerald-300 font-medium px-1.5 py-0.5 rounded-full bg-emerald-950/40 border border-emerald-400/30" title="Syncing fresh data in background">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          Syncing
+                        </span>
+                      )}
+                    </div>
                     {lastUpdated ? (
                       <p className="text-sm font-bold text-white leading-snug">
                         {lastUpdated.toLocaleString("en-US", { month: "numeric", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true })}
@@ -779,7 +894,18 @@ export default function SalesReportsPage() {
                       <SelectValue placeholder="All Dates" />
                     </SelectTrigger>
                     <SelectContent>
-                      {[["all", "All Dates"], ["today", "Today"], ["this_week", "This Week"], ["this_month", "This Month"], ["this_quarter", "This Quarter"], ["this_year", "This Year"], ["last_month", "Last Month"], ["last_quarter", "Last Quarter"], ["last_year", "Last Year"], ["custom", "Custom Range"]].map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+                      {[
+                        ["all", "All Dates"],
+                        ["today", "Today"],
+                        ["yesterday", "Yesterday"],
+                        ["this_week", "This Week"],
+                        ["last_week", "Last Week"],
+                        ["this_month", "This Month"],
+                        ["last_month", "Last Month"],
+                        ["this_year", "This Year"],
+                        ["last_year", "Last Year"],
+                        ["custom", "Custom Range"],
+                      ].map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1038,6 +1164,7 @@ export default function SalesReportsPage() {
                           <col style={{ width: "100px" }} /> {/* Company */}
                           <col style={{ width: "115px" }} /> {/* Planned Sales */}
                           <col style={{ width: "115px" }} /> {/* Actual Sales */}
+                          <col style={{ width: "110px" }} /> {/* % Share of Total */}
                           <col style={{ width: "105px" }} /> {/* Variance Amt */}
                           <col style={{ width: "75px" }} />  {/* Variance % */}
                           <col style={{ width: "115px" }} /> {/* Collection Amt */}
@@ -1058,6 +1185,7 @@ export default function SalesReportsPage() {
                             <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-slate-300 border-r border-slate-600">Company</th>
                             <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-blue-300 border-r border-slate-600">Planned Sales</th>
                             <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-green-300 border-r border-slate-600">Actual Sales</th>
+                            <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-cyan-300 border-r border-slate-600">% Share of Total</th>
                             <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-white border-r border-slate-600">Variance Amt</th>
                             <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-white border-r border-slate-600">Variance%</th>
                             <th style={{ backgroundColor: "#4c1d95" }} className="px-3 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-violet-200 border-r border-violet-700">Collection Amt</th>
@@ -1188,9 +1316,18 @@ export default function SalesReportsPage() {
                                 </td>
                                 {/* Company col — blank on date row */}
                                 <td className="text-center px-3 py-3 text-xs text-slate-400">—</td>
-                                {/* Date totals — new order: Planned, Actual, Variance, Var%, Collection, Unverified, Cancelled */}
+                                {/* Date totals — new order: Planned, Actual, % Share, Variance, Var%, Collection, Unverified, Cancelled */}
                                 <td className="text-center px-3 py-3 font-bold text-xs text-blue-700 bg-blue-50/60">₹{formatCurrency(group.totalPlanned)}</td>
                                 <td className="text-center px-3 py-3 font-bold text-xs text-green-700 bg-green-50/60">₹{formatCurrency(group.totalActual)}</td>
+                                <td className="text-center px-3 py-3 font-bold text-xs text-cyan-800 bg-cyan-50/60 border-r border-slate-300">
+                                  {grandTotal.actualSalesAmount > 0 && group.totalActual > 0 ? (
+                                    <Badge variant="outline" className="bg-cyan-100 text-cyan-800 border-cyan-300 font-bold px-1.5 py-0 text-xs">
+                                      {((group.totalActual / grandTotal.actualSalesAmount) * 100).toFixed(1)}%
+                                    </Badge>
+                                  ) : (
+                                    <span className="text-slate-400 font-normal">0.0%</span>
+                                  )}
+                                </td>
                                 <td className={`text-center px-3 py-3 font-bold text-xs ${group.totalVariance >= 0 ? "text-green-700 bg-green-50/40" : "text-red-700 bg-red-50/40"}`}>₹{formatCurrency(group.totalVariance)}</td>
                                 <td className="text-center px-3 py-3">
                                   <Badge variant="outline" className={`font-bold px-1.5 py-0 text-xs ${varPct >= 0 ? "bg-green-100 text-green-800 border-green-300" : "bg-red-100 text-red-800 border-red-300"}`}>
@@ -1251,6 +1388,17 @@ export default function SalesReportsPage() {
                                           <span className="absolute left-1/2 -translate-x-1/2 -top-8 hidden group-hover/tip:block bg-black text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-30">Click for detailed sales report</span>
                                         </span>
                                       ) : <span className="text-green-700 font-medium">₹0</span>}
+                                    </td>
+
+                                    {/* % Share of Total */}
+                                    <td className="text-center px-3 py-2.5 text-xs font-bold border-r border-slate-100">
+                                      {Number(row.actualSalesAmount) > 0 && grandTotal.actualSalesAmount > 0 ? (
+                                        <span className="text-slate-800 font-extrabold">
+                                          {((row.actualSalesAmount / grandTotal.actualSalesAmount) * 100).toFixed(1)}%
+                                        </span>
+                                      ) : (
+                                        <span className="text-slate-300 font-normal">—</span>
+                                      )}
                                     </td>
 
                                     {/* Variance */}
@@ -1320,6 +1468,9 @@ export default function SalesReportsPage() {
                               <td className="text-center px-3 py-4 border-r border-slate-700 text-slate-400" style={{ backgroundColor: "#0f172a" }}>—</td>
                               <td className="font-bold text-sm text-blue-400 text-center px-3 py-4 border-r border-slate-700" style={{ backgroundColor: "#0f172a" }}>₹{formatCurrency(dateGrandTotal.planned)}</td>
                               <td className="font-bold text-sm text-green-400 text-center px-3 py-4 border-r border-slate-700" style={{ backgroundColor: "#0f172a" }}>₹{formatCurrency(dateGrandTotal.actual)}</td>
+                              <td className="font-bold text-sm text-cyan-300 text-center px-3 py-4 border-r border-slate-700" style={{ backgroundColor: "#0f172a" }}>
+                                {dateGrandTotal.actual > 0 ? "100.0%" : "0.0%"}
+                              </td>
                               <td className={`font-bold text-sm text-center px-3 py-4 border-r border-slate-700 ${dateGrandTotal.variance >= 0 ? "text-green-400" : "text-red-400"}`} style={{ backgroundColor: "#0f172a" }}>₹{formatCurrency(dateGrandTotal.variance)}</td>
                               <td className={`font-bold text-sm text-center px-3 py-4 border-r border-slate-700 ${dateGrandTotal.variancePercent >= 0 ? "text-green-400" : "text-red-400"}`} style={{ backgroundColor: "#0f172a" }}>{dateGrandTotal.variancePercent >= 0 ? "+" : ""}{dateGrandTotal.variancePercent.toFixed(1)}%</td>
                               <td className="font-bold text-sm text-violet-400 text-center px-3 py-4 border-r border-slate-700" style={{ backgroundColor: "#0f172a" }}>₹{formatCurrency(dateGrandTotal.collection)}</td>
@@ -1544,6 +1695,159 @@ export default function SalesReportsPage() {
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ── EMPLOYEE-WISE SALES PERFORMANCE ───────────────────────────── */}
+        <Card className="shadow-2xl border-0 rounded-2xl overflow-hidden bg-white mt-8">
+          <div className="w-full -mt-2 sm:-mt-3 px-4 sm:px-6 py-2.5 bg-[#f5f9ff] border-b border-slate-200">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900">Employee-wise Sales Performance</h2>
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs sm:text-sm font-semibold bg-blue-100 text-blue-800 whitespace-nowrap">
+                  {employeeSalesPerformance.length} Employees
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <CardContent className="p-0">
+            {employeeSalesPerformance.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <p className="text-base font-semibold text-slate-600 mb-1">No employee sales data found</p>
+                <p className="text-sm text-slate-400">Try adjusting your filters</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto w-full" style={{ WebkitOverflowScrolling: "touch" }}>
+                <table className="border-collapse" style={{ minWidth: "850px", width: "100%", tableLayout: "fixed" }}>
+                  <colgroup>
+                    <col style={{ width: "260px" }} /> {/* Employee Name */}
+                    <col style={{ width: "150px" }} /> {/* Planned Sales */}
+                    <col style={{ width: "150px" }} /> {/* Actual Sales */}
+                    <col style={{ width: "130px" }} /> {/* % Share */}
+                    <col style={{ width: "160px" }} /> {/* Variance */}
+                  </colgroup>
+                  <thead>
+                    <tr style={{ background: "linear-gradient(to right, #1e293b, #334155, #1e293b)" }}>
+                      <th
+                        style={{ backgroundColor: "#1e293b", position: "sticky", left: 0, zIndex: 3, boxShadow: "4px 0 8px -2px rgba(0,0,0,0.4)" }}
+                        className="px-4 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-white border-r border-slate-600 min-w-[260px]"
+                      >
+                        Employee Name
+                      </th>
+                      <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-blue-300 border-r border-slate-600">
+                        Planned Sales
+                      </th>
+                      <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-green-300 border-r border-slate-600">
+                        Actual Sales
+                      </th>
+                      <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-cyan-300 border-r border-slate-600">
+                        % Share
+                      </th>
+                      <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-white">
+                        Variance
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {employeeSalesPerformance.map((emp, idx) => {
+                      const evenRow = idx % 2 === 0
+                      const rowBg = evenRow ? "#ffffff" : "#f8fafc"
+
+                      return (
+                        <tr
+                          key={emp.empName}
+                          className="border-b border-slate-100 transition-colors"
+                          style={{ backgroundColor: rowBg }}
+                          onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = "#f1f5f9"}
+                          onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = rowBg}
+                        >
+                          {/* Employee Name - sticky */}
+                          <td
+                            style={{
+                              backgroundColor: rowBg,
+                              position: "sticky",
+                              left: 0,
+                              zIndex: 2,
+                              boxShadow: "4px 0 8px -2px rgba(0,0,0,0.06), 2px 0 0 0 #f1f5f9",
+                              transition: "background-color 150ms",
+                            }}
+                            className="px-4 py-3 border-r border-slate-100"
+                            onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = "#f1f5f9"}
+                            onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = rowBg}
+                          >
+                            <div className="flex items-center gap-2.5 pl-2">
+                              <span className="w-5 h-5 rounded bg-slate-100 text-slate-500 text-[10px] font-bold flex items-center justify-center shrink-0 border border-slate-200">
+                                {idx + 1}
+                              </span>
+                              <span className="text-xs font-semibold text-slate-700 truncate max-w-[200px]" title={emp.empName}>
+                                {emp.empName}
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Planned Sales */}
+                          <td className="text-center px-3 py-3 text-xs font-bold text-blue-700 border-r border-slate-100 tabular-nums">
+                            ₹{formatCurrency(emp.plannedSales)}
+                          </td>
+
+                          {/* Actual Sales */}
+                          <td className="text-center px-3 py-3 text-xs font-bold text-green-700 border-r border-slate-100 tabular-nums">
+                            ₹{formatCurrency(emp.actualSales)}
+                          </td>
+
+                          {/* % Share */}
+                          <td className="text-center px-3 py-3 text-xs font-bold text-slate-800 border-r border-slate-100 tabular-nums">
+                            {emp.actualSales > 0 ? (
+                              <span>{emp.share.toFixed(1)}%</span>
+                            ) : (
+                              <span className="text-slate-300 font-normal">—</span>
+                            )}
+                          </td>
+
+                          {/* Variance */}
+                          <td className={`text-center px-3 py-3 text-xs font-bold tabular-nums ${emp.variance >= 0 ? "text-green-700" : "text-red-700"}`}>
+                            ₹{formatCurrency(emp.variance)}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+
+                  {/* Grand Total Footer */}
+                  {employeeSalesPerformance.length > 1 && (
+                    <tfoot>
+                      <tr style={{ borderTop: "4px solid #f59e0b", backgroundColor: "#0f172a" }}>
+                        <td
+                          style={{
+                            backgroundColor: "#0f172a",
+                            position: "sticky",
+                            left: 0,
+                            zIndex: 2,
+                            boxShadow: "4px 0 8px -2px rgba(0,0,0,0.5)",
+                          }}
+                          className="font-extrabold text-xs text-white text-left px-4 py-4 border-r border-slate-700"
+                        >
+                          GRAND TOTAL
+                        </td>
+                        <td style={{ backgroundColor: "#0f172a" }} className="text-center px-3 py-4 border-r border-slate-700 font-bold text-sm text-blue-400 tabular-nums">
+                          ₹{formatCurrency(employeeGrandTotal.planned)}
+                        </td>
+                        <td style={{ backgroundColor: "#0f172a" }} className="text-center px-3 py-4 border-r border-slate-700 font-bold text-sm text-green-400 tabular-nums">
+                          ₹{formatCurrency(employeeGrandTotal.actual)}
+                        </td>
+                        <td style={{ backgroundColor: "#0f172a" }} className="text-center px-3 py-4 border-r border-slate-700 font-bold text-sm text-cyan-300 tabular-nums">
+                          {employeeGrandTotal.actual > 0 ? "100.0%" : "0.0%"}
+                        </td>
+                        <td style={{ backgroundColor: "#0f172a" }} className={`text-center px-3 py-4 font-bold text-sm tabular-nums ${employeeGrandTotal.variance >= 0 ? "text-green-400" : "text-red-400"}`}>
+                          ₹{formatCurrency(employeeGrandTotal.variance)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
               </div>
             )}
           </CardContent>
