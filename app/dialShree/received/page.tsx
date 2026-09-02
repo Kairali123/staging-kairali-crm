@@ -120,7 +120,7 @@ function getCanonicalOutcome(rawVal: string): string | null {
     return null;
 }
 
-export function isAudioUrl(url: any): boolean {
+function isAudioUrl(url: any): boolean {
     if (!url) return false;
     const u = String(url).toLowerCase().trim();
     if (!u.startsWith("http")) return false;
@@ -138,7 +138,7 @@ export function isAudioUrl(url: any): boolean {
 }
 
 /** Format ISO or MySQL date/time strings into "DD/MM/YYYY HH:MM" */
-export function formatDisplayDateTime(val: any): string {
+function formatDisplayDateTime(val: any): string {
     if (!val || val === "—" || val === "null" || val === "undefined") return "—";
     const s = String(val).trim();
     if (!s) return "—";
@@ -170,11 +170,11 @@ export function formatDisplayDateTime(val: any): string {
     return s;
 }
 
-export function formatDate(val: any): string {
+function formatDate(val: any): string {
     return formatDisplayDateTime(val);
 }
 
-export function formatCallDateTime(val: any): string {
+function formatCallDateTime(val: any): string {
     if (!val || val === "—" || val === "null" || val === "undefined") return "—";
     const s = String(val).trim();
     if (!s) return "—";

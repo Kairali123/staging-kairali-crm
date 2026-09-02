@@ -12,6 +12,7 @@
     "security:routes": "node scripts/security-route-audit.mjs",
     "security:static": "node scripts/security-static-checks.mjs",
     "security:typecheck": "node scripts/typecheck-security-files.mjs",
+    "test:order-form-security": "node --test scripts/order-form-security.test.mjs",
     "security:audit:high": "npm audit --omit=dev --audit-level=high",
     "security:ci": "npm run security:regression && npm run security:routes && npm run security:static && npm run security:typecheck",
     "ci:security": "npm run security:ci",

@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { LoaderCircle } from "lucide-react"
 
-const PRIMARY_ORDER_FORM_URL = "https://kappl-primary-order-form.vercel.app/"
+const PRIMARY_ORDER_FORM_URL = "/new-order-fms/primary-order-form/app/index.html"
 
 export default function PrimaryOrderFormPage() {
   const [isLoading, setIsLoading] = useState(true)
@@ -30,7 +30,7 @@ export default function PrimaryOrderFormPage() {
         title="KAPPL Primary Order Form"
         className="block h-[calc(100dvh-4rem)] min-h-[720px] w-full border-0 bg-white"
         allow="camera; fullscreen"
-        referrerPolicy="strict-origin-when-cross-origin"
+        referrerPolicy="same-origin"
         onLoad={() => setIsLoading(false)}
       />
     </div>
