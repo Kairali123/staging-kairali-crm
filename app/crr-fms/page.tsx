@@ -890,47 +890,77 @@ export default function CRRCallingProcessPage() {
     const isStageCompleted = (g: Guest, stageNo: number) =>
         !isBookingCancelled(g) && g.stageStatus[stageNo - 1] === "Complete";
 
-    const activePendingCount = rows.filter((g) => !isRecordCompleted(g) && !isBookingCancelled(g)).length;
-    const pendingCount = statusFilter === "complete" || statusFilter === "cancelled" ? 0 : activePendingCount;
-    const completeCount = statusFilter === "pending" || statusFilter === "cancelled" ? 0 : completedRows.length;
+    // Optimized single-pass memoized aggregation for all KPI counters
+    const {
+        activePendingCount,
+        pendingCount,
+        completeCount,
+        actionablePendingCount,
+        cancelledCount,
+        totalPipelineCount,
+        referralsGeneratedCount,
+    } = useMemo(() => {
+        let activePend = 0;
+        let actionablePend = 0;
+        let cancelled = 0;
+        let referrals = 0;
 
-    // "Actionable now" = the subset of pendingRows that is already unlocked
-    const actionablePendingCount = pendingRows.filter((g) => {
-        if (isBookingCancelled(g)) return false;
-        if (stageFilter !== "all") {
-            const stageNum = Number(stageFilter);
-            return g.stageStatus[stageNum - 1] !== "Complete" && !isStageLocked(g, stageNum);
-        }
+        const stageNum = stageFilter !== "all" ? Number(stageFilter) : null;
         const stagesToCheck = isAdminRole ? STAGES.map((s) => s.no) : userAccessibleStages;
-        return stagesToCheck.some((n) => g.stageStatus[n - 1] !== "Complete" && !isStageLocked(g, n));
-    }).length;
 
-    const cancelledCount = statusFilter === "pending" || statusFilter === "complete" ? 0 : rows.filter((g) => isBookingCancelled(g)).length;
-    const totalPipelineCount = overallRecords.length;
-    const referralsGeneratedCount = rows.filter(
-        (g) => g.referralCollection?.referralTakenStatus === "Yes"
-    ).length;
+        for (const g of rows) {
+            const isCancelled = isBookingCancelled(g);
+            if (isCancelled) {
+                cancelled++;
+            } else if (!isRecordCompleted(g)) {
+                activePend++;
+                // "Actionable now" = the subset of pendingRows that is already unlocked
+                if (stageNum !== null) {
+                    if (g.stageStatus[stageNum - 1] !== "Complete" && !isStageLocked(g, stageNum)) {
+                        actionablePend++;
+                    }
+                } else {
+                    if (stagesToCheck.some((n) => g.stageStatus[n - 1] !== "Complete" && !isStageLocked(g, n))) {
+                        actionablePend++;
+                    }
+                }
+            }
+
+            if (g.referralCollection?.referralTakenStatus === "Yes") {
+                referrals++;
+            }
+        }
+
+        const pendCount = statusFilter === "complete" || statusFilter === "cancelled" ? 0 : activePend;
+        const compCount = statusFilter === "pending" || statusFilter === "cancelled" ? 0 : completedRows.length;
+        const cancCount = statusFilter === "pending" || statusFilter === "complete" ? 0 : cancelled;
+
+        return {
+            activePendingCount: activePend,
+            pendingCount: pendCount,
+            completeCount: compCount,
+            actionablePendingCount: actionablePend,
+            cancelledCount: cancCount,
+            totalPipelineCount: overallRecords.length,
+            referralsGeneratedCount: referrals,
+        };
+    }, [rows, statusFilter, completedRows.length, isRecordCompleted, stageFilter, isAdminRole, userAccessibleStages, overallRecords.length]);
 
     /* ---------- PENDING REPORT (doer x stage) ---------- */
-    // Also scoped to the current filtered `rows`, so the stage-wise pending
-    // breakdown table updates alongside the KPI cards when filters change.
-    //
-    // Semantics (per business rule):
-    //   pending  = stage is UNLOCKED (planned date reached) AND not completed.
-    //              Locked/future stages do NOT count — nobody can act on them yet.
-    //   attribution = STRICTLY the stage's own DOER (GAS savedData.doer).
-    //              No fallback to the booking creator (takenBy) — that fallback
-    //              previously leaked non-doers (booking creators, travel agents)
-    //              into the row list. Pending stages with NO doer recorded are
-    //              grouped into a single "Unassigned" row so that real pending
-    //              work stays visible instead of silently disappearing.
+    // Scoped to the current filtered `rows`, with single-pass stage tallying for high performance
     const pendingReport = useMemo(() => {
         // Cancelled bookings are auto-closed: none of their stages count as pending.
         const activeRows = rows.filter((g) => !isBookingCancelled(g));
 
-        // A booking stage idx is pending if that stage is not Complete
-        const isPendingTask = (g: Guest, idx: number) =>
-            !isBookingCancelled(g) && g.stageStatus[idx] !== "Complete";
+        // Pre-calculate pending counts per stage in a single pass over activeRows (O(N) instead of O(users * stages * N))
+        const stagePendingCountArray = new Array(STAGES.length).fill(0);
+        for (const g of activeRows) {
+            for (let idx = 0; idx < STAGES.length; idx++) {
+                if (g.stageStatus[idx] !== "Complete") {
+                    stagePendingCountArray[idx]++;
+                }
+            }
+        }
 
         // Use responsiblePersonList (which merges DB stageUsers with DEFAULT_STAGE_USERS)
         const usersToDisplay = responsiblePersonList;
@@ -955,7 +985,7 @@ export default function CRRCallingProcessPage() {
                 if (!effectiveStages.includes(stageNo)) {
                     return 0;
                 }
-                return activeRows.filter((g) => isPendingTask(g, idx)).length;
+                return stagePendingCountArray[idx];
             });
             return { emp: su.name || su.email, email: su.email, counts };
         });

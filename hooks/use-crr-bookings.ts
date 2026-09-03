@@ -320,56 +320,126 @@ function mapRow(row: GasBookingRow): Guest {
 
 const BOOKINGS_CACHE_KEY = "crr_fms_bookings_cache";
 const STAGE_USERS_CACHE_KEY = "crr_fms_stage_users_cache";
+const IDB_NAME = "crr_fms_db";
+const IDB_STORE = "crr_cache";
+const IDB_VERSION = 1;
+
 let inMemoryBookingsCache: Guest[] | null = null;
 let inMemoryStageUsersCache: StageUser[] | null = null;
 
-function loadCachedBookings(): Guest[] | null {
-    if (inMemoryBookingsCache && inMemoryBookingsCache.length > 0) return inMemoryBookingsCache;
-    if (typeof window === "undefined") return null;
-    try {
-        const raw = localStorage.getItem(BOOKINGS_CACHE_KEY);
-        if (!raw) return null;
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-            inMemoryBookingsCache = parsed;
-            return parsed;
+function openIdb(): Promise<IDBDatabase | null> {
+    if (typeof window === "undefined" || !window.indexedDB) return Promise.resolve(null);
+    return new Promise((resolve) => {
+        try {
+            const req = window.indexedDB.open(IDB_NAME, IDB_VERSION);
+            req.onupgradeneeded = () => {
+                const db = req.result;
+                if (!db.objectStoreNames.contains(IDB_STORE)) {
+                    db.createObjectStore(IDB_STORE);
+                }
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => resolve(null);
+        } catch {
+            resolve(null);
         }
+    });
+}
+
+async function getIdbItem<T>(key: string): Promise<T | null> {
+    try {
+        const db = await openIdb();
+        if (!db) return null;
+        return new Promise((resolve) => {
+            const tx = db.transaction(IDB_STORE, "readonly");
+            const store = tx.objectStore(IDB_STORE);
+            const req = store.get(key);
+            req.onsuccess = () => resolve(req.result ?? null);
+            req.onerror = () => resolve(null);
+        });
+    } catch {
+        return null;
+    }
+}
+
+async function setIdbItem<T>(key: string, value: T): Promise<void> {
+    try {
+        const db = await openIdb();
+        if (!db) return;
+        return new Promise((resolve) => {
+            const tx = db.transaction(IDB_STORE, "readwrite");
+            const store = tx.objectStore(IDB_STORE);
+            store.put(value, key);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => resolve();
+        });
     } catch {
         // ignore
     }
+}
+
+async function deleteIdbItem(key: string): Promise<void> {
+    try {
+        const db = await openIdb();
+        if (!db) return;
+        return new Promise((resolve) => {
+            const tx = db.transaction(IDB_STORE, "readwrite");
+            const store = tx.objectStore(IDB_STORE);
+            store.delete(key);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => resolve();
+        });
+    } catch {
+        // ignore
+    }
+}
+
+function loadCachedBookings(): Guest[] | null {
+    if (inMemoryBookingsCache && inMemoryBookingsCache.length > 0) return inMemoryBookingsCache;
     return null;
 }
 
 function loadCachedStageUsers(): StageUser[] | null {
     if (inMemoryStageUsersCache && inMemoryStageUsersCache.length > 0) return inMemoryStageUsersCache;
-    if (typeof window === "undefined") return null;
-    try {
-        const raw = localStorage.getItem(STAGE_USERS_CACHE_KEY);
-        if (!raw) return null;
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-            inMemoryStageUsersCache = parsed;
-            return parsed;
-        }
-    } catch {
-        // ignore
-    }
     return null;
 }
 
 export function useCrrBookings() {
     const [guests, setGuests] = useState<Guest[]>(() => loadCachedBookings() || []);
     const [stageUsers, setStageUsers] = useState<StageUser[]>(() => loadCachedStageUsers() || []);
-    const [loading, setLoading] = useState<boolean>(() => !loadCachedBookings());
+    const [loading, setLoading] = useState<boolean>(() => !inMemoryBookingsCache || inMemoryBookingsCache.length === 0);
     const [isRevalidating, setIsRevalidating] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
     const isFetchingRef = useRef<boolean>(false);
+    const initialLoadFromIdbDone = useRef<boolean>(false);
+
+    // Initial instant hydrate from IndexedDB if in-memory cache is cold
+    useEffect(() => {
+        if (initialLoadFromIdbDone.current) return;
+        initialLoadFromIdbDone.current = true;
+
+        if (!inMemoryBookingsCache || inMemoryBookingsCache.length === 0) {
+            getIdbItem<Guest[]>(BOOKINGS_CACHE_KEY).then((cached) => {
+                if (cached && Array.isArray(cached) && cached.length > 0) {
+                    inMemoryBookingsCache = cached;
+                    setGuests(cached);
+                    setLoading(false);
+                }
+            });
+            getIdbItem<StageUser[]>(STAGE_USERS_CACHE_KEY).then((cachedUsers) => {
+                if (cachedUsers && Array.isArray(cachedUsers) && cachedUsers.length > 0) {
+                    inMemoryStageUsersCache = cachedUsers;
+                    setStageUsers(cachedUsers);
+                }
+            });
+        }
+    }, []);
 
     const fetchBookings = useCallback(async (isManualRefresh = false) => {
         if (isFetchingRef.current) return;
         isFetchingRef.current = true;
 
-        const hasCache = Boolean(loadCachedBookings());
+        const hasCache = Boolean((inMemoryBookingsCache && inMemoryBookingsCache.length > 0) || guests.length > 0);
         if (!hasCache || isManualRefresh) {
             setLoading(true);
         } else {
@@ -395,15 +465,12 @@ export function useCrrBookings() {
             setGuests(mapped);
             setStageUsers(json.stageUsers || []);
 
-            // Save to memory and localStorage
+            // Save to memory cache and persistent IndexedDB
             inMemoryBookingsCache = mapped;
             inMemoryStageUsersCache = json.stageUsers || [];
-            try {
-                localStorage.setItem(BOOKINGS_CACHE_KEY, JSON.stringify(mapped));
-                localStorage.setItem(STAGE_USERS_CACHE_KEY, JSON.stringify(json.stageUsers || []));
-            } catch {
-                // Storage quota exceeded or private mode
-            }
+
+            setIdbItem(BOOKINGS_CACHE_KEY, mapped);
+            setIdbItem(STAGE_USERS_CACHE_KEY, json.stageUsers || []);
         } catch (err: any) {
             console.error("[useCrrBookings] fetch failed:", err);
             const msg = err?.name === "AbortError"
@@ -416,7 +483,7 @@ export function useCrrBookings() {
             setIsRevalidating(false);
             isFetchingRef.current = false;
         }
-    }, []);
+    }, [guests.length]);
 
     useEffect(() => {
         fetchBookings();
@@ -426,6 +493,8 @@ export function useCrrBookings() {
         const handleClearCache = () => {
             inMemoryBookingsCache = null;
             inMemoryStageUsersCache = null;
+            deleteIdbItem(BOOKINGS_CACHE_KEY);
+            deleteIdbItem(STAGE_USERS_CACHE_KEY);
             try {
                 localStorage.removeItem(BOOKINGS_CACHE_KEY);
                 localStorage.removeItem(STAGE_USERS_CACHE_KEY);
@@ -444,19 +513,19 @@ export function useCrrBookings() {
    ========================================================= */
 
 export function isStageLocked(guest: Guest, stageNo: number): boolean {
-    const info = guest.stages.find((s) => s.stage === stageNo);
+    const info = guest.stages[stageNo - 1] ?? guest.stages.find((s) => s.stage === stageNo);
     if (!info || !info.available) return true; // stage missing from GAS response = locked (safe default)
     return info.locked;
 }
 
 export function getStagePlannedDate(guest: Guest, stageNo: number): string | null {
-    const info = guest.stages.find((s) => s.stage === stageNo);
+    const info = guest.stages[stageNo - 1] ?? guest.stages.find((s) => s.stage === stageNo);
     return info?.plannedDate ?? null;
 }
 
 // Completion timestamp (actualCol value) — null when incomplete.
 export function getStageActualDate(guest: Guest, stageNo: number): string | null {
-    const info = guest.stages.find((s) => s.stage === stageNo);
+    const info = guest.stages[stageNo - 1] ?? guest.stages.find((s) => s.stage === stageNo);
     return info?.actualDate ?? null;
 }
 

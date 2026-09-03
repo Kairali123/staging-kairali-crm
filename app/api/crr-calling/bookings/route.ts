@@ -25,7 +25,7 @@ interface ServerBookingsCache {
     timestamp: number;
 }
 let serverCache: ServerBookingsCache | null = null;
-const CACHE_TTL_MS = 30_000;
+const CACHE_TTL_MS = 60_000;
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -167,13 +167,20 @@ export async function GET(req: NextRequest) {
 
         const now = Date.now();
         if (serverCache && (now - serverCache.timestamp) < CACHE_TTL_MS) {
-            return NextResponse.json({
-                success: true,
-                count: serverCache.data.length,
-                data: serverCache.data,
-                stageUsers: serverCache.stageUsers,
-                cached: true,
-            });
+            return NextResponse.json(
+                {
+                    success: true,
+                    count: serverCache.data.length,
+                    data: serverCache.data,
+                    stageUsers: serverCache.stageUsers,
+                    cached: true,
+                },
+                {
+                    headers: {
+                        "Cache-Control": "private, no-cache, no-transform",
+                    },
+                }
+            );
         }
 
         const pool = await getPool();
@@ -186,14 +193,39 @@ export async function GET(req: NextRequest) {
             [chkRows],
             [permRows],
         ] = await Promise.all([
-            pool.query<any[]>(`SELECT * FROM KTAHV_CRR_Process_FMS ORDER BY id DESC`),
+            pool.query<any[]>(`
+                SELECT 
+                    id, timestamp, check_in_date, check_out_date, client_name, gender, mobile, country, country_code, email,
+                    booking_id, days_of_stay, programme_package_name, package_type, room_type, room_category, invoice_amount,
+                    booking_taken_by, mid, booking_no, booking_url, uid, booking_status,
+                    stage1_call_date_planned, stage1_task_done_actual,
+                    stage2_planned, stage2_actual, stage2_next_visit_date, stage2_remarks, stage9_doer,
+                    stage4_rating_request_call_date_planned, stage4_task_done_actual, stage4_remarks_for_next_visit_date,
+                    stage6_call_date_planned, stage6_task_done_actual,
+                    stage7_call_date_planned, stage7_task_done_actual, stage7_referals_details,
+                    stage8_call_date_planned, stage8_task_done_actual
+                FROM KTAHV_CRR_Process_FMS 
+                ORDER BY id DESC
+            `),
             pool.query<any[]>(
                 `SELECT id, uid, call_purpose, planned, actual, to_show, did_they_achieve_the_outcomes_planned_for, outcome_remarks, status, remarks_why_not_done_or_close, followup_date_for_the_welcome_call, doer, rating_status, remarks_why_not_given_ratings, proof_of_ratings, followup_date_for_the_rating, stay_feedback, followup_date_for_the_result_and_progress, updated_at, timestamp FROM KTAHV_CRR_Calling_FMS ORDER BY id ASC`
             ),
             pool.query<any[]>(
                 `SELECT booking_id, doctor_assigned_to_the_client, special_request_or_requirement_noted, arrival_doer_name, arrival_planned, arrival_actual, client_arrival_data_upload_remarks, departure_doer_name, departure_planned, departure_actual, client_departure_data_upload_remarks, created_at, updated_at FROM ktahv_guest_tracker`
             ),
-            pool.query<any[]>(`SELECT * FROM ktahv_checkinmasterfms ORDER BY id DESC`),
+            pool.query<any[]>(`
+                SELECT 
+                    id, reservation_id, mobile, room_no,
+                    stage3_planned, stage3_actual, stage3_doer_remarks, stage3_doer, stage3_time_delay,
+                    stage2_qr_code_scanned_status_by_guest_or_not, stage2_guest_feedback_after_scanning_ai_qr_code,
+                    stage2_guest_testinomial_feedback_received_through_html_form, stage2_referral_received_through_referral_html_form,
+                    stage4_planned, stage4_actual, stage4_doer_remarks, stage4_doer, stage4_time_delay,
+                    stage4_feedback_taking_url, stage4_feedback_report,
+                    stage5_planned_referral, stage5_actual_referral, stage5_referral_taken_status, stage5_doer_referral, stage5_doer_remarks, stage5_time_delay_referral,
+                    updated_at, booking_date_time
+                FROM ktahv_checkinmasterfms 
+                ORDER BY id DESC
+            `),
             pool.query<any[]>(
                 `SELECT 
                     p.email,
@@ -227,6 +259,11 @@ export async function GET(req: NextRequest) {
         const checkinMap = new Map<string, any>();
         if (chkRows) {
             for (const chk of chkRows) {
+                // Normalize stage5 alias keys if present
+                if (chk.stage5_planned_referral && !chk.stage5_planned) chk.stage5_planned = chk.stage5_planned_referral;
+                if (chk.stage5_doer_referral && !chk.stage5_doer) chk.stage5_doer = chk.stage5_doer_referral;
+                if (chk.stage5_time_delay_referral && !chk.stage5_time_delay) chk.stage5_time_delay = chk.stage5_time_delay_referral;
+
                 if (chk.reservation_id) {
                     const raw = String(chk.reservation_id).trim();
                     const norm = normalizeKey(raw);
@@ -296,36 +333,34 @@ export async function GET(req: NextRequest) {
             }
         }
 
-        // Build CrrCalling index by UID -> list of calling rows
-        const callingIndex = new Map<string, any[]>();
+        // Build CrrCalling pre-indexed lookup by UID -> purpose keyword in O(1)
+        const callingMap = new Map<string, { welcome?: any; rating?: any; return?: any; result?: any }>();
         for (const row of callingRows) {
             if (!row.uid) continue;
             const k = String(row.uid).trim();
-            if (!callingIndex.has(k)) {
-                callingIndex.set(k, []);
+            let entry = callingMap.get(k);
+            if (!entry) {
+                entry = {};
+                callingMap.set(k, entry);
             }
-            callingIndex.get(k)!.push(row);
+            const purpose = String(row.call_purpose || "").toLowerCase();
+            if (purpose.includes("welcome call")) {
+                entry.welcome = row;
+            } else if (purpose.includes("call after landing, seek feedback") || purpose.includes("rating")) {
+                entry.rating = row;
+            } else if (purpose.includes("time to return") || purpose.includes("safe return")) {
+                entry.return = row;
+            } else if (purpose.includes("result and progress")) {
+                entry.result = row;
+            }
         }
-
-        // Helper to find latest CrrCalling row matching a purpose keyword
-        const findCallingRow = (uid: string, keyword: string) => {
-            const list = callingIndex.get(uid) || [];
-            const kw = keyword.toLowerCase();
-            let found: any = null;
-            for (const item of list) {
-                if (String(item.call_purpose || "").toLowerCase().includes(kw)) {
-                    found = item; // last match wins
-                }
-            }
-            return found;
-        };
 
         // 6. Map each processRow into the standard GasBookingRow payload
         const data = processRows.map((row: any, idx: number) => {
             const uid = String(row.uid || "").trim();
             const bookingId = String(row.booking_id || "").trim();
             const tracker = trackerMap.get(bookingId) || trackerMap.get(bookingId.toLowerCase()) || trackerMap.get(normalizeKey(bookingId));
-            const num = String(bookingId || row.booking_no || row.reservation_id || "").match(/\d+/)?.[0] || "";
+            const num = String(bookingId || row.booking_no || "").match(/\d+/)?.[0] || "";
             const cleanMobile = String(row.mobile || "").replace(/\D/g, "").slice(-10);
 
             const checkin =
@@ -335,32 +370,17 @@ export async function GET(req: NextRequest) {
                 checkinMap.get(String(row.booking_no || "").trim()) ||
                 checkinMap.get(String(row.booking_no || "").trim().toLowerCase()) ||
                 checkinMap.get(normalizeKey(row.booking_no)) ||
-                checkinMap.get(String(row.reservation_id || "").trim()) ||
-                checkinMap.get(normalizeKey(row.reservation_id)) ||
                 (num ? checkinMap.get(num) : null) ||
                 (num ? checkinMap.get(`ktahv-pms-${num}`) : null) ||
                 (num ? checkinMap.get(`pms-${num}`) : null) ||
                 (cleanMobile ? checkinMap.get(cleanMobile) : null);
 
-            if (bookingId.includes("9335") || String(row.client_name || "").toLowerCase().includes("basha")) {
-                console.log("[DEBUG 9335 BASHA]", {
-                    bookingId,
-                    row_stage8_call_date_planned: row.stage8_call_date_planned,
-                    row_stage8_task_done_actual: row.stage8_task_done_actual,
-                    row_stage7_referals_details: row.stage7_referals_details,
-                    checkin_found: !!checkin,
-                    checkin_stage5_planned: checkin?.stage5_planned,
-                    checkin_stage5_actual_referral: checkin?.stage5_actual_referral,
-                    checkin_stage5_referral_taken_status: checkin?.stage5_referral_taken_status,
-                    checkin_stage5_doer: checkin?.stage5_doer,
-                    checkin_stage5_doer_remarks: checkin?.stage5_doer_remarks,
-                });
-            }
+            const cCalling = callingMap.get(uid);
 
             const bookingTakenBy = String(row.booking_taken_by || "").trim();
 
             // Stage 1: Arrival Welcome on Pickup (CrrCalling / CrrProcess)
-            const c1 = findCallingRow(uid, "Welcome Call");
+            const c1 = cCalling?.welcome;
             const s1Planned = c1?.planned || row.stage1_call_date_planned || row.check_in_date || null;
             const s1Actual = c1?.actual || row.stage1_task_done_actual || null;
             const s1ToShow = parseToShow(c1?.to_show);
@@ -456,7 +476,7 @@ export async function GET(req: NextRequest) {
             };
 
             // Stage 5: Online Rating & Review Request (CrrCalling / CrrProcess Col AU)
-            const c5 = findCallingRow(uid, "Call after landing, seek feedback") || findCallingRow(uid, "rating");
+            const c5 = cCalling?.rating;
             const s5Planned = c5?.planned || row.stage4_rating_request_call_date_planned || null;
             const s5Actual = c5?.actual || row.stage4_task_done_actual || null;
             const s5ToShow = parseToShow(c5?.to_show);
@@ -474,7 +494,7 @@ export async function GET(req: NextRequest) {
             } : (bookingTakenBy ? { doer: bookingTakenBy } : null);
 
             // Stage 6: Safe Return Confirmation (CrrCalling / CrrProcess Col BA)
-            const c6 = findCallingRow(uid, "Time to Return") || findCallingRow(uid, "Safe Return");
+            const c6 = cCalling?.return;
             const s6Planned = c6?.planned || row.stage6_call_date_planned || null;
             const s6Actual = c6?.actual || row.stage6_task_done_actual || null;
             const s6ToShow = parseToShow(c6?.to_show);
@@ -489,7 +509,7 @@ export async function GET(req: NextRequest) {
             } : (bookingTakenBy ? { doer: bookingTakenBy } : null);
 
             // Stage 7: Result Tracking & Health Progress Check (CrrCalling / CrrProcess Col BQ)
-            const c7 = findCallingRow(uid, "Result and Progress Since Return") || findCallingRow(uid, "Result and Progress");
+            const c7 = cCalling?.result;
             const s7Planned = c7?.planned || row.stage7_call_date_planned || null;
             const s7Actual = c7?.actual || row.stage7_task_done_actual || null;
             const s7ToShow = parseToShow(c7?.to_show);
@@ -644,12 +664,19 @@ export async function GET(req: NextRequest) {
             timestamp: Date.now(),
         };
 
-        return NextResponse.json({
-            success: true,
-            count: data.length,
-            data,
-            stageUsers,
-        });
+        return NextResponse.json(
+            {
+                success: true,
+                count: data.length,
+                data,
+                stageUsers,
+            },
+            {
+                headers: {
+                    "Cache-Control": "private, no-cache, no-transform",
+                },
+            }
+        );
     } catch (err) {
         console.error("[crr-calling/bookings] MySQL fetch failed:", err);
         return NextResponse.json(
