@@ -20,6 +20,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { PermissionChipDropdown, type PermissionOption, getChipStyle } from "@/components/ui/permission-chip-dropdown"
 import {
   Plus,
   Edit,
@@ -61,6 +62,7 @@ import {
   EyeOff,
   CheckCircle,
   TableIcon,
+  X,
 } from "lucide-react"
 import type { User, UserRole, Department } from "@/hooks/use-auth"
 import { toast } from "sonner"
@@ -117,6 +119,7 @@ interface ExtendedUser extends User {
   tokenVersion?: number
   registeredDevicesCount?: number
   activeSessionsCount?: number
+  modulePermissions?: Record<string, string[]>
 }
 
 // ─── Page Component ───────────────────────────────────────────────────────────
@@ -1764,144 +1767,290 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
 
 // ─── User Form ────────────────────────────────────────────────────────────────
 
-// ─── Permission Schema & Definitions ──────────────────────────────────────────
+// ─── Permission Schema & Definitions (Google Sheets Dropdown Architecture) ─────
 
-const PERMISSION_GROUPS: {
+export interface PageModuleDef {
+  key: string
+  label: string
   category: string
   description: string
-  permissions: { key: string; label: string; description: string }[]
-}[] = [
-  {
-    category: "Core Workspace & Leads",
-    description: "Main workspace, incoming leads, assignments and AI deals",
-    permissions: [
-      { key: "dashboard.view", label: "Executive Dashboard", description: "View analytics & system overview" },
-      { key: "leads.view", label: "Leads Assignment", description: "Access lead pipeline and assignment hub" },
-      { key: "leads.edit", label: "Edit Lead Details", description: "Update lead status, outcomes & notes" },
-      { key: "leads.assign", label: "Assign Leads to Staff", description: "Reallocate leads across agents & teams" },
-      { key: "deal_assistant.view", label: "AI Deal Assistant", description: "AI-driven deal intelligence & tracking" },
-      { key: "ai_voice_menu.view", label: "AI Voice Lead Qualification", description: "Voice transcription & qualification reports" },
-      { key: "dialshree_menu.view", label: "DialShree Lead Qualification", description: "DialShree calling & callback logs" },
-      { key: "dialshree_received.view", label: "DialShree Received Leads", description: "View DialShree received callback leads" },
-      { key: "dialshree_sent.view", label: "DialShree Sent Leads", description: "View DialShree sent outreach leads" },
-      { key: "dialshree_summary.view", label: "DialShree Summary Report", description: "View DialShree performance & qualification summary" },
-    ],
-  },
-  {
-    category: "Sales & Call Management",
-    description: "Calling pipelines, sales reporting and agent performance",
-    permissions: [
-      { key: "calls_report.view", label: "Calls Report", description: "Call history logs and recording statistics" },
-      { key: "sales_report.view", label: "Sales Report", description: "Revenue statistics and sales conversion data" },
-      { key: "sales_calling.view", label: "Sales Calling Master", description: "Calling schedules, daily master lists & status" },
-      { key: "riya_sharma.view", label: "Riya Sharma Portal", description: "Agent dedicated conversion tracking" },
-      // Sales Call Audit is four composable permissions, not one. `view` opens
-      // the page and grants no data; `viewSelf`/`viewAll` decide how much data
-      // comes through it; `write` decides whether HR actions can be saved. Grant
-      // `view` alongside a scope — `view` on its own renders an empty table.
-      { key: "sales_call_audit.view", label: "Sales Call Audit — Open Page", description: "Open the audit page. Grants no data on its own; pair with Own Data or All Data" },
-      { key: "sales_call_audit.viewSelf", label: "Sales Call Audit — Own Data", description: "See only their own audit scorecard, read-only" },
-      { key: "sales_call_audit.viewAll", label: "Sales Call Audit — All Data", description: "See every agent's audit records and team reports, read-only" },
-      { key: "sales_call_audit.write", label: "Sales Call Audit — HR Actions", description: "Save HR verification, remarks and attendance actions on visible records" },
-    ],
-  },
-  {
-    category: "Marketing & Ads Analytics",
-    description: "Marketing funnels, PPC ads and Google/Facebook campaign reports",
-    permissions: [
-      { key: "marketing.view", label: "Marketing Reports Hub", description: "Access marketing analytics overview" },
-      { key: "marketing_funnel.view", label: "Marketing Funnel", description: "Lead stage funnel & drop-off metrics" },
-      { key: "marketing_google_report.view", label: "Google PPC Reports", description: "Google campaign ROAS & expense analytics" },
-      { key: "marketing_facebook_report.view", label: "Facebook PPC Reports", description: "Meta/Facebook ad performance tracking" },
-      { key: "google_adword_report.view", label: "Google Adwords Reports", description: "Adwords spend and source analysis" },
-    ],
-  },
-  {
-    category: "FMS & Booking Systems",
-    description: "File Management Systems, bookings, task tracking and verification",
-    permissions: [
-      { key: "fms.view", label: "FMS Systems Hub", description: "Main access to all File Management Systems" },
-      { key: "team.view", label: "KTAHV Booking FMS", description: "Manage KTAHV team bookings & confirmations" },
-      { key: "villa_raag.view", label: "Villa Raag Booking FMS", description: "Manage Villa Raag resort reservations" },
-      { key: "ktahv_booking_form.view", label: "KTAHV Booking Intake Form", description: "Direct booking intake submission form" },
-      { key: "crr_fms.view", label: "KTAHV CRR Calling FMS", description: "CRR guest follow-up and retention FMS" },
-      { key: "task_fms.view", label: "FMS Bottleneck Tracker", description: "Pending bottleneck tasks & operational alerts" },
-      { key: "cold_enquiry_reverification.view", label: "Cold Enquiry Reverification", description: "Reverify cold customer leads" },
-      { key: "new-order-fms.view", label: "New Order FMS", description: "Manage product order lifecycle" },
-      { key: "mr-fms.view", label: "MR FMS", description: "Medical Representative field reporting" },
-    ],
-  },
-  {
-    category: "Financials & Partner Networks",
-    description: "Accounts reconciliation, payment tracking and partner onboarding",
-    permissions: [
-      { key: "accounts_tracker.view", label: "KTAHV Accounts Tracker", description: "Reconcile booking accounts, invoices & receipts" },
-      { key: "payments.view", label: "Payments & Invoicing", description: "View financial payment records & ledger" },
-      { key: "partners.view", label: "Partner Onboarding System", description: "Corporate and doctor referral partners" },
-    ],
-  },
-  {
-    category: "Portals & Miscellaneous Tools",
-    description: "External portal shortcuts, doctor CMS, recordings and meetings",
-    permissions: [
-      { key: "portal_hub.view", label: "Unified Portal Hub", description: "Access external portal launcher" },
-      { key: "sales_target_portal.view", label: "Sales Target Portal", description: "Sales target portal integration" },
-      { key: "call_recording_portal.view", label: "Call Recording Portal", description: "IVR audio call recording archives" },
-      { key: "doctor_portal.view", label: "Doctor Portal", description: "Doctor consultation CMS & history" },
-      { key: "partner_onboard_form.view", label: "Partner Onboard Form", description: "External partner onboarding form" },
-      { key: "meetings.view", label: "Meetings Hub", description: "Team meeting logs and action items" },
-    ],
-  },
-  {
-    category: "Administrative & User Management",
-    description: "Personnel directory, account creation and credential security",
-    permissions: [
-      { key: "users.view", label: "View User Directory", description: "Browse personnel directory" },
-      { key: "users.create", label: "Create Employees", description: "Register new team accounts" },
-      { key: "users.edit", label: "Edit Employees", description: "Update profile & role permissions" },
-      { key: "users.delete", label: "Delete Employees", description: "Terminate user accounts" },
-    ],
-  },
-]
-
-const ROLE_DEFAULT_PERMISSIONS: Record<string, string[]> = {
-  super_admin: ["all"],
-  admin: [
-    "dashboard.view",
-    "users.view", "users.create", "users.edit", "users.delete",
-    "leads.view", "leads.edit", "leads.assign",
-    "calls_report.view", "sales_report.view", "sales_calling.view",
-    "marketing.view", "marketing_funnel.view", "marketing_google_report.view", "marketing_facebook_report.view", "google_adword_report.view",
-    "fms.view", "team.view", "villa_raag.view", "ktahv_booking_form.view", "crr_fms.view", "task_fms.view", "cold_enquiry_reverification.view", "new-order-fms.view", "mr-fms.view",
-    "deal_assistant.view", "ai_voice_menu.view", "dialshree_menu.view", "dialshree_received.view", "dialshree_sent.view", "dialshree_summary.view", "accounts_tracker.view", "partners.view", "meetings.view", "portal_hub.view", "sales_target_portal.view", "call_recording_portal.view", "doctor_portal.view", "partner_onboard_form.view"
-  ],
-  sales_manager: [
-    "dashboard.view", "leads.view", "leads.edit", "leads.assign", "calls_report.view", "sales_report.view", "sales_calling.view", "riya_sharma.view", "marketing.view", "fms.view", "team.view", "villa_raag.view", "ktahv_booking_form.view", "crr_fms.view", "deal_assistant.view", "portal_hub.view", "sales_target_portal.view", "call_recording_portal.view", "meetings.view"
-  ],
-  sales_agent: [
-    "dashboard.view", "leads.view", "leads.edit", "calls_report.view", "sales_calling.view", "fms.view", "team.view", "villa_raag.view", "ktahv_booking_form.view", "deal_assistant.view", "sales_target_portal.view"
-  ],
-  operation_manager: [
-    "dashboard.view", "fms.view", "team.view", "villa_raag.view", "ktahv_booking_form.view", "crr_fms.view", "task_fms.view", "cold_enquiry_reverification.view", "new-order-fms.view", "mr-fms.view", "accounts_tracker.view", "meetings.view"
-  ],
-  operation_staff: [
-    "dashboard.view", "fms.view", "team.view", "ktahv_booking_form.view", "crr_fms.view", "task_fms.view", "cold_enquiry_reverification.view", "new-order-fms.view"
-  ],
-  account_manager: [
-    "dashboard.view", "accounts_tracker.view", "payments.view", "sales_report.view", "fms.view", "team.view", "villa_raag.view", "portal_hub.view"
-  ],
-  doctor: [
-    "dashboard.view", "doctor_portal.view", "meetings.view", "portal_hub.view"
-  ],
+  options: PermissionOption[]
 }
 
-// ─── Executive Employee Profile & Permissions Modal (Exact CRM Design Pattern) ─
+export const STANDARD_PAGE_OPTIONS: PermissionOption[] = [
+  { id: "view", label: "view" },
+  { id: "edit", label: "edit" },
+  { id: "delete", label: "delete" },
+  { id: "manage", label: "manage" },
+  { id: "create", label: "create" },
+  { id: "viewSelf", label: "viewSelf" },
+  { id: "viewAll", label: "viewAll" },
+]
+
+export const LEADS_PAGE_OPTIONS: PermissionOption[] = [
+  { id: "view", label: "view" },
+  { id: "edit", label: "edit" },
+  { id: "delete", label: "delete" },
+  { id: "manage", label: "manage" },
+  { id: "create", label: "create" },
+  { id: "assign", label: "assign" },
+]
+
+export const DIALSHREE_PAGE_OPTIONS: PermissionOption[] = [
+  { id: "view", label: "view" },
+  { id: "stage1", label: "stage1" },
+  { id: "stage2", label: "stage2" },
+  { id: "stage3", label: "stage3" },
+  { id: "stage4", label: "stage4" },
+  { id: "stage5", label: "stage5" },
+  { id: "stage6", label: "stage6" },
+  { id: "stage7", label: "stage7" },
+  { id: "stage8", label: "stage8" },
+  { id: "Executive", label: "Executive" },
+  { id: "Review", label: "Review" },
+  { id: "stage9", label: "stage9" },
+  { id: "stage10", label: "stage10" },
+  { id: "stage11", label: "stage11" },
+]
+
+export const SALES_AUDIT_PAGE_OPTIONS: PermissionOption[] = [
+  { id: "view", label: "view" },
+  { id: "viewSelf", label: "viewSelf" },
+  { id: "viewAll", label: "viewAll" },
+  { id: "write", label: "write" },
+]
+
+export const ALL_PAGE_MODULES: PageModuleDef[] = [
+  // ── 1. Core Workspace & Leads
+  { key: "dashboard", label: "Executive Dashboard", category: "Core Workspace & Leads", description: "Analytics & system overview", options: STANDARD_PAGE_OPTIONS },
+  { key: "leads", label: "Leads Assignment & Pipeline", category: "Core Workspace & Leads", description: "Incoming leads, assignment & follow-up", options: LEADS_PAGE_OPTIONS },
+  { key: "deal_assistant", label: "AI Deal Assistant", category: "Core Workspace & Leads", description: "AI qualification & deals", options: STANDARD_PAGE_OPTIONS },
+  { key: "ai_voice_menu", label: "AI Voice Qualification", category: "Core Workspace & Leads", description: "Voice transcription & reports", options: STANDARD_PAGE_OPTIONS },
+  { key: "ai_voice_sent", label: "AI Voice Sent Outreach", category: "Core Workspace & Leads", description: "Voice outbound outreach logs", options: STANDARD_PAGE_OPTIONS },
+  { key: "ai_voice_received", label: "AI Voice Received Leads", category: "Core Workspace & Leads", description: "Inbound voice callback leads", options: STANDARD_PAGE_OPTIONS },
+  { key: "ai_voice_summary", label: "AI Voice Summary Report", category: "Core Workspace & Leads", description: "AI qualification summary metrics", options: STANDARD_PAGE_OPTIONS },
+  { key: "dialshree_menu", label: "DialShree Lead Qualification", category: "Core Workspace & Leads", description: "Dialer calling & callback stages", options: DIALSHREE_PAGE_OPTIONS },
+  { key: "dialshree_received", label: "DialShree Received Leads", category: "Core Workspace & Leads", description: "Dialer received callback leads", options: DIALSHREE_PAGE_OPTIONS },
+  { key: "dialshree_sent", label: "DialShree Sent Leads", category: "Core Workspace & Leads", description: "Dialer sent outreach leads", options: DIALSHREE_PAGE_OPTIONS },
+  { key: "dialshree_summary", label: "DialShree Summary Report", category: "Core Workspace & Leads", description: "Dialer outreach summary reports", options: DIALSHREE_PAGE_OPTIONS },
+  { key: "oohl_enquiry_new", label: "OOHL Enquiry Master", category: "Core Workspace & Leads", description: "OOHL inbound inquiry stages", options: DIALSHREE_PAGE_OPTIONS },
+
+  // ── 2. Sales & Call Management
+  { key: "calls", label: "Calls Master Log", category: "Sales & Call Management", description: "Call logs and calling status", options: STANDARD_PAGE_OPTIONS },
+  { key: "calls_report", label: "Calls Report", category: "Sales & Call Management", description: "Call history logs & recordings", options: STANDARD_PAGE_OPTIONS },
+  { key: "sales_report", label: "Sales Report", category: "Sales & Call Management", description: "Revenue statistics & conversions", options: STANDARD_PAGE_OPTIONS },
+  { key: "sales_calling", label: "Sales Calling Master", category: "Sales & Call Management", description: "Daily schedules & calling sheets", options: STANDARD_PAGE_OPTIONS },
+  { key: "riya_sharma", label: "Riya Sharma Portal", category: "Sales & Call Management", description: "Agent dedicated conversion tracking", options: STANDARD_PAGE_OPTIONS },
+  { key: "sales_call_audit", label: "Sales Call Audit", category: "Sales & Call Management", description: "Call scorecards, scopes & HR verification", options: SALES_AUDIT_PAGE_OPTIONS },
+
+  // ── 3. Marketing & Ads Analytics
+  { key: "marketing", label: "Marketing Reports Hub", category: "Marketing & Ads Analytics", description: "Campaign performance overview", options: STANDARD_PAGE_OPTIONS },
+  { key: "marketing_funnel", label: "Marketing Funnel", category: "Marketing & Ads Analytics", description: "Lead stage funnel & conversions", options: STANDARD_PAGE_OPTIONS },
+  { key: "marketing_google_report", label: "Google PPC Reports", category: "Marketing & Ads Analytics", description: "Google ad spend & ROAS analytics", options: STANDARD_PAGE_OPTIONS },
+  { key: "marketing_facebook_report", label: "Facebook PPC Reports", category: "Marketing & Ads Analytics", description: "Meta campaign metrics", options: STANDARD_PAGE_OPTIONS },
+  { key: "google_adword_report", label: "Google Adwords Reports", category: "Marketing & Ads Analytics", description: "Adwords spend & sources", options: STANDARD_PAGE_OPTIONS },
+
+  // ── 4. FMS & Booking Systems
+  { key: "fms", label: "FMS Systems Hub", category: "FMS & Booking Systems", description: "File Management Systems core", options: STANDARD_PAGE_OPTIONS },
+  { key: "bookings", label: "Bookings Intake & Manage", category: "FMS & Booking Systems", description: "Resort reservations & guests", options: STANDARD_PAGE_OPTIONS },
+  { key: "team", label: "KTAHV Booking FMS", category: "FMS & Booking Systems", description: "KTAHV team bookings FMS", options: STANDARD_PAGE_OPTIONS },
+  { key: "villa_raag", label: "Villa Raag Booking FMS", category: "FMS & Booking Systems", description: "Villa Raag resort reservations", options: STANDARD_PAGE_OPTIONS },
+  { key: "ktahv_booking_form", label: "KTAHV Booking Intake Form", category: "FMS & Booking Systems", description: "Direct booking intake submission", options: STANDARD_PAGE_OPTIONS },
+  { key: "crr_fms", label: "KTAHV CRR Calling FMS", category: "FMS & Booking Systems", description: "CRR guest follow-up & retention", options: STANDARD_PAGE_OPTIONS },
+  { key: "om_fms", label: "Operations Manager FMS", category: "FMS & Booking Systems", description: "Ops management lifecycle FMS", options: STANDARD_PAGE_OPTIONS },
+  { key: "task_fms", label: "FMS Bottleneck Tracker", category: "FMS & Booking Systems", description: "Pending bottlenecks & alerts", options: STANDARD_PAGE_OPTIONS },
+  { key: "cold_enquiry_reverification", label: "Cold Enquiry Reverification", category: "FMS & Booking Systems", description: "Reverify cold customer leads", options: STANDARD_PAGE_OPTIONS },
+  { key: "new_order_fms", label: "New Order FMS", category: "FMS & Booking Systems", description: "Product order lifecycle FMS", options: STANDARD_PAGE_OPTIONS },
+  { key: "mr_fms", label: "MR FMS", category: "FMS & Booking Systems", description: "Medical rep field reporting", options: STANDARD_PAGE_OPTIONS },
+
+  // ── 5. Financials & Invoicing
+  { key: "accounts_tracker", label: "KTAHV Accounts Tracker", category: "Financials & Invoicing", description: "Reconcile booking accounts & receipts", options: STANDARD_PAGE_OPTIONS },
+  { key: "payments", label: "Payments & Receipts", category: "Financials & Invoicing", description: "Financial payment records & ledger", options: STANDARD_PAGE_OPTIONS },
+  { key: "invoices", label: "Billing & Invoices", category: "Financials & Invoicing", description: "Client tax invoices & receipts", options: STANDARD_PAGE_OPTIONS },
+  { key: "partners", label: "Partner Systems Hub", category: "Financials & Invoicing", description: "Corporate & doctor partners", options: STANDARD_PAGE_OPTIONS },
+
+  // ── 6. Portals & Miscellaneous Tools
+  { key: "portal_hub", label: "Unified Portal Hub", category: "Portals & Miscellaneous Tools", description: "External portal shortcuts launcher", options: STANDARD_PAGE_OPTIONS },
+  { key: "sales_target_portal", label: "Sales Target Portal", category: "Portals & Miscellaneous Tools", description: "Sales target portal integration", options: STANDARD_PAGE_OPTIONS },
+  { key: "call_recording_portal", label: "Call Recording Portal", category: "Portals & Miscellaneous Tools", description: "IVR audio call recording archives", options: STANDARD_PAGE_OPTIONS },
+  { key: "doctor_portal", label: "Doctor Portal", category: "Portals & Miscellaneous Tools", description: "Doctor consultation CMS & history", options: STANDARD_PAGE_OPTIONS },
+  { key: "partner_onboard_form", label: "Partner Onboard Form", category: "Portals & Miscellaneous Tools", description: "External partner onboarding form", options: STANDARD_PAGE_OPTIONS },
+  { key: "meetings", label: "Meetings Hub", category: "Portals & Miscellaneous Tools", description: "Team meeting logs & action items", options: STANDARD_PAGE_OPTIONS },
+
+  // ── 7. Administrative & Personnel
+  { key: "users", label: "View User Directory", category: "Administrative & Personnel", description: "Personnel directory & credentials", options: STANDARD_PAGE_OPTIONS },
+  { key: "employee", label: "Staff Directory", category: "Administrative & Personnel", description: "Employee records & directory", options: STANDARD_PAGE_OPTIONS },
+  { key: "escalations", label: "Escalations & Alerts", category: "Administrative & Personnel", description: "Operational escalation monitoring", options: STANDARD_PAGE_OPTIONS },
+  { key: "guests", label: "Guest Master Records", category: "Administrative & Personnel", description: "Guest profiles & historical stays", options: STANDARD_PAGE_OPTIONS },
+  { key: "helpdesk", label: "Helpdesk & Support", category: "Administrative & Personnel", description: "Support tickets & queries", options: STANDARD_PAGE_OPTIONS },
+  { key: "performance", label: "Staff Performance", category: "Administrative & Personnel", description: "Team KPIs and scorecards", options: STANDARD_PAGE_OPTIONS },
+  { key: "prescriptions", label: "Prescriptions Archive", category: "Administrative & Personnel", description: "Medical consultation prescriptions", options: STANDARD_PAGE_OPTIONS },
+  { key: "reports", label: "Central Reports Hub", category: "Administrative & Personnel", description: "Central analytics & reports", options: STANDARD_PAGE_OPTIONS },
+]
+
+export const ROLE_DEFAULT_MODULE_MAP: Record<string, Record<string, string[]>> = {
+  super_admin: { all: ["all"] },
+  admin: {
+    dashboard: ["view"],
+    users: ["view", "create", "edit", "delete"],
+    leads: ["view", "edit", "assign"],
+    calls_report: ["view"],
+    sales_report: ["view"],
+    sales_calling: ["view"],
+    marketing: ["view"],
+    marketing_funnel: ["view"],
+    marketing_google_report: ["view"],
+    marketing_facebook_report: ["view"],
+    google_adword_report: ["view"],
+    fms: ["view"],
+    team: ["view"],
+    villa_raag: ["view"],
+    ktahv_booking_form: ["view"],
+    crr_fms: ["view"],
+    task_fms: ["view"],
+    cold_enquiry_reverification: ["view"],
+    new_order_fms: ["view"],
+    mr_fms: ["view"],
+    deal_assistant: ["view"],
+    ai_voice_menu: ["view"],
+    dialshree_menu: ["view"],
+    dialshree_received: ["view"],
+    dialshree_sent: ["view"],
+    dialshree_summary: ["view"],
+    accounts_tracker: ["view"],
+    partners: ["view"],
+    meetings: ["view"],
+    portal_hub: ["view"],
+    sales_target_portal: ["view"],
+    call_recording_portal: ["view"],
+    doctor_portal: ["view"],
+    partner_onboard_form: ["view"],
+  },
+  sales_manager: {
+    dashboard: ["view"],
+    leads: ["view", "edit", "assign"],
+    calls_report: ["view"],
+    sales_report: ["view"],
+    sales_calling: ["view"],
+    riya_sharma: ["view"],
+    marketing: ["view"],
+    fms: ["view"],
+    team: ["view"],
+    villa_raag: ["view"],
+    ktahv_booking_form: ["view"],
+    crr_fms: ["view"],
+    deal_assistant: ["view"],
+    portal_hub: ["view"],
+    sales_target_portal: ["view"],
+    call_recording_portal: ["view"],
+    meetings: ["view"],
+  },
+  sales_agent: {
+    dashboard: ["view"],
+    leads: ["view", "edit"],
+    calls_report: ["view"],
+    sales_calling: ["view"],
+    fms: ["view"],
+    team: ["view"],
+    villa_raag: ["view"],
+    ktahv_booking_form: ["view"],
+    deal_assistant: ["view"],
+    sales_target_portal: ["view"],
+  },
+  operation_manager: {
+    dashboard: ["view"],
+    fms: ["view"],
+    team: ["view"],
+    villa_raag: ["view"],
+    ktahv_booking_form: ["view"],
+    crr_fms: ["view"],
+    task_fms: ["view"],
+    cold_enquiry_reverification: ["view"],
+    new_order_fms: ["view"],
+    mr_fms: ["view"],
+    accounts_tracker: ["view"],
+    meetings: ["view"],
+  },
+  operation_staff: {
+    dashboard: ["view"],
+    fms: ["view"],
+    team: ["view"],
+    ktahv_booking_form: ["view"],
+    crr_fms: ["view"],
+    task_fms: ["view"],
+    cold_enquiry_reverification: ["view"],
+    new_order_fms: ["view"],
+  },
+  account_manager: {
+    dashboard: ["view"],
+    accounts_tracker: ["view"],
+    payments: ["view"],
+    sales_report: ["view"],
+    fms: ["view"],
+    team: ["view"],
+    villa_raag: ["view"],
+    portal_hub: ["view"],
+  },
+  doctor: {
+    dashboard: ["view"],
+    doctor_portal: ["view"],
+    meetings: ["view"],
+    portal_hub: ["view"],
+  },
+}
+
+/**
+ * Robust non-destructive converter that parses existing user permissions
+ * (from user.modulePermissions and user.permissions) into the per-module chip map.
+ */
+function parseUserPermissionsToModuleMap(
+  existingModulePerms?: Record<string, string[]>,
+  existingFlatPerms?: string[]
+): Record<string, string[]> {
+  const result: Record<string, string[]> = {}
+
+  // 1. If explicit module permissions map is loaded from DB
+  if (existingModulePerms && typeof existingModulePerms === "object") {
+    for (const [k, v] of Object.entries(existingModulePerms)) {
+      if (Array.isArray(v) && v.length > 0) {
+        result[k] = [...v]
+      }
+    }
+  }
+
+  // 2. Also parse flat permissions to ensure no existing assignments are omitted
+  if (Array.isArray(existingFlatPerms)) {
+    for (const p of existingFlatPerms) {
+      if (!p || typeof p !== "string") continue
+      if (p === "all") continue
+
+      if (p.includes(".")) {
+        const dotIdx = p.indexOf(".")
+        const rawMod = p.substring(0, dotIdx)
+        const mod = rawMod.replace(/-/g, "_")
+        const act = p.substring(dotIdx + 1)
+        if (!result[mod]) result[mod] = []
+        if (!result[mod].includes(act)) {
+          result[mod].push(act)
+        }
+      } else {
+        const mod = p.replace(/-/g, "_")
+        if (!result[mod]) result[mod] = []
+        if (!result[mod].includes("view")) {
+          result[mod].push("view")
+        }
+      }
+    }
+  }
+
+  return result
+}
 
 interface EmployeeProfileModalProps {
-  user?: User
+  user?: ExtendedUser | User
   open: boolean
   onClose: () => void
-  onSubmit: (userData: Omit<User, "id">) => Promise<void> | void
+  onSubmit: (userData: any) => Promise<void> | void
 }
 
 function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfileModalProps) {
@@ -1917,14 +2066,14 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
     shift:      user?.shift      || ("morning" as "morning" | "evening" | "night"),
   })
 
-  const [permissions, setPermissions] = useState<string[]>(() => {
-    if (user?.permissions && user.permissions.length > 0) return user.permissions
-    return ROLE_DEFAULT_PERMISSIONS[user?.role || "sales_agent"] || []
-  })
+  const [modulePermissions, setModulePermissions] = useState<Record<string, string[]>>({})
+  const [isAllAccess, setIsAllAccess] = useState<boolean>(false)
   const [permissionSearch, setPermissionSearch] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [customModuleInput, setCustomModuleInput] = useState("")
+  const [showCustomInput, setShowCustomInput] = useState(false)
 
-  // Reset/sync form when modal opens
+  // Sync / initialize form state when modal opens
   useEffect(() => {
     if (open) {
       setFormData({
@@ -1938,12 +2087,29 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
         isActive:   user?.isActive   ?? true,
         shift:      user?.shift      || ("morning" as "morning" | "evening" | "night"),
       })
-      setPermissions(
-        user?.permissions && user.permissions.length > 0
-          ? user.permissions
-          : ROLE_DEFAULT_PERMISSIONS[user?.role || "sales_agent"] || []
+
+      const hasSuperAll =
+        user?.role === "super_admin" ||
+        (Array.isArray(user?.permissions) && user.permissions.includes("all"))
+
+      setIsAllAccess(hasSuperAll)
+
+      const initialMap = parseUserPermissionsToModuleMap(
+        (user as any)?.modulePermissions,
+        user?.permissions
       )
+
+      // If new employee registration without initial perms, use role defaults
+      if (!user && Object.keys(initialMap).length === 0) {
+        const defaults = ROLE_DEFAULT_MODULE_MAP[formData.role] || {}
+        setModulePermissions(defaults)
+      } else {
+        setModulePermissions(initialMap)
+      }
+
       setPermissionSearch("")
+      setShowCustomInput(false)
+      setCustomModuleInput("")
     }
   }, [open, user?.id])
 
@@ -1951,49 +2117,84 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
 
   const handleRoleChange = (newRole: UserRole) => {
     setFormData(p => ({ ...p, role: newRole }))
-    const defaults = ROLE_DEFAULT_PERMISSIONS[newRole] || []
-    setPermissions(defaults)
+    if (newRole === "super_admin") {
+      setIsAllAccess(true)
+    } else {
+      setIsAllAccess(false)
+      const defaults = ROLE_DEFAULT_MODULE_MAP[newRole] || {}
+      setModulePermissions(defaults)
+    }
   }
 
-  const togglePermission = (permKey: string) => {
-    setPermissions(prev => {
-      if (permKey === "all") {
-        return prev.includes("all") ? [] : ["all"]
-      }
-      const withoutAll = prev.filter(p => p !== "all")
-      if (withoutAll.includes(permKey)) {
-        return withoutAll.filter(p => p !== permKey)
+  const updateModuleChips = (moduleKey: string, newChips: string[]) => {
+    setModulePermissions(prev => {
+      const next = { ...prev }
+      if (newChips.length === 0) {
+        delete next[moduleKey]
       } else {
-        return [...withoutAll, permKey]
+        next[moduleKey] = newChips
       }
+      return next
     })
   }
 
-  const toggleCategory = (catPerms: { key: string }[]) => {
-    const keys = catPerms.map(p => p.key)
-    const allSelected = keys.every(k => permissions.includes(k) || permissions.includes("all"))
-    setPermissions(prev => {
-      const withoutAll = prev.filter(p => p !== "all")
-      if (allSelected) {
-        return withoutAll.filter(p => !keys.includes(p))
-      } else {
-        return Array.from(new Set([...withoutAll, ...keys]))
-      }
+  const addPagePermission = (pageKey: string) => {
+    if (!pageKey) return
+    setModulePermissions(prev => ({
+      ...prev,
+      [pageKey]: prev[pageKey] && prev[pageKey].length > 0 ? prev[pageKey] : ["view"],
+    }))
+    toast.success(`Added page permission for '${pageKey}'`)
+  }
+
+  const removePagePermission = (moduleKey: string) => {
+    setModulePermissions(prev => {
+      const next = { ...prev }
+      delete next[moduleKey]
+      return next
     })
   }
 
-  const selectAllPermissions = () => {
-    const allKeys = PERMISSION_GROUPS.flatMap(g => g.permissions.map(p => p.key))
-    setPermissions(allKeys)
+  const handleAddCustomModule = () => {
+    const cleanKey = customModuleInput.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_")
+    if (!cleanKey) {
+      toast.error("Please enter a valid page key")
+      return
+    }
+    addPagePermission(cleanKey)
+    setCustomModuleInput("")
+    setShowCustomInput(false)
+  }
+
+  const toggleAllAccess = () => {
+    setIsAllAccess(prev => !prev)
+  }
+
+  const selectAllView = () => {
+    const newMap: Record<string, string[]> = {}
+    for (const mod of ALL_PAGE_MODULES) {
+      newMap[mod.key] = ["view"]
+    }
+    setModulePermissions(newMap)
+    toast.success("All pages set to View permission")
   }
 
   const clearAllPermissions = () => {
-    setPermissions([])
+    setModulePermissions({})
+    setIsAllAccess(false)
+    toast.info("Cleared all page permissions")
   }
 
   const resetToRoleDefaults = () => {
-    const defaults = ROLE_DEFAULT_PERMISSIONS[formData.role] || []
-    setPermissions(defaults)
+    if (formData.role === "super_admin") {
+      setIsAllAccess(true)
+      setModulePermissions({ all: ["all"] })
+    } else {
+      setIsAllAccess(false)
+      const defaults = ROLE_DEFAULT_MODULE_MAP[formData.role] || {}
+      setModulePermissions(defaults)
+    }
+    toast.success(`Reset to ${formData.role.replace(/_/g, " ")} defaults`)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -2002,11 +2203,28 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
       toast.error("Please fill in all required fields marked with *")
       return
     }
+
     setSubmitting(true)
     try {
+      let finalPermissions: string[] = []
+      if (isAllAccess || formData.role === "super_admin") {
+        finalPermissions = ["all"]
+      } else {
+        const permsSet = new Set<string>()
+        for (const [modKey, chips] of Object.entries(modulePermissions)) {
+          if (!chips || chips.length === 0) continue
+          permsSet.add(modKey)
+          for (const chip of chips) {
+            permsSet.add(`${modKey}.${chip}`)
+          }
+        }
+        finalPermissions = Array.from(permsSet)
+      }
+
       await onSubmit({
         ...formData,
-        permissions,
+        permissions: finalPermissions,
+        modulePermissions,
         joinDate: user?.joinDate || new Date().toISOString().split("T")[0],
       })
     } finally {
@@ -2017,27 +2235,47 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
   const F = "h-11 rounded-xl text-xs bg-slate-50/70 border-slate-200 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all text-slate-800 font-medium"
   const L = "text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1"
 
-  // Filter groups according to search
-  const filteredGroups = permissionSearch.trim()
-    ? PERMISSION_GROUPS.map(g => ({
-        ...g,
-        permissions: g.permissions.filter(
-          p =>
-            p.label.toLowerCase().includes(permissionSearch.toLowerCase()) ||
-            p.key.toLowerCase().includes(permissionSearch.toLowerCase()) ||
-            p.description.toLowerCase().includes(permissionSearch.toLowerCase())
-        ),
-      })).filter(g => g.permissions.length > 0)
-    : PERMISSION_GROUPS
+  // Filter modules according to search
+  const q = permissionSearch.trim().toLowerCase()
+  const filteredModules = q
+    ? ALL_PAGE_MODULES.filter(
+        (m) =>
+          m.label.toLowerCase().includes(q) ||
+          m.key.toLowerCase().includes(q) ||
+          m.category.toLowerCase().includes(q) ||
+          m.description.toLowerCase().includes(q)
+      )
+    : ALL_PAGE_MODULES
 
-  const totalPossiblePermissions = PERMISSION_GROUPS.flatMap(g => g.permissions).length
-  const activePermissionsCount = permissions.includes("all") ? totalPossiblePermissions : permissions.length
+  // Group modules by category
+  const categoriesMap = new Map<string, PageModuleDef[]>()
+  for (const m of filteredModules) {
+    if (!categoriesMap.has(m.category)) {
+      categoriesMap.set(m.category, [])
+    }
+    categoriesMap.get(m.category)!.push(m)
+  }
+
+  // Any custom modules configured for this user that are not in ALL_PAGE_MODULES
+  const standardKeysSet = new Set(ALL_PAGE_MODULES.map((m) => m.key))
+  const customConfiguredKeys = Object.keys(modulePermissions).filter(
+    (k) => !standardKeysSet.has(k) && k !== "all"
+  )
+
+  // Unassigned modules list for the "+ Add Page Permission" dropdown
+  const unassignedModules = ALL_PAGE_MODULES.filter((m) => !modulePermissions[m.key])
+
+  const configuredPagesCount = isAllAccess
+    ? ALL_PAGE_MODULES.length
+    : Object.keys(modulePermissions).filter(
+        (k) => modulePermissions[k] && modulePermissions[k].length > 0 && k !== "all"
+      ).length
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-5 md:p-6 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="flex max-h-[94vh] w-full max-w-5xl xl:max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl border border-slate-200">
+      <div className="flex max-h-[95vh] w-full max-w-5xl xl:max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl border border-slate-200">
         
-        {/* ── Top Header (Exact Executive Verifier Theme) ── */}
+        {/* ── Top Header (Executive Verifier Theme) ── */}
         <div className="relative flex items-start justify-between bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 px-6 py-5 shrink-0 rounded-t-2xl">
           <div className="flex items-start gap-3.5">
             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-white font-bold text-lg shadow-inner shrink-0">
@@ -2048,12 +2286,10 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
                 {user ? "Executive Employee Profile & Access Control" : "Executive New Employee Registration"}
               </h2>
               <p className="text-xs text-indigo-100 mt-0.5">
-                {user
-                  ? `Update employee credentials, divisional allocation & module permissions`
-                  : "Complete all fields below to configure employee credentials and permissions"}
+                Configure employee credentials, divisional allocation &amp; granular per-page dropdown permissions
               </p>
 
-              {/* Informative Header Tags matching Executive Verifier */}
+              {/* Informative Header Tags */}
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-md bg-white/10 px-2.5 py-1 text-xs text-indigo-50 ring-1 ring-inset ring-white/20">
                   <span className="font-semibold text-white">Employee ID</span>
@@ -2102,11 +2338,11 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
                   Full Name <span className="text-rose-500">*</span>
                 </Label>
                 <Input
+                  required
+                  placeholder="e.g. John Doe"
                   value={formData.name}
                   onChange={e => setFormData(p => ({ ...p, name: e.target.value }))}
-                  placeholder="e.g. Rahul Sharma"
                   className={F}
-                  required
                 />
               </div>
 
@@ -2115,12 +2351,12 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
                   Official Email <span className="text-rose-500">*</span>
                 </Label>
                 <Input
+                  required
                   type="email"
+                  placeholder="user@kairali.com"
                   value={formData.email}
                   onChange={e => setFormData(p => ({ ...p, email: e.target.value }))}
-                  placeholder="e.g. name@kairali.com"
                   className={F}
-                  required
                 />
               </div>
 
@@ -2129,20 +2365,20 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
                   Employee ID <span className="text-rose-500">*</span>
                 </Label>
                 <Input
+                  required
+                  placeholder="e.g. K2000"
                   value={formData.employeeId}
                   onChange={e => setFormData(p => ({ ...p, employeeId: e.target.value }))}
-                  placeholder="EMP-1042"
-                  className={`${F} font-mono font-bold text-slate-900`}
-                  required
+                  className={F}
                 />
               </div>
 
               <div className="space-y-1.5">
                 <Label className={L}>Phone Number</Label>
                 <Input
+                  placeholder="+91 98765 43210"
                   value={formData.phone}
                   onChange={e => setFormData(p => ({ ...p, phone: e.target.value }))}
-                  placeholder="+91 98765 43210"
                   className={F}
                 />
               </div>
@@ -2246,11 +2482,11 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
               </div>
             </div>
 
-            {/* SECTION 3: PAGE PERMISSIONS MATRIX */}
+            {/* ── SECTION 3: GOOGLE SHEETS STYLE PAGE PERMISSIONS DROPDOWNS ── */}
             <div className="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
               
               {/* Matrix Control Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 px-4 py-3 border-b border-slate-200">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 px-4 py-3 border-b border-slate-200">
                 <div className="flex items-center gap-2.5">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white shadow-xs">
                     <ShieldCheck className="h-4 w-4" />
@@ -2261,49 +2497,73 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
                         Page &amp; Module Permissions
                       </h4>
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-600 text-white shadow-xs">
-                        {permissions.includes("all") ? "Full Super Admin Access" : `${activePermissionsCount} of ${totalPossiblePermissions} Allowed`}
+                        {isAllAccess ? "Full Super Admin All-Access" : `${configuredPagesCount} of ${ALL_PAGE_MODULES.length} Pages Configured`}
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500">
-                      Toggle checkboxes to assign page visibility and feature access
+                      Multi-select chip dropdowns mapped directly to database columns &amp; sheet permissions
                     </p>
                   </div>
                 </div>
 
-                {/* Fast Action Buttons */}
-                <div className="flex items-center gap-1.5 flex-wrap">
+                {/* Header Action Buttons & "+ Add Page Permission" */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* "+ Add Page Permission" Dropdown */}
+                  <div className="relative">
+                    <Select
+                      value=""
+                      onValueChange={(val) => {
+                        if (val === "__custom__") {
+                          setShowCustomInput(true)
+                        } else if (val) {
+                          addPagePermission(val)
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="h-7 px-3 text-[11px] font-bold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 border-indigo-600 shadow-xs flex items-center gap-1.5">
+                        <Plus className="h-3.5 w-3.5" />
+                        <span>+ Add Page Permission</span>
+                      </SelectTrigger>
+                      <SelectContent className="max-h-72">
+                        <SelectItem value="__custom__" className="text-indigo-600 font-bold border-b">
+                          + Add Custom Page Column...
+                        </SelectItem>
+                        {unassignedModules.map((m) => (
+                          <SelectItem key={m.key} value={m.key} className="text-xs">
+                            <span className="font-semibold">{m.label}</span>{" "}
+                            <span className="text-[10px] text-slate-400 font-mono">({m.key})</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Super Admin All-Access Toggle */}
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => togglePermission("all")}
+                    onClick={toggleAllAccess}
                     className={`h-7 px-2.5 text-[10px] font-bold rounded-lg border transition-all ${
-                      permissions.includes("all")
+                      isAllAccess
                         ? "bg-purple-600 text-white border-purple-700 shadow-xs"
                         : "bg-white text-purple-700 border-purple-200 hover:bg-purple-50"
                     }`}
                   >
                     <Shield className="h-3 w-3 mr-1" />
-                    {permissions.includes("all") ? "✓ All-Access Granted" : "Grant All (all)"}
+                    {isAllAccess ? "✓ All-Access Active" : "Grant All (all)"}
                   </Button>
+
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={selectAllPermissions}
+                    onClick={selectAllView}
                     className="h-7 px-2.5 text-[10px] font-medium bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
                   >
-                    Select All
+                    All View
                   </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={clearAllPermissions}
-                    className="h-7 px-2.5 text-[10px] font-medium bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
-                  >
-                    Clear
-                  </Button>
+
                   <Button
                     type="button"
                     variant="outline"
@@ -2313,15 +2573,56 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
                   >
                     Reset Defaults
                   </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={clearAllPermissions}
+                    className="h-7 px-2.5 text-[10px] font-medium bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                  >
+                    Clear All
+                  </Button>
                 </div>
               </div>
+
+              {/* Custom Page Column Input Popover / Bar */}
+              {showCustomInput && (
+                <div className="p-3 bg-amber-50/80 border-b border-amber-200 flex items-center gap-2">
+                  <span className="text-xs font-bold text-amber-900">New Column:</span>
+                  <Input
+                    value={customModuleInput}
+                    onChange={(e) => setCustomModuleInput(e.target.value)}
+                    placeholder="Enter database column / page key (e.g. custom_reports)..."
+                    className="h-8 text-xs bg-white rounded-lg flex-1 max-w-sm border-amber-300 font-mono"
+                    autoFocus
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleAddCustomModule}
+                    className="h-8 px-3 text-xs bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg"
+                  >
+                    Add Column
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setShowCustomInput(false)}
+                    className="h-8 px-2 text-xs text-slate-500 hover:text-slate-700"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              )}
 
               {/* Search Inside Permissions */}
               <div className="p-3 bg-slate-50/60 border-b border-slate-200">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
                   <Input
-                    placeholder="Search permission pages by keyword (e.g. leads, marketing, fms, bookings, calls)..."
+                    placeholder="Search page permissions by name, column key, or category (e.g. dialshree, leads, fms, audit)..."
                     value={permissionSearch}
                     onChange={e => setPermissionSearch(e.target.value)}
                     className="h-8.5 rounded-lg border-slate-200 bg-white pl-8.5 text-xs placeholder:text-slate-400 focus:border-indigo-500"
@@ -2329,70 +2630,102 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
                 </div>
               </div>
 
-              {/* Category Checkbox Grid */}
-              <div className="p-4 space-y-3.5 max-h-[360px] overflow-y-auto">
-                {filteredGroups.map(group => {
-                  const isGroupFullySelected = group.permissions.every(
-                    p => permissions.includes(p.key) || permissions.includes("all")
-                  )
-                  const grantedInGroup = group.permissions.filter(
-                    p => permissions.includes(p.key) || permissions.includes("all")
+              {/* Super Admin All-Access Banner */}
+              {isAllAccess && (
+                <div className="m-3 p-3 rounded-xl bg-purple-50 border border-purple-200 flex items-center justify-between gap-3 text-purple-900">
+                  <div className="flex items-center gap-2.5">
+                    <Shield className="h-5 w-5 text-purple-600 shrink-0" />
+                    <div>
+                      <p className="text-xs font-bold leading-tight">Super Admin Full System Authority Granted</p>
+                      <p className="text-[11px] text-purple-700 mt-0.5">
+                        This employee has unconstrained permission across all pages, modules, APIs, and administrative functions.
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsAllAccess(false)}
+                    className="h-7 px-2.5 text-[10px] font-bold border-purple-300 text-purple-700 hover:bg-purple-100 rounded-lg shrink-0"
+                  >
+                    Switch to Custom Permissions
+                  </Button>
+                </div>
+              )}
+
+              {/* Category Page List with Multi-Select Chip Dropdowns */}
+              <div className="p-4 space-y-4 max-h-[380px] overflow-y-auto">
+                {Array.from(categoriesMap.entries()).map(([category, modules]) => {
+                  const activeCountInCat = modules.filter(
+                    (m) => modulePermissions[m.key] && modulePermissions[m.key].length > 0
                   ).length
 
                   return (
                     <div
-                      key={group.category}
-                      className="rounded-xl border border-slate-200 bg-slate-50/40 p-3 shadow-2xs space-y-2"
+                      key={category}
+                      className="rounded-xl border border-slate-200 bg-slate-50/40 p-3.5 shadow-2xs space-y-2.5"
                     >
                       {/* Category Header */}
-                      <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-200/80">
+                      <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-200/80">
                         <div className="flex items-center gap-2">
-                          <Checkbox
-                            id={`cat-${group.category}`}
-                            checked={isGroupFullySelected}
-                            onCheckedChange={() => toggleCategory(group.permissions)}
-                            className="rounded border-slate-300 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
-                          />
-                          <label
-                            htmlFor={`cat-${group.category}`}
-                            className="text-xs font-bold text-slate-800 cursor-pointer select-none"
-                          >
-                            {group.category}
-                          </label>
+                          <span className="text-xs font-bold text-slate-800">{category}</span>
                           <span className="text-[11px] text-slate-400 font-normal hidden sm:inline">
-                            • {group.description}
+                            • {modules.length} available pages
                           </span>
                         </div>
-
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white text-slate-600 border border-slate-200">
-                          {grantedInGroup} / {group.permissions.length} allowed
+                          {activeCountInCat} / {modules.length} active
                         </span>
                       </div>
 
-                      {/* Checkbox Grid (3 Columns) */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                        {group.permissions.map(perm => {
-                          const isChecked = permissions.includes(perm.key) || permissions.includes("all")
+                      {/* Module Rows Grid (2 Columns on large screens) */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
+                        {modules.map((m) => {
+                          const activeChips = modulePermissions[m.key] || []
+                          const isConfigured = activeChips.length > 0
 
                           return (
                             <div
-                              key={perm.key}
-                              onClick={() => togglePermission(perm.key)}
-                              className={`flex items-start gap-2 p-2.5 rounded-lg border transition-all cursor-pointer select-none ${
-                                isChecked
-                                  ? "bg-indigo-50/80 border-indigo-300 text-indigo-950 shadow-2xs"
-                                  : "bg-white border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300"
+                              key={m.key}
+                              className={`p-2.5 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 ${
+                                isConfigured
+                                  ? "bg-white border-indigo-200 shadow-2xs"
+                                  : "bg-slate-50/80 border-slate-200 text-slate-500"
                               }`}
                             >
-                              <Checkbox
-                                id={perm.key}
-                                checked={isChecked}
-                                onCheckedChange={() => togglePermission(perm.key)}
-                                className="mt-0.5 rounded border-slate-300 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
-                              />
+                              {/* Left: Module Info */}
                               <div className="min-w-0 flex-1">
-                                <p className="text-xs font-bold leading-tight truncate">{perm.label}</p>
-                                <p className="font-mono text-[9px] text-slate-400 mt-0.5 truncate">{perm.key}</p>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <p className="text-xs font-bold text-slate-800 truncate">{m.label}</p>
+                                  <span className="px-1.5 py-0.2 rounded font-mono text-[9px] bg-slate-100 text-slate-500 border border-slate-200 truncate">
+                                    col: {m.key}
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">{m.description}</p>
+                              </div>
+
+                              {/* Right: Dropdown + Remove */}
+                              <div className="flex items-center gap-1.5 w-full sm:w-auto sm:min-w-[190px] max-w-full">
+                                <div className="flex-1">
+                                  <PermissionChipDropdown
+                                    options={m.options}
+                                    selected={activeChips}
+                                    onChange={(newChips) => updateModuleChips(m.key, newChips)}
+                                    placeholder="+ Select permissions"
+                                  />
+                                </div>
+
+                                {isConfigured && (
+                                  <button
+                                    type="button"
+                                    onClick={() => removePagePermission(m.key)}
+                                    title="Remove this page permission"
+                                    className="h-7 w-7 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors shrink-0"
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
                               </div>
                             </div>
                           )
@@ -2401,12 +2734,58 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
                     </div>
                   )
                 })}
+
+                {/* Custom Configured Columns (if any were added) */}
+                {customConfiguredKeys.length > 0 && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-3.5 shadow-2xs space-y-2.5">
+                    <div className="flex items-center justify-between gap-2 pb-2 border-b border-amber-200">
+                      <span className="text-xs font-bold text-amber-900">Custom / Dynamic Page Columns</span>
+                      <span className="text-[10px] text-amber-700 font-medium">
+                        {customConfiguredKeys.length} custom columns
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
+                      {customConfiguredKeys.map((k) => (
+                        <div
+                          key={k}
+                          className="p-2.5 rounded-xl border border-amber-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-amber-950 truncate">{k}</p>
+                            <span className="px-1.5 py-0.2 rounded font-mono text-[9px] bg-amber-100 text-amber-700 border border-amber-200">
+                              column: {k}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 w-full sm:w-auto sm:min-w-[190px]">
+                            <div className="flex-1">
+                              <PermissionChipDropdown
+                                options={STANDARD_PAGE_OPTIONS}
+                                selected={modulePermissions[k] || []}
+                                onChange={(newChips) => updateModuleChips(k, newChips)}
+                                placeholder="+ Select permissions"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removePagePermission(k)}
+                              className="h-7 w-7 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors shrink-0"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
             </div>
           </div>
 
-          {/* ── Footer Bar (Exact Executive Verifier Pattern) ── */}
+          {/* ── Footer Bar (Executive Verifier Pattern) ── */}
           <div className="border-t border-slate-200 bg-slate-50 px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shrink-0 rounded-b-2xl -mx-6 -mb-5 mt-4">
             <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
               <span>
@@ -2416,9 +2795,11 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
                 </span>
               </span>
               <span>
-                <span className="font-medium uppercase tracking-wide text-slate-400">PERMISSIONS: </span>
+                <span className="font-medium uppercase tracking-wide text-slate-400">PAGE ACCESS: </span>
                 <span className="text-slate-800 font-semibold">
-                  {permissions.includes("all") ? "Full System Access (Super Admin)" : `${activePermissionsCount} of ${totalPossiblePermissions} Pages Allowed`}
+                  {isAllAccess
+                    ? "Full System Access (Super Admin All-Access)"
+                    : `${configuredPagesCount} of ${ALL_PAGE_MODULES.length} Pages Configured`}
                 </span>
               </span>
             </div>

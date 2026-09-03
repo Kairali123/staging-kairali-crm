@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
 import { verifySessionCookieValue } from '@/lib/session'
 import { ensureSecurityTables } from '@/lib/user-devices'
-import { parsePermissionsFromDbRow } from '@/lib/db-auth'
+import { parsePermissionsFromDbRow, extractModulePermissionsFromDbRow } from '@/lib/db-auth'
 import { syncUserRolePermissions } from '@/lib/db-user-admin'
 
 export const dynamic = 'force-dynamic'
@@ -103,12 +103,14 @@ export async function GET(req: NextRequest) {
 
       // Assemble permissions
       let userPermissions: string[] = []
+      let userModulePermissions: Record<string, string[]> = {}
       if (userRole === 'super_admin') {
         userPermissions = ['all']
       } else {
         const dbPermRow = cleanEmail ? permMap.get(cleanEmail) : null
         if (dbPermRow) {
           userPermissions = parsePermissionsFromDbRow(dbPermRow)
+          userModulePermissions = extractModulePermissionsFromDbRow(dbPermRow)
         }
         if (r.permission && typeof r.permission === 'string') {
           const direct = r.permission.split(',').map((p: string) => p.trim()).filter(Boolean)
@@ -129,6 +131,7 @@ export async function GET(req: NextRequest) {
         isActive: String(r.active).toLowerCase() === '1' || String(r.active).toLowerCase() === 'yes' || String(r.active).toLowerCase() === 'active',
         tokenVersion: Number(r.token_version || 1),
         permissions: userPermissions,
+        modulePermissions: userModulePermissions,
         registeredDevicesCount,
         activeSessionsCount,
       }
@@ -164,6 +167,7 @@ export async function POST(req: NextRequest) {
       phone = '',
       isActive = true,
       permissions = [],
+      modulePermissions,
       password = 'Password@123',
     } = body
 
@@ -224,7 +228,12 @@ export async function POST(req: NextRequest) {
     )
 
     // Synchronize user_role_permissions table
-    await syncUserRolePermissions(cleanEmail, role, role === 'super_admin' ? ['all'] : permissionsArr)
+    await syncUserRolePermissions(
+      cleanEmail,
+      role,
+      role === 'super_admin' ? ['all'] : permissionsArr,
+      modulePermissions
+    )
 
     return NextResponse.json({
       success: true,

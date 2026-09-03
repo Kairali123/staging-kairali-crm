@@ -33,6 +33,7 @@ export async function PATCH(
       phone,
       isActive,
       permissions,
+      modulePermissions,
     } = body
 
     const pool = await getPool()
@@ -98,7 +99,8 @@ export async function PATCH(
       await syncUserRolePermissions(
         updatedEmail,
         updatedRole,
-        updatedRole === 'super_admin' ? ['all'] : permsArr
+        updatedRole === 'super_admin' ? ['all'] : permsArr,
+        modulePermissions
       )
     }
 

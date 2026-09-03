@@ -97,6 +97,52 @@ export function parsePermissionsFromDbRow(row: Record<string, any> | null | unde
 }
 
 /**
+ * Extracts per-module chip arrays from a user_role_permissions row.
+ * E.g. { dialshree_menu: ['view', 'stage1', 'stage2'], leads: ['view', 'assign'] }
+ */
+export function extractModulePermissionsFromDbRow(
+  row: Record<string, any> | null | undefined
+): Record<string, string[]> {
+  if (!row) return {}
+  const result: Record<string, string[]> = {}
+  const excludedKeys = new Set(['id', 'email', 'role', 'created_at', 'updated_at'])
+
+  for (const [key, value] of Object.entries(row)) {
+    if (excludedKeys.has(key) || value === null || value === undefined) continue
+    const valStr = String(value).trim()
+    if (!valStr || valStr === '0' || valStr === 'false' || valStr === 'no') continue
+
+    const moduleName = key.trim()
+    if (valStr.toUpperCase() === 'ALL' || valStr === '1' || valStr.toLowerCase() === 'true') {
+      result[moduleName] = ['all']
+      continue
+    }
+
+    // Try parsing JSON if json string e.g. {"view": true, "export": true}
+    if (valStr.startsWith('{') && valStr.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(valStr)
+        const activeKeys = Object.entries(parsed)
+          .filter(([_, v]) => Boolean(v))
+          .map(([k]) => k)
+        if (activeKeys.length > 0) {
+          result[moduleName] = activeKeys
+          continue
+        }
+      } catch {}
+    }
+
+    // Comma-separated parts e.g. "view, assign" or "view, stage1"
+    const parts = valStr.split(',').map((p) => p.trim()).filter(Boolean)
+    if (parts.length > 0) {
+      result[moduleName] = parts
+    }
+  }
+
+  return result
+}
+
+/**
  * Fetches permissions for a specific email or role from `user_role_permissions`.
  */
 export async function getUserPermissionsFromDb(email: string, role?: string): Promise<string[]> {
