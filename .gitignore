@@ -28,3 +28,9 @@ next-env.d.ts
 
 # outputs
 /outputs/
+
+# temporary and scratch files
+/temp/
+temp/
+*.tmp
+scratch/
