@@ -1,6 +1,4 @@
 import nodemailer from "nodemailer";
-import fs from "fs";
-import path from "path";
 
 export interface SendOtpEmailParams {
   name: string;
@@ -17,25 +15,18 @@ export async function sendOtpEmail({
   otp,
   expiresInMinutes,
 }: SendOtpEmailParams) {
-  // Write to temp/last_otp.txt for dev/debug convenience
-  try {
-    const tempDir = path.join(process.cwd(), "temp");
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true });
-    }
-    fs.writeFileSync(path.join(tempDir, "last_otp.txt"), otp, "utf8");
-  } catch (err) {
-    console.error("[sendOtpEmail] Failed to write last_otp.txt:", err);
-  }
-
   const adminEmail =
     process.env.ADMIN_OTP_EMAIL ||
     process.env.ADMIN_EMAIL ||
     process.env.SMTP_USER ||
     "admin@kairali.com";
 
+  // `.env` names this SMTP_PASSWORD; some deployments set SMTP_PASS. Accept both,
+  // otherwise the credential silently reads as absent and no mail is dispatched.
+  const smtpPass = process.env.SMTP_PASSWORD || process.env.SMTP_PASS;
+
   // If SMTP is configured, send actual email
-  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && smtpPass) {
     try {
       const transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST,
@@ -43,14 +34,14 @@ export async function sendOtpEmail({
         secure: process.env.SMTP_SECURE === "true" || process.env.SMTP_PORT === "465",
         auth: {
           user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
+          pass: smtpPass,
         },
       });
 
       const mailOptions = {
         from: process.env.SMTP_FROM || `"Kairali CRM Security" <${process.env.SMTP_USER}>`,
         to: adminEmail,
-        subject: `[Kairali CRM] DB Access OTP: ${otp} for ${name}`,
+        subject: `[Kairali CRM] DB Access OTP for ${name}`,
         html: `
           <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
             <h2 style="color: #4f46e5;">Database Access Request OTP</h2>
@@ -75,7 +66,7 @@ export async function sendOtpEmail({
     }
   } else {
     console.log(
-      `[sendOtpEmail (Mock/Dev)] OTP generated for ${name} (${action}): ${otp}. Valid for ${expiresInMinutes}m.`
+      `[sendOtpEmail] OTP generated for user ${name} (${action}). Valid for ${expiresInMinutes}m.`
     );
   }
 }
