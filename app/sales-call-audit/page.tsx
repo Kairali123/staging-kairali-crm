@@ -29,6 +29,7 @@ import {
   Clock,
   Database,
   Download,
+  ExternalLink,
   Filter,
   Headphones,
   Info,
@@ -2215,8 +2216,12 @@ export default function SalesCallAuditPage() {
                               </div>
                               <div>
                                 <div className="flex items-center gap-2">
-                                  <span className="font-bold text-slate-900 text-xs">{call.clientName}</span>
-                                  <span className="text-[11px] text-slate-400 font-mono">({call.clientPhone})</span>
+                                  <span className="font-bold text-slate-900 text-xs">
+                                    {call.clientName || (selectedAgent ? `Agent: ${selectedAgent.name}` : "Call Evaluation")}
+                                  </span>
+                                  {call.clientPhone && (
+                                    <span className="text-[11px] text-slate-400 font-mono">({call.clientPhone})</span>
+                                  )}
                                   <Badge
                                     className={`text-[10px] font-bold px-1.5 py-0.2 ${isGood
                                       ? "bg-emerald-100 text-emerald-800 border-emerald-300"
@@ -2228,12 +2233,16 @@ export default function SalesCallAuditPage() {
                                 </div>
                                 <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono mt-0.5">
                                   <span className="font-semibold text-slate-700">{call.callId}</span>
-                                  <span>•</span>
-                                  <span>{call.leadId}</span>
+                                  {call.leadId && (
+                                    <>
+                                      <span>•</span>
+                                      <span>{call.leadId}</span>
+                                    </>
+                                  )}
                                   <span>•</span>
                                   <span className="inline-flex items-center gap-1 text-slate-600">
                                     <Clock className="h-3 w-3 text-slate-400" />
-                                    {call.callTime} ({call.callDuration})
+                                    {call.callTime} {call.callDuration ? `(${call.callDuration})` : ""}
                                   </span>
                                 </div>
                               </div>
@@ -2267,6 +2276,33 @@ export default function SalesCallAuditPage() {
 
                           {/* Call Card Body */}
                           <div className="p-3.5 space-y-2.5">
+                            {/* Audio Recording Player */}
+                            {call.recordingUrl && (
+                              <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                                  <Volume2 className="h-4 w-4 text-indigo-600 flex-shrink-0" />
+                                  <span>Call Audio Recording</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <audio
+                                    controls
+                                    src={call.recordingUrl}
+                                    className="h-8 max-w-full sm:max-w-[260px] rounded"
+                                    preload="none"
+                                  />
+                                  <a
+                                    href={call.recordingUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 hover:underline px-2 py-1 bg-white rounded border border-indigo-200"
+                                  >
+                                    <ExternalLink className="h-3 w-3" />
+                                    Open Audio
+                                  </a>
+                                </div>
+                              </div>
+                            )}
+
                             {/* Stated vs Verified Outcomes */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-200">
                               <div>
