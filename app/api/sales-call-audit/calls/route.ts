@@ -252,24 +252,49 @@ export async function GET(req: NextRequest) {
           ? Number(parsedCallScore.toFixed(2))
           : null
 
-        // Parse 6 call-specific parameters directly from DB
-        const pk = parseScore(r.product_knowledge)
-        const cu = parseScore(r.customer_understanding)
-        const cs = parseScore(r.communication_skills)
-        const oh = parseScore(r.objection_handling)
-        const cl = parseScore(r.closing_skills)
-        const tv = parseScore(r.tone_and_volume)
-
-        // Return empty arrays when not explicitly persisted (zero fabrication)
-        const strengths: string[] = []
-        const deficiencies: string[] = []
-
-        const observation = r.what_went_wrong_by_sales_team_senior_verifier ||
+        const rawExp = r.what_went_wrong_by_sales_team_senior_verifier ||
           r.complete_explanation ||
           r.explanation ||
           r.remarks ||
           r.reason ||
-          (callSpecificScore !== null && callSpecificScore >= 2.5 ? "Good Call" : "Call evaluation completed")
+          ""
+
+        // Parse 6 call-specific parameters directly from columns, with fallback to bot explanation text
+        const extractScore = (pattern: RegExp): number | null => {
+          const match = rawExp.match(pattern)
+          if (match && match[1]) {
+            const v = parseFloat(match[1])
+            return isNaN(v) ? null : Number(v.toFixed(1))
+          }
+          return null
+        }
+
+        const pk = parseScore(r.product_knowledge) ?? extractScore(/Product Knowledge\s*\(([0-9.]+)\/5\)/i)
+        const cu = parseScore(r.customer_understanding) ?? extractScore(/Customer Understanding\s*\(([0-9.]+)\/5\)/i)
+        const cs = parseScore(r.communication_skills) ?? extractScore(/Communication Skills\s*\(([0-9.]+)\/5\)/i)
+        const oh = parseScore(r.objection_handling) ?? extractScore(/Objection Handling\s*\(([0-9.]+)\/5\)/i)
+        const cl = parseScore(r.closing_skills) ?? extractScore(/Closing Skills\s*\(([0-9.]+)\/5\)/i)
+        const tv = parseScore(r.tone_and_volume) ?? extractScore(/Tone and Volume\s*\(([0-9.]+)\/5\)/i)
+
+        // Factual strengths and deficiencies derived from actual evaluated metric scores
+        const strengths: string[] = []
+        const deficiencies: string[] = []
+
+        if (pk !== null && pk >= 3.5) strengths.push(`Product Knowledge (${pk}/5)`)
+        if (cu !== null && cu >= 3.5) strengths.push(`Customer Understanding (${cu}/5)`)
+        if (cs !== null && cs >= 3.5) strengths.push(`Communication Skills (${cs}/5)`)
+        if (oh !== null && oh >= 3.5) strengths.push(`Objection Handling (${oh}/5)`)
+        if (cl !== null && cl >= 3.5) strengths.push(`Closing Skills (${cl}/5)`)
+        if (tv !== null && tv >= 3.5) strengths.push(`Tone & Volume (${tv}/5)`)
+
+        if (pk !== null && pk <= 2.5) deficiencies.push(`Product Knowledge (${pk}/5)`)
+        if (cu !== null && cu <= 2.5) deficiencies.push(`Customer Understanding (${cu}/5)`)
+        if (cs !== null && cs <= 2.5) deficiencies.push(`Communication Skills (${cs}/5)`)
+        if (oh !== null && oh <= 2.5) deficiencies.push(`Objection Handling (${oh}/5)`)
+        if (cl !== null && cl <= 2.5) deficiencies.push(`Closing Skills (${cl}/5)`)
+        if (tv !== null && tv <= 2.5) deficiencies.push(`Tone & Volume (${tv}/5)`)
+
+        const observation = rawExp || (callSpecificScore !== null && callSpecificScore >= 2.5 ? "Good Call" : "Call evaluation completed")
 
         callsList.push({
           callId: `CALL-${r.id}`,
