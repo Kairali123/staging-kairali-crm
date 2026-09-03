@@ -51,28 +51,22 @@ export type SalesCallAuditRecord = {
 export async function GET(req: NextRequest) {
   try {
     const user = getSessionUser(req)
-    const isDev = process.env.NODE_ENV === "development"
 
-    if (!user && !isDev) {
+    if (!user) {
       return NextResponse.json(
         { success: false, error: "Unauthorized: Please log in to view sales call audit data." },
         { status: 401, headers: noStoreHeaders }
       )
     }
 
-    if (user && !hasSalesCallAuditPageAccess(user)) {
+    if (!hasSalesCallAuditPageAccess(user)) {
       return NextResponse.json(
         { success: false, error: "Forbidden: sales_call_audit.view permission required." },
         { status: 403, headers: noStoreHeaders }
       )
     }
 
-    // Scope is the data axis, separate from page access. A session holding only
-    // `view` reaches the page and reads no rows, so answer 200 with an empty set
-    // rather than 403 — the page is allowed to render, there is just nothing in
-    // it. `scope` is echoed so the UI can say why the table is empty.
-    // Dev sessions with no cookie keep the pre-existing unauthenticated path.
-    const scope = user ? getSalesCallAuditScope(user) : "all"
+    const scope = getSalesCallAuditScope(user)
     if (scope === "none") {
       return NextResponse.json(
         { success: true, data: [], count: 0, scope },
@@ -202,16 +196,15 @@ const GAS_SALES_CALL_AUDIT_URL =
 export async function POST(req: NextRequest) {
   try {
     const user = getSessionUser(req)
-    const isDev = process.env.NODE_ENV === "development"
 
-    if (!user && !isDev) {
+    if (!user) {
       return NextResponse.json(
         { success: false, error: "Unauthorized: Please log in to record HR actions." },
         { status: 401, headers: noStoreHeaders }
       )
     }
 
-    if (user && !hasSalesCallAuditWriteAccess(user)) {
+    if (!hasSalesCallAuditWriteAccess(user)) {
       return NextResponse.json(
         { success: false, error: "Forbidden: sales_call_audit.write permission required." },
         { status: 403, headers: noStoreHeaders }

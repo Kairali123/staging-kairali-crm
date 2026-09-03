@@ -337,6 +337,7 @@ export const SALES_CALL_AUDIT_VIEW = 'sales_call_audit.view'
 export const SALES_CALL_AUDIT_VIEW_SELF = 'sales_call_audit.viewSelf'
 export const SALES_CALL_AUDIT_VIEW_ALL = 'sales_call_audit.viewAll'
 export const SALES_CALL_AUDIT_WRITE = 'sales_call_audit.write'
+export const SALES_CALL_AUDIT_SEND = 'sales_call_audit.send'
 
 // Pre-split spelling. It meant "see the dashboard data", so it maps to viewAll
 // rather than being dropped, and no session that works today stops working.
@@ -390,6 +391,14 @@ export function hasSalesCallAuditPageAccess(user: unknown): boolean {
 export function hasSalesCallAuditWriteAccess(user: unknown): boolean {
   if (isSalesCallAuditSuperAdmin(user)) return true
   return hasPermission(user, SALES_CALL_AUDIT_WRITE)
+}
+
+// May this session dispatch email reports?
+// Strictly requires the dedicated `sales_call_audit.send` permission (or super_admin with wildcard 'all').
+// Neither `sales_call_audit.write` nor `sales_call_audit.viewAll` grants sending authority.
+export function hasSalesCallAuditSendAccess(user: unknown): boolean {
+  if (isSalesCallAuditSuperAdmin(user)) return true
+  return hasPermission(user, SALES_CALL_AUDIT_SEND)
 }
 
 // The identities a 'self'-scoped session may act as. `employeeId` is the join key
