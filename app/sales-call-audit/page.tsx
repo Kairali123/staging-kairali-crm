@@ -55,6 +55,7 @@ import {
   XCircle,
   Award,
   Zap,
+  ExternalLink,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -291,15 +292,27 @@ export default function SalesCallAuditPage() {
     date: string
   } | null>(null)
   const [modalCalls, setModalCalls] = useState<any[]>([])
+  const [modalAgentMeta, setModalAgentMeta] = useState<any>(null)
   const [modalCallsLoading, setModalCallsLoading] = useState(false)
   const [modalCallTab, setModalCallTab] = useState<"all" | "good" | "bad">("all")
   const [modalCallSearch, setModalCallSearch] = useState("")
   const [expandedCallId, setExpandedCallId] = useState<string | null>(null)
 
+  const getAudioStreamUrl = (url?: string): string => {
+    if (!url) return ""
+    const trimmed = url.trim()
+    const gDriveMatch = trimmed.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/)
+    if (gDriveMatch && gDriveMatch[1]) {
+      return `https://docs.google.com/uc?export=download&id=${gDriveMatch[1]}`
+    }
+    return trimmed
+  }
+
   // Fetch granular audited call details when modal is opened
   useEffect(() => {
     if (!callDetailModal?.open || !callDetailModal.agent) {
       setModalCalls([])
+      setModalAgentMeta(null)
       return
     }
     setModalCallTab(callDetailModal.type)
@@ -319,8 +332,13 @@ export default function SalesCallAuditPage() {
         const res = await fetch(`/api/sales-call-audit/calls?${params.toString()}`)
         if (res.ok) {
           const json = await res.json()
-          if (json.success && Array.isArray(json.data)) {
-            setModalCalls(json.data)
+          if (json.success) {
+            if (Array.isArray(json.data)) {
+              setModalCalls(json.data)
+            }
+            if (json.agent) {
+              setModalAgentMeta(json.agent)
+            }
           }
         }
       } catch (e) {
@@ -2121,6 +2139,75 @@ export default function SalesCallAuditPage() {
                     </span>
                   </div>
                 </div>
+
+                {/* Overall 6 Metrics Banner (Outside and Above the Call List) */}
+                <div className="mt-3.5 pt-3 border-t border-white/20">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-white tracking-wide">
+                      <ListChecks className="h-3.5 w-3.5 text-white/90" />
+                      <span>Employee Daily Overall 6 Metrics</span>
+                      <span className="text-[10px] text-white/70 font-normal">(Aggregated Daily Audit)</span>
+                    </div>
+                    <span className="text-[10px] text-white/75 font-mono">
+                      Target Benchmark: ≥ 2.5 / 5.0
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 text-slate-800">
+                    {[
+                      {
+                        label: "Product Knowledge",
+                        val: callDetailModal.agent.productKnowledge ?? modalAgentMeta?.overallMetrics?.productKnowledge,
+                      },
+                      {
+                        label: "Customer Understanding",
+                        val: callDetailModal.agent.customerUnderstanding ?? modalAgentMeta?.overallMetrics?.customerUnderstanding,
+                      },
+                      {
+                        label: "Communication Skills",
+                        val: callDetailModal.agent.communicationSkills ?? modalAgentMeta?.overallMetrics?.communicationSkills,
+                      },
+                      {
+                        label: "Objection Handling",
+                        val: callDetailModal.agent.objectionHandling ?? modalAgentMeta?.overallMetrics?.objectionHandling,
+                      },
+                      {
+                        label: "Closing Skills",
+                        val: callDetailModal.agent.closingSkills ?? modalAgentMeta?.overallMetrics?.closingSkills,
+                      },
+                      {
+                        label: "Tone & Volume",
+                        val: callDetailModal.agent.toneVolume ?? modalAgentMeta?.overallMetrics?.toneVolume,
+                      },
+                    ].map((m, mIdx) => {
+                      const num = m.val !== null && m.val !== undefined && m.val !== "NA" ? Number(m.val) : null
+                      return (
+                        <div
+                          key={mIdx}
+                          className="bg-white/95 backdrop-blur-sm rounded-lg p-2 border border-white/40 shadow-xs flex flex-col justify-between"
+                        >
+                          <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight truncate block">
+                            {m.label}
+                          </span>
+                          <div className="mt-1 flex items-baseline justify-between">
+                            <span
+                              className={`text-xs font-black ${
+                                num === null
+                                  ? "text-slate-400"
+                                  : num >= 3.5
+                                    ? "text-emerald-700"
+                                    : num >= 2.5
+                                      ? "text-amber-700"
+                                      : "text-rose-700"
+                              }`}
+                            >
+                              {num !== null && !isNaN(num) ? `${num.toFixed(1)} / 5.0` : "N/A"}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
               </div>
 
               {/* Filter Tabs & Search Bar */}
@@ -2129,20 +2216,22 @@ export default function SalesCallAuditPage() {
                   <button
                     type="button"
                     onClick={() => setModalCallTab("all")}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${modalCallTab === "all"
-                      ? "bg-slate-800 text-white shadow-xs"
-                      : "text-slate-600 hover:bg-slate-100"
-                      }`}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                      modalCallTab === "all"
+                        ? "bg-slate-800 text-white shadow-xs"
+                        : "text-slate-600 hover:bg-slate-100"
+                    }`}
                   >
                     All Calls ({modalCalls.length})
                   </button>
                   <button
                     type="button"
                     onClick={() => setModalCallTab("good")}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${modalCallTab === "good"
-                      ? "bg-emerald-600 text-white shadow-xs"
-                      : "text-emerald-700 hover:bg-emerald-50"
-                      }`}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      modalCallTab === "good"
+                        ? "bg-emerald-600 text-white shadow-xs"
+                        : "text-emerald-700 hover:bg-emerald-50"
+                    }`}
                   >
                     <ThumbsUp className="h-3.5 w-3.5" />
                     Good Calls ({callDetailModal.agent.good})
@@ -2150,23 +2239,24 @@ export default function SalesCallAuditPage() {
                   <button
                     type="button"
                     onClick={() => setModalCallTab("bad")}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${modalCallTab === "bad"
-                      ? "bg-rose-600 text-white shadow-xs"
-                      : "text-rose-700 hover:bg-rose-50"
-                      }`}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      modalCallTab === "bad"
+                        ? "bg-rose-600 text-white shadow-xs"
+                        : "text-rose-700 hover:bg-rose-50"
+                    }`}
                   >
                     <ThumbsDown className="h-3.5 w-3.5" />
                     Bad Calls ({callDetailModal.agent.bad})
                   </button>
                 </div>
 
-                <div className="relative w-full sm:w-64">
+                <div className="relative w-full sm:w-72">
                   <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
                   <input
                     type="text"
                     value={modalCallSearch}
                     onChange={e => setModalCallSearch(e.target.value)}
-                    placeholder="Search client, lead, notes..."
+                    placeholder="Search Lead ID, Call ID, findings..."
                     className="w-full h-8 pl-8 pr-3 text-xs bg-white border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-xs"
                   />
                   {modalCallSearch && (
@@ -2182,7 +2272,7 @@ export default function SalesCallAuditPage() {
               </div>
 
               {/* Body: List of Detailed Calls */}
-              <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5 text-xs bg-slate-50">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs bg-slate-50">
                 {modalCallsLoading ? (
                   <div className="py-16 text-center">
                     <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-2" />
@@ -2205,8 +2295,8 @@ export default function SalesCallAuditPage() {
                           (call.callId && call.callId.toLowerCase().includes(q)) ||
                           (call.leadId && call.leadId.toLowerCase().includes(q)) ||
                           (call.clientName && call.clientName.toLowerCase().includes(q)) ||
-                          (call.clientPhone && call.clientPhone.toLowerCase().includes(q)) ||
                           (call.statedOutcome && call.statedOutcome.toLowerCase().includes(q)) ||
+                          (call.verifiedOutcome && call.verifiedOutcome.toLowerCase().includes(q)) ||
                           (call.auditorObservation && call.auditorObservation.toLowerCase().includes(q))
                         if (!match) return false
                       }
@@ -2240,66 +2330,85 @@ export default function SalesCallAuditPage() {
                       return (
                         <div
                           key={call.callId || idx}
-                          className={`bg-white rounded-xl border transition-all duration-200 shadow-xs hover:shadow-sm overflow-hidden ${isGood
-                            ? "border-emerald-200/80 hover:border-emerald-300"
-                            : "border-rose-200/80 hover:border-rose-300"
-                            }`}
+                          className={`bg-white rounded-xl border transition-all duration-200 shadow-xs hover:shadow-sm overflow-hidden ${
+                            isGood
+                              ? "border-emerald-200/80 hover:border-emerald-300"
+                              : "border-rose-200/80 hover:border-rose-300"
+                          }`}
                         >
-                          {/* Call Card Header */}
+                          {/* Call Card Header: Agent → Lead ID → Call ID → Date/Time */}
                           <div
-                            className={`p-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 border-b ${isGood ? "bg-emerald-50/40 border-emerald-100" : "bg-rose-50/40 border-rose-100"
-                              }`}
+                            className={`p-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 border-b ${
+                              isGood ? "bg-emerald-50/40 border-emerald-100" : "bg-rose-50/40 border-rose-100"
+                            }`}
                           >
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-start sm:items-center gap-3">
                               <div
-                                className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-xs ${isGood
-                                  ? "bg-emerald-600 text-white"
-                                  : "bg-rose-600 text-white"
-                                  }`}
+                                className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-xs mt-0.5 sm:mt-0 ${
+                                  isGood ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"
+                                }`}
                               >
                                 {isGood ? <ThumbsUp className="h-4 w-4" /> : <ThumbsDown className="h-4 w-4" />}
                               </div>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-bold text-slate-900 text-xs">{call.clientName}</span>
-                                  <span className="text-[11px] text-slate-400 font-mono">({call.clientPhone})</span>
+                              <div className="space-y-1">
+                                {/* Flow line: Agent → Lead ID → Call ID */}
+                                <div className="flex flex-wrap items-center gap-1.5 text-xs">
                                   <Badge
-                                    className={`text-[10px] font-bold px-1.5 py-0.2 ${isGood
-                                      ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                                      : "bg-rose-100 text-rose-800 border-rose-300"
-                                      }`}
+                                    className={`text-[10px] font-bold px-1.5 py-0.2 ${
+                                      isGood
+                                        ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                        : "bg-rose-100 text-rose-800 border-rose-300"
+                                    }`}
                                   >
                                     {isGood ? "GOOD CALL" : "BAD CALL"}
                                   </Badge>
+                                  <span className="text-slate-300">|</span>
+                                  <span className="text-[11px] text-slate-700 font-semibold">
+                                    Agent: <strong className="text-slate-900">{callDetailModal.agent.name}</strong> ({callDetailModal.agent.id})
+                                  </span>
                                 </div>
-                                <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono mt-0.5">
-                                  <span className="font-semibold text-slate-700">{call.callId}</span>
-                                  <span>•</span>
-                                  <span>{call.leadId}</span>
-                                  <span>•</span>
-                                  <span className="inline-flex items-center gap-1 text-slate-600">
+
+                                <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-600">
+                                  <span className="inline-flex items-center gap-1 font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-2xs">
+                                    <span className="text-slate-400 font-normal text-[10px]">Lead ID:</span>
+                                    <span className="text-blue-700">{call.leadId}</span>
+                                  </span>
+                                  <span className="text-slate-400 font-bold">→</span>
+                                  <span className="font-mono font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">
+                                    {call.callId}
+                                  </span>
+                                  <span className="text-slate-400 font-bold">→</span>
+                                  <span className="inline-flex items-center gap-1 text-slate-600 font-medium">
                                     <Clock className="h-3 w-3 text-slate-400" />
-                                    {call.callTime} ({call.callDuration})
+                                    {call.callTime} {call.callDuration && call.callDuration !== "—" ? `(${call.callDuration})` : ""}
                                   </span>
                                 </div>
                               </div>
                             </div>
 
+                            {/* Call Score & Toggle 6 Metrics Button */}
                             <div className="flex items-center gap-2.5 justify-end">
                               <div className="text-right">
-                                <span className="text-[10px] text-slate-400 uppercase font-semibold">Call Score</span>
+                                <span className="text-[10px] text-slate-400 uppercase font-semibold block leading-none mb-1">
+                                  Call Score
+                                </span>
                                 <div
-                                  className={`text-sm font-bold ${isGood ? "text-emerald-700" : "text-rose-700"
-                                    }`}
+                                  className={`text-sm font-black ${
+                                    isGood ? "text-emerald-700" : "text-rose-700"
+                                  }`}
                                 >
-                                  {call.avgScore ? Number(call.avgScore).toFixed(2) : "—"} / 5.0
+                                  {call.avgScore !== undefined && call.avgScore !== null ? Number(call.avgScore).toFixed(2) : "—"} / 5.0
                                 </div>
                               </div>
                               <Button
                                 size="sm"
                                 variant="outline"
                                 onClick={() => setExpandedCallId(isExpanded ? null : call.callId)}
-                                className="h-7 px-2 text-[11px] border-slate-200 text-slate-700 hover:bg-slate-100 cursor-pointer"
+                                className={`h-7 px-2.5 text-[11px] font-semibold border transition-all cursor-pointer ${
+                                  isExpanded
+                                    ? "bg-slate-800 text-white border-slate-800 hover:bg-slate-900"
+                                    : "border-slate-200 text-slate-700 hover:bg-slate-100"
+                                }`}
                               >
                                 {isExpanded ? "Hide Metrics" : "6 Metrics"}
                                 {isExpanded ? (
@@ -2312,7 +2421,97 @@ export default function SalesCallAuditPage() {
                           </div>
 
                           {/* Call Card Body */}
-                          <div className="p-3.5 space-y-2.5">
+                          <div className="p-3.5 space-y-3">
+                            {/* Call Recording Bar (Playable Audio + External Link) */}
+                            <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center flex-shrink-0">
+                                  <Volume2 className="h-3.5 w-3.5" />
+                                </div>
+                                <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">
+                                  Call Recording:
+                                </span>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto flex-1 justify-start sm:justify-end">
+                                {call.recordingUrl ? (
+                                  <>
+                                    <audio
+                                      controls
+                                      preload="none"
+                                      src={getAudioStreamUrl(call.recordingUrl)}
+                                      className="h-8 w-full sm:w-72 rounded text-xs bg-white border border-slate-200 shadow-2xs"
+                                    />
+                                    <a
+                                      href={call.recordingUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold rounded-md bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-2xs cursor-pointer flex-shrink-0"
+                                    >
+                                      <ExternalLink className="h-3 w-3" />
+                                      <span>Open Audio</span>
+                                    </a>
+                                  </>
+                                ) : (
+                                  <span className="text-[11px] text-slate-400 italic">
+                                    No recording audio available for this call
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* 6 Call-Specific Metrics Breakdown */}
+                            {isExpanded && (
+                              <div className="border border-blue-200/80 bg-blue-50/40 p-3 rounded-lg space-y-2 animate-in fade-in duration-200">
+                                <div className="flex items-center justify-between text-[11px] font-bold text-slate-800">
+                                  <span className="flex items-center gap-1.5 text-blue-900">
+                                    <ListChecks className="h-3.5 w-3.5 text-blue-600" />
+                                    <span>6 Call-Specific Metrics Evaluation</span>
+                                    <span className="text-[10px] text-slate-500 font-normal">
+                                      (Strictly for {call.callId} • Lead: {call.leadId})
+                                    </span>
+                                  </span>
+                                  <span className="text-[10px] text-slate-500 font-mono">Scores out of 5.0</span>
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-1">
+                                  {[
+                                    { label: "Product Knowledge", val: call.productKnowledge },
+                                    { label: "Customer Understanding", val: call.customerUnderstanding },
+                                    { label: "Communication Skills", val: call.communicationSkills },
+                                    { label: "Objection Handling", val: call.objectionHandling },
+                                    { label: "Closing Skills", val: call.closingSkills },
+                                    { label: "Tone & Volume", val: call.toneVolume },
+                                  ].map((p, pIdx) => {
+                                    const isNA = p.val === "NA" || p.val === null || p.val === undefined
+                                    const num = !isNA ? Number(p.val) : null
+                                    return (
+                                      <div
+                                        key={pIdx}
+                                        className="bg-white p-2 rounded-lg border border-slate-200 shadow-2xs flex flex-col justify-between"
+                                      >
+                                        <span className="text-[9px] font-semibold text-slate-500 uppercase block truncate">
+                                          {p.label}
+                                        </span>
+                                        <span
+                                          className={`font-black text-xs mt-1 ${
+                                            isNA
+                                              ? "text-slate-400"
+                                              : (num ?? 0) >= 3.5
+                                                ? "text-emerald-700"
+                                                : (num ?? 0) >= 2.5
+                                                  ? "text-amber-700"
+                                                  : "text-rose-700"
+                                          }`}
+                                        >
+                                          {isNA ? "N/A" : `${(num ?? 0).toFixed(1)} / 5.0`}
+                                        </span>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
                             {/* Stated vs Verified Outcomes */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-200">
                               <div>
@@ -2322,17 +2521,18 @@ export default function SalesCallAuditPage() {
                               <div>
                                 <span className="text-[10px] font-bold uppercase text-slate-400">Auditor Evaluation:</span>
                                 <p
-                                  className={`font-semibold mt-0.5 ${isGood ? "text-emerald-700" : "text-rose-700 font-bold"
-                                    }`}
+                                  className={`font-semibold mt-0.5 ${
+                                    isGood ? "text-emerald-700" : "text-rose-700 font-bold"
+                                  }`}
                                 >
                                   {call.verifiedOutcome || "—"}
                                 </p>
                               </div>
                             </div>
 
-                            {/* Auditor Observation */}
+                            {/* Auditor Observation / Finding */}
                             {call.auditorObservation && (
-                              <div className="text-xs text-slate-700 bg-white p-2.5 rounded-lg border border-slate-100">
+                              <div className="text-xs text-slate-700 bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs">
                                 <span className="font-bold text-slate-900 block mb-0.5">Auditor Quality Finding:</span>
                                 <p className="text-slate-600 leading-relaxed">{call.auditorObservation}</p>
                               </div>
@@ -2361,44 +2561,6 @@ export default function SalesCallAuditPage() {
                                   </span>
                                 ))}
                             </div>
-
-                            {/* Collapsible 6 Parameters for This Specific Call */}
-                            {isExpanded && (
-                              <div className="mt-3 pt-3 border-t border-slate-200 bg-slate-50/70 p-3 rounded-lg space-y-2 animate-in fade-in duration-200">
-                                <div className="flex items-center justify-between text-[11px] font-bold text-slate-800">
-                                  <span className="flex items-center gap-1">
-                                    <ListChecks className="h-3.5 w-3.5 text-blue-600" />
-                                    Specific Call Parameter Breakdown
-                                  </span>
-                                  <span className="text-[10px] text-slate-400 font-mono">Scores out of 5.0</span>
-                                </div>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
-                                  {[
-                                    { label: "Product Knowledge", val: call.productKnowledge },
-                                    { label: "Customer Understanding", val: call.customerUnderstanding },
-                                    { label: "Communication Skills", val: call.communicationSkills },
-                                    { label: "Objection Handling", val: call.objectionHandling },
-                                    { label: "Closing Skills", val: call.closingSkills },
-                                    { label: "Tone & Volume", val: call.toneVolume },
-                                  ].map((p, pIdx) => {
-                                    const num = Number(p.val || 0)
-                                    return (
-                                      <div key={pIdx} className="bg-white p-2 rounded border border-slate-200 shadow-2xs">
-                                        <span className="text-[9px] font-semibold text-slate-500 uppercase block truncate">
-                                          {p.label}
-                                        </span>
-                                        <span
-                                          className={`font-bold text-xs ${num >= 3.5 ? "text-emerald-700" : num >= 2.5 ? "text-amber-700" : "text-rose-700"
-                                            }`}
-                                        >
-                                          {num.toFixed(1)} / 5.0
-                                        </span>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              </div>
-                            )}
                           </div>
                         </div>
                       )
