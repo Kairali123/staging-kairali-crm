@@ -2217,7 +2217,7 @@ export default function SalesCallAuditPage() {
                               <div>
                                 <div className="flex items-center gap-2">
                                   <span className="font-bold text-slate-900 text-xs">
-                                    {call.clientName || (selectedAgent ? `Agent: ${selectedAgent.name}` : "Call Evaluation")}
+                                    {call.clientName ? `Client: ${call.clientName}` : (callDetailModal?.agent?.name ? `Agent: ${callDetailModal.agent.name}` : "Call Audit Evaluation")}
                                   </span>
                                   {call.clientPhone && (
                                     <span className="text-[11px] text-slate-400 font-mono">({call.clientPhone})</span>
