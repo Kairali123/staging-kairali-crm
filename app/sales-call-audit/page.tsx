@@ -2211,65 +2211,79 @@ export default function SalesCallAuditPage() {
               </div>
 
               {/* Filter Tabs & Search Bar */}
-              <div className="p-4 bg-slate-100/80 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div className="flex items-center gap-1.5 bg-white p-1 rounded-lg border border-slate-200 shadow-xs w-full sm:w-auto">
-                  <button
-                    type="button"
-                    onClick={() => setModalCallTab("all")}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                      modalCallTab === "all"
-                        ? "bg-slate-800 text-white shadow-xs"
-                        : "text-slate-600 hover:bg-slate-100"
-                    }`}
-                  >
-                    All Calls ({modalCalls.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setModalCallTab("good")}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                      modalCallTab === "good"
-                        ? "bg-emerald-600 text-white shadow-xs"
-                        : "text-emerald-700 hover:bg-emerald-50"
-                    }`}
-                  >
-                    <ThumbsUp className="h-3.5 w-3.5" />
-                    Good Calls ({callDetailModal.agent.good})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setModalCallTab("bad")}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                      modalCallTab === "bad"
-                        ? "bg-rose-600 text-white shadow-xs"
-                        : "text-rose-700 hover:bg-rose-50"
-                    }`}
-                  >
-                    <ThumbsDown className="h-3.5 w-3.5" />
-                    Bad Calls ({callDetailModal.agent.bad})
-                  </button>
-                </div>
+              {(() => {
+                const actualCalls = modalCalls.filter(c => {
+                  const ct = String(c.callType || "").trim().toLowerCase()
+                  return ct !== "voicemail" && !ct.includes("voicemail")
+                })
+                const goodCallsList = actualCalls.filter(c => c.qualityType === "good")
+                const badCallsList = actualCalls.filter(c => c.qualityType === "bad")
+                const goodCountDisplay = callDetailModal.agent.good ?? goodCallsList.length
+                const badCountDisplay = callDetailModal.agent.bad ?? badCallsList.length
+                const totalActualDisplay = callDetailModal.agent.calls ?? actualCalls.length ?? (Number(goodCountDisplay || 0) + Number(badCountDisplay || 0))
 
-                <div className="relative w-full sm:w-72">
-                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                  <input
-                    type="text"
-                    value={modalCallSearch}
-                    onChange={e => setModalCallSearch(e.target.value)}
-                    placeholder="Search Lead ID, Call ID, findings..."
-                    className="w-full h-8 pl-8 pr-3 text-xs bg-white border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-xs"
-                  />
-                  {modalCallSearch && (
-                    <button
-                      type="button"
-                      onClick={() => setModalCallSearch("")}
-                      className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </div>
-              </div>
+                return (
+                  <div className="p-4 bg-slate-100/80 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div className="flex items-center gap-1.5 bg-white p-1 rounded-lg border border-slate-200 shadow-xs w-full sm:w-auto">
+                      <button
+                        type="button"
+                        onClick={() => setModalCallTab("all")}
+                        className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                          modalCallTab === "all"
+                            ? "bg-slate-800 text-white shadow-xs"
+                            : "text-slate-600 hover:bg-slate-100"
+                        }`}
+                      >
+                        All Calls ({totalActualDisplay})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setModalCallTab("good")}
+                        className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                          modalCallTab === "good"
+                            ? "bg-emerald-600 text-white shadow-xs"
+                            : "text-emerald-700 hover:bg-emerald-50"
+                        }`}
+                      >
+                        <ThumbsUp className="h-3.5 w-3.5" />
+                        Good Calls ({goodCountDisplay})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setModalCallTab("bad")}
+                        className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                          modalCallTab === "bad"
+                            ? "bg-rose-600 text-white shadow-xs"
+                            : "text-rose-700 hover:bg-rose-50"
+                        }`}
+                      >
+                        <ThumbsDown className="h-3.5 w-3.5" />
+                        Bad Calls ({badCountDisplay})
+                      </button>
+                    </div>
+
+                    <div className="relative w-full sm:w-72">
+                      <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                      <input
+                        type="text"
+                        value={modalCallSearch}
+                        onChange={e => setModalCallSearch(e.target.value)}
+                        placeholder="Search Lead ID, Call ID, findings..."
+                        className="w-full h-8 pl-8 pr-3 text-xs bg-white border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-xs"
+                      />
+                      {modalCallSearch && (
+                        <button
+                          type="button"
+                          onClick={() => setModalCallSearch("")}
+                          className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()}
 
               {/* Body: List of Detailed Calls */}
               <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs bg-slate-50">
@@ -2287,6 +2301,8 @@ export default function SalesCallAuditPage() {
                 ) : (
                   (() => {
                     const filtered = modalCalls.filter(call => {
+                      const ct = String(call.callType || "").trim().toLowerCase()
+                      if (ct === "voicemail" || ct.includes("voicemail")) return false
                       if (modalCallTab === "good" && call.qualityType !== "good") return false
                       if (modalCallTab === "bad" && call.qualityType !== "bad") return false
                       if (modalCallSearch.trim()) {

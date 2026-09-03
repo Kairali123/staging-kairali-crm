@@ -36,6 +36,7 @@ export interface AuditedCallDetail {
   strengths: string[]
   deficiencies: string[]
   recordingUrl?: string
+  callType?: string
 }
 
 function parseScore(val: any): number | string | null {
@@ -167,7 +168,7 @@ export async function GET(req: NextRequest) {
 
     // 2. Fetch granular call audit records strictly from kairali_sales_metric_bot_for_ho
     let rawBotRows: any[] = []
-    const auditLimit = parentRow?.total_calls_audited ? Math.max(Number(parentRow.total_calls_audited), 30) : 100
+    const auditLimit = Math.max(Number(parentRow?.total_calls_audited || 0) + 100, 300)
     const targetYmd = normalizeToYmd(date) || normalizeToYmd(parentRow?.time_stamp)
 
     try {
@@ -177,7 +178,7 @@ export async function GET(req: NextRequest) {
           `SELECT * FROM kairali_sales_metric_bot_for_ho 
            WHERE (sales_person_id = ? OR sales_person_name LIKE ?)
              AND DATE(timestamp) = ?
-           ORDER BY (CASE WHEN quality_status IS NOT NULL OR overall_score > 0 OR avg_score > 0 THEN 1 ELSE 0 END) DESC, timestamp DESC, id DESC
+           ORDER BY (CASE WHEN quality_status IS NOT NULL OR overall_score > 0 OR avg_score > 0 OR lead_outcome_verify_status IS NOT NULL THEN 1 ELSE 0 END) DESC, timestamp DESC, id DESC
            LIMIT ?`,
           [scopedEmpId, `%${scopedName || scopedEmpId}%`, targetYmd, auditLimit]
         )
@@ -192,7 +193,7 @@ export async function GET(req: NextRequest) {
           `SELECT * FROM kairali_sales_metric_bot_for_ho 
            WHERE (sales_person_id = ? OR sales_person_name LIKE ?)
              AND DATE(timestamp) <= ?
-           ORDER BY (CASE WHEN quality_status IS NOT NULL OR overall_score > 0 OR avg_score > 0 THEN 1 ELSE 0 END) DESC, timestamp DESC, id DESC
+           ORDER BY (CASE WHEN quality_status IS NOT NULL OR overall_score > 0 OR avg_score > 0 OR lead_outcome_verify_status IS NOT NULL THEN 1 ELSE 0 END) DESC, timestamp DESC, id DESC
            LIMIT ?`,
           [scopedEmpId, `%${scopedName || scopedEmpId}%`, targetYmd, auditLimit]
         )
@@ -206,7 +207,7 @@ export async function GET(req: NextRequest) {
         const [fallbackRows] = await pool.query<any[]>(
           `SELECT * FROM kairali_sales_metric_bot_for_ho 
            WHERE (sales_person_id = ? OR sales_person_name LIKE ?)
-           ORDER BY (CASE WHEN quality_status IS NOT NULL OR overall_score > 0 OR avg_score > 0 THEN 1 ELSE 0 END) DESC, timestamp DESC, id DESC
+           ORDER BY (CASE WHEN quality_status IS NOT NULL OR overall_score > 0 OR avg_score > 0 OR lead_outcome_verify_status IS NOT NULL THEN 1 ELSE 0 END) DESC, timestamp DESC, id DESC
            LIMIT ?`,
           [scopedEmpId, `%${scopedName || scopedEmpId}%`, auditLimit]
         )
@@ -217,6 +218,12 @@ export async function GET(req: NextRequest) {
     } catch (e: any) {
       console.warn("[sales-call-details-api] kairali_sales_metric_bot_for_ho query error:", e?.message)
     }
+
+    // Filter out voicemails - only count and show actual calls
+    rawBotRows = rawBotRows.filter(r => {
+      const callType = String(r.call_type || r.callType || "").trim().toLowerCase()
+      return callType !== "voicemail" && !callType.includes("voicemail")
+    })
 
     const totalAudited = parentRow?.total_calls_audited
       ? Number(parentRow.total_calls_audited)
@@ -232,7 +239,7 @@ export async function GET(req: NextRequest) {
 
     const baseScore = parentRow?.avg_score ? Number(parentRow.avg_score) : 1.5
 
-    // Build the list of real call-specific audited calls
+    // Build the list of real call-specific audited calls (excluding voicemails)
     const callsList: AuditedCallDetail[] = []
 
     if (rawBotRows.length > 0) {
@@ -240,11 +247,13 @@ export async function GET(req: NextRequest) {
         const r = rawBotRows[idx]
         const qStatus = String(r.quality_status || "").toLowerCase()
         const scoreVal = parseFloat(r.avg_score || r.overall_score || "0")
+        const verifyStatus = String(r.lead_outcome_verify_status || "").trim().toLowerCase()
 
         const isGood =
           qStatus.includes("good") ||
           qStatus.includes("pass") ||
-          r.lead_outcome_verify_status === "Yes" ||
+          verifyStatus === "yes" ||
+          verifyStatus === "verified" ||
           (qStatus === "" && !isNaN(scoreVal) && scoreVal >= 2.5)
 
         const qType: "good" | "bad" = isGood ? "good" : "bad"
@@ -323,6 +332,7 @@ export async function GET(req: NextRequest) {
           strengths,
           deficiencies,
           recordingUrl: r.audio_url || undefined,
+          callType: r.call_type ? String(r.call_type) : undefined,
         })
       }
     }

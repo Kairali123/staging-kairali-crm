@@ -283,6 +283,7 @@ const exemptApiPaths = new Set([
   // OWNER-DEFERRED: anonymous mobile access, preserved as-is for now.
   '/api/calendar/mobile',
   '/api/sales-call-audit',
+  '/api/sales-call-audit/calls',
 ])
 
 // No active API prefix exemptions. `/api/meetings/*` stays behind the signed

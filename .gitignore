@@ -34,3 +34,5 @@ next-env.d.ts
 temp/
 *.tmp
 scratch/
+*_debug.json
+schema_bot_debug.json
