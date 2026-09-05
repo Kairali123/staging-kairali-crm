@@ -317,17 +317,26 @@ function mapRow(row: GasBookingRow): Guest {
     };
 }
 
-export function useCrrBookings() {
+export function useCrrBookings(from?: string, to?: string) {
     const [guests, setGuests] = useState<Guest[]>([]);
     const [stageUsers, setStageUsers] = useState<StageUser[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isRevalidating, setIsRevalidating] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const fetchBookings = useCallback(async () => {
-        setLoading(true);
+    const fetchBookings = useCallback(async (isBackground = false) => {
+        if (isBackground) {
+            setIsRevalidating(true);
+        } else {
+            setLoading(true);
+        }
         setError(null);
         try {
-            const res = await fetch("/api/crr-calling/bookings", { cache: "no-store" });
+            const params = new URLSearchParams();
+            if (from) params.set("from", from);
+            if (to)   params.set("to",   to);
+            const url = `/api/crr-calling/bookings${params.size ? "?" + params.toString() : ""}`;
+            const res = await fetch(url, { cache: "no-store" });
             const json: GasBookingsResponse = await res.json();
 
             if (!res.ok || !json.success) {
@@ -342,14 +351,17 @@ export function useCrrBookings() {
             setError(err instanceof Error ? err.message : "Failed to load bookings");
         } finally {
             setLoading(false);
+            setIsRevalidating(false);
         }
-    }, []);
+    }, [from, to]);
 
     useEffect(() => {
-        fetchBookings();
+        fetchBookings(guests.length > 0);
     }, [fetchBookings]);
 
-    return { guests, setGuests, loading, error, refetch: fetchBookings, stageUsers };
+    const refetch = useCallback(() => fetchBookings(true), [fetchBookings]);
+
+    return { guests, setGuests, loading, isRevalidating, error, refetch, stageUsers };
 }
 
 /* =========================================================
