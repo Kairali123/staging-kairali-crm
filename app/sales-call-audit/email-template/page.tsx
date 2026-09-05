@@ -127,7 +127,7 @@ export default function SalesCallAuditEmailTemplatePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          to: "sysadmin@kairali.com",
+          to: "ho.hr@kairali.com",
           date: selectedDate,
           displayDate,
           metrics,
@@ -136,7 +136,7 @@ export default function SalesCallAuditEmailTemplatePage() {
       })
       const json = await res.json()
       if (json.success) {
-        toast.success(`Report successfully sent to sysadmin@kairali.com!`, {
+        toast.success(`Report successfully sent to ho.hr@kairali.com!`, {
           description: `Dispatched ${employees.length} employee audit records for ${displayDate}`,
         })
       } else {
@@ -228,7 +228,7 @@ export default function SalesCallAuditEmailTemplatePage() {
                 ) : (
                   <Send className="mr-2 h-4 w-4" />
                 )}
-                {sendingEmail ? "Sending..." : "Send to sysadmin@kairali.com"}
+                {sendingEmail ? "Sending..." : "Send to ho.hr@kairali.com"}
               </Button>
 
               <Button
@@ -407,7 +407,7 @@ export default function SalesCallAuditEmailTemplatePage() {
                 ) : (
                   <Send className="mr-2 h-4 w-4" />
                 )}
-                {sendingEmail ? "Sending..." : "Send Report to sysadmin@kairali.com"}
+                {sendingEmail ? "Sending..." : "Send Report to ho.hr@kairali.com"}
               </Button>
             </div>
 
