@@ -104,6 +104,8 @@ function getDoctorEmail(doctorName?: string | null): string {
     return slug ? `${slug}@ktahv.com` : "doctor@ktahv.com";
 }
 
+const NO_STORE_HEADERS = { "Cache-Control": "private, no-store" };
+
 export async function GET(req: NextRequest) {
     try {
         const session = getSessionUserResult(req);
@@ -111,14 +113,14 @@ export async function GET(req: NextRequest) {
         if (session.state === "missing") {
             return NextResponse.json(
                 { success: false, error: "Access denied: Not logged in" },
-                { status: 401 }
+                { status: 401, headers: NO_STORE_HEADERS }
             );
         }
 
         if (session.state === "invalid") {
             return NextResponse.json(
                 { success: false, error: "Access denied: Invalid session" },
-                { status: 401 }
+                { status: 401, headers: NO_STORE_HEADERS }
             );
         }
 
@@ -137,83 +139,145 @@ export async function GET(req: NextRequest) {
         if (!hasReadPermission) {
             return NextResponse.json(
                 { success: false, error: "Access denied: Insufficient permissions" },
-                { status: 403 }
+                { status: 403, headers: NO_STORE_HEADERS }
             );
+        }
+
+        const { searchParams } = new URL(req.url);
+        const fromParam = searchParams.get("from");
+        const toParam   = searchParams.get("to");
+        const limitParam = searchParams.get("limit");
+
+        const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+        let hasDateFilter = false;
+        let fromTimestamp: string | null = null;
+        let toTimestamp: string | null = null;
+
+        // Strict range validation: if either 'from' or 'to' is supplied, both must be valid YYYY-MM-DD and from <= to
+        if (fromParam !== null || toParam !== null) {
+            if (!fromParam || !toParam || !ISO_DATE_RE.test(fromParam) || !ISO_DATE_RE.test(toParam)) {
+                return NextResponse.json(
+                    { success: false, error: "Invalid date range parameters. Both 'from' and 'to' must be valid YYYY-MM-DD dates." },
+                    { status: 400, headers: NO_STORE_HEADERS }
+                );
+            }
+            if (fromParam > toParam) {
+                return NextResponse.json(
+                    { success: false, error: "Invalid date range: 'from' date cannot be after 'to' date." },
+                    { status: 400, headers: NO_STORE_HEADERS }
+                );
+            }
+            hasDateFilter = true;
+            fromTimestamp = `${fromParam} 00:00:00`;
+            toTimestamp   = `${toParam} 23:59:59.999`;
+        }
+
+        // Hard ceiling / limit enforcement (max 2000 records)
+        const HARD_CEILING = 2000;
+        let effectiveLimit = HARD_CEILING;
+        if (limitParam) {
+            const parsedLimit = parseInt(limitParam, 10);
+            if (isNaN(parsedLimit) || parsedLimit <= 0) {
+                return NextResponse.json(
+                    { success: false, error: "Invalid limit parameter. Must be a positive integer." },
+                    { status: 400, headers: NO_STORE_HEADERS }
+                );
+            }
+            effectiveLimit = Math.min(parsedLimit, HARD_CEILING);
         }
 
         const pool = await getPool();
 
-        // 1. Fetch all master bookings from KTAHV_CRR_Process_FMS
+        // 1. Explicit minimal projection — exact columns verified against KTAHV_CRR_Process_FMS schema
+        const PROJECTION_SQL = `
+            SELECT 
+                id, timestamp, check_in_date, check_out_date, client_name, gender, mobile, 
+                country, country_code, email, booking_id, days_of_stay, programme_package_name, 
+                package_type, room_type, room_category, invoice_amount, booking_taken_by, mid, 
+                booking_no, booking_url, uid, booking_status,
+                stage1_call_date_planned, stage1_task_done_actual, stage1_actual_for_next_visit_date,
+                stage2_planned, stage2_actual, stage2_remarks, stage2_next_visit_date,
+                stage4_rating_request_call_date_planned, stage4_task_done_actual, stage4_remarks_for_next_visit_date,
+                stage6_call_date_planned, stage6_task_done_actual,
+                stage7_call_date_planned, stage7_task_done_actual, stage7_referals_details,
+                stage8_call_date_planned, stage8_task_done_actual, stage9_doer
+            FROM KTAHV_CRR_Process_FMS
+        `;
+
         const [processRows] = await pool.query<any[]>(
-            `SELECT * FROM KTAHV_CRR_Process_FMS ORDER BY id DESC`
+            hasDateFilter && fromTimestamp && toTimestamp
+                ? `${PROJECTION_SQL} WHERE timestamp BETWEEN ? AND ? ORDER BY id DESC LIMIT ?`
+                : `${PROJECTION_SQL} ORDER BY id DESC LIMIT ?`,
+            hasDateFilter && fromTimestamp && toTimestamp
+                ? [fromTimestamp, toTimestamp, effectiveLimit]
+                : [effectiveLimit]
         );
 
         if (!processRows || processRows.length === 0) {
-            return NextResponse.json({ success: true, count: 0, data: [] });
+            return NextResponse.json(
+                { success: true, count: 0, data: [] },
+                { headers: NO_STORE_HEADERS }
+            );
         }
 
-        // 2. Collect UIDs and booking_ids
+        // 2. Collect UIDs, booking_ids, and checkin keys (bounded by processRows)
         const uids = processRows.map((r) => r.uid).filter(Boolean);
         const bookingIds = processRows.map((r) => r.booking_id).filter(Boolean);
-
-        // 3. Batch fetch CrrCalling records
-        let callingRows: any[] = [];
-        if (uids.length > 0) {
-            const [cRows] = await pool.query<any[]>(
-                `SELECT * FROM KTAHV_CRR_Calling_FMS WHERE uid IN (?) ORDER BY id ASC`,
-                [uids]
-            );
-            callingRows = cRows || [];
-        }
-
-        // 4. Batch fetch GuestTracker records
-        let trackerMap = new Map<string, any>();
-        if (bookingIds.length > 0) {
-            const [tRows] = await pool.query<any[]>(
-                `SELECT * FROM ktahv_guest_tracker WHERE booking_id IN (?)`,
-                [bookingIds]
-            );
-            if (tRows) {
-                for (const tr of tRows) {
-                    if (tr.booking_id) trackerMap.set(String(tr.booking_id).trim(), tr);
-                }
-            }
-        }
-
-        // 5. Batch fetch CheckinMaster records
         const checkinKeys = Array.from(
             new Set(
                 processRows
-                    .flatMap((r) => [r.booking_id, r.booking_no, r.reservation_id, r.uid])
+                    .flatMap((r) => [r.booking_id, r.booking_no, r.uid])
                     .filter(Boolean)
                     .map((s) => String(s).trim())
             )
         );
 
-        let checkinMap = new Map<string, any>();
-        if (checkinKeys.length > 0) {
-            const [chkRows] = await pool.query<any[]>(
-                `SELECT * FROM ktahv_checkinmasterfms WHERE reservation_id IN (?) OR TRIM(reservation_id) IN (?)`,
-                [checkinKeys, checkinKeys]
-            );
-            if (chkRows) {
-                for (const chk of chkRows) {
-                    if (chk.reservation_id) {
-                        const raw = String(chk.reservation_id).trim();
-                        checkinMap.set(raw.toLowerCase(), chk);
-                        checkinMap.set(raw, chk);
-                    }
-                    if (chk.id) {
-                        checkinMap.set(String(chk.id), chk);
-                    }
-                }
-            }
-        }
-
-        // 5b. Fetch Permission-Based Stage Users (mapping real employee names & emails to assigned stages)
-        let stageUsers: Array<{ name: string; email: string; role: string; stages: number[] }> = [];
-        try {
-            const [permRows] = await pool.query<any[]>(
+        // 3. Concurrently fetch all related sub-queries in parallel with explicit projections
+        const [callingResult, trackerResult, checkinResult, permResult] = await Promise.all([
+            uids.length > 0
+                ? pool.query<any[]>(
+                    `SELECT id, uid, call_purpose, planned, actual, to_show, updated_at, timestamp,
+                            status, outcome_remarks, did_they_achieve_the_outcomes_planned_for,
+                            remarks_why_not_done_or_close, followup_date_for_the_welcome_call,
+                            followup_date_for_the_rating, followup_date_for_the_result_and_progress,
+                            doer, rating_status, remarks_why_not_given_ratings, proof_of_ratings,
+                            stay_feedback
+                     FROM KTAHV_CRR_Calling_FMS
+                     WHERE uid IN (?)
+                     ORDER BY id ASC`,
+                    [uids]
+                  )
+                : Promise.resolve([[]] as any),
+            bookingIds.length > 0
+                ? pool.query<any[]>(
+                    `SELECT booking_id, arrival_planned, arrival_actual, arrival_doer_name,
+                            client_arrival_data_upload_remarks, departure_planned, departure_actual,
+                            departure_doer_name, client_departure_data_upload_remarks,
+                            doctor_assigned_to_the_client, updated_at
+                     FROM ktahv_guest_tracker
+                     WHERE booking_id IN (?)`,
+                    [bookingIds]
+                  )
+                : Promise.resolve([[]] as any),
+            checkinKeys.length > 0
+                ? pool.query<any[]>(
+                    `SELECT id, reservation_id, room_no,
+                            stage3_planned, stage3_actual, stage3_doer_remarks, stage3_doer, stage3_time_delay,
+                            stage2_qr_code_scanned_status_by_guest_or_not,
+                            stage2_guest_feedback_after_scanning_ai_qr_code,
+                            stage2_guest_testinomial_feedback_received_through_html_form,
+                            stage2_referral_received_through_referral_html_form,
+                            stage4_planned, stage4_actual, stage4_doer_remarks, stage4_doer, stage4_time_delay,
+                            stage4_feedback_taking_url, stage4_feedback_report,
+                            stage5_planned_referral, stage5_actual_referral, stage5_doer_remarks,
+                            stage5_referral_taken_status, stage5_doer_referral, stage5_time_delay_referral
+                     FROM ktahv_checkinmasterfms
+                     WHERE reservation_id IN (?)`,
+                    [checkinKeys]
+                  )
+                : Promise.resolve([[]] as any),
+            pool.query<any[]>(
                 `SELECT 
                     p.email,
                     p.role,
@@ -222,44 +286,70 @@ export async function GET(req: NextRequest) {
                  FROM user_role_permissions p
                  LEFT JOIN userlogin u ON LOWER(TRIM(u.email_id)) = LOWER(TRIM(p.email))
                  WHERE p.crr_fms IS NOT NULL AND p.crr_fms != ''`
-            );
+            ).catch((e) => {
+                console.warn("[crr-calling/bookings] Failed to fetch stage users:", e);
+                return [[]] as any;
+            }),
+        ]);
 
-            if (permRows && permRows.length > 0) {
-                const seen = new Set<string>();
-                for (const p of permRows) {
-                    const email = String(p.email || "").trim();
-                    const crrFms = String(p.crr_fms || "");
+        const callingRows: any[] = callingResult[0] || [];
 
-                    // Parse stages assigned in crr_fms column (e.g. "view, stage1, stage2, stage4, stage5, stage6, stage8")
-                    const assignedStages: number[] = [];
-                    const parts = crrFms.split(",").map((s) => s.trim().toLowerCase());
-                    for (const part of parts) {
-                        const match = part.match(/^stage(\d+)$/);
-                        if (match) {
-                            const num = parseInt(match[1], 10);
-                            if (num >= 1 && num <= 11) {
-                                assignedStages.push(num);
-                            }
+        // 4. Build GuestTracker map
+        const trackerMap = new Map<string, any>();
+        const tRows = trackerResult[0] || [];
+        for (const tr of tRows) {
+            if (tr.booking_id) trackerMap.set(String(tr.booking_id).trim(), tr);
+        }
+
+        // 5. Build CheckinMaster map
+        const checkinMap = new Map<string, any>();
+        const chkRows = checkinResult[0] || [];
+        for (const chk of chkRows) {
+            if (chk.reservation_id) {
+                const raw = String(chk.reservation_id).trim();
+                checkinMap.set(raw.toLowerCase(), chk);
+                checkinMap.set(raw, chk);
+            }
+            if (chk.id) {
+                checkinMap.set(String(chk.id), chk);
+            }
+        }
+
+        // 5b. Parse Permission-Based Stage Users
+        const stageUsers: Array<{ name: string; email: string; role: string; stages: number[] }> = [];
+        const permRows = permResult[0] || [];
+        if (permRows.length > 0) {
+            const seen = new Set<string>();
+            for (const p of permRows) {
+                const email = String(p.email || "").trim();
+                const crrFms = String(p.crr_fms || "");
+
+                // Parse stages assigned in crr_fms column (e.g. "view, stage1, stage2, stage4, stage5, stage6, stage8")
+                const assignedStages: number[] = [];
+                const parts = crrFms.split(",").map((s) => s.trim().toLowerCase());
+                for (const part of parts) {
+                    const match = part.match(/^stage(\d+)$/);
+                    if (match) {
+                        const num = parseInt(match[1], 10);
+                        if (num >= 1 && num <= 11) {
+                            assignedStages.push(num);
                         }
                     }
+                }
 
-                    // Strict real name from userlogin (e.g. Jinsha Manoj MV, Dr. Rahul R, Shoukath Ali Moosa, Anoop Vijayaraj)
-                    const name = String(p.user_name || p.email || "").trim();
-
-                    const key = email || name;
-                    if (assignedStages.length > 0 && key && !seen.has(key)) {
-                        seen.add(key);
-                        stageUsers.push({
-                            name,
-                            email,
-                            role: String(p.role || ""),
-                            stages: assignedStages.sort((a, b) => a - b),
-                        });
-                    }
+                // Strict real name from userlogin
+                const name = String(p.user_name || p.email || "").trim();
+                const key = email || name;
+                if (assignedStages.length > 0 && key && !seen.has(key)) {
+                    seen.add(key);
+                    stageUsers.push({
+                        name,
+                        email,
+                        role: String(p.role || ""),
+                        stages: assignedStages.sort((a, b) => a - b),
+                    });
                 }
             }
-        } catch (e) {
-            console.warn("[crr-calling/bookings] Failed to fetch stage users:", e);
         }
 
         // Build CrrCalling index by UID -> list of calling rows
@@ -521,17 +611,20 @@ export async function GET(req: NextRequest) {
             };
         });
 
-        return NextResponse.json({
-            success: true,
-            count: data.length,
-            data,
-            stageUsers,
-        });
+        return NextResponse.json(
+            {
+                success: true,
+                count: data.length,
+                data,
+                stageUsers,
+            },
+            { headers: NO_STORE_HEADERS }
+        );
     } catch (err) {
         console.error("[crr-calling/bookings] MySQL fetch failed:", err);
         return NextResponse.json(
             { success: false, error: err instanceof Error ? err.message : "Failed to fetch bookings from database" },
-            { status: 500 }
+            { status: 500, headers: NO_STORE_HEADERS }
         );
     }
 }
