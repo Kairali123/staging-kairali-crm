@@ -127,6 +127,7 @@ export default function SalesCallAuditEmailTemplatePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          to: "ho.hr@kairali.com",
           date: selectedDate,
         }),
       })

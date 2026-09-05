@@ -73,8 +73,13 @@ export async function POST(req: NextRequest) {
       body = {}
     }
 
-    // Issue #60: Reject any client-supplied metrics, employee lists, or custom recipients
-    if (body.metrics || body.employees || body.to || body.recipient || body.reportContent) {
+    const targetRecipient = process.env.HR_AUDIT_EMAIL || "ho.hr@kairali.com"
+
+    // Issue #60: Reject any client-supplied metrics, employee lists, or unauthorized custom recipients
+    const isCustomTo = body.to && body.to !== targetRecipient && body.to !== "ho.hr@kairali.com"
+    const isCustomRecipient = body.recipient && body.recipient !== targetRecipient && body.recipient !== "ho.hr@kairali.com"
+
+    if (body.metrics || body.employees || isCustomTo || isCustomRecipient || body.reportContent) {
       return NextResponse.json(
         {
           success: false,
@@ -157,7 +162,6 @@ export async function POST(req: NextRequest) {
     const totalAgents = dbRows.length
     const teamAvgScore = scoreCount > 0 ? (scoreSum / scoreCount).toFixed(2) : "0.00"
 
-    const targetRecipient = process.env.HR_AUDIT_EMAIL || "ho.hr@kairali.com"
     const displayDate = targetYmd || "Today"
     const subject = `[Daily HR Quality Audit Report] - Agent-wise Call Audit (${displayDate})`
 
