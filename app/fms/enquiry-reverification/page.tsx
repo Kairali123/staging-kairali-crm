@@ -40,7 +40,9 @@ import {
     Snowflake,
     Share2,
     AlertTriangle,
-    Users
+    Users,
+    Bot,
+    Sparkles
 } from "lucide-react"
 
 function isAudioRecordingUrl(url: any): boolean {
@@ -130,7 +132,7 @@ export default function EnquiryReverificationPage() {
 
     const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false)
     const [selectedEnquiry, setSelectedEnquiry] = useState<any>(null)
-    const [activeModalTab, setActiveModalTab] = useState<"info" | "connection" | "quality" | "verifier">("info")
+    const [activeModalTab, setActiveModalTab] = useState<"info" | "connection" | "quality" | "verifier" | "ai_remarks">("info")
     const [selectedCallHistory, setSelectedCallHistory] = useState<LeadRow | null>(null)
     const [selectedExecutiveRecord, setSelectedExecutiveRecord] = useState<ExecutiveVerifierRecord | null>(null)
     const [isExecutiveModalOpen, setIsExecutiveModalOpen] = useState(false)
@@ -413,6 +415,45 @@ export default function EnquiryReverificationPage() {
             return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 font-bold px-2 py-0.5 rounded-full text-[11px]">Low</Badge>
         }
         return <Badge className="bg-slate-100 text-slate-700 border-slate-300 font-semibold px-2 py-0.5 rounded-full text-[11px]">{priority}</Badge>
+    }
+
+    const renderAiRemarks = (enq: any) => {
+        const primaryRemark = enq?.ai_remarks || enq?.explanation || enq?.DC || enq?.CN || enq?.CZ || ""
+        const validReason = enq?.CY || enq?.CJ || ""
+        const category = enq?.AI_Verification_Category || ""
+
+        if (!primaryRemark && !validReason && !category) {
+            return <span className="text-slate-400">—</span>
+        }
+
+        return (
+            <div className="flex flex-col gap-1 max-w-[280px]">
+                {validReason ? (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                            <Sparkles className="w-3 h-3 text-indigo-500 shrink-0" />
+                            <span className="truncate max-w-[170px]">{validReason}</span>
+                        </span>
+                    </div>
+                ) : null}
+
+                {primaryRemark ? (
+                    <p 
+                        className="text-[11.5px] text-slate-700 leading-snug line-clamp-2 cursor-pointer hover:text-blue-700 transition-colors"
+                        title={primaryRemark}
+                        onClick={() => handleOpenDetails(enq)}
+                    >
+                        {primaryRemark}
+                    </p>
+                ) : category ? (
+                    <span className="text-[11px] font-medium text-slate-500 italic">
+                        Categorized as {category}
+                    </span>
+                ) : (
+                    <span className="text-slate-400">—</span>
+                )}
+            </div>
+        )
     }
 
     const handleSort = (field: string) => {
@@ -1205,6 +1246,16 @@ export default function EnquiryReverificationPage() {
                                             Priority {renderSortIcon("sqv_priority")}
                                         </div>
                                     </th>
+
+                                    {workflowTab !== "manual_review" && (
+                                        <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-normal leading-tight min-w-[240px] max-w-[300px] border-r border-white/15 bg-slate-900/40">
+                                            <div className="flex items-center gap-1.5">
+                                                <Bot className="w-3.5 h-3.5 text-cyan-300 shrink-0" />
+                                                <span>AI Remarks / Reasoning</span>
+                                            </div>
+                                        </th>
+                                    )}
+
                                     <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">Subject</th>
                                     <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">Notes</th>
                                     <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">IVR URL</th>
@@ -1249,7 +1300,7 @@ export default function EnquiryReverificationPage() {
 
                                 {loadError && sortedEnquiries.length === 0 && (
                                     <tr>
-                                        <td colSpan={20} className="py-10 px-4 text-center">
+                                        <td colSpan={workflowTab !== "manual_review" ? 21 : 20} className="py-10 px-4 text-center">
                                             <div className="flex flex-col items-center gap-2">
                                                 <AlertCircle className="h-6 w-6 text-red-500" />
                                                 <p className="text-sm font-semibold text-slate-700">Unable to load enquiries</p>
@@ -1269,7 +1320,7 @@ export default function EnquiryReverificationPage() {
 
                                 {!loadError && sortedEnquiries.length === 0 && (
                                     <tr>
-                                        <td colSpan={20} className="py-12 px-4 text-center">
+                                        <td colSpan={workflowTab !== "manual_review" ? 21 : 20} className="py-12 px-4 text-center">
                                             <div className="flex flex-col items-center justify-center gap-2">
                                                 <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
                                                     {workflowTab === "manual_review" && <Users className="w-5 h-5 text-blue-500" />}
@@ -1318,6 +1369,12 @@ export default function EnquiryReverificationPage() {
                                         <td className="py-3 px-4 whitespace-nowrap border-r border-slate-100">
                                             {renderPriorityBadge(enq.sqv_priority || enq.dialer_priority)}
                                         </td>
+
+                                        {workflowTab !== "manual_review" && (
+                                            <td className="py-3 px-4 border-r border-slate-100 min-w-[240px] max-w-[300px] bg-slate-50/50 group-hover:bg-blue-50/50">
+                                                {renderAiRemarks(enq)}
+                                            </td>
+                                        )}
 
                                         <td className="py-3 px-4 max-w-[200px] truncate font-medium text-slate-700 border-r border-slate-100" title={enq.subjects}>
                                             {enq.subjects || "—"}
@@ -1981,6 +2038,15 @@ export default function EnquiryReverificationPage() {
                                             >
                                                 <PhoneCall className="h-4 w-4" /> SQV & Dialer Details
                                             </button>
+                                            <button
+                                                onClick={() => setActiveModalTab("ai_remarks")}
+                                                className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold rounded-lg transition ${activeModalTab === "ai_remarks"
+                                                    ? "bg-[#4f46e5] text-white shadow-sm"
+                                                    : "text-[#475569] hover:bg-[#e2e8f0] hover:text-[#0f172a]"
+                                                    }`}
+                                            >
+                                                <Bot className="h-4 w-4" /> AI Remarks & Reasoning
+                                            </button>
                                         </div>
                                     </div>
 
@@ -2134,6 +2200,56 @@ export default function EnquiryReverificationPage() {
                                                             <div className="text-[13px] font-bold text-[#1e293b]">{selectedEnquiry.cold_done_in_calling_appsheet_or_in_dailer || "—"}</div>
                                                         </div>
                                                     </div>
+                                                </div>
+                                            )}
+
+                                            {/* TAB 3: AI REMARKS & REASONING */}
+                                            {activeModalTab === "ai_remarks" && (
+                                                <div className="space-y-4">
+                                                    <div className="flex items-center gap-2 mb-3">
+                                                        <div className="w-1 h-3.5 rounded bg-[#4f46e5]" />
+                                                        <span className="text-[11.5px] font-extrabold tracking-wider uppercase text-[#4f46e5]">AI Analysis & Categorization Reasoning</span>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                        <div className="border border-[#e2e8f0] rounded-xl bg-white p-[10px_14px]">
+                                                            <div className="text-[10px] font-bold tracking-[0.7px] uppercase text-[#94a3b8] mb-1">AI Category</div>
+                                                            <div className="text-[13px] font-bold text-[#1e293b]">
+                                                                {selectedEnquiry.AI_Verification_Category || "—"}
+                                                            </div>
+                                                        </div>
+                                                        <div className="border border-[#e2e8f0] rounded-xl bg-white p-[10px_14px]">
+                                                            <div className="text-[10px] font-bold tracking-[0.7px] uppercase text-[#94a3b8] mb-1">Valid Reason (Classification)</div>
+                                                            <div className="text-[13px] font-bold text-[#4f46e5]">
+                                                                {selectedEnquiry.CY || selectedEnquiry.valid_reason_senior_verifier || selectedEnquiry.CJ || "—"}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="border border-[#e2e8f0] rounded-xl bg-white p-[12px_16px]">
+                                                        <div className="text-[10px] font-bold tracking-[0.7px] uppercase text-[#94a3b8] mb-1">AI Remarks / Recommendation</div>
+                                                        <div className="text-[13px] font-medium leading-relaxed text-[#1e293b] whitespace-pre-wrap bg-[#f8fafc] border border-[#e2e8f0] rounded-lg p-3">
+                                                            {selectedEnquiry.ai_remarks || selectedEnquiry.explanation || selectedEnquiry.DC || selectedEnquiry.CN || "No specific AI remarks recorded for this entry."}
+                                                        </div>
+                                                    </div>
+
+                                                    {(selectedEnquiry.CZ || selectedEnquiry.what_went_wrong_by_sales_team_senior_verifier) && (
+                                                        <div className="border border-rose-100 rounded-xl bg-rose-50/40 p-[12px_16px]">
+                                                            <div className="text-[10px] font-bold tracking-[0.7px] uppercase text-rose-700 mb-1">Identified Sales Gap / What Went Wrong</div>
+                                                            <div className="text-[12.5px] font-medium leading-relaxed text-rose-950 whitespace-pre-wrap bg-white border border-rose-200/60 rounded-lg p-3">
+                                                                {selectedEnquiry.CZ || selectedEnquiry.what_went_wrong_by_sales_team_senior_verifier}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {selectedEnquiry.complete_explanation && (
+                                                        <div className="border border-[#e2e8f0] rounded-xl bg-white p-[12px_16px]">
+                                                            <div className="text-[10px] font-bold tracking-[0.7px] uppercase text-[#94a3b8] mb-1">Complete Audit Breakdown</div>
+                                                            <div className="text-[12px] font-mono leading-relaxed text-slate-700 whitespace-pre-wrap max-h-[220px] overflow-y-auto bg-[#f8fafc] border border-[#e2e8f0] rounded-lg p-3">
+                                                                {selectedEnquiry.complete_explanation}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
 
