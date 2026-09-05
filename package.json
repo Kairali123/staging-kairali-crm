@@ -15,6 +15,7 @@
     "security:audit:high": "npm audit --omit=dev --audit-level=high",
     "security:ci": "npm run security:regression && npm run security:routes && npm run security:static && npm run security:typecheck",
     "ci:security": "npm run security:ci",
+    "test:call-audit": "npx tsx --test scripts/sales-call-audit-executable-routes.test.ts",
     "test:crr": "npx tsx --test scripts/crr-query-boundary.test.mjs",
     "typecheck": "tsc --noEmit --incremental false",
     "start": "next start"

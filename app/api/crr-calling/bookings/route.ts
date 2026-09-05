@@ -189,13 +189,13 @@ export async function GET(req: NextRequest) {
 
         const pool = await getPool();
 
-        // 1. Explicit minimal projection — only the 42 columns needed by downstream mapper
+        // 1. Explicit minimal projection — exact columns verified against KTAHV_CRR_Process_FMS schema
         const PROJECTION_SQL = `
             SELECT 
                 id, timestamp, check_in_date, check_out_date, client_name, gender, mobile, 
                 country, country_code, email, booking_id, days_of_stay, programme_package_name, 
                 package_type, room_type, room_category, invoice_amount, booking_taken_by, mid, 
-                booking_no, booking_url, uid, booking_status, reservation_id,
+                booking_no, booking_url, uid, booking_status,
                 stage1_call_date_planned, stage1_task_done_actual, stage1_actual_for_next_visit_date,
                 stage2_planned, stage2_actual, stage2_remarks, stage2_next_visit_date,
                 stage4_rating_request_call_date_planned, stage4_task_done_actual, stage4_remarks_for_next_visit_date,
@@ -227,22 +227,55 @@ export async function GET(req: NextRequest) {
         const checkinKeys = Array.from(
             new Set(
                 processRows
-                    .flatMap((r) => [r.booking_id, r.booking_no, r.reservation_id, r.uid])
+                    .flatMap((r) => [r.booking_id, r.booking_no, r.uid])
                     .filter(Boolean)
                     .map((s) => String(s).trim())
             )
         );
 
-        // 3. Concurrently fetch all related sub-queries in parallel
+        // 3. Concurrently fetch all related sub-queries in parallel with explicit projections
         const [callingResult, trackerResult, checkinResult, permResult] = await Promise.all([
             uids.length > 0
-                ? pool.query<any[]>(`SELECT * FROM KTAHV_CRR_Calling_FMS WHERE uid IN (?) ORDER BY id ASC`, [uids])
+                ? pool.query<any[]>(
+                    `SELECT id, uid, call_purpose, planned, actual, to_show, updated_at, timestamp,
+                            status, outcome_remarks, did_they_achieve_the_outcomes_planned_for,
+                            remarks_why_not_done_or_close, followup_date_for_the_welcome_call,
+                            followup_date_for_the_rating, followup_date_for_the_result_and_progress,
+                            doer, rating_status, remarks_why_not_given_ratings, proof_of_ratings,
+                            stay_feedback
+                     FROM KTAHV_CRR_Calling_FMS
+                     WHERE uid IN (?)
+                     ORDER BY id ASC`,
+                    [uids]
+                  )
                 : Promise.resolve([[]] as any),
             bookingIds.length > 0
-                ? pool.query<any[]>(`SELECT * FROM ktahv_guest_tracker WHERE booking_id IN (?)`, [bookingIds])
+                ? pool.query<any[]>(
+                    `SELECT booking_id, arrival_planned, arrival_actual, arrival_doer_name,
+                            client_arrival_data_upload_remarks, departure_planned, departure_actual,
+                            departure_doer_name, client_departure_data_upload_remarks,
+                            doctor_assigned_to_the_client, updated_at
+                     FROM ktahv_guest_tracker
+                     WHERE booking_id IN (?)`,
+                    [bookingIds]
+                  )
                 : Promise.resolve([[]] as any),
             checkinKeys.length > 0
-                ? pool.query<any[]>(`SELECT * FROM ktahv_checkinmasterfms WHERE reservation_id IN (?)`, [checkinKeys])
+                ? pool.query<any[]>(
+                    `SELECT id, reservation_id, room_no,
+                            stage3_planned, stage3_actual, stage3_doer_remarks, stage3_doer, stage3_time_delay,
+                            stage2_qr_code_scanned_status_by_guest_or_not,
+                            stage2_guest_feedback_after_scanning_ai_qr_code,
+                            stage2_guest_testinomial_feedback_received_through_html_form,
+                            stage2_referral_received_through_referral_html_form,
+                            stage4_planned, stage4_actual, stage4_doer_remarks, stage4_doer, stage4_time_delay,
+                            stage4_feedback_taking_url, stage4_feedback_report,
+                            stage5_planned_referral, stage5_actual_referral, stage5_doer_remarks,
+                            stage5_referral_taken_status, stage5_doer_referral, stage5_time_delay_referral
+                     FROM ktahv_checkinmasterfms
+                     WHERE reservation_id IN (?)`,
+                    [checkinKeys]
+                  )
                 : Promise.resolve([[]] as any),
             pool.query<any[]>(
                 `SELECT 
