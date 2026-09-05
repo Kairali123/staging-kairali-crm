@@ -4,7 +4,10 @@ import assert from 'node:assert/strict'
 import { createHmac, randomUUID } from 'node:crypto'
 import { NextRequest } from 'next/server'
 
-import { GET as getDialShreeSent } from '../app/api/dialshree/sent/route'
+import fs from 'node:fs'
+import path from 'node:path'
+import os from 'node:os'
+import { GET as getDialShreeSent, clearDialShreeSentMemoryCache } from '../app/api/dialshree/sent/route'
 
 const TEST_SECRET = process.env.NEXTAUTH_SECRET || 'test-secret-key-sales-audit-32'
 
@@ -54,6 +57,20 @@ test('Executable Route Handlers Suite (DialShree Sent Outreach)', async (t) => {
   let dbShouldFail = false
   let executedSql = ''
   let executedParams: any[] = []
+
+  const cleanupTempCache = () => {
+    clearDialShreeSentMemoryCache()
+    const tmpFile = path.join(os.tmpdir(), "dialshree_sent_cache_v1.json")
+    try {
+      if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile)
+    } catch {}
+  }
+
+  cleanupTempCache()
+  t.after(() => {
+    cleanupTempCache()
+    delete (global as any)._sqlPool
+  })
 
   const mockDbPool = {
     getConnection: async () => {

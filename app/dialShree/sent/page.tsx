@@ -8,341 +8,651 @@ import { useAuth } from "@/hooks/use-auth";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-    Search,
-    Loader2,
-    Send,
-    PhoneCall,
-    CheckCircle2,
-    AlertCircle,
-    Clock,
-    Download,
-    Copy,
-    Check,
-    ChevronLeft,
-    ChevronRight,
-    ChevronsLeft,
-    ChevronsRight,
-    ExternalLink,
-    Filter,
-    ArrowUpDown,
-    Eye,
-    X,
-    PhoneOutgoing,
-    PhoneIncoming,
-} from "lucide-react";
+import { Search, Loader2 } from "lucide-react";
 
-// ─── Status & Color Types ─────────────────────────────────────────────────────
+// ─── Color Types ─────────────────────────────────────────────────────────────
 
-type PillColor = "green" | "blue" | "purple" | "orange" | "red" | "yellow" | "gray" | "teal" | "indigo";
+type PillColor = "green" | "blue" | "purple" | "orange" | "red" | "yellow" | "gray" | "teal" | "indigo" | "pink";
+type DotColor = "g" | "o" | "r" | "b" | "x";
 
-const PILL_STYLES: Record<PillColor, { bg: string; fg: string; border: string }> = {
-    green: { bg: "#dcfce7", fg: "#15803d", border: "#bbf7d0" },
-    blue: { bg: "#dbeafe", fg: "#1d4ed8", border: "#bfdbfe" },
-    purple: { bg: "#f3e8ff", fg: "#7e22ce", border: "#e9d5ff" },
-    orange: { bg: "#ffedd5", fg: "#c2410c", border: "#fed7aa" },
-    red: { bg: "#fee2e2", fg: "#b91c1c", border: "#fecaca" },
-    yellow: { bg: "#fef9c3", fg: "#854d0e", border: "#fef08a" },
-    gray: { bg: "#f1f5f9", fg: "#475569", border: "#e2e8f0" },
-    teal: { bg: "#ccfbf1", fg: "#0f766e", border: "#99f6e4" },
-    indigo: { bg: "#e0e7ff", fg: "#4338ca", border: "#c7d2fe" },
+// ─── Format Date/Time ─────────────────────────────────────────────────────────
+
+export function formatDisplayDateTime(val: any): string {
+    if (!val || val === "—" || val === "null" || val === "undefined") return "—";
+    const s = String(val).trim();
+    if (!s) return "—";
+    if (/^\d{2}\/\d{2}\/\d{4}/.test(s)) return s;
+
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+    if (m) {
+        const year = m[1];
+        const month = m[2];
+        const day = m[3];
+        const hours = m[4];
+        const mins = m[5];
+        if (hours !== undefined && mins !== undefined && (hours !== "00" || mins !== "00")) {
+            return `${day}/${month}/${year} ${hours}:${mins}`;
+        }
+        return `${day}/${month}/${year}`;
+    }
+
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) {
+        const p = (n: number) => String(n).padStart(2, "0");
+        const hours = p(d.getHours());
+        const mins = p(d.getMinutes());
+        if (hours !== "00" || mins !== "00") {
+            return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${hours}:${mins}`;
+        }
+        return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+    }
+    return s;
+}
+
+// ─── Table Primitives ─────────────────────────────────────────────────────────
+
+const PILL_STYLES: Record<PillColor, React.CSSProperties> = {
+    green: { background: "#d1fae5", color: "#065f46" },
+    blue: { background: "#dbeafe", color: "#1e40af" },
+    purple: { background: "#ede9fe", color: "#5b21b6" },
+    orange: { background: "#ffedd5", color: "#9a3412" },
+    red: { background: "#fee2e2", color: "#991b1b" },
+    yellow: { background: "#fef3c7", color: "#92400e" },
+    gray: { background: "#f1f5f9", color: "#475569" },
+    teal: { background: "#ccfbf1", color: "#0f766e" },
+    indigo: { background: "#e0e7ff", color: "#3730a3" },
+    pink: { background: "#fce7f3", color: "#9d174d" },
 };
+const DOT: { [k in DotColor]: string } = { g: "#10b981", o: "#f59e0b", r: "#ef4444", b: "#3b82f6", x: "#94a3b8" };
 
-function StatusBadge({ label, color }: { label: string; color: PillColor }) {
-    const style = PILL_STYLES[color] || PILL_STYLES.gray;
+function Pill({ label, color, dot }: { label: string; color: PillColor; dot?: DotColor }) {
     return (
-        <span
-            style={{
-                backgroundColor: style.bg,
-                color: style.fg,
-                borderColor: style.border,
-            }}
-            className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border shadow-2xs whitespace-nowrap"
-        >
-            <span
-                className="w-1.5 h-1.5 rounded-full shrink-0"
-                style={{ backgroundColor: style.fg }}
-            />
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "2px 8px", borderRadius: 20, fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap", ...PILL_STYLES[color] }}>
+            {dot && <span style={{ width: 6, height: 6, borderRadius: "50%", background: DOT[dot], display: "inline-block" }} />}
             {label}
         </span>
     );
 }
 
-function IntentBadge({ intent }: { intent: string }) {
-    const norm = (intent || "").toLowerCase().trim();
-    if (norm === "high") return <StatusBadge label="High Intent" color="red" />;
-    if (norm === "medium" || norm === "med") return <StatusBadge label="Medium Intent" color="orange" />;
-    if (norm === "low") return <StatusBadge label="Low Intent" color="green" />;
-    return <span className="text-slate-400 text-xs">—</span>;
+function Td({ children, style, className }: { children: React.ReactNode; style?: React.CSSProperties; className?: string }) {
+    return <td className={className} style={{ padding: "8px 11px", fontSize: 11.5, color: "#374151", borderRight: "1px solid #f1f5f9", whiteSpace: "nowrap", verticalAlign: "middle", ...style }}>{children}</td>;
 }
 
-// ─── Lead Details Modal ───────────────────────────────────────────────────────
+function Th({ children, style: extraStyle, className }: { children: React.ReactNode; style?: React.CSSProperties; className?: string }) {
+    return <th className={className} style={{ padding: "9px 11px", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,.78)", textTransform: "uppercase" as const, letterSpacing: ".6px", whiteSpace: "nowrap", textAlign: "left" as const, borderRight: "1px solid rgba(255,255,255,.06)", ...extraStyle }}>{children}</th>;
+}
 
-function LeadDetailsModal({ lead, onClose }: { lead: DialShreeSentLead; onClose: () => void }) {
+function SortableTh({ children, colKey, sortKey, sortDir, onSort, style: extraStyle, className }: {
+    children: React.ReactNode; colKey: string; sortKey: string; sortDir: "asc" | "desc"; onSort: (k: string) => void; style?: React.CSSProperties; className?: string;
+}) {
+    const active = sortKey === colKey;
+    return (
+        <th className={className} onClick={() => onSort(colKey)} style={{ padding: "9px 11px", fontSize: 10, fontWeight: 700, color: active ? "#fff" : "rgba(255,255,255,.78)", textTransform: "uppercase" as const, letterSpacing: ".6px", whiteSpace: "nowrap", textAlign: "left" as const, borderRight: "1px solid rgba(255,255,255,.06)", cursor: "pointer", userSelect: "none", background: active ? "rgba(255,255,255,.12)" : undefined, ...extraStyle }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                {children}
+                <span className="sort-arrows" style={{ display: "inline-flex", flexDirection: "column", gap: 1, opacity: active ? 1 : 0.4 }}>
+                    <span style={{ fontSize: 7, lineHeight: 1, color: active && sortDir === "asc" ? "#fff" : "rgba(255,255,255,.5)" }}>▲</span>
+                    <span style={{ fontSize: 7, lineHeight: 1, color: active && sortDir === "desc" ? "#fff" : "rgba(255,255,255,.5)" }}>▼</span>
+                </span>
+            </span>
+        </th>
+    );
+}
+
+function HLabel({ full, short }: { full: string; short: string }) {
+    return <>
+        <span className="lbl-full">{full}</span>
+        <span className="lbl-short">{short}</span>
+    </>;
+}
+
+function TooltipTd({ children, label, maxWidth = 140, mono = false }: { children: string; label: string; maxWidth?: number; mono?: boolean }) {
+    const [show, setShow] = useState(false);
+    const [pos, setPos] = useState({ x: 0, y: 0 });
+    const isEmpty = !children || children === "—";
+    return (
+        <td onMouseEnter={isEmpty ? undefined : e => { const r = e.currentTarget.getBoundingClientRect(); setPos({ x: r.left, y: r.bottom + 8 }); setShow(true); }} onMouseLeave={() => setShow(false)}
+            style={{ padding: "8px 11px", fontSize: 11.5, color: "#374151", borderRight: "1px solid #f1f5f9", maxWidth, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "middle", fontFamily: mono ? "monospace" : undefined }}>
+            {children}
+            {show && !isEmpty && (
+                <div style={{ position: "fixed", left: Math.min(pos.x, window.innerWidth - 340), top: pos.y, zIndex: 9999, background: "#1e2a4a", color: "#f1f5f9", fontSize: 12, padding: "10px 14px", borderRadius: 9, maxWidth: 400, whiteSpace: "pre-wrap", wordBreak: "break-word", boxShadow: "0 8px 24px rgba(0,0,0,.28)", lineHeight: 1.6, pointerEvents: "none" }}>
+                    <div style={{ position: "absolute", top: -6, left: 16, width: 0, height: 0, borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderBottom: "6px solid #1e2a4a" }} />
+                    <span style={{ fontWeight: 700, color: "#a5b4fc", fontSize: 10, textTransform: "uppercase" as const, letterSpacing: ".6px", display: "block", marginBottom: 5 }}>{label}</span>
+                    <span style={{ fontFamily: mono ? "monospace" : undefined }}>{children}</span>
+                </div>
+            )}
+        </td>
+    );
+}
+
+function CopyTd({ value, style: extraStyle, className }: { value: string; style?: React.CSSProperties; className?: string }) {
     const [copied, setCopied] = useState(false);
-
-    const handleCopyId = () => {
-        if (lead.leadId) {
-            navigator.clipboard.writeText(lead.leadId);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1800);
-        }
-    };
-
-    const initials = (name: string) =>
-        (name || "")
-            .split(" ")
-            .filter(Boolean)
-            .slice(0, 2)
-            .map((w) => w[0])
-            .join("")
-            .toUpperCase() || "L";
+    const handleCopy = () => { navigator.clipboard.writeText(value).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1800); }); };
+    const { background: extraBg, ...restExtra } = extraStyle || {};
 
     return (
-        <div
-            onClick={(e) => {
-                if (e.target === e.currentTarget) onClose();
-            }}
-            className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-150"
-        >
-            <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
-                {/* Modal Header */}
-                <div className="bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 p-5 text-white flex items-start justify-between gap-4 shrink-0">
-                    <div className="flex items-center gap-3.5 min-w-0">
-                        <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center font-black text-lg text-indigo-200 shrink-0">
-                            {initials(lead.clientName)}
-                        </div>
-                        <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                                <h3 className="text-lg font-bold text-white truncate" title={lead.clientName}>
-                                    {lead.clientName}
-                                </h3>
-                                <StatusBadge
-                                    label={lead.deliveryStatus.label}
-                                    color={lead.deliveryStatus.color as PillColor}
-                                />
-                            </div>
-                            <div className="flex items-center gap-2 text-xs text-slate-300 mt-1 flex-wrap">
-                                <span className="font-mono bg-white/10 px-2 py-0.5 rounded text-[11px] text-slate-200">
-                                    ID: {lead.leadId}
-                                </span>
-                                <button
-                                    onClick={handleCopyId}
-                                    className="inline-flex items-center gap-1 text-[11px] text-indigo-300 hover:text-white transition-colors"
-                                >
-                                    {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                                    {copied ? "Copied" : "Copy ID"}
-                                </button>
-                                <span>•</span>
-                                <span>Enquiry: {lead.enquiryDateTime || lead.timestamp || "—"}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <button
-                        onClick={onClose}
-                        className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors shrink-0"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
+        <td className={`${className || ''} ${copied ? 'copied-active' : ''}`} onClick={handleCopy} title={value} style={{ padding: "8px 11px", fontSize: 11, borderRight: "1px solid #f1f5f9", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "middle", cursor: "pointer", fontFamily: "monospace", color: copied ? "#059669" : "#475569", background: copied ? "#f0fdf4" : (extraBg || undefined), transition: "background .2s, color .2s", userSelect: "all", ...restExtra }}>
+            {copied ? "✓ Copied!" : value}
+        </td>
+    );
+}
+
+function colorText(value: string, type: "status" | "intent"): string {
+    const v = (value || "").toLowerCase().trim();
+    if (type === "intent") {
+        if (v.includes("high")) return "#059669";
+        if (v.includes("med")) return "#d97706";
+        if (v.includes("low")) return "#ea580c";
+        return "#64748b";
+    }
+    if (type === "status") {
+        if (v.includes("sent")) return "#059669";
+        if (v.includes("exception") || v.includes("error") || v.includes("failed")) return "#dc2626";
+        return "#ea580c";
+    }
+    return "#374151";
+}
+
+function ColorTd({ value, type, maxWidth }: { value: string; type: "status" | "intent"; maxWidth?: number }) {
+    if (!value || value === "—") return <Td>{value || "—"}</Td>;
+    return (
+        <td style={{ padding: "8px 11px", fontSize: 11.5, borderRight: "1px solid #f1f5f9", whiteSpace: "nowrap", verticalAlign: "middle", maxWidth, overflow: maxWidth ? "hidden" : undefined, textOverflow: maxWidth ? "ellipsis" : undefined }}>
+            <span style={{ color: colorText(value, type), fontWeight: 700 }} title={value}>{value}</span>
+        </td>
+    );
+}
+
+// ─── Pagination ───────────────────────────────────────────────────────────────
+
+function Pagination({ total, page, perPage, onPage, onPerPage }: { total: number; page: number; perPage: number; onPage: (p: number) => void; onPerPage: (n: number) => void }) {
+    const totalPages = Math.max(1, Math.ceil(total / perPage));
+    const from = total === 0 ? 0 : Math.min((page - 1) * perPage + 1, total);
+    const to = Math.min(page * perPage, total);
+    const [goInput, setGoInput] = useState("");
+    const handleGo = () => { const n = parseInt(goInput); if (!isNaN(n) && n >= 1 && n <= totalPages) { onPage(n); setGoInput(""); } };
+    const getPages = (): (number | "…")[] => {
+        if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+        const pages: (number | "…")[] = [1];
+        if (page > 3) pages.push("…");
+        for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) pages.push(i);
+        if (page < totalPages - 2) pages.push("…");
+        pages.push(totalPages);
+        return pages;
+    };
+    const btn = (label: React.ReactNode, onClick: () => void, disabled: boolean, active = false, key?: string): React.ReactNode => (
+        <button key={key} onClick={onClick} disabled={disabled} style={{ height: 30, minWidth: 30, padding: "0 8px", border: active ? "none" : "1px solid #e2e8f0", borderRadius: 6, fontSize: 12.5, fontWeight: active ? 700 : 500, cursor: disabled ? "not-allowed" : "pointer", background: active ? "#4f46e5" : disabled ? "#f8fafc" : "#fff", color: active ? "#fff" : disabled ? "#cbd5e1" : "#374151", fontFamily: "inherit", display: "inline-flex", alignItems: "center", justifyContent: "center", transition: "all .12s" }}>{label}</button>
+    );
+    return (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, padding: "10px 14px", borderTop: "1px solid #f1f5f9", background: "#fafbfe" }}>
+            <div style={{ fontSize: 12.5, color: "#64748b", whiteSpace: "nowrap" }}>Showing <strong style={{ color: "#1e2a4a" }}>{from}–{to}</strong> of <strong style={{ color: "#1e2a4a" }}>{total}</strong> leads</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                {btn("«", () => onPage(1), page === 1, false, "first")}
+                {btn("‹ Prev", () => onPage(page - 1), page === 1, false, "prev")}
+                {getPages().map((p, i) => p === "…" ? <span key={`e${i}`} style={{ fontSize: 12.5, color: "#94a3b8", padding: "0 4px" }}>…</span> : btn(p, () => onPage(p as number), false, p === page, `page-${p}`))}
+                {btn("Next ›", () => onPage(page + 1), page === totalPages, false, "next")}
+                {btn("»", () => onPage(totalPages), page === totalPages, false, "last")}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12.5, color: "#64748b" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span>Rows/page</span>
+                    <select aria-label="Rows per page" value={perPage} onChange={e => { onPerPage(Number(e.target.value)); onPage(1); }} style={{ height: 30, padding: "0 6px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12.5, fontFamily: "inherit", background: "#fff", color: "#374151", cursor: "pointer" }}>
+                        {[10, 25, 50, 100, 500].map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
                 </div>
-
-                {/* Modal Body */}
-                <div className="p-6 overflow-y-auto space-y-6 text-xs sm:text-sm">
-                    {/* Grid: 2 Columns */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        {/* Section: Client & Contact */}
-                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
-                            <div className="flex items-center gap-2 font-bold text-slate-900 pb-2 border-b border-slate-200">
-                                <span className="text-indigo-600">👤</span> Client Contact Details
-                            </div>
-                            <div className="grid grid-cols-2 gap-3 text-xs">
-                                <div>
-                                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Primary Mobile</span>
-                                    <span className="font-semibold text-slate-800">{lead.mobile || "—"}</span>
-                                </div>
-                                <div>
-                                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Alternate Mobile</span>
-                                    <span className="font-semibold text-slate-800">{lead.altMobile || "—"}</span>
-                                </div>
-                                <div>
-                                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Primary Email</span>
-                                    <span className="font-semibold text-slate-800 truncate block" title={lead.email}>
-                                        {lead.email || "—"}
-                                    </span>
-                                </div>
-                                <div>
-                                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Alternate Email</span>
-                                    <span className="font-semibold text-slate-800 truncate block" title={lead.altEmail}>
-                                        {lead.altEmail || "—"}
-                                    </span>
-                                </div>
-                                <div>
-                                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Location / Geo</span>
-                                    <span className="font-semibold text-slate-800">
-                                        {[lead.location, lead.geo].filter(Boolean).join(", ") || "—"}
-                                    </span>
-                                </div>
-                                <div>
-                                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Region / Code</span>
-                                    <span className="font-semibold text-slate-800">
-                                        {[lead.region, lead.code].filter(Boolean).join(" · ") || "—"}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Section: Campaign & DialShree Settings */}
-                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
-                            <div className="flex items-center gap-2 font-bold text-slate-900 pb-2 border-b border-slate-200">
-                                <span className="text-indigo-600">🎯</span> Campaign & Dialer Outreach
-                            </div>
-                            <div className="grid grid-cols-2 gap-3 text-xs">
-                                <div>
-                                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Campaign Name</span>
-                                    <span className="font-semibold text-slate-800">{lead.campaignName || "—"}</span>
-                                </div>
-                                <div>
-                                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Dialer List ID</span>
-                                    <span className="font-mono font-semibold text-slate-800">{lead.listId || "—"}</span>
-                                </div>
-                                <div>
-                                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Target Brand / Website</span>
-                                    <span className="font-semibold text-slate-800">{lead.websiteName || "—"}</span>
-                                </div>
-                                <div>
-                                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Assigned MR / Agent</span>
-                                    <span className="font-semibold text-slate-800">{lead.assignTo || "—"}</span>
-                                </div>
-                                <div className="col-span-2">
-                                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Data Source</span>
-                                    <span className="font-medium text-slate-700 break-words">{lead.dataSource || "—"}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Section: Outreach Delivery & Exceptions */}
-                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
-                            <div className="flex items-center gap-2 font-bold text-slate-900 pb-2 border-b border-slate-200">
-                                <span className="text-indigo-600">📤</span> Dispatch & Response Result
-                            </div>
-                            <div className="space-y-2.5 text-xs">
-                                <div>
-                                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Response Result</span>
-                                    <div className="mt-1 p-2.5 bg-white rounded-lg border border-slate-200 font-mono text-[11px] text-slate-700 break-words whitespace-pre-wrap max-h-28 overflow-y-auto">
-                                        {lead.responseResult || "No response data recorded"}
-                                    </div>
-                                </div>
-                                {lead.actionAfterException && (
-                                    <div>
-                                        <span className="text-[10px] font-bold uppercase text-rose-500 block">Exception Action / Note</span>
-                                        <div className="mt-1 p-2.5 bg-rose-50 rounded-lg border border-rose-200 text-[11px] text-rose-800 break-words">
-                                            {lead.actionAfterException}
-                                        </div>
-                                    </div>
-                                )}
-                                <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
-                                    <div>
-                                        <span className="text-slate-400 block">Sent Timestamp:</span>
-                                        <span className="font-semibold text-slate-700">{lead.timestampSentNotSent || "—"}</span>
-                                    </div>
-                                    <div>
-                                        <span className="text-slate-400 block">Action Timestamp:</span>
-                                        <span className="font-semibold text-slate-700">{lead.timestampAfterAction || "—"}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Section: Timezone & Calling Window */}
-                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
-                            <div className="flex items-center gap-2 font-bold text-slate-900 pb-2 border-b border-slate-200">
-                                <span className="text-indigo-600">🕒</span> Calling Hours & Geolocation
-                            </div>
-                            <div className="grid grid-cols-2 gap-3 text-xs">
-                                <div>
-                                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Timezone</span>
-                                    <span className="font-semibold text-slate-800">{lead.timezone || "Asia/Kolkata"}</span>
-                                </div>
-                                <div>
-                                    <span className="text-[10px] font-bold uppercase text-slate-400 block">UTC Offset</span>
-                                    <span className="font-semibold text-slate-800">{lead.utcOffset || "+05:30"}</span>
-                                </div>
-                                <div>
-                                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Business Hours Start</span>
-                                    <span className="font-semibold text-slate-800">{lead.businessHoursStart || "—"}</span>
-                                </div>
-                                <div>
-                                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Business Hours End</span>
-                                    <span className="font-semibold text-slate-800">{lead.businessHoursEnd || "—"}</span>
-                                </div>
-                                <div className="col-span-2">
-                                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Weekdays Configuration</span>
-                                    <span className="font-semibold text-slate-800">{lead.weekdaysConfig || "—"}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Section: Remarks & Enquiry Notes */}
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
-                        <div className="flex items-center gap-2 font-bold text-slate-900 pb-2 border-b border-slate-200">
-                            <span className="text-indigo-600">📝</span> Remarks, Intent & Enquiry Notes
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                            <div className="bg-white p-3 rounded-lg border border-slate-200">
-                                <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Lead Intent</span>
-                                <IntentBadge intent={lead.sqvLeadIntent} />
-                            </div>
-                            <div className="col-span-2 bg-white p-3 rounded-lg border border-slate-200">
-                                <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">SQV Remarks</span>
-                                <p className="text-slate-700 leading-relaxed">{lead.sqvRemarks || "—"}</p>
-                            </div>
-                        </div>
-
-                        {lead.subjects && (
-                            <div className="bg-white p-3 rounded-lg border border-slate-200 text-xs">
-                                <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Enquiry Subject</span>
-                                <p className="text-slate-800 font-semibold">{lead.subjects}</p>
-                            </div>
-                        )}
-
-                        {lead.notes && (
-                            <div className="bg-white p-3 rounded-lg border border-slate-200 text-xs">
-                                <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Enquiry Notes</span>
-                                <p className="text-slate-700 leading-relaxed whitespace-pre-wrap">{lead.notes}</p>
-                            </div>
-                        )}
-
-                        {lead.remarksHistory && (
-                            <div className="bg-white p-3 rounded-lg border border-slate-200 text-xs">
-                                <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Remarks History</span>
-                                <p className="text-slate-600 leading-relaxed whitespace-pre-wrap">{lead.remarksHistory}</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* Modal Footer */}
-                <div className="p-4 bg-slate-100 border-t border-slate-200 flex items-center justify-between shrink-0">
-                    <div className="text-[11px] text-slate-500">
-                        Primary Key ID: <span className="font-mono font-bold text-slate-700">{lead.id}</span> · Created: {lead.createdAt || "—"}
-                    </div>
-                    <Button onClick={onClose} variant="default" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6">
-                        Close Details
-                    </Button>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span>Go to</span>
+                    <input aria-label="Go to page" type="number" min={1} max={totalPages} value={goInput} onChange={e => setGoInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleGo()} placeholder="Page" style={{ height: 30, width: 56, padding: "0 8px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12.5, fontFamily: "inherit", background: "#fff", color: "#374151", textAlign: "center", outline: "none" }} />
+                    <button onClick={handleGo} style={{ height: 30, padding: "0 14px", borderRadius: 6, border: "none", background: "#4f46e5", color: "#fff", fontSize: 12.5, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}>Go</button>
                 </div>
             </div>
         </div>
     );
 }
 
-// ─── Main Component Inner ─────────────────────────────────────────────────────
+// ─── SVG Icons ────────────────────────────────────────────────────────────────
+
+const SendSvg = ({ sz = 14 }: { sz?: number }) => (
+    <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="22" y1="2" x2="11" y2="13" />
+        <polygon points="22 2 15 22 11 13 2 9 22 2" />
+    </svg>
+);
+
+// ─── Sent View Modal ──────────────────────────────────────────────────────────
+
+function SentViewModal({ row, onClose }: { row: DialShreeSentLead; onClose: () => void }) {
+    const val = (v: any) => {
+        if (v === null || v === undefined) return "—";
+        const t = String(v).trim();
+        return t === "" || t === "0" || t === "—" ? "—" : t;
+    };
+
+    const Field = ({ label, value, color = "#4f46e5" }: { label: string; value: any; color?: string }) => (
+        <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: ".8px", textTransform: "uppercase", color, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</div>
+            <div style={{ fontSize: 12.5, color: "#1e293b", fontWeight: 500, lineHeight: 1.6, wordBreak: "break-word", overflowWrap: "anywhere" }}>{val(value)}</div>
+        </div>
+    );
+
+    const Section = ({ title, icon, color, children, style }: { title: string; icon: string; color: string; children: React.ReactNode; style?: React.CSSProperties }) => (
+        <div style={{ paddingBottom: 18, ...style }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 16 }}>
+                <span style={{ fontSize: 13 }}>{icon}</span>
+                <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "1px", textTransform: "uppercase", color }}>{title}</span>
+                <div style={{ flex: 1, height: 1, background: `${color}15`, marginLeft: 8 }} />
+            </div>
+            {children}
+        </div>
+    );
+
+    return (
+        <div style={{ position: "fixed", inset: 0, zIndex: 10000, background: "rgba(15,23,42,0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+            onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+            <div style={{ background: "#fff", borderRadius: 20, width: "100%", maxWidth: 1100, maxHeight: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)", overflow: "hidden", border: "1px solid #e2e8f0" }}>
+                {/* Header */}
+                <div style={{ background: "linear-gradient(135deg,#1e1b4b,#312e81,#4338ca)", padding: "20px 28px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+                    <div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>DialShree Outbound Lead Details</div>
+                        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", marginTop: 4, display: "flex", gap: 8, alignItems: "center" }}>
+                            <span style={{ background: "rgba(255,255,255,0.15)", padding: "2px 8px", borderRadius: 4 }}>{row.clientName}</span>
+                            <span style={{ opacity: 0.5 }}>•</span>
+                            <span>{row.mobile}</span>
+                            {row.leadId && <><span style={{ opacity: 0.5 }}>•</span><span style={{ fontFamily: "monospace", fontSize: 11 }}>ID: {row.leadId}</span></>}
+                            <span style={{ opacity: 0.5 }}>•</span>
+                            <Pill label={row.deliveryStatus.label} color={row.deliveryStatus.color as PillColor} dot={row.deliveryStatus.category === "sent" ? "g" : row.deliveryStatus.category === "exception" ? "r" : "o"} />
+                        </div>
+                    </div>
+                    <button onClick={onClose} style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "rgba(255,255,255,0.1)", color: "#fff", fontSize: 24, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.2)"} onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}>×</button>
+                </div>
+                {/* Content */}
+                <div style={{ overflowY: "auto", padding: "32px", display: "flex", flexDirection: "column", gap: 32 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "32px 48px" }}>
+                        <Section title="Client Information" icon="👤" color="#0891b2">
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "16px 20px" }}>
+                                <Field label="Client Name" value={row.clientName} color="#0891b2" />
+                                <Field label="Primary Mobile" value={row.mobile} color="#0891b2" />
+                                <Field label="Alternate Mobile" value={row.altMobile} color="#0891b2" />
+                                <Field label="Email ID" value={row.email} color="#0891b2" />
+                                <Field label="Alternate Email" value={row.altEmail} color="#0891b2" />
+                                <Field label="Lead ID" value={row.leadId} color="#0891b2" />
+                            </div>
+                        </Section>
+                        <Section title="Campaign & Outreach" icon="🎯" color="#4f46e5">
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "16px 20px" }}>
+                                <Field label="Campaign Name" value={row.campaignName} color="#4f46e5" />
+                                <Field label="List ID" value={row.listId} color="#4f46e5" />
+                                <Field label="Target Company" value={row.company} color="#4f46e5" />
+                                <Field label="Website / Source" value={row.websiteName} color="#4f46e5" />
+                                <Field label="Assign To" value={row.assignTo} color="#4f46e5" />
+                                <Field label="Data Source" value={row.dataSource} color="#4f46e5" />
+                            </div>
+                        </Section>
+                        <Section title="Lead Qualification & Intent" icon="📈" color="#7c3aed">
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "16px 20px" }}>
+                                <Field label="Lead Intent" value={row.sqvLeadIntent} color="#7c3aed" />
+                                <Field label="Delivery Status" value={row.deliveryStatus.label} color="#7c3aed" />
+                                <Field label="Subject" value={row.subjects} color="#7c3aed" />
+                                <Field label="Intent Remarks" value={row.sqvRemarks} color="#7c3aed" />
+                            </div>
+                        </Section>
+                        <Section title="Location & Business Hours" icon="🕒" color="#d946ef">
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "16px 20px" }}>
+                                <Field label="Location" value={[row.location, row.geo].filter(Boolean).join(", ")} color="#d946ef" />
+                                <Field label="Region / Code" value={[row.region, row.code].filter(Boolean).join(" · ")} color="#d946ef" />
+                                <Field label="Timezone" value={row.timezone} color="#d946ef" />
+                                <Field label="Business Hours" value={`${row.businessHoursStart || '—'} to ${row.businessHoursEnd || '—'}`} color="#d946ef" />
+                                <Field label="Weekdays Config" value={row.weekdaysConfig} color="#d946ef" />
+                                <Field label="Enquiry D/T" value={row.enquiryDateTime} color="#d946ef" />
+                            </div>
+                        </Section>
+                    </div>
+
+                    <Section title="Outreach Response & Action" icon="📤" color="#03412f" style={{ borderTop: "2px solid #f1f5f9", paddingTop: 28 }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                            <div style={{ background: "#f8fafc", borderRadius: 16, border: "1px solid #e2e8f0", padding: "18px 22px" }}>
+                                <div style={{ fontSize: 10, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Dialer Response Result</div>
+                                <div style={{ fontSize: 13.5, color: "#1e293b", lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "monospace" }}>{val(row.responseResult)}</div>
+                            </div>
+                            {row.actionAfterException && (
+                                <div style={{ background: "#fef2f2", borderRadius: 16, border: "1px solid #fecaca", padding: "18px 22px" }}>
+                                    <div style={{ fontSize: 10, fontWeight: 800, color: "#b91c1c", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Exception Action / Remediation</div>
+                                    <div style={{ fontSize: 13.5, color: "#991b1b", lineHeight: 1.6, wordBreak: "break-word" }}>{row.actionAfterException}</div>
+                                </div>
+                            )}
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
+                                <div style={{ background: "#f8fafc", borderRadius: 16, border: "1px solid #e2e8f0", padding: "18px 22px" }}>
+                                    <div style={{ fontSize: 10, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Remarks History</div>
+                                    <div style={{ fontSize: 13, color: "#1e293b", lineHeight: 1.6, wordBreak: "break-word" }}>{val(row.remarksHistory)}</div>
+                                </div>
+                                <div style={{ background: "#f8fafc", borderRadius: 16, border: "1px solid #e2e8f0", padding: "18px 22px" }}>
+                                    <div style={{ fontSize: 10, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Original Notes</div>
+                                    <div style={{ fontSize: 13, color: "#1e293b", lineHeight: 1.6, wordBreak: "break-word" }}>{val(row.notes)}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </Section>
+                </div>
+                {/* Footer */}
+                <div style={{ borderTop: "1px solid #e2e8f0", padding: "18px 32px", display: "flex", alignItems: "center", justifyContent: "flex-end", background: "#f8fafc", flexShrink: 0 }}>
+                    <button onClick={onClose} style={{ padding: "12px 36px", borderRadius: 12, border: "none", background: "#4338ca", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 12px rgba(67,56,202,0.25)" }}>Close Details</button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ─── Status Breakdown Config ──────────────────────────────────────────────────
+
+type SentStatusKey = "total_sent" | "dispatched" | "exception" | "pending";
+
+const SENT_STATUS_CFG: { key: SentStatusKey; label: string; color: string; bgColor: string; borderColor: string }[] = [
+    { key: "total_sent", label: "Total Outbound", color: "#1d4ed8", bgColor: "#eff6ff", borderColor: "#93c5fd" },
+    { key: "dispatched", label: "Sent / Dispatched", color: "#047857", bgColor: "#ecfdf5", borderColor: "#6ee7b7" },
+    { key: "exception", label: "Exceptions / Errors", color: "#b91c1c", bgColor: "#fef2f2", borderColor: "#fca5a5" },
+    { key: "pending", label: "Pending Outreach", color: "#7c3aed", bgColor: "#f5f3ff", borderColor: "#c4b5fd" },
+];
+
+function SentStatusBreakdown({ counts, total, loading }: {
+    counts: Record<SentStatusKey, { total: number; high: number; medium: number; low: number }>;
+    total: number;
+    loading: boolean;
+}) {
+    return (
+        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, overflow: "hidden", boxShadow: "0 1px 8px rgba(0,0,0,0.06)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 20px", borderBottom: "1px solid #f1f5f9", background: "linear-gradient(90deg, #f8faff 0%, #ffffff 100%)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 9, background: "#dbeafe", color: "#1d4ed8", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "0 2px 7px #1d4ed828" }}>
+                        <SendSvg sz={16} />
+                    </div>
+                    <div>
+                        <div style={{ fontSize: 13.5, fontWeight: 700, color: "#1e293b", lineHeight: 1.2 }}>DialShree Outbound Outreach Status</div>
+                        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>DialShree Dispatch Performance — Delivery & Exception Breakdown</div>
+                    </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    {loading && <div style={{ width: 14, height: 14, border: "2px solid #e2e8f0", borderTopColor: "#4f46e5", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 20, padding: "4px 12px", color: "#1d4ed8", fontSize: 11.5, fontWeight: 600 }}>
+                        <span>Outbound</span>
+                        <span style={{ background: "#1d4ed8", color: "#fff", borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 800, marginLeft: 2 }}>{loading ? "…" : total}</span>
+                    </div>
+                </div>
+            </div>
+            <div style={{ padding: "18px 20px" }}>
+                <div style={{ background: "#f8fafc", border: "1px solid #e8edf8", borderRadius: 12, padding: "14px 16px 16px" }}>
+                    <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "1px", color: "#6366f1", textTransform: "uppercase" as const, marginBottom: 14 }}>Outreach Dispatch Analysis</div>
+                    {loading ? (
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
+                            {[...Array(4)].map((_, i) => <div key={i} style={{ height: 86, borderRadius: 10, background: "#e9ecef", animation: "kpi-pulse 1.4s ease-in-out infinite" }} />)}
+                        </div>
+                    ) : (
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
+                            {SENT_STATUS_CFG.map(cfg => {
+                                const stats = counts[cfg.key] || { total: 0, high: 0, medium: 0, low: 0 };
+                                const count = stats.total;
+                                const calculatePercent = (value: number, totalAmount: number) =>
+                                    totalAmount > 0 ? ((value / totalAmount) * 100).toFixed(1) : "0.0";
+                                const pct = calculatePercent(count, total);
+                                const isEmpty = count === 0;
+                                return (
+                                    <div key={cfg.key} style={{ background: cfg.bgColor, border: `1.5px solid ${cfg.borderColor}`, borderRadius: 10, padding: "13px 15px 12px", display: "flex", flexDirection: "column", gap: 8, transition: "box-shadow .18s, transform .18s", cursor: "default" }}
+                                        onMouseEnter={e => { if (!isEmpty) { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 14px rgba(0,0,0,0.09)"; (e.currentTarget as HTMLDivElement).style.transform = "translateY(-1px)"; } }}
+                                        onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; (e.currentTarget as HTMLDivElement).style.transform = "none"; }}>
+                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                                <span style={{ width: 7, height: 7, borderRadius: "50%", background: cfg.color, flexShrink: 0, display: "inline-block" }} />
+                                                <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".5px", textTransform: "uppercase", color: cfg.color, lineHeight: 1 }}>{cfg.label}</span>
+                                            </div>
+                                            <div style={{ fontSize: 15, opacity: 0.85 }}>
+                                                {cfg.key === "dispatched" ? "✅" : cfg.key === "exception" ? "⚠️" : cfg.key === "pending" ? "🕒" : "📤"}
+                                            </div>
+                                        </div>
+                                        <div style={{ fontSize: 30, fontWeight: 800, color: "#0f172a", lineHeight: 1, letterSpacing: "-1.5px" }}>{count}</div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                            <div style={{ display: "inline-flex", alignItems: "center", background: cfg.color + "18", borderRadius: 20, padding: "2px 9px", width: "fit-content" }}>
+                                                <span style={{ fontSize: 11.5, fontWeight: 700, color: cfg.color }}>{pct}%</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Intent Breakdown */}
+                                        <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 4, borderTop: "1px dashed rgba(0,0,0,0.08)", paddingTop: 8 }}>
+                                            {[
+                                                { label: "High Intent", val: stats.high, color: "#f87171" },
+                                                { label: "Medium Intent", val: stats.medium, color: "#fbbf24" },
+                                                { label: "Low Intent", val: stats.low, color: "#34d399" }
+                                            ].map(i => (
+                                                <div key={i.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 10, fontWeight: 700 }}>
+                                                    <span style={{ color: "#64748b" }}>{i.label}:</span>
+                                                    <span style={{ color: i.color }}>
+                                                        {i.val} ({calculatePercent(i.val, count)}%)
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ─── Sent Table Inner Component ───────────────────────────────────────────────
+
+function DialShreeSentTableInner({ data }: { data: DialShreeSentLead[] }) {
+    const [page, setPage] = useState(1);
+    const [perPage, setPerPage] = useState(10);
+    const [viewRow, setViewRow] = useState<DialShreeSentLead | null>(null);
+    const [sortKey, setSortKey] = useState("timestamp");
+    const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+    const handleSort = (k: string) => {
+        if (sortKey === k) setSortDir(d => d === "asc" ? "desc" : "asc");
+        else { setSortKey(k); setSortDir("asc"); }
+        setPage(1);
+    };
+
+    const sorted = useMemo(() => {
+        return [...data].sort((a, b) => {
+            let av: string | number = "", bv: string | number = "";
+            if (sortKey === "id") { av = a.id; bv = b.id; }
+            else if (sortKey === "timestamp") { av = a._ts_num ?? 0; bv = b._ts_num ?? 0; }
+            else if (sortKey === "enquiryDateTime") { av = a._enq_num ?? 0; bv = b._enq_num ?? 0; }
+            else if (sortKey === "clientName") { av = a.clientName.toLowerCase(); bv = b.clientName.toLowerCase(); }
+            else if (sortKey === "mobile") { av = String(a.mobile); bv = String(b.mobile); }
+            else if (sortKey === "campaignName") { av = a.campaignName.toLowerCase(); bv = b.campaignName.toLowerCase(); }
+            else if (sortKey === "company") { av = a.company.toLowerCase(); bv = b.company.toLowerCase(); }
+            else if (sortKey === "sqvLeadIntent") { av = a.sqvLeadIntent.toLowerCase(); bv = b.sqvLeadIntent.toLowerCase(); }
+            else if (sortKey === "deliveryStatus") { av = a.deliveryStatus.label.toLowerCase(); bv = b.deliveryStatus.label.toLowerCase(); }
+            else if (sortKey === "assignTo") { av = (a.assignTo || "").toLowerCase(); bv = (b.assignTo || "").toLowerCase(); }
+
+            if (av < bv) return sortDir === "asc" ? -1 : 1;
+            if (av > bv) return sortDir === "asc" ? 1 : -1;
+            return 0;
+        });
+    }, [data, sortKey, sortDir]);
+
+    useEffect(() => {
+        const totalPages = Math.max(1, Math.ceil(sorted.length / perPage));
+        if (page > totalPages) setPage(1);
+    }, [sorted.length, perPage, page]);
+
+    const paged = sorted.slice((page - 1) * perPage, page * perPage);
+    const sp = { sortKey, sortDir, onSort: handleSort };
+
+    return (
+        <>
+            {viewRow && <SentViewModal row={viewRow} onClose={() => setViewRow(null)} />}
+
+            <style>{`
+                .sent-table-row {
+                    border-bottom: 1px solid #f1f5f9;
+                    transition: background .12s, box-shadow .12s;
+                }
+                .sent-table-row:hover {
+                    background: #e0e7ff !important;
+                    box-shadow: inset 3px 0 0 #4f46e5 !important;
+                }
+                .lbl-short { display: none; }
+                @media (min-width: 1024px) {
+                    .sticky-header-1 { position: sticky; left: 0; z-index: 20; background: #1e2a4a !important; min-width: 120px; }
+                    .sticky-header-2 { position: sticky; left: 120px; z-index: 20; background: #1e2a4a !important; min-width: 130px; }
+                    .sticky-header-3 { position: sticky; left: 250px; z-index: 20; background: #1e2a4a !important; min-width: 160px; }
+                    .sticky-header-4 { position: sticky; left: 410px; z-index: 20; background: #1e2a4a !important; min-width: 180px; box-shadow: 4px 0 8px -2px rgba(0,0,0,0.15); border-right: none !important; }
+                    
+                    .sticky-cell-1 { position: sticky; left: 0; z-index: 10; background: #fff; min-width: 120px; }
+                    .sticky-cell-2 { position: sticky; left: 120px; z-index: 10; background: #fff; min-width: 130px; }
+                    .sticky-cell-3 { position: sticky; left: 250px; z-index: 10; background: #fff; min-width: 160px; }
+                    .sticky-cell-4 { position: sticky; left: 410px; z-index: 10; background: #fff; min-width: 180px; box-shadow: 4px 0 8px -2px rgba(0,0,0,0.1); border-right: none !important; }
+                    
+                    .sent-table-row:hover .sticky-cell-1,
+                    .sent-table-row:hover .sticky-cell-2,
+                    .sent-table-row:hover .sticky-cell-3,
+                    .sent-table-row:hover .sticky-cell-4 {
+                        background: #e0e7ff !important;
+                    }
+                    .sticky-cell-3.copied-active { background: #f0fdf4 !important; color: #059669 !important; }
+                }
+                @media (max-width: 1023.98px) {
+                    .sticky-header-1, .sticky-cell-1 { left: 0; min-width: 64px; max-width: 64px; }
+                    .sticky-header-2, .sticky-cell-2 { left: 64px; min-width: 76px; max-width: 76px; }
+                    .sticky-header-3, .sticky-cell-3 { left: 140px; min-width: 58px; max-width: 58px; }
+                    .sticky-header-4, .sticky-cell-4 { left: 198px; min-width: 104px; max-width: 104px; }
+                    .sticky-header-1, .sticky-header-2, .sticky-header-3, .sticky-header-4 {
+                        position: sticky; z-index: 20; background: #1e2a4a !important; overflow: hidden;
+                    }
+                    .sticky-cell-1, .sticky-cell-2, .sticky-cell-3, .sticky-cell-4 {
+                        position: sticky; z-index: 10; background: #fff;
+                    }
+                    .sticky-header-4, .sticky-cell-4 {
+                        box-shadow: 4px 0 8px -2px rgba(0,0,0,0.15) !important; border-right: none !important;
+                    }
+                    .sticky-header-1, .sticky-header-2, .sticky-header-3, .sticky-header-4,
+                    .sticky-cell-1, .sticky-cell-2, .sticky-cell-3, .sticky-cell-4 {
+                        padding: 6px 5px !important; font-size: 9.5px !important;
+                    }
+                    .lbl-full { display: none; }
+                    .lbl-short { display: inline; }
+                    .sticky-header-1 .sort-arrows, .sticky-header-2 .sort-arrows { display: none; }
+                    .sticky-cell-2 { white-space: normal !important; overflow-wrap: break-word; line-height: 1.3; }
+                    .sticky-cell-4 > div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                    .sticky-cell-4 > div:first-child { font-size: 10px !important; }
+                    .sticky-cell-4 > div:not(:first-child) { font-size: 8.5px !important; }
+                    .sent-table-row:hover .sticky-cell-1,
+                    .sent-table-row:hover .sticky-cell-2,
+                    .sent-table-row:hover .sticky-cell-3,
+                    .sent-table-row:hover .sticky-cell-4 {
+                        background: #e0e7ff !important;
+                    }
+                    .sticky-cell-3.copied-active { background: #f0fdf4 !important; color: #059669 !important; }
+                }
+                @media (max-width: 639.98px) {
+                    .sticky-header-1, .sticky-cell-1,
+                    .sticky-header-2, .sticky-cell-2,
+                    .sticky-header-3, .sticky-cell-3 {
+                        position: static !important; left: auto !important; min-width: 90px; max-width: none; box-shadow: none !important;
+                    }
+                    .sticky-header-4, .sticky-cell-4 { left: 0 !important; min-width: 130px; max-width: 130px; }
+                }
+                .sent-table-scroll {
+                    overflow-x: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain;
+                }
+            `}</style>
+            <div className="sent-table-scroll">
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                        <tr style={{ background: "#1e2a4a" }}>
+                            <SortableTh colKey="timestamp" {...sp} className="sticky-header-1"><HLabel full="Sent Timestamp" short="Sent TS" /></SortableTh>
+                            <SortableTh colKey="enquiryDateTime" {...sp} className="sticky-header-2"><HLabel full="Enq Date & Time" short="Enq D&T" /></SortableTh>
+                            <Th className="sticky-header-3">Lead ID</Th>
+                            <SortableTh colKey="clientName" {...sp} className="sticky-header-4"><HLabel full="Client Details" short="Client" /></SortableTh>
+                            <Th>Subject</Th>
+                            <SortableTh colKey="campaignName" {...sp}>Campaign</SortableTh>
+                            <SortableTh colKey="company" {...sp}>Company</SortableTh>
+                            <Th>Data Source</Th>
+                            <SortableTh colKey="deliveryStatus" {...sp}>Outreach Status</SortableTh>
+                            <Th>Response / Result</Th>
+                            <SortableTh colKey="sqvLeadIntent" {...sp}>Intent</SortableTh>
+                            <SortableTh colKey="assignTo" {...sp}>Assign To</SortableTh>
+                            <Th>Location / Geo</Th>
+                            <Th>Action</Th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {paged.length === 0 ? (
+                            <tr><td colSpan={14} style={{ padding: 32, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>No records found</td></tr>
+                        ) : paged.map((row, i) => {
+                            return (
+                                <tr key={String(row.id) + i} className="sent-table-row">
+                                    <Td className="sticky-cell-1">{formatDisplayDateTime(row.timestamp)}</Td>
+                                    <Td className="sticky-cell-2">{formatDisplayDateTime(row.enquiryDateTime)}</Td>
+                                    <CopyTd value={row.leadId} className="sticky-cell-3" />
+                                    <Td className="sticky-cell-4">
+                                        <div title={row.clientName} style={{ fontWeight: 600, color: "#1e293b" }}>{row.clientName}</div>
+                                        {row.mobile && <div title={String(row.mobile)} style={{ fontSize: 11.5, color: "#1e293b", marginTop: 2 }}>{row.mobile}</div>}
+                                        {row.email && <div title={row.email} style={{ fontSize: 10.5, color: "#64748b", marginTop: 2 }}>{row.email}</div>}
+                                    </Td>
+                                    <TooltipTd label="Subject" maxWidth={120}>{row.subjects}</TooltipTd>
+                                    <TooltipTd label="Campaign" maxWidth={130}>{row.campaignName}</TooltipTd>
+                                    <Td>{row.company}</Td>
+                                    <TooltipTd label="Data Source" maxWidth={110}>{row.dataSource}</TooltipTd>
+                                    <td style={{ padding: "8px 11px", fontSize: 11.5, borderRight: "1px solid #f1f5f9", whiteSpace: "nowrap", verticalAlign: "middle" }}>
+                                        <Pill
+                                            label={row.deliveryStatus.label}
+                                            color={row.deliveryStatus.color as PillColor}
+                                            dot={row.deliveryStatus.category === "sent" ? "g" : row.deliveryStatus.category === "exception" ? "r" : "o"}
+                                        />
+                                    </td>
+                                    <TooltipTd label="Response Result" maxWidth={140} mono>{row.responseResult}</TooltipTd>
+                                    <ColorTd value={row.sqvLeadIntent} type="intent" maxWidth={90} />
+                                    <Td>{row.assignTo || "—"}</Td>
+                                    <Td>{[row.location, row.geo].filter(Boolean).join(", ") || "—"}</Td>
+                                    <td style={{ padding: "6px 10px", borderRight: "none", whiteSpace: "nowrap", verticalAlign: "middle" }}>
+                                        <button onClick={() => setViewRow(row)}
+                                            style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 11px", borderRadius: 6, border: "1.5px solid #4f46e5", background: "#eef2ff", color: "#4f46e5", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", transition: "all .15s" }}
+                                            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "#4f46e5"; (e.currentTarget as HTMLButtonElement).style.color = "#fff"; }}
+                                            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "#eef2ff"; (e.currentTarget as HTMLButtonElement).style.color = "#4f46e5"; }}>
+                                            <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+                                            View
+                                        </button>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+            <Pagination total={data.length} page={page} perPage={perPage} onPage={setPage} onPerPage={setPerPage} />
+        </>
+    );
+}
+
+// ─── Date Helpers ─────────────────────────────────────────────────────────────
+
+function getDateRange(filter: string): { from: Date | null; to: Date | null } {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    switch (filter) {
+        case "today": return { from: today, to: new Date(today.getTime() + 86400000 - 1) };
+        case "yesterday": { const y = new Date(today.getTime() - 86400000); return { from: y, to: new Date(today.getTime() - 1) }; }
+        case "this_week": { const dow = today.getDay(); const mon = new Date(today.getTime() - ((dow === 0 ? 6 : dow - 1) * 86400000)); return { from: mon, to: new Date(mon.getTime() + 7 * 86400000 - 1) }; }
+        case "last_week": { const dow = today.getDay(); const thisMonday = new Date(today.getTime() - ((dow === 0 ? 6 : dow - 1) * 86400000)); const lastMon = new Date(thisMonday.getTime() - 7 * 86400000); return { from: lastMon, to: new Date(thisMonday.getTime() - 1) }; }
+        case "this_month": return { from: new Date(now.getFullYear(), now.getMonth(), 1), to: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59) };
+        case "last_month": return { from: new Date(now.getFullYear(), now.getMonth() - 1, 1), to: new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59) };
+        case "this_year": return { from: new Date(now.getFullYear(), 0, 1), to: new Date(now.getFullYear(), 11, 31, 23, 59, 59) };
+        case "last_year": return { from: new Date(now.getFullYear() - 1, 0, 1), to: new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59) };
+        default: return { from: null, to: null };
+    }
+}
+
+// ─── Main Page Inner Component ────────────────────────────────────────────────
 
 function DialShreeSentPageInner() {
+    const { user, isLoading, hasPermission } = useAuth();
     const router = useRouter();
-    const { user, isLoading: authLoading, hasPermission } = useAuth();
 
-    // Permissions check
     const isSuperAdmin = Boolean(
         user?.role === "super_admin" ||
         String(user?.role || "").trim().toLowerCase() === "super_admin" ||
@@ -359,819 +669,330 @@ function DialShreeSentPageInner() {
     );
 
     useEffect(() => {
-        if (!authLoading && user && !isAuthorized) {
+        if (!isLoading && user && !isAuthorized) {
             router.replace("/access-denied");
         }
-    }, [authLoading, user, isAuthorized, router]);
+    }, [isLoading, user, isAuthorized, router]);
 
-    // Data hook
-    const { data: sentLeads, loading, isRefreshing, error, refetch } = useDialShreeSentLeads();
+    const { data: sentApiData, loading: sentLoading, isRefreshing: hookRefreshing, error: sentError, refetch: refetchSent } = useDialShreeSentLeads();
 
-    // Filters state
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const isRefreshingAny = isRefreshing || hookRefreshing;
+    const handleRefresh = async () => {
+        setIsRefreshing(true);
+        await refetchSent();
+        setIsRefreshing(false);
+    };
+
+    const tableRef = useRef<HTMLDivElement>(null);
+
     const [search, setSearch] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
     useEffect(() => {
-        const timer = setTimeout(() => setDebouncedSearch(search), 300);
-        return () => clearTimeout(timer);
+        const h = setTimeout(() => setDebouncedSearch(search), 300);
+        return () => clearTimeout(h);
     }, [search]);
 
-    const [dateRange, setDateRange] = useState("all");
-    const [customStart, setCustomStart] = useState("");
-    const [customEnd, setCustomEnd] = useState("");
-    const [campaignFilter, setCampaignFilter] = useState("all");
-    const [companyFilter, setCompanyFilter] = useState("all");
-    const [statusFilter, setStatusFilter] = useState("all");
-    const [intentFilter, setIntentFilter] = useState("all");
-
-    // Sorting
-    const [sortKey, setSortKey] = useState<string>("id");
-    const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-
-    // Pagination
-    const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(50);
-
-    // Selected modal lead
-    const [selectedLead, setSelectedLead] = useState<DialShreeSentLead | null>(null);
-
-    // Dynamic Filter Options
-    const campaignOptions = useMemo(() => {
-        const set = new Set<string>();
-        sentLeads.forEach((l) => {
-            if (l.campaignName && l.campaignName !== "—") set.add(l.campaignName);
-        });
-        return Array.from(set).sort();
-    }, [sentLeads]);
-
-    const companyOptions = useMemo(() => {
-        const set = new Set<string>();
-        sentLeads.forEach((l) => {
-            if (l.company && l.company !== "—") set.add(l.company);
-        });
-        return Array.from(set).sort();
-    }, [sentLeads]);
-
-    // Date Range Helper
-    const matchesDateRange = (dateStr: string, rangeKey: string) => {
-        if (!dateStr || dateStr === "—" || rangeKey === "all") return true;
-        const d = new Date(dateStr);
-        if (isNaN(d.getTime())) return true;
-
-        const now = new Date();
-        const startOfDay = (dt: Date) => new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
-
-        if (rangeKey === "today") {
-            return d >= startOfDay(now);
-        }
-        if (rangeKey === "yesterday") {
-            const yest = new Date(now);
-            yest.setDate(yest.getDate() - 1);
-            const startYest = startOfDay(yest);
-            return d >= startYest && d < startOfDay(now);
-        }
-        if (rangeKey === "this_week") {
-            const startWeek = startOfDay(now);
-            startWeek.setDate(startWeek.getDate() - startWeek.getDay());
-            return d >= startWeek;
-        }
-        if (rangeKey === "this_month") {
-            const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-            return d >= startMonth;
-        }
-        if (rangeKey === "last_month") {
-            const startLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-            const endLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
-            return d >= startLastMonth && d <= endLastMonth;
-        }
-        if (rangeKey === "custom") {
-            if (customStart && d < new Date(customStart)) return false;
-            if (customEnd) {
-                const end = new Date(customEnd);
-                end.setHours(23, 59, 59, 999);
-                if (d > end) return false;
-            }
-            return true;
-        }
-        return true;
-    };
-
-    // Filtered data computation
-    const filteredLeads = useMemo(() => {
-        return sentLeads.filter((lead) => {
-            // 1. Text search
-            if (debouncedSearch) {
-                const q = debouncedSearch.toLowerCase();
-                const matched =
-                    lead.clientName.toLowerCase().includes(q) ||
-                    lead.mobile.toLowerCase().includes(q) ||
-                    lead.email.toLowerCase().includes(q) ||
-                    lead.leadId.toLowerCase().includes(q) ||
-                    lead.campaignName.toLowerCase().includes(q) ||
-                    lead.subjects.toLowerCase().includes(q) ||
-                    lead.notes.toLowerCase().includes(q) ||
-                    lead.assignTo.toLowerCase().includes(q) ||
-                    lead.responseResult.toLowerCase().includes(q);
-                if (!matched) return false;
-            }
-
-            // 2. Date filter
-            const targetDate = lead.timestamp || lead.enquiryDateTime;
-            if (!matchesDateRange(targetDate, dateRange)) return false;
-
-            // 3. Campaign
-            if (campaignFilter !== "all" && lead.campaignName !== campaignFilter) return false;
-
-            // 4. Company
-            if (companyFilter !== "all" && lead.company !== companyFilter) return false;
-
-            // 5. Status / Delivery Category
-            if (statusFilter !== "all") {
-                if (statusFilter === "sent" && lead.deliveryStatus.category !== "sent") return false;
-                if (statusFilter === "exception" && lead.deliveryStatus.category !== "exception") return false;
-                if (statusFilter === "pending" && lead.deliveryStatus.category !== "pending") return false;
-            }
-
-            // 6. Intent
-            if (intentFilter !== "all") {
-                const intentLower = (lead.sqvLeadIntent || "").toLowerCase();
-                if (intentFilter === "high" && !intentLower.includes("high")) return false;
-                if (intentFilter === "medium" && !intentLower.includes("med")) return false;
-                if (intentFilter === "low" && !intentLower.includes("low")) return false;
-            }
-
-            return true;
-        });
-    }, [sentLeads, debouncedSearch, dateRange, customStart, customEnd, campaignFilter, companyFilter, statusFilter, intentFilter]);
-
-    // Sorting
-    const sortedLeads = useMemo(() => {
-        const copy = [...filteredLeads];
-        copy.sort((a, b) => {
-            let valA: any = (a as any)[sortKey];
-            let valB: any = (b as any)[sortKey];
-
-            if (sortKey === "id") {
-                valA = a.id;
-                valB = b.id;
-            } else if (sortKey === "timestamp") {
-                valA = a._ts_num || 0;
-                valB = b._ts_num || 0;
-            } else if (sortKey === "enquiryDateTime") {
-                valA = a._enq_num || 0;
-                valB = b._enq_num || 0;
-            } else {
-                valA = String(valA || "").toLowerCase();
-                valB = String(valB || "").toLowerCase();
-            }
-
-            if (valA < valB) return sortDir === "asc" ? -1 : 1;
-            if (valA > valB) return sortDir === "asc" ? 1 : -1;
-            return 0;
-        });
-        return copy;
-    }, [filteredLeads, sortKey, sortDir]);
-
-    // Pagination
-    const totalPages = Math.ceil(sortedLeads.length / pageSize) || 1;
-    const pagedLeads = useMemo(() => {
-        const start = (page - 1) * pageSize;
-        return sortedLeads.slice(start, start + pageSize);
-    }, [sortedLeads, page, pageSize]);
-
-    // Reset page on filter changes
-    useEffect(() => {
-        setPage(1);
-    }, [debouncedSearch, dateRange, campaignFilter, companyFilter, statusFilter, intentFilter, pageSize]);
-
-    const handleSort = (key: string) => {
-        if (sortKey === key) {
-            setSortDir(sortDir === "asc" ? "desc" : "asc");
-        } else {
-            setSortKey(key);
-            setSortDir("desc");
-        }
-    };
+    const [dateFilter, setDateFilter] = useState("all");
+    const [company, setCompany] = useState("all");
+    const [campaign, setCampaign] = useState("all");
+    const [status, setStatus] = useState("all");
+    const [intent, setIntent] = useState("all");
+    const [customDate, setCustomDate] = useState({ start: "", end: "" });
 
     const clearFilters = () => {
         setSearch("");
-        setDateRange("all");
-        setCustomStart("");
-        setCustomEnd("");
-        setCampaignFilter("all");
-        setCompanyFilter("all");
-        setStatusFilter("all");
-        setIntentFilter("all");
+        setDateFilter("all");
+        setCompany("all");
+        setCampaign("all");
+        setStatus("all");
+        setIntent("all");
+        setCustomDate({ start: "", end: "" });
     };
 
-    // KPI Metrics calculation
-    const metrics = useMemo(() => {
-        let sentCount = 0;
-        let exceptionCount = 0;
-        let pendingCount = 0;
-        let highIntent = 0;
-        let medIntent = 0;
-        let lowIntent = 0;
+    const dateWindow = useMemo(() => {
+        if (dateFilter === "custom") {
+            const from = customDate.start ? new Date(customDate.start) : null;
+            const to = customDate.end ? new Date(`${customDate.end}T23:59:59.999`) : null;
+            return { from, to };
+        }
+        return getDateRange(dateFilter);
+    }, [dateFilter, customDate]);
 
-        filteredLeads.forEach((l) => {
-            if (l.deliveryStatus.category === "sent") sentCount++;
-            else if (l.deliveryStatus.category === "exception") exceptionCount++;
-            else pendingCount++;
+    // ── Filter Options ────────────────────────────────────────────────────────
+    const companyOptions = useMemo(() => Array.from(new Set(sentApiData.map(r => r.company))).filter(v => v && v !== "—").sort(), [sentApiData]);
+    const campaignOptions = useMemo(() => Array.from(new Set(sentApiData.map(r => r.campaignName))).filter(v => v && v !== "—").sort(), [sentApiData]);
 
-            const intent = l.sqvLeadIntent.toLowerCase();
-            if (intent.includes("high")) highIntent++;
-            else if (intent.includes("med")) medIntent++;
-            else if (intent.includes("low")) lowIntent++;
+    // ── Filtered Data ─────────────────────────────────────────────────────────
+    const filteredSent = useMemo(() => {
+        const q = debouncedSearch.trim().toLowerCase();
+        return sentApiData.filter(r => {
+            if (q && !(
+                r.clientName.toLowerCase().includes(q) ||
+                String(r.mobile).includes(q) ||
+                r.email.toLowerCase().includes(q) ||
+                r.leadId.toLowerCase().includes(q) ||
+                r.subjects.toLowerCase().includes(q) ||
+                r.campaignName.toLowerCase().includes(q) ||
+                r.dataSource.toLowerCase().includes(q) ||
+                r.responseResult.toLowerCase().includes(q) ||
+                r.notes.toLowerCase().includes(q)
+            )) return false;
+
+            if (dateWindow.from || dateWindow.to) {
+                const ts = r._ts_num || r._enq_num || 0;
+                if (!ts) return false;
+                if (dateWindow.from && ts < dateWindow.from.getTime()) return false;
+                if (dateWindow.to && ts > dateWindow.to.getTime()) return false;
+            }
+
+            if (company !== "all" && r.company !== company) return false;
+            if (campaign !== "all" && r.campaignName !== campaign) return false;
+
+            if (status !== "all") {
+                if (status === "sent" && r.deliveryStatus.category !== "sent") return false;
+                if (status === "exception" && r.deliveryStatus.category !== "exception") return false;
+                if (status === "pending" && r.deliveryStatus.category !== "pending") return false;
+            }
+
+            if (intent !== "all" && !r.sqvLeadIntent.toLowerCase().includes(intent.toLowerCase())) return false;
+
+            return true;
+        });
+    }, [debouncedSearch, dateWindow, company, campaign, status, intent, sentApiData]);
+
+    // ── Counts Breakdown ──────────────────────────────────────────────────────
+    const sentCounts = useMemo(() => {
+        const init = () => ({ total: 0, high: 0, medium: 0, low: 0 });
+        const counts: Record<SentStatusKey, { total: number; high: number; medium: number; low: number }> = {
+            total_sent: init(),
+            dispatched: init(),
+            exception: init(),
+            pending: init(),
+        };
+
+        filteredSent.forEach(r => {
+            const intRaw = (r.sqvLeadIntent || "").toLowerCase().trim();
+            const addIntent = (stats: { total: number; high: number; medium: number; low: number }) => {
+                stats.total++;
+                if (intRaw.includes("high")) stats.high++;
+                else if (intRaw.includes("med")) stats.medium++;
+                else stats.low++;
+            };
+
+            addIntent(counts.total_sent);
+            if (r.deliveryStatus.category === "sent") {
+                addIntent(counts.dispatched);
+            } else if (r.deliveryStatus.category === "exception") {
+                addIntent(counts.exception);
+            } else {
+                addIntent(counts.pending);
+            }
         });
 
-        return {
-            total: filteredLeads.length,
-            sentCount,
-            exceptionCount,
-            pendingCount,
-            highIntent,
-            medIntent,
-            lowIntent,
-        };
-    }, [filteredLeads]);
+        return counts;
+    }, [filteredSent]);
+
+    if (sentLoading && sentApiData.length === 0) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
+                <div className="flex flex-col items-center justify-center min-h-[60vh]">
+                    <div style={{ width: 44, height: 44, border: "3px solid #e0e7ff", borderTopColor: "#4f46e5", borderRadius: "50%", animation: "spin 0.7s linear infinite", marginBottom: 16 }} />
+                    <p className="text-base font-bold text-indigo-600 animate-pulse">Fetching latest DialShree Sent Outreach Leads...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!isAuthorized) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-50">
+                <div className="text-center">
+                    <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: "#1e293b" }}>Access Restricted</div>
+                    <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 6 }}>You do not have permission to view DialShree sent outreach records.</div>
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <div className="font-sans bg-[#f0f2f8] min-h-screen text-slate-800 pb-12">
-            {/* Top Banner & Header */}
-            <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-4 sm:p-6 text-white border-b border-indigo-900/40 relative overflow-hidden">
-                <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                    <div className="flex items-center gap-3.5">
-                        <div className="w-12 h-12 rounded-xl bg-indigo-600/30 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shadow-inner">
-                            <Send className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <div className="flex items-center gap-2">
-                                <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white">
-                                    DialShree Sent Outreach Leads
-                                </h1>
-                                <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                                    Outbound Queue
-                                </span>
-                            </div>
-                            <p className="text-xs sm:text-sm text-slate-300 mt-1">
-                                Authoritative lead dispatch queue and outbound outreach log from `dialshree_kairali_sent`
-                            </p>
-                        </div>
-                    </div>
+        <div className="font-sans bg-[#f0f2f8] min-h-full text-slate-800">
+            <style>{`
+                @keyframes spin      { to { transform: rotate(360deg); } }
+                @keyframes kpi-pulse { 0%,100% { opacity:1; } 50% { opacity:0.38; } }
+            `}</style>
 
-                    {/* Right side navigation & Sync buttons */}
-                    <div className="flex items-center gap-2.5 w-full md:w-auto justify-end flex-wrap">
-                        {/* Tab Switcher */}
-                        <div className="inline-flex rounded-lg bg-white/10 p-1 border border-white/15 text-xs font-semibold">
-                            <Link
-                                href="/dialShree/received"
-                                className="px-3 py-1.5 rounded-md text-slate-300 hover:text-white hover:bg-white/10 transition-all"
-                            >
-                                Received Leads
-                            </Link>
-                            <span className="px-3 py-1.5 rounded-md bg-indigo-600 text-white shadow-xs font-bold">
-                                Sent Outreach
-                            </span>
-                        </div>
+            {/* Banner */}
+            <div style={{ background: "linear-gradient(110deg,#1e1b4b 0%,#312e81 45%,#4338ca 100%)", padding: "14px 16px", display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12, position: "relative", overflow: "hidden" }}>
+                <div style={{ position: "absolute", right: -60, top: -60, width: 220, height: 220, borderRadius: "50%", background: "rgba(255,255,255,.06)", pointerEvents: "none" }} />
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(255,255,255,.18)", display: "flex", alignItems: "center", justifyContent: "center", marginRight: 12, flexShrink: 0, color: "#fff" }}>
+                    <SendSvg sz={20} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", letterSpacing: "-.3px", lineHeight: 1.2 }}>DialShree Sent Outreach Log</div>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,.65)", marginTop: 2 }}>DialShree Calling Portal · Sent Leads — Real-time DialShree Outbound Queue</div>
+                </div>
 
-                        {/* Sync Button */}
-                        <Button
-                            onClick={() => refetch()}
-                            disabled={loading || isRefreshing}
-                            className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md h-9"
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                    <div className="hidden sm:inline-flex rounded-lg bg-white/10 p-1 border border-white/15 text-xs font-semibold">
+                        <Link
+                            href="/dialShree/received"
+                            className="px-3 py-1.5 rounded-md text-white/80 hover:text-white hover:bg-white/10 transition-all"
                         >
-                            {loading || isRefreshing ? (
-                                <>
-                                    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                                    Syncing...
-                                </>
-                            ) : (
-                                <>
-                                    <PhoneOutgoing className="w-3.5 h-3.5 mr-1.5" />
-                                    Sync Data
-                                </>
-                            )}
-                        </Button>
+                            Received Leads
+                        </Link>
+                        <span className="px-3 py-1.5 rounded-md bg-white text-indigo-900 shadow-xs font-bold">
+                            Sent Outreach
+                        </span>
                     </div>
+
+                    {hookRefreshing && !isRefreshing && (
+                        <div className="hidden md:flex items-center gap-2 text-white/60 text-[11px] font-medium animate-pulse">
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            Background Syncing...
+                        </div>
+                    )}
+                    <button onClick={handleRefresh} disabled={isRefreshingAny}
+                        style={{ background: "rgba(255,255,255,.15)", border: "1px solid rgba(255,255,255,.2)", borderRadius: 8, height: 42, padding: "0 16px", color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: isRefreshingAny ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 8, transition: "all .2s" }}
+                        onMouseEnter={e => !isRefreshingAny && (e.currentTarget.style.background = "rgba(255,255,255,.25)")}
+                        onMouseLeave={e => !isRefreshingAny && (e.currentTarget.style.background = "rgba(255,255,255,.15)")}>
+                        <div style={{ width: 14, height: 14, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", borderRadius: "50%", animation: isRefreshingAny ? "spin 0.8s linear infinite" : "none" }} />
+                        {isRefreshingAny ? "Refreshing..." : "Sync Data"}
+                    </button>
                 </div>
             </div>
 
-            <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-5 space-y-5">
-                {/* Error Banner if any */}
-                {error && (
-                    <div className="bg-rose-50 border border-rose-200 p-4 rounded-xl text-rose-800 flex items-center justify-between gap-3 text-xs sm:text-sm">
-                        <div className="flex items-center gap-2">
-                            <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
-                            <span>{error}</span>
-                        </div>
-                        <Button
-                            onClick={() => refetch()}
-                            variant="outline"
-                            size="sm"
-                            className="border-rose-300 text-rose-800 hover:bg-rose-100"
-                        >
-                            Retry
-                        </Button>
-                    </div>
-                )}
-
-                {/* KPI Metrics Cards */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                    {/* Total Sent */}
-                    <div className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-xs flex flex-col justify-between">
-                        <div className="flex items-center justify-between text-slate-500">
-                            <span className="text-[11px] font-bold uppercase tracking-wider">Total Outbound</span>
-                            <Send className="w-4 h-4 text-indigo-600" />
-                        </div>
-                        <div className="mt-2 flex items-baseline gap-2">
-                            <span className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">
-                                {loading && sentLeads.length === 0 ? "..." : metrics.total.toLocaleString()}
-                            </span>
-                            <span className="text-[11px] text-slate-500">leads logged</span>
-                        </div>
-                        <div className="mt-2 text-[10px] text-slate-400">
-                            Filtered from {sentLeads.length.toLocaleString()} total database records
-                        </div>
-                    </div>
-
-                    {/* Dispatched / Sent */}
-                    <div className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-xs flex flex-col justify-between">
-                        <div className="flex items-center justify-between text-slate-500">
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Dispatched / Sent</span>
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                        </div>
-                        <div className="mt-2 flex items-baseline gap-2">
-                            <span className="text-2xl sm:text-3xl font-black text-emerald-700 tabular-nums">
-                                {loading && sentLeads.length === 0 ? "..." : metrics.sentCount.toLocaleString()}
-                            </span>
-                            <span className="text-[11px] font-bold text-emerald-600">
-                                {metrics.total > 0 ? ((metrics.sentCount / metrics.total) * 100).toFixed(1) : 0}%
-                            </span>
-                        </div>
-                        <div className="mt-2 text-[10px] text-slate-400">Successfully sent to agent or dialer queue</div>
-                    </div>
-
-                    {/* Exceptions / Failed */}
-                    <div className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-xs flex flex-col justify-between">
-                        <div className="flex items-center justify-between text-slate-500">
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-rose-700">Exceptions / Errors</span>
-                            <AlertCircle className="w-4 h-4 text-rose-600" />
-                        </div>
-                        <div className="mt-2 flex items-baseline gap-2">
-                            <span className="text-2xl sm:text-3xl font-black text-rose-700 tabular-nums">
-                                {loading && sentLeads.length === 0 ? "..." : metrics.exceptionCount.toLocaleString()}
-                            </span>
-                            <span className="text-[11px] font-bold text-rose-600">
-                                {metrics.total > 0 ? ((metrics.exceptionCount / metrics.total) * 100).toFixed(1) : 0}%
-                            </span>
-                        </div>
-                        <div className="mt-2 text-[10px] text-slate-400">Requires exception verification or retry</div>
-                    </div>
-
-                    {/* Lead Intent Breakdown */}
-                    <div className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-xs flex flex-col justify-between">
-                        <div className="flex items-center justify-between text-slate-500">
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700">Lead Intent Mix</span>
-                            <span className="text-xs">⚡</span>
-                        </div>
-                        <div className="mt-2 flex items-center justify-between gap-1 text-xs">
-                            <div className="text-center">
-                                <span className="block text-rose-700 font-extrabold text-sm sm:text-base tabular-nums">
-                                    {metrics.highIntent}
-                                </span>
-                                <span className="text-[10px] text-slate-500 font-semibold">High</span>
-                            </div>
-                            <div className="w-px h-6 bg-slate-200" />
-                            <div className="text-center">
-                                <span className="block text-amber-600 font-extrabold text-sm sm:text-base tabular-nums">
-                                    {metrics.medIntent}
-                                </span>
-                                <span className="text-[10px] text-slate-500 font-semibold">Med</span>
-                            </div>
-                            <div className="w-px h-6 bg-slate-200" />
-                            <div className="text-center">
-                                <span className="block text-emerald-600 font-extrabold text-sm sm:text-base tabular-nums">
-                                    {metrics.lowIntent}
-                                </span>
-                                <span className="text-[10px] text-slate-500 font-semibold">Low</span>
-                            </div>
-                        </div>
-                        <div className="mt-2 text-[10px] text-slate-400">Prioritization of client purchase intent</div>
+            {/* Error banner if any */}
+            {sentError && sentApiData.length === 0 && (
+                <div className="mt-3 mx-2 sm:mx-4 lg:mx-5">
+                    <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "14px 18px", color: "#991b1b", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>⚠️ {sentError}</div>
+                        <Button onClick={handleRefresh} size="sm" variant="outline" className="border-rose-300 text-rose-800 bg-white">Retry</Button>
                     </div>
                 </div>
+            )}
 
-                {/* Filters Section */}
-                <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs p-4 sm:p-5 space-y-4">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                        <div className="flex items-center gap-2">
-                            <Filter className="w-4 h-4 text-indigo-600" />
-                            <h3 className="text-sm font-bold text-slate-900">Filter Outreach Leads</h3>
-                            <span className="text-xs text-slate-400 font-normal">
-                                ({filteredLeads.length} leads matching criteria)
-                            </span>
-                        </div>
-                        <Button
-                            onClick={clearFilters}
-                            variant="ghost"
-                            size="sm"
-                            className="text-xs text-slate-500 hover:text-slate-800 h-8"
-                        >
-                            Reset Filters
-                        </Button>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                        {/* Search */}
-                        <div className="sm:col-span-2">
-                            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
-                                Search Leads
-                            </label>
-                            <div className="relative">
-                                <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-                                <Input
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                    placeholder="Name, phone, email, lead ID, notes..."
-                                    className="pl-9 h-9 text-xs"
-                                />
-                            </div>
-                        </div>
-
-                        {/* Date Range */}
-                        <div>
-                            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
-                                Date Range
-                            </label>
-                            <Select value={dateRange} onValueChange={setDateRange}>
-                                <SelectTrigger className="h-9 text-xs">
-                                    <SelectValue placeholder="All Time" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Time</SelectItem>
-                                    <SelectItem value="today">Today</SelectItem>
-                                    <SelectItem value="yesterday">Yesterday</SelectItem>
-                                    <SelectItem value="this_week">This Week</SelectItem>
-                                    <SelectItem value="this_month">This Month</SelectItem>
-                                    <SelectItem value="last_month">Last Month</SelectItem>
-                                    <SelectItem value="custom">Custom Range</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        {/* Campaign Filter */}
-                        <div>
-                            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
-                                Campaign
-                            </label>
-                            <Select value={campaignFilter} onValueChange={setCampaignFilter}>
-                                <SelectTrigger className="h-9 text-xs">
-                                    <SelectValue placeholder="All Campaigns" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Campaigns</SelectItem>
-                                    {campaignOptions.map((c) => (
-                                        <SelectItem key={c} value={c}>
-                                            {c}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        {/* Status Filter */}
-                        <div>
-                            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
-                                Outbound Status
-                            </label>
-                            <Select value={statusFilter} onValueChange={setStatusFilter}>
-                                <SelectTrigger className="h-9 text-xs">
-                                    <SelectValue placeholder="All Status" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Status</SelectItem>
-                                    <SelectItem value="sent">Sent / Dispatched</SelectItem>
-                                    <SelectItem value="exception">Exceptions / Errors</SelectItem>
-                                    <SelectItem value="pending">Pending</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        {/* Intent Filter */}
-                        <div>
-                            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
-                                Lead Intent
-                            </label>
-                            <Select value={intentFilter} onValueChange={setIntentFilter}>
-                                <SelectTrigger className="h-9 text-xs">
-                                    <SelectValue placeholder="All Intent" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Intent</SelectItem>
-                                    <SelectItem value="high">High Intent</SelectItem>
-                                    <SelectItem value="medium">Medium Intent</SelectItem>
-                                    <SelectItem value="low">Low Intent</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-
-                    {/* Custom Date Range Row */}
-                    {dateRange === "custom" && (
-                        <div className="pt-2 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md">
-                            <div>
-                                <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Start Date</label>
-                                <Input
-                                    type="date"
-                                    value={customStart}
-                                    onChange={(e) => setCustomStart(e.target.value)}
-                                    className="h-8 text-xs"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">End Date</label>
-                                <Input
-                                    type="date"
-                                    value={customEnd}
-                                    onChange={(e) => setCustomEnd(e.target.value)}
-                                    className="h-8 text-xs"
-                                />
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* Main Table Container */}
-                <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden">
-                    {/* Table Header Controls */}
-                    <div className="p-3 sm:p-4 border-b border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-                        <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-900">
-                                Showing {sortedLeads.length === 0 ? 0 : (page - 1) * pageSize + 1} -{" "}
-                                {Math.min(page * pageSize, sortedLeads.length)} of {sortedLeads.length.toLocaleString()} leads
-                            </span>
-                        </div>
-
+            {/* Filters */}
+            <div className="mt-3 mx-2 sm:mx-4 lg:mx-5">
+                <div className="rounded-xl border border-slate-200 bg-white shadow-md">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-3 sm:px-5 py-3 sm:py-4 bg-gradient-to-r from-blue-100 via-white to-indigo-100 border-b border-slate-200 rounded-t-xl">
                         <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-1.5">
-                                <span className="text-slate-500 text-[11px]">Per page:</span>
-                                <Select
-                                    value={String(pageSize)}
-                                    onValueChange={(val) => setPageSize(Number(val))}
-                                >
-                                    <SelectTrigger className="h-8 w-20 text-xs">
-                                        <SelectValue />
-                                    </SelectTrigger>
+                            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-700 flex items-center justify-center shadow-md border border-blue-700/30">
+                                <Search className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-semibold text-slate-900">Filters &amp; Search</h3>
+                                <p className="text-xs text-slate-500">Refine and locate DialShree sent outreach leads efficiently</p>
+                            </div>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={clearFilters} className="bg-white border-slate-300 text-slate-700 font-medium hover:bg-blue-50">Clear Filters</Button>
+                    </div>
+                    <div className="px-3 sm:px-5 py-3 sm:py-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3">
+                            <div className="flex flex-col gap-1.5 sm:col-span-2 xl:col-span-2">
+                                <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Search Leads</label>
+                                <Input placeholder="Name, email, phone, ID, subject, remarks..." value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)} className="h-10 w-full rounded-md border-gray-300" />
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Date Range</label>
+                                <Select value={dateFilter} onValueChange={setDateFilter}>
+                                    <SelectTrigger className="h-10 w-full rounded-md border-gray-300"><SelectValue placeholder="Select range" /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="25">25</SelectItem>
-                                        <SelectItem value="50">50</SelectItem>
-                                        <SelectItem value="100">100</SelectItem>
-                                        <SelectItem value="200">200</SelectItem>
+                                        {[["all", "All Time"], ["today", "Today"], ["yesterday", "Yesterday"], ["this_week", "This Week"], ["last_week", "Last Week"], ["this_month", "This Month"], ["last_month", "Last Month"], ["this_year", "This Year"], ["last_year", "Last Year"], ["custom", "Custom"]].map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Company</label>
+                                <Select value={company} onValueChange={setCompany}>
+                                    <SelectTrigger className="h-10 w-full rounded-md border-gray-300"><SelectValue placeholder="All" /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All</SelectItem>
+                                        {companyOptions.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Campaign</label>
+                                <Select value={campaign} onValueChange={setCampaign}>
+                                    <SelectTrigger className="h-10 w-full rounded-md border-gray-300"><SelectValue placeholder="All Campaigns" /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Campaigns</SelectItem>
+                                        {campaignOptions.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Outreach Status</label>
+                                <Select value={status} onValueChange={setStatus}>
+                                    <SelectTrigger className="h-10 w-full rounded-md border-gray-300"><SelectValue placeholder="All Status" /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Status</SelectItem>
+                                        <SelectItem value="sent">Sent / Dispatched</SelectItem>
+                                        <SelectItem value="exception">Exceptions / Errors</SelectItem>
+                                        <SelectItem value="pending">Pending</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Lead Intent</label>
+                                <Select value={intent} onValueChange={setIntent}>
+                                    <SelectTrigger className="h-10 w-full rounded-md border-gray-300"><SelectValue placeholder="All Intent" /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Intent</SelectItem>
+                                        <SelectItem value="high">High</SelectItem>
+                                        <SelectItem value="medium">Medium</SelectItem>
+                                        <SelectItem value="low">Low</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
                         </div>
-                    </div>
 
-                    {/* Table Scroll Area */}
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse text-xs">
-                            <thead>
-                                <tr className="bg-slate-900 text-slate-200 border-b border-slate-800 text-[11px] font-bold uppercase tracking-wider">
-                                    <th
-                                        onClick={() => handleSort("id")}
-                                        className="py-3 px-3.5 cursor-pointer hover:bg-slate-800 transition-colors whitespace-nowrap"
-                                    >
-                                        <div className="flex items-center gap-1">
-                                            <span>ID</span>
-                                            <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                                        </div>
-                                    </th>
-                                    <th
-                                        onClick={() => handleSort("timestamp")}
-                                        className="py-3 px-3.5 cursor-pointer hover:bg-slate-800 transition-colors whitespace-nowrap"
-                                    >
-                                        <div className="flex items-center gap-1">
-                                            <span>Dispatch Date</span>
-                                            <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                                        </div>
-                                    </th>
-                                    <th
-                                        onClick={() => handleSort("enquiryDateTime")}
-                                        className="py-3 px-3.5 cursor-pointer hover:bg-slate-800 transition-colors whitespace-nowrap"
-                                    >
-                                        <div className="flex items-center gap-1">
-                                            <span>Enquiry Date</span>
-                                            <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                                        </div>
-                                    </th>
-                                    <th className="py-3 px-3.5 whitespace-nowrap">Lead ID</th>
-                                    <th
-                                        onClick={() => handleSort("clientName")}
-                                        className="py-3 px-3.5 cursor-pointer hover:bg-slate-800 transition-colors"
-                                    >
-                                        <div className="flex items-center gap-1">
-                                            <span>Client Name & Contact</span>
-                                            <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                                        </div>
-                                    </th>
-                                    <th
-                                        onClick={() => handleSort("campaignName")}
-                                        className="py-3 px-3.5 cursor-pointer hover:bg-slate-800 transition-colors"
-                                    >
-                                        <div className="flex items-center gap-1">
-                                            <span>Campaign & Dialer</span>
-                                            <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                                        </div>
-                                    </th>
-                                    <th className="py-3 px-3.5">Intent</th>
-                                    <th className="py-3 px-3.5">Outbound Status</th>
-                                    <th className="py-3 px-3.5">Assign To</th>
-                                    <th className="py-3 px-3.5 text-center">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {loading && sentLeads.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={10} className="py-16 text-center text-slate-400">
-                                            <Loader2 className="w-6 h-6 animate-spin mx-auto text-indigo-600 mb-2" />
-                                            Loading DialShree sent outreach records from database...
-                                        </td>
-                                    </tr>
-                                ) : pagedLeads.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={10} className="py-14 text-center text-slate-500">
-                                            <p className="font-semibold text-sm text-slate-700">No matching outreach records found</p>
-                                            <p className="text-xs text-slate-400 mt-1">Try adjusting your search or filter selections</p>
-                                            <Button onClick={clearFilters} variant="outline" size="sm" className="mt-3 text-xs">
-                                                Reset Filters
-                                            </Button>
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    pagedLeads.map((lead) => (
-                                        <tr
-                                            key={lead.id}
-                                            onClick={() => setSelectedLead(lead)}
-                                            className="hover:bg-indigo-50/40 transition-colors cursor-pointer group"
-                                        >
-                                            {/* ID */}
-                                            <td className="py-2.5 px-3.5 font-mono text-[11px] font-bold text-slate-500">
-                                                #{lead.id}
-                                            </td>
-
-                                            {/* Sent Timestamp */}
-                                            <td className="py-2.5 px-3.5 text-slate-700 whitespace-nowrap">
-                                                {lead.timestamp || "—"}
-                                            </td>
-
-                                            {/* Enquiry Date */}
-                                            <td className="py-2.5 px-3.5 text-slate-600 whitespace-nowrap">
-                                                {lead.enquiryDateTime || "—"}
-                                            </td>
-
-                                            {/* Lead ID */}
-                                            <td className="py-2.5 px-3.5">
-                                                <span className="font-mono text-[11px] bg-slate-100 px-2 py-0.5 rounded text-slate-700 border border-slate-200">
-                                                    {lead.leadId}
-                                                </span>
-                                            </td>
-
-                                            {/* Client Details */}
-                                            <td className="py-2.5 px-3.5">
-                                                <div className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors truncate max-w-[200px]" title={lead.clientName}>
-                                                    {lead.clientName}
-                                                </div>
-                                                <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
-                                                    <span>{lead.mobile}</span>
-                                                    {lead.email && lead.email !== "—" && (
-                                                        <>
-                                                            <span className="text-slate-300">•</span>
-                                                            <span className="truncate max-w-[130px]" title={lead.email}>
-                                                                {lead.email}
-                                                            </span>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </td>
-
-                                            {/* Campaign & Dialer */}
-                                            <td className="py-2.5 px-3.5">
-                                                <div className="font-semibold text-slate-800 truncate max-w-[180px]" title={lead.campaignName}>
-                                                    {lead.campaignName}
-                                                </div>
-                                                <div className="text-[10px] text-slate-400 mt-0.5">
-                                                    List: {lead.listId || "N/A"} · {lead.company}
-                                                </div>
-                                            </td>
-
-                                            {/* Intent */}
-                                            <td className="py-2.5 px-3.5">
-                                                <IntentBadge intent={lead.sqvLeadIntent} />
-                                            </td>
-
-                                            {/* Outbound Status */}
-                                            <td className="py-2.5 px-3.5">
-                                                <StatusBadge
-                                                    label={lead.deliveryStatus.label}
-                                                    color={lead.deliveryStatus.color as PillColor}
-                                                />
-                                            </td>
-
-                                            {/* Assign To */}
-                                            <td className="py-2.5 px-3.5 text-slate-700 font-medium">
-                                                {lead.assignTo}
-                                            </td>
-
-                                            {/* Action */}
-                                            <td className="py-2.5 px-3.5 text-center" onClick={(e) => e.stopPropagation()}>
-                                                <Button
-                                                    onClick={() => setSelectedLead(lead)}
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="h-7 px-2.5 text-xs text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 font-bold"
-                                                >
-                                                    <Eye className="w-3.5 h-3.5 mr-1" />
-                                                    View
-                                                </Button>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    {/* Table Pagination Footer */}
-                    <div className="p-3 sm:p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-                        <div className="text-slate-500">
-                            Page <span className="font-bold text-slate-800">{page}</span> of{" "}
-                            <span className="font-bold text-slate-800">{totalPages}</span>
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                            <Button
-                                onClick={() => setPage(1)}
-                                disabled={page <= 1}
-                                variant="outline"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                            >
-                                <ChevronsLeft className="w-4 h-4" />
-                            </Button>
-                            <Button
-                                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                disabled={page <= 1}
-                                variant="outline"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                            >
-                                <ChevronLeft className="w-4 h-4" />
-                            </Button>
-
-                            <span className="px-3 py-1 bg-white border border-slate-200 rounded font-semibold text-slate-700">
-                                {page}
-                            </span>
-
-                            <Button
-                                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                                disabled={page >= totalPages}
-                                variant="outline"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                            >
-                                <ChevronRight className="w-4 h-4" />
-                            </Button>
-                            <Button
-                                onClick={() => setPage(totalPages)}
-                                disabled={page >= totalPages}
-                                variant="outline"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                            >
-                                <ChevronsRight className="w-4 h-4" />
-                            </Button>
-                        </div>
+                        {/* Custom date range */}
+                        {dateFilter === "custom" && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 pt-3 border-t border-slate-200">
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Start Date</label>
+                                    <Input type="date" value={customDate.start} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomDate({ ...customDate, start: e.target.value })} className="h-10 w-full rounded-md border-gray-300" />
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-xs font-medium uppercase tracking-wide text-slate-500">End Date</label>
+                                    <Input type="date" value={customDate.end} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomDate({ ...customDate, end: e.target.value })} className="h-10 w-full rounded-md border-gray-300" />
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
 
-            {/* Lead Details Modal Drawer */}
-            {selectedLead && (
-                <LeadDetailsModal lead={selectedLead} onClose={() => setSelectedLead(null)} />
-            )}
+            {/* KPI Breakdown */}
+            <div className="mx-2 sm:mx-4 lg:mx-5 mt-4">
+                <SentStatusBreakdown counts={sentCounts} total={filteredSent.length} loading={sentLoading} />
+            </div>
+
+            {/* Table */}
+            <div ref={tableRef} className="mx-2 sm:mx-4 lg:mx-5 mt-4 mb-6">
+                <div className="bg-white border border-slate-200 rounded-xl shadow-md overflow-hidden">
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "1px solid #e8edf5", background: "#fff" }}>
+                        <div style={{ width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: "#dbeafe", color: "#1d4ed8" }}>
+                            <SendSvg sz={14} />
+                        </div>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "#1e2a4a" }}>DialShree Sent Outreach — Outbound Log &amp; Queue</span>
+                    </div>
+                    {(sentLoading && filteredSent.length === 0)
+                        ? <div style={{ padding: "40px", textAlign: "center", color: "#94a3b8", fontSize: 13 }}><div style={{ display: "inline-block", width: 20, height: 20, border: "2px solid #e2e8f0", borderTopColor: "#4f46e5", borderRadius: "50%", animation: "spin 0.7s linear infinite", marginRight: 10, verticalAlign: "middle" }} />Loading DialShree sent outreach data...</div>
+                        : <DialShreeSentTableInner data={filteredSent} />
+                    }
+                </div>
+            </div>
         </div>
     );
 }
 
 export default function DialShreeSentPage() {
     return (
-        <Suspense
-            fallback={
-                <div className="flex items-center justify-center min-h-[60vh] text-slate-500 text-sm">
-                    <Loader2 className="w-6 h-6 animate-spin text-indigo-600 mr-2" />
-                    Loading DialShree Sent Outreach Module...
-                </div>
-            }
-        >
+        <Suspense fallback={<div className="flex items-center justify-center h-64 text-slate-500 text-sm">Loading DialShree Sent Outreach...</div>}>
             <DialShreeSentPageInner />
         </Suspense>
     );

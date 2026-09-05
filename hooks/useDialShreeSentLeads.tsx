@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { getIDBCache, setIDBCache } from "@/lib/idb";
+import { LEADS_CACHE_CLEARED_EVENT } from "@/lib/leads-cache-control";
 
 export interface DialShreeSentLead {
     id: number;
@@ -78,8 +79,8 @@ function safeStr(val: any, fallback = "—"): string {
 }
 
 const CACHE_TTL = 3 * 60 * 1000; // 3 mins
-const CACHE_KEY = "dialshree_sent_cache_idb_v1";
-const CACHE_TIME_KEY = "dialshree_sent_cache_time_idb_v1";
+const CACHE_KEY = "dialshree_sent_cache_idb_v2";
+const CACHE_TIME_KEY = "dialshree_sent_cache_time_idb_v2";
 
 export function useDialShreeSentLeads() {
     const [data, setData] = useState<DialShreeSentLead[]>([]);
@@ -214,6 +215,15 @@ export function useDialShreeSentLeads() {
 
     useEffect(() => {
         fetchData();
+    }, [fetchData]);
+
+    useEffect(() => {
+        const handleClear = () => {
+            setData([]);
+            fetchData(true);
+        };
+        window.addEventListener(LEADS_CACHE_CLEARED_EVENT, handleClear);
+        return () => window.removeEventListener(LEADS_CACHE_CLEARED_EVENT, handleClear);
     }, [fetchData]);
 
     return {

@@ -10,6 +10,11 @@ let memoryCache: any[] | null = null;
 let lastFetchTime = 0;
 const CACHE_TTL = 3 * 60 * 1000; // 3 minutes
 
+export function clearDialShreeSentMemoryCache() {
+    memoryCache = null;
+    lastFetchTime = 0;
+}
+
 const noStoreHeaders = {
     "Cache-Control": "private, no-store, no-cache, must-revalidate",
     "Pragma": "no-cache",
