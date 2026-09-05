@@ -19,6 +19,7 @@ const securityFiles = [
   'app/api/bot-lookup/route.ts',
   'app/api/bot-lookup/recent/route.ts',
   'app/api/capture-partner/route.ts',
+  'app/api/dialshree/sent/route.ts',
   'app/api/doctor/calendar/route.ts',
   'app/api/doctor/consultations/route.ts',
   'app/api/doctor/consultations/[id]/route.ts',

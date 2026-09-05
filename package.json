@@ -17,6 +17,7 @@
     "ci:security": "npm run security:ci",
     "test:call-audit": "npx tsx --test scripts/sales-call-audit-executable-routes.test.ts",
     "test:crr": "npx tsx --test scripts/crr-query-boundary.test.mjs",
+    "test:dialshree-sent": "npx tsx --test scripts/dialshree-sent-executable-routes.test.ts",
     "typecheck": "tsc --noEmit --incremental false",
     "start": "next start"
   },

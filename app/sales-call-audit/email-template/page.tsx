@@ -129,9 +129,6 @@ export default function SalesCallAuditEmailTemplatePage() {
         body: JSON.stringify({
           to: "ho.hr@kairali.com",
           date: selectedDate,
-          displayDate,
-          metrics,
-          employees,
         }),
       })
       const json = await res.json()

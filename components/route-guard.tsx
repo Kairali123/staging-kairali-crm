@@ -62,6 +62,7 @@ const pagePermissions: Record<string, string> = {
   '/voicecall/data/sent': 'ai_voice_sent.view',
   '/dialShree/received': 'dialshree_received.view',
   '/dialShree/sent': 'dialshree_sent.view',
+  '/dialShree/summary': 'dialshree_menu.view',
   '/voicecall/summary': 'ai_voice_summary.view',
   '/meetings': 'meetings.view',
   '/accounts-tracker': 'accounts_tracker.view',
