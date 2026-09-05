@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
     const coldBy = searchParams.get("coldBy")
     const verifyStatus = searchParams.get("verifyStatus")
     const priority = searchParams.get("priority")
-    const workflowTab = searchParams.get("tab") || "manual_review"
+    const workflowTab = searchParams.get("workflowTab") || searchParams.get("tab") || "manual_review"
     const skipFilters = searchParams.get("skipFilters") === "true"
 
     const sortField = searchParams.get("sortField") || "generate_date_time"
@@ -181,13 +181,33 @@ export async function GET(req: NextRequest) {
     const executiveDoneClause = "COALESCE(TRIM(verify_action_status_executive_verifier), '') <> ''"
     const seniorDoneClause = "COALESCE(TRIM(verify_action_status_senior_verifier), '') <> ''"
 
-    // Apply workflow tab specific filter
+    // Strictly mutually exclusive SQL predicates for AI_Verification_Category
+    const isEscalateClause = `(LOWER(TRIM(AI_Verification_Category)) LIKE '%escalate%' OR LOWER(TRIM(AI_Verification_Category)) LIKE '%abhilash%')`
+    const isOtherClause = `((LOWER(TRIM(AI_Verification_Category)) LIKE '%other%') AND NOT ${isEscalateClause})`
+    const isReopenClause = `((LOWER(TRIM(AI_Verification_Category)) LIKE '%reopen%') AND NOT ${isOtherClause} AND NOT ${isEscalateClause})`
+    const isColdClause = `((LOWER(TRIM(AI_Verification_Category)) LIKE '%cold%') AND NOT ${isReopenClause} AND NOT ${isOtherClause} AND NOT ${isEscalateClause})`
+    const isManualReviewClause = `(
+      AI_Verification_Category IS NULL 
+      OR TRIM(AI_Verification_Category) = '' 
+      OR (
+        NOT ${isEscalateClause}
+        AND NOT ${isOtherClause}
+        AND NOT ${isReopenClause}
+        AND NOT ${isColdClause}
+      )
+    )`
+
+    // Apply workflow tab specific filter using AI_Verification_Category
     if (workflowTab === "manual_review") {
-      conditions.push("(COALESCE(TRIM(verify_action_status_executive_verifier), '') = '' AND COALESCE(TRIM(verify_action_status_senior_verifier), '') = '')")
+      conditions.push(isManualReviewClause)
+    } else if (workflowTab === "ai_reopen" || workflowTab === "ai_reopened") {
+      conditions.push(isReopenClause)
     } else if (workflowTab === "ai_cold") {
-      conditions.push("(TRIM(verify_action_status_senior_verifier) = 'Cold' OR (TRIM(verify_action_status_executive_verifier) = 'Cold' AND (verify_action_status_senior_verifier IS NULL OR TRIM(verify_action_status_senior_verifier) = '' OR TRIM(verify_action_status_senior_verifier) = 'Cold')))")
-    } else if (workflowTab === "ai_reopened") {
-      conditions.push("(TRIM(verify_action_status_senior_verifier) LIKE '%Reopen%' OR (TRIM(verify_action_status_executive_verifier) LIKE '%Reopen%' AND (verify_action_status_senior_verifier IS NULL OR TRIM(verify_action_status_senior_verifier) = '' OR TRIM(verify_action_status_senior_verifier) LIKE '%Reopen%')))")
+      conditions.push(isColdClause)
+    } else if (workflowTab === "ai_reopen_to_other" || workflowTab === "reopen_to_other") {
+      conditions.push(isOtherClause)
+    } else if (workflowTab === "ai_escalate_abhilash" || workflowTab === "escalate_to_abhilash") {
+      conditions.push(isEscalateClause)
     } else {
       // Keep queue visible until both verifiers are complete
       conditions.push(`NOT (${executiveDoneClause} AND ${seniorDoneClause})`)
@@ -195,13 +215,15 @@ export async function GET(req: NextRequest) {
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
 
-    // Optimize: Single query to calculate all counts in one table scan
+    // Optimize: Single query to calculate all counts in one table scan with mutually exclusive clauses
     const countQuery = `
       SELECT 
         COUNT(*) as total,
-        SUM(CASE WHEN (COALESCE(TRIM(verify_action_status_executive_verifier), '') = '' AND COALESCE(TRIM(verify_action_status_senior_verifier), '') = '') THEN 1 ELSE 0 END) as countManualReview,
-        SUM(CASE WHEN (TRIM(verify_action_status_senior_verifier) = 'Cold' OR (TRIM(verify_action_status_executive_verifier) = 'Cold' AND (verify_action_status_senior_verifier IS NULL OR TRIM(verify_action_status_senior_verifier) = '' OR TRIM(verify_action_status_senior_verifier) = 'Cold'))) THEN 1 ELSE 0 END) as countAiCold,
-        SUM(CASE WHEN (TRIM(verify_action_status_senior_verifier) LIKE '%Reopen%' OR (TRIM(verify_action_status_executive_verifier) LIKE '%Reopen%' AND (verify_action_status_senior_verifier IS NULL OR TRIM(verify_action_status_senior_verifier) = '' OR TRIM(verify_action_status_senior_verifier) LIKE '%Reopen%'))) THEN 1 ELSE 0 END) as countAiReopened,
+        SUM(CASE WHEN ${isManualReviewClause} THEN 1 ELSE 0 END) as countManualReview,
+        SUM(CASE WHEN ${isReopenClause} THEN 1 ELSE 0 END) as countAiReopen,
+        SUM(CASE WHEN ${isColdClause} THEN 1 ELSE 0 END) as countAiCold,
+        SUM(CASE WHEN ${isOtherClause} THEN 1 ELSE 0 END) as countAiReopenToOther,
+        SUM(CASE WHEN ${isEscalateClause} THEN 1 ELSE 0 END) as countAiEscalateAbhilash,
         SUM(CASE WHEN NOT (${executiveDoneClause} AND ${seniorDoneClause}) THEN 1 ELSE 0 END) as pending,
         SUM(CASE WHEN ${executiveDoneClause} AND ${seniorDoneClause} THEN 1 ELSE 0 END) as completed,
         SUM(CASE WHEN LOWER(cold_done_in_calling_appsheet_or_in_dailer) = 'yes' 
@@ -268,7 +290,8 @@ export async function GET(req: NextRequest) {
         doer_senior_verifier_email_id,
         hs_status_if_escalate_to_abhilash_sir_by_senior,
         transfer_to_user_fms_if_reopen,
-        both_done
+        both_done,
+        AI_Verification_Category
       FROM fms_enquiry_cold_reverification_v2
       ${whereClause}
       ORDER BY ${finalSortField} ${finalSortDirection}
@@ -420,12 +443,16 @@ export async function GET(req: NextRequest) {
     const seniorEscalateAbhilash = Number(archiveCountResult[0][0]?.seniorEscalateAbhilash || 0) + Number(countResult[0][0]?.seniorEscalateAbhilash || 0)
 
     const countManualReview = Number(countResult[0][0]?.countManualReview || 0)
+    const countAiReopen = Number(countResult[0][0]?.countAiReopen || 0)
     const countAiCold = Number(countResult[0][0]?.countAiCold || 0)
-    const countAiReopened = Number(countResult[0][0]?.countAiReopened || 0)
+    const countAiReopenToOther = Number(countResult[0][0]?.countAiReopenToOther || 0)
+    const countAiEscalateAbhilash = Number(countResult[0][0]?.countAiEscalateAbhilash || 0)
 
     let currentTabTotal = countManualReview
-    if (workflowTab === "ai_cold") currentTabTotal = countAiCold
-    else if (workflowTab === "ai_reopened") currentTabTotal = countAiReopened
+    if (workflowTab === "ai_reopen" || workflowTab === "ai_reopened") currentTabTotal = countAiReopen
+    else if (workflowTab === "ai_cold") currentTabTotal = countAiCold
+    else if (workflowTab === "ai_reopen_to_other" || workflowTab === "reopen_to_other") currentTabTotal = countAiReopenToOther
+    else if (workflowTab === "ai_escalate_abhilash" || workflowTab === "escalate_to_abhilash") currentTabTotal = countAiEscalateAbhilash
     else if (workflowTab === "all") currentTabTotal = pending
 
     const totalPages = Math.max(1, Math.ceil(currentTabTotal / limit))
@@ -442,8 +469,12 @@ export async function GET(req: NextRequest) {
       },
       tabCounts: {
         manualReview: countManualReview,
+        aiReopen: countAiReopen,
         aiCold: countAiCold,
-        aiReopened: countAiReopened
+        aiReopenToOther: countAiReopenToOther,
+        aiEscalateAbhilash: countAiEscalateAbhilash,
+        // Backward compatibility keys
+        aiReopened: countAiReopen
       },
       kpi: {
         total,

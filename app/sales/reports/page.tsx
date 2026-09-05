@@ -130,68 +130,25 @@ export default function SalesReportsPage() {
     return () => { document.body.style.overflow = "" }
   }, [showLoader])
 
-  // Date Range selected → disable Month/Year
+  // Cumulative filter handlers
   const handleDateFilterChange = (val: string) => {
     setDateFilter(val)
-    if (val !== "all") {
-      setFilterMode("dateRange")
-      setMonthFilter("all")
-      setYearFilter("all")
-    } else {
-      setFilterMode("monthYear")
+    if (val !== "custom") {
+      setCustomFromDate("")
+      setCustomToDate("")
     }
+    setCurrentPage(1)
   }
 
-  // Month selected → disable Date Range
   const handleMonthFilterChange = (val: string) => {
     setMonthFilter(val)
-    if (val !== "all") {
-      setFilterMode("monthYear")
-      setDateFilter("all")
-      setCustomFromDate("")
-      setCustomToDate("")
-    } else if (yearFilter === "all") {
-      setFilterMode("monthYear")
-    }
+    setCurrentPage(1)
   }
 
-  // Year selected → disable Date Range
   const handleYearFilterChange = (val: string) => {
     setYearFilter(val)
-    if (val !== "all") {
-      setFilterMode("monthYear")
-      setDateFilter("all")
-      setCustomFromDate("")
-      setCustomToDate("")
-    } else if (monthFilter === "all") {
-      setFilterMode("monthYear")
-    }
+    setCurrentPage(1)
   }
-
-  useEffect(() => {
-    if (filterMode !== "dateRange") return
-    const now = new Date()
-    const months = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"]
-    const currentMonth = months[now.getMonth()]
-    const currentYear = now.getFullYear().toString()
-
-    switch (dateFilter) {
-      case "today":
-      case "this_week":
-        setMonthFilter(currentMonth); setYearFilter(currentYear); break
-      case "this_month": setMonthFilter(currentMonth); setYearFilter(currentYear); break
-      case "last_month": {
-        const d = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-        setMonthFilter(months[d.getMonth()]); setYearFilter(d.getFullYear().toString()); break
-      }
-      case "this_quarter":
-      case "last_quarter":
-      case "this_year":
-        setMonthFilter("all"); setYearFilter(currentYear); break
-      case "last_year": setMonthFilter("all"); setYearFilter((now.getFullYear() - 1).toString()); break
-      default: break
-    }
-  }, [dateFilter, filterMode])
 
   const previousMonthData = useMemo(() => {
     if (monthFilter === "all" || yearFilter === "all")
@@ -211,54 +168,120 @@ export default function SalesReportsPage() {
 
   const filteredData = useMemo(() => {
     const now = new Date()
-    const currentYear = now.getFullYear().toString()
+    const nowYear = now.getFullYear()
+    const nowMonth = now.getMonth() // 0-indexed
+    const nowDay = now.getDate()
 
-    // Quarter helper: returns { monthNums: string[], year: string }
-    const getQuarterMonths = (filter: string) => {
-      const m = now.getMonth() // 0-indexed
-      const currentQ = Math.floor(m / 3) // 0,1,2,3
-      if (filter === "this_quarter") {
-        const start = currentQ * 3
-        return { monthNums: _months.slice(start, start + 3).map(monthNameToNum), year: currentYear }
+    // Precalculate preset boundary timestamps (local time)
+    const todayStart = new Date(nowYear, nowMonth, nowDay, 0, 0, 0, 0).getTime()
+    const todayEnd = new Date(nowYear, nowMonth, nowDay, 23, 59, 59, 999).getTime()
+
+    // Monday-start week
+    const dayOfWeek = now.getDay()
+    const diffToMon = (dayOfWeek + 6) % 7
+    const weekStart = new Date(nowYear, nowMonth, nowDay - diffToMon, 0, 0, 0, 0).getTime()
+    const weekEnd = new Date(nowYear, nowMonth, nowDay - diffToMon + 6, 23, 59, 59, 999).getTime()
+
+    const thisMonthStart = new Date(nowYear, nowMonth, 1, 0, 0, 0, 0).getTime()
+    const thisMonthEnd = new Date(nowYear, nowMonth + 1, 0, 23, 59, 59, 999).getTime()
+
+    const lastMonthStart = new Date(nowYear, nowMonth - 1, 1, 0, 0, 0, 0).getTime()
+    const lastMonthEnd = new Date(nowYear, nowMonth, 0, 23, 59, 59, 999).getTime()
+
+    const currentQ = Math.floor(nowMonth / 3)
+    const thisQuarterStart = new Date(nowYear, currentQ * 3, 1, 0, 0, 0, 0).getTime()
+    const thisQuarterEnd = new Date(nowYear, (currentQ + 1) * 3, 0, 23, 59, 59, 999).getTime()
+
+    const prevQYear = currentQ === 0 ? nowYear - 1 : nowYear
+    const prevQ = currentQ === 0 ? 3 : currentQ - 1
+    const lastQuarterStart = new Date(prevQYear, prevQ * 3, 1, 0, 0, 0, 0).getTime()
+    const lastQuarterEnd = new Date(prevQYear, (prevQ + 1) * 3, 0, 23, 59, 59, 999).getTime()
+
+    const thisYearStart = new Date(nowYear, 0, 1, 0, 0, 0, 0).getTime()
+    const thisYearEnd = new Date(nowYear, 11, 31, 23, 59, 59, 999).getTime()
+
+    const lastYearStart = new Date(nowYear - 1, 0, 1, 0, 0, 0, 0).getTime()
+    const lastYearEnd = new Date(nowYear - 1, 11, 31, 23, 59, 59, 999).getTime()
+
+    // Custom date range bounds
+    let customStart: number | null = null
+    let customEnd: number | null = null
+    if (dateFilter === "custom") {
+      if (customFromDate) {
+        const [y, m, d] = customFromDate.split("-").map(Number)
+        customStart = new Date(y, m - 1, d, 0, 0, 0, 0).getTime()
       }
-      if (filter === "last_quarter") {
-        const prevQ = currentQ === 0 ? 3 : currentQ - 1
-        const prevYear = currentQ === 0 ? (now.getFullYear() - 1).toString() : currentYear
-        const start = prevQ * 3
-        return { monthNums: _months.slice(start, start + 3).map(monthNameToNum), year: prevYear }
+      if (customToDate) {
+        const [y, m, d] = customToDate.split("-").map(Number)
+        customEnd = new Date(y, m - 1, d, 23, 59, 59, 999).getTime()
       }
-      return null
     }
 
+    const activeMonthNum = monthFilter !== "all" ? monthNameToNum(monthFilter) : "all"
+    const searchLower = searchQuery.trim().toLowerCase()
+
     return salesData.filter(row => {
-      const matchesCompany = companyFilter === "all" || row.company === companyFilter
-      const matchesEmployee = employeeFilter === "all" || row.empName === employeeFilter
-      const matchesSearch = searchQuery === "" ||
-        row.empName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        row.company.toLowerCase().includes(searchQuery.toLowerCase())
+      // 1. Company filter
+      if (companyFilter !== "all" && row.company !== companyFilter) return false
 
-      let matchesDate = true
-      if (dateFilter === "custom" && customFromDate && customToDate) {
-        // row.date is "dd-mm-yyyy", parse to comparable Date
-        const [dd, mm, yyyy] = row.date.split("-")
-        const rowDate = new Date(Number(yyyy), Number(mm) - 1, Number(dd))
-        const fromDate = new Date(customFromDate); fromDate.setHours(0, 0, 0, 0)
-        const toDate = new Date(customToDate); toDate.setHours(23, 59, 59, 999)
-        matchesDate = rowDate >= fromDate && rowDate <= toDate
+      // 2. Employee filter
+      if (employeeFilter !== "all" && row.empName !== employeeFilter) return false
+
+      // 3. Search query
+      if (searchLower) {
+        const empMatch = (row.empName || "").toLowerCase().includes(searchLower)
+        const compMatch = (row.company || "").toLowerCase().includes(searchLower)
+        if (!empMatch && !compMatch) return false
       }
 
-      // Quarter filters — override monthFilter/yearFilter logic
-      if (dateFilter === "this_quarter" || dateFilter === "last_quarter") {
-        const q = getQuarterMonths(dateFilter)!
-        return matchesCompany && matchesEmployee && matchesSearch &&
-          q.monthNums.includes(row.month) && row.year === q.year
+      // 4. Month filter (cumulative)
+      if (activeMonthNum !== "all" && row.month !== activeMonthNum) return false
+
+      // 5. Year filter (cumulative)
+      if (yearFilter !== "all" && row.year !== yearFilter) return false
+
+      // 6. Date Range filter
+      if (dateFilter !== "all") {
+        if (!row.date) return false
+        const [dd, mm, yyyy] = row.date.split("-").map(Number)
+        // Midday local time to cleanly avoid DST and boundary shifts
+        const rowTime = new Date(yyyy, mm - 1, dd, 12, 0, 0).getTime()
+
+        switch (dateFilter) {
+          case "today":
+            if (rowTime < todayStart || rowTime > todayEnd) return false
+            break
+          case "this_week":
+            if (rowTime < weekStart || rowTime > weekEnd) return false
+            break
+          case "this_month":
+            if (rowTime < thisMonthStart || rowTime > thisMonthEnd) return false
+            break
+          case "last_month":
+            if (rowTime < lastMonthStart || rowTime > lastMonthEnd) return false
+            break
+          case "this_quarter":
+            if (rowTime < thisQuarterStart || rowTime > thisQuarterEnd) return false
+            break
+          case "last_quarter":
+            if (rowTime < lastQuarterStart || rowTime > lastQuarterEnd) return false
+            break
+          case "this_year":
+            if (rowTime < thisYearStart || rowTime > thisYearEnd) return false
+            break
+          case "last_year":
+            if (rowTime < lastYearStart || rowTime > lastYearEnd) return false
+            break
+          case "custom":
+            if (customStart !== null && rowTime < customStart) return false
+            if (customEnd !== null && rowTime > customEnd) return false
+            break
+          default:
+            break
+        }
       }
 
-      // monthFilter is a name like "JANUARY" — convert to "01" for comparison
-      const activeMonthNum = monthFilter !== "all" ? monthNameToNum(monthFilter) : "all"
-      const matchesMonth = dateFilter === "custom" ? true : activeMonthNum === "all" || row.month === activeMonthNum
-      const matchesYear = dateFilter === "custom" ? true : yearFilter === "all" || row.year === yearFilter
-      return matchesCompany && matchesEmployee && matchesSearch && matchesMonth && matchesYear && matchesDate
+      return true
     })
   }, [salesData, monthFilter, yearFilter, companyFilter, employeeFilter, searchQuery, dateFilter, customFromDate, customToDate])
 
@@ -802,52 +825,17 @@ export default function SalesReportsPage() {
 
   const employeeGrandTotal = useMemo(() => {
     const planned = employeeSalesPerformance.reduce((s, r) => s + r.plannedSales, 0)
-    const actual = employeeSalesPerformance.reduce((s, r) => s + r.actualSales, 0)
     const unverified = employeeSalesPerformance.reduce((s, r) => s + r.unverifiedSales, 0)
-    const verified = Math.max(0, actual - unverified)
+    const verified = employeeSalesPerformance.reduce((s, r) => s + r.verifiedSales, 0)
+    // Total Actual Sales = Verified Sales + Unverified Sales
+    const actual = verified + unverified
     const share = employeeSalesPerformance.length > 0 && actual > 0 ? 100 : 0
     return { planned, actual, unverified, verified, share }
   }, [employeeSalesPerformance])
 
   const periodTotalActual = useMemo(() => {
-    const now = new Date()
-    const currentYear = now.getFullYear().toString()
-    const getQuarterMonths = (filter: string) => {
-      const m = now.getMonth()
-      const currentQ = Math.floor(m / 3)
-      if (filter === "this_quarter") {
-        const start = currentQ * 3
-        return { monthNums: _months.slice(start, start + 3).map(monthNameToNum), year: currentYear }
-      }
-      if (filter === "last_quarter") {
-        const prevQ = currentQ === 0 ? 3 : currentQ - 1
-        const prevYear = currentQ === 0 ? (now.getFullYear() - 1).toString() : currentYear
-        const start = prevQ * 3
-        return { monthNums: _months.slice(start, start + 3).map(monthNameToNum), year: prevYear }
-      }
-      return null
-    }
-
-    return salesData.filter(row => {
-      const matchesCompany = companyFilter === "all" || row.company === companyFilter
-      let matchesDate = true
-      if (dateFilter === "custom" && customFromDate && customToDate) {
-        const [dd, mm, yyyy] = row.date.split("-")
-        const rowDate = new Date(Number(yyyy), Number(mm) - 1, Number(dd))
-        const fromDate = new Date(customFromDate); fromDate.setHours(0, 0, 0, 0)
-        const toDate = new Date(customToDate); toDate.setHours(23, 59, 59, 999)
-        matchesDate = rowDate >= fromDate && rowDate <= toDate
-      }
-      if (dateFilter === "this_quarter" || dateFilter === "last_quarter") {
-        const q = getQuarterMonths(dateFilter)!
-        return matchesCompany && q.monthNums.includes(row.month) && row.year === q.year
-      }
-      const activeMonthNum = monthFilter !== "all" ? monthNameToNum(monthFilter) : "all"
-      const matchesMonth = dateFilter === "custom" ? true : activeMonthNum === "all" || row.month === activeMonthNum
-      const matchesYear = dateFilter === "custom" ? true : yearFilter === "all" || row.year === yearFilter
-      return matchesCompany && matchesMonth && matchesYear && matchesDate
-    }).reduce((s, r) => s + (r.actualSalesAmount || 0), 0)
-  }, [salesData, companyFilter, dateFilter, customFromDate, customToDate, monthFilter, yearFilter])
+    return filteredData.reduce((s, r) => s + (r.actualSalesAmount || 0), 0)
+  }, [filteredData])
 
   const actualSalesSharePct = useMemo(() => {
     if (periodTotalActual > 0) {
@@ -912,10 +900,10 @@ export default function SalesReportsPage() {
   ]
 
   const renderEmployeeDonutChart = () => {
-    const size = 210
+    const size = 280
     const center = size / 2
-    const Ro = 94
-    const Ri = 56
+    const Ro = 125
+    const Ri = 75
 
     const activeEmps = employeeSalesPerformance.filter(e => e.actualSales > 0)
     const totalActual = employeeGrandTotal.actual
@@ -1063,7 +1051,7 @@ export default function SalesReportsPage() {
                   <title>{`${emp.empName}: ₹${formatCurrency(emp.actualSales)} (${emp.share.toFixed(1)}%)`}</title>
                 </path>
                 {/* Show label inside slice if slice is large enough */}
-                {angle >= 24 && (
+                {angle >= 18 && (
                   <text
                     x={labelPos.x}
                     y={labelPos.y}
@@ -1085,10 +1073,10 @@ export default function SalesReportsPage() {
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-3 pointer-events-none">
           {hoveredEmp ? (
             <>
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate max-w-[100px]" title={hoveredEmp.empName}>
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider truncate max-w-[130px]" title={hoveredEmp.empName}>
                 {hoveredEmp.empName}
               </span>
-              <span className="text-sm sm:text-base font-black text-slate-900 tabular-nums mt-0.5">
+              <span className="text-base sm:text-lg font-black text-slate-900 tabular-nums mt-0.5">
                 ₹{formatCurrency(hoveredEmp.actualSales)}
               </span>
               <span className="text-[11px] font-extrabold text-blue-600 tabular-nums mt-0.5">
@@ -1097,10 +1085,10 @@ export default function SalesReportsPage() {
             </>
           ) : (
             <>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                 Total Sales
               </span>
-              <span className="text-sm sm:text-base font-black text-slate-900 tabular-nums mt-0.5">
+              <span className="text-base sm:text-lg font-black text-slate-900 tabular-nums mt-0.5">
                 ₹{formatCurrency(totalActual)}
               </span>
               <span className="text-[11px] font-bold text-slate-500 tabular-nums mt-0.5">
@@ -1198,9 +1186,9 @@ export default function SalesReportsPage() {
 
                 {/* Date Range — greyed when month/year active */}
                 <div className="order-3 sm:order-none">
-                  <label className={`text-xs mb-1 block uppercase font-semibold tracking-wide ${filterMode === "monthYear" ? "text-slate-300" : "text-slate-500"}`}>Date Range</label>
+                  <label className="text-xs mb-1 block uppercase font-semibold tracking-wide text-slate-500">Date Range</label>
                   <Select value={dateFilter} onValueChange={handleDateFilterChange}>
-                    <SelectTrigger className={`h-11 sm:h-10 w-full rounded-md border-gray-300 transition-opacity ${filterMode === "monthYear" ? "opacity-40" : ""}`}>
+                    <SelectTrigger className="h-11 sm:h-10 w-full rounded-md border-gray-300">
                       <SelectValue placeholder="All Dates" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1211,9 +1199,9 @@ export default function SalesReportsPage() {
 
                 {/* Month — greyed when date range active */}
                 <div className="order-4 sm:order-none">
-                  <label className={`text-xs mb-1 block uppercase font-semibold tracking-wide ${filterMode === "dateRange" ? "text-slate-300" : "text-slate-500"}`}>Month</label>
+                  <label className="text-xs mb-1 block uppercase font-semibold tracking-wide text-slate-500">Month</label>
                   <Select value={monthFilter} onValueChange={handleMonthFilterChange}>
-                    <SelectTrigger className={`h-11 sm:h-10 w-full rounded-md border-gray-300 transition-opacity ${filterMode === "dateRange" ? "opacity-40" : ""}`}>
+                    <SelectTrigger className="h-11 sm:h-10 w-full rounded-md border-gray-300">
                       <SelectValue placeholder="All Months" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1225,9 +1213,9 @@ export default function SalesReportsPage() {
 
                 {/* Year — greyed when date range active */}
                 <div className="order-5 sm:order-none">
-                  <label className={`text-xs mb-1 block uppercase font-semibold tracking-wide ${filterMode === "dateRange" ? "text-slate-300" : "text-slate-500"}`}>Year</label>
+                  <label className="text-xs mb-1 block uppercase font-semibold tracking-wide text-slate-500">Year</label>
                   <Select value={yearFilter} onValueChange={handleYearFilterChange}>
-                    <SelectTrigger className={`h-11 sm:h-10 w-full rounded-md border-gray-300 transition-opacity ${filterMode === "dateRange" ? "opacity-40" : ""}`}>
+                    <SelectTrigger className="h-11 sm:h-10 w-full rounded-md border-gray-300">
                       <SelectValue placeholder="All Years" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1294,7 +1282,7 @@ export default function SalesReportsPage() {
               </form>
 
               {/* Custom date range pickers */}
-              {filterMode === "dateRange" && dateFilter === "custom" && (
+              {dateFilter === "custom" && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 mt-1 border-t border-slate-200">
                   <div>
                     <label className="text-xs text-slate-500 mb-1 block uppercase font-semibold tracking-wide">Start Date</label>
@@ -1395,9 +1383,352 @@ export default function SalesReportsPage() {
 
         </div>{/* end w-full space-y-8 */}
 
-        {/* ── MAIN TABLE CARD ────────────────────────────────────────────── */}
+{/* ── EMPLOYEE-WISE SALES PERFORMANCE ───────────────────────────── */}
         <Card className="shadow-2xl border-0 rounded-2xl overflow-hidden bg-white mt-8">
-          <div ref={resultsRef} className="w-full -mt-2 sm:-mt-3 px-4 sm:px-6 py-2.5 bg-[#f5f9ff] border-b border-slate-200">
+          <div ref={resultsRef} className="w-full px-4 sm:px-6 py-4 bg-[#f5f9ff] border-b border-slate-200">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-md text-white">
+                    <Trophy className="w-4 h-4" />
+                  </div>
+                  <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900">Employee-wise Sales Performance</h2>
+                </div>
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs sm:text-sm font-semibold bg-blue-100 text-blue-800 whitespace-nowrap">
+                  {employeeSalesPerformance.length} Employees
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <CardContent className="p-0">
+            {employeeSalesPerformance.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <p className="text-base font-semibold text-slate-600 mb-1">No employee sales data found</p>
+                <p className="text-sm text-slate-400">Try adjusting your filters</p>
+              </div>
+            ) : (
+              <div className="p-4 sm:p-6 bg-slate-50/40">
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+                  {/* ── LEFT (~60%): Employee-wise Sales Performance Table ── */}
+                  <div className="xl:col-span-7 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                    <div className="px-4 py-3 bg-gradient-to-r from-slate-900 to-slate-800 text-white flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Trophy className="w-4 h-4 text-amber-400" />
+                        <span className="text-xs sm:text-sm font-bold tracking-wide uppercase">Employee Performance Rankings</span>
+                      </div>
+                      <span className="text-xs text-slate-300 font-medium">
+                        Sorted by Actual Sales
+                      </span>
+                    </div>
+
+                    <div className="overflow-x-auto w-full" style={{ WebkitOverflowScrolling: "touch" }}>
+                      <table className="border-collapse" style={{ minWidth: "645px", width: "100%", tableLayout: "fixed" }}>
+                        <colgroup>
+                          <col style={{ width: "210px" }} /> {/* Employee Name */}
+                          <col style={{ width: "115px" }} /> {/* Planned Sales */}
+                          <col style={{ width: "115px" }} /> {/* Actual Sales */}
+                          <col style={{ width: "85px" }} />  {/* % Share */}
+                          <col style={{ width: "120px" }} /> {/* Unverified Sales */}
+                        </colgroup>
+                        <thead>
+                          <tr style={{ background: "linear-gradient(to right, #1e293b, #334155, #1e293b)" }}>
+                            <th
+                              style={{
+                                width: "210px",
+                                minWidth: "210px",
+                                maxWidth: "210px",
+                                backgroundColor: "#1e293b",
+                                position: "sticky",
+                                left: 0,
+                                zIndex: 3,
+                                boxShadow: "3px 0 8px -1px rgba(0,0,0,0.35)",
+                              }}
+                              className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-white border-r border-slate-700"
+                            >
+                              Employee Name
+                            </th>
+                            <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3 text-center text-[11px] font-bold uppercase tracking-wider text-blue-300 border-r border-slate-700">
+                              Planned Sales
+                            </th>
+                            <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3 text-center text-[11px] font-bold uppercase tracking-wider text-green-300 border-r border-slate-700">
+                              Actual Sales
+                            </th>
+                            <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3 text-center text-[11px] font-bold uppercase tracking-wider text-cyan-300 border-r border-slate-700">
+                              % Share
+                            </th>
+                            <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3 text-center text-[11px] font-bold uppercase tracking-wider text-amber-300">
+                              Unverified Sales
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {employeeSalesPerformance.map((emp, idx) => {
+                            const evenRow = idx % 2 === 0
+                            const rowBg = evenRow ? "#ffffff" : "#f8fafc"
+
+                            return (
+                              <tr
+                                key={emp.empName}
+                                className="border-b border-slate-100 transition-colors hover:bg-blue-50/40"
+                                style={{ backgroundColor: rowBg }}
+                              >
+                                {/* Employee Name - sticky */}
+                                <td
+                                  style={{
+                                    width: "210px",
+                                    minWidth: "210px",
+                                    maxWidth: "210px",
+                                    backgroundColor: rowBg,
+                                    position: "sticky",
+                                    left: 0,
+                                    zIndex: 2,
+                                    boxShadow: "3px 0 8px -1px rgba(0,0,0,0.08), 1px 0 0 0 #f1f5f9",
+                                    transition: "background-color 150ms",
+                                  }}
+                                  className="px-4 py-2.5 border-r border-slate-100"
+                                >
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    {renderRankBadge(idx)}
+                                    <span
+                                      className="text-xs font-semibold text-slate-800 truncate block"
+                                      style={{ maxWidth: "155px" }}
+                                      title={emp.empName}
+                                    >
+                                      {emp.empName}
+                                    </span>
+                                  </div>
+                                </td>
+
+                                {/* Planned Sales */}
+                                <td className="text-center px-3 py-2.5 text-xs font-bold text-blue-700 border-r border-slate-100 tabular-nums">
+                                  ₹{formatCurrency(emp.plannedSales)}
+                                </td>
+
+                                {/* Actual Sales */}
+                                <td className="text-center px-3 py-2.5 text-xs font-bold text-green-700 border-r border-slate-100 tabular-nums">
+                                  ₹{formatCurrency(emp.actualSales)}
+                                </td>
+
+                                {/* % Share */}
+                                <td className="text-center px-3 py-2.5 text-xs font-bold text-slate-800 border-r border-slate-100 tabular-nums">
+                                  {emp.actualSales > 0 ? `${emp.share.toFixed(1)}%` : "—"}
+                                </td>
+
+                                {/* Unverified Sales */}
+                                <td className="text-center px-3 py-2.5 text-xs font-bold text-amber-700 tabular-nums">
+                                  ₹{formatCurrency(emp.unverifiedSales)}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+
+                        {/* Grand Total Footer */}
+                        {employeeSalesPerformance.length > 1 && (
+                          <tfoot>
+                            <tr style={{ borderTop: "3px solid #f59e0b", backgroundColor: "#0f172a" }}>
+                              <td
+                                style={{
+                                  width: "210px",
+                                  minWidth: "210px",
+                                  maxWidth: "210px",
+                                  backgroundColor: "#0f172a",
+                                  position: "sticky",
+                                  left: 0,
+                                  zIndex: 2,
+                                  boxShadow: "3px 0 8px -1px rgba(0,0,0,0.5)",
+                                }}
+                                className="font-extrabold text-xs text-white text-left px-4 py-3.5 border-r border-slate-700"
+                              >
+                                GRAND TOTAL
+                              </td>
+                              <td style={{ backgroundColor: "#0f172a" }} className="text-center px-3 py-3.5 border-r border-slate-700 font-bold text-xs sm:text-sm text-blue-400 tabular-nums">
+                                ₹{formatCurrency(employeeGrandTotal.planned)}
+                              </td>
+                              <td style={{ backgroundColor: "#0f172a" }} className="text-center px-3 py-3.5 border-r border-slate-700 font-bold text-xs sm:text-sm text-green-400 tabular-nums">
+                                ₹{formatCurrency(employeeGrandTotal.actual)}
+                              </td>
+                              <td style={{ backgroundColor: "#0f172a" }} className="text-center px-3 py-3.5 border-r border-slate-700 font-bold text-xs sm:text-sm text-cyan-300 tabular-nums">
+                                {employeeGrandTotal.actual > 0 ? "100.0%" : "0.0%"}
+                              </td>
+                              <td style={{ backgroundColor: "#0f172a" }} className="text-center px-3 py-3.5 font-bold text-xs sm:text-sm text-amber-400 tabular-nums">
+                                ₹{formatCurrency(employeeGrandTotal.unverified)}
+                              </td>
+                            </tr>
+                          </tfoot>
+                        )}
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* ── RIGHT (~40%): Employee Sales Share Donut Chart + Legend + Supporting Summary ── */}
+                  <div className="xl:col-span-5 bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col justify-between">
+                    <div>
+                      {/* Card Header */}
+                      <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+                        <div className="flex items-center gap-2">
+                          <div className="p-2 bg-indigo-50 text-indigo-700 rounded-lg">
+                            <PieChartIcon className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h3 className="text-sm sm:text-base font-bold text-slate-900">
+                              Employee Sales Share
+                            </h3>
+                            <p className="text-[11px] text-slate-500">
+                              {employeeSalesPerformance.filter(e => e.actualSales > 0).length} of {employeeSalesPerformance.length} contributors with sales
+                            </p>
+                          </div>
+                        </div>
+                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs font-semibold px-2 py-0.5">
+                          {employeeSalesPerformance.length === 1 ? "Single Employee" : "Team Breakdown"}
+                        </Badge>
+                      </div>
+
+                      {/* Single Donut Chart where each Employee is a slice */}
+                      <div className="flex flex-col items-center justify-center pt-1">
+                        {renderEmployeeDonutChart()}
+
+                        {/* Interactive Employee Breakdown / Legend List */}
+                        <div className="w-full mt-3.5">
+                          <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-400 px-2 pb-1.5 border-b border-slate-100">
+                            <span>Employee</span>
+                            <div className="flex items-center gap-3 sm:gap-4">
+                              <span>Actual Sales</span>
+                              <span className="w-14 text-right">% Share</span>
+                              <span className="w-20 text-right">Unverified Amt</span>
+                            </div>
+                          </div>
+                          <div className="max-h-[150px] overflow-y-auto space-y-1 mt-1.5 pr-1 divide-y divide-slate-50">
+                            {employeeSalesPerformance.map((emp, i) => {
+                              const isHovered = hoveredEmpName === emp.empName
+                              const color = EMPLOYEE_PIE_COLORS[i % EMPLOYEE_PIE_COLORS.length]
+                              const hasSales = emp.actualSales > 0
+
+                              return (
+                                <div
+                                  key={emp.empName}
+                                  onMouseEnter={() => hasSales && setHoveredEmpName(emp.empName)}
+                                  onMouseLeave={() => setHoveredEmpName(null)}
+                                  className={`flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                                    isHovered
+                                      ? "bg-blue-50/90 ring-1 ring-blue-300 font-semibold"
+                                      : "hover:bg-slate-50 text-slate-700"
+                                  } ${!hasSales ? "opacity-50" : ""}`}
+                                >
+                                  <div className="flex items-center gap-2 min-w-0 pr-2">
+                                    <span
+                                      className="w-2.5 h-2.5 rounded-full shrink-0 shadow-xs"
+                                      style={{ backgroundColor: hasSales ? color : "#cbd5e1" }}
+                                    />
+                                    <span className="truncate text-slate-800 font-medium" title={emp.empName}>
+                                      {emp.empName}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-3 sm:gap-4 shrink-0 tabular-nums">
+                                    <span className="font-bold text-slate-900">
+                                      ₹{formatCurrency(emp.actualSales)}
+                                    </span>
+                                    <span
+                                      className={`w-14 text-right font-extrabold ${
+                                        hasSales ? "text-blue-600" : "text-slate-400"
+                                      }`}
+                                    >
+                                      {emp.share.toFixed(1)}%
+                                    </span>
+                                    <span className="w-20 text-right font-bold text-amber-700">
+                                      ₹{formatCurrency(emp.unverifiedSales)}
+                                    </span>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Supporting Summary Information: Verified vs Unverified, Total Actual & 100% Share */}
+                    <div className="mt-4 pt-3.5 border-t border-slate-100">
+                      <div className="flex items-center justify-between mb-2 px-0.5">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                          Verification & Total Summary
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-medium">
+                          Supporting Information
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                        {/* 1. Total Actual Sales (= Verified + Unverified) */}
+                        <div className="bg-slate-50 rounded-xl p-2.5 sm:p-3 border border-slate-200/80 flex flex-col justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 truncate">
+                            Total Actual Sales
+                          </span>
+                          <div className="mt-1">
+                            <span className="text-sm sm:text-base font-black text-slate-900 tabular-nums block truncate">
+                              ₹{formatCurrency(employeeGrandTotal.actual)}
+                            </span>
+                            <span className="text-[10px] text-slate-400 block truncate mt-0.5">
+                              Verified + Unverified
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* 2. Verified Sales */}
+                        <div className="bg-emerald-50/70 rounded-xl p-2.5 sm:p-3 border border-emerald-200/70 flex flex-col justify-between">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 truncate">
+                              Verified Sales
+                            </span>
+                            <span className="text-[9px] font-extrabold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded shrink-0">
+                              {employeeGrandTotal.actual > 0
+                                ? `${((employeeGrandTotal.verified / employeeGrandTotal.actual) * 100).toFixed(1)}%`
+                                : "0.0%"}
+                            </span>
+                          </div>
+                          <div className="mt-1">
+                            <span className="text-sm sm:text-base font-black text-emerald-950 tabular-nums block truncate">
+                              ₹{formatCurrency(employeeGrandTotal.verified)}
+                            </span>
+                            <span className="text-[10px] text-emerald-700 block truncate mt-0.5">
+                              Verified revenue
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* 3. Unverified Sales */}
+                        <div className="bg-amber-50/70 rounded-xl p-2.5 sm:p-3 border border-amber-200/70 flex flex-col justify-between">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 truncate">
+                              Unverified Sales
+                            </span>
+                            <span className="text-[9px] font-extrabold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded shrink-0">
+                              {employeeGrandTotal.actual > 0
+                                ? `${((employeeGrandTotal.unverified / employeeGrandTotal.actual) * 100).toFixed(1)}%`
+                                : "0.0%"}
+                            </span>
+                          </div>
+                          <div className="mt-1">
+                            <span className="text-sm sm:text-base font-black text-amber-950 tabular-nums block truncate">
+                              ₹{formatCurrency(employeeGrandTotal.unverified)}
+                            </span>
+                            <span className="text-[10px] text-amber-700 block truncate mt-0.5">
+                              Pending verification
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+{/* ── MAIN TABLE CARD ────────────────────────────────────────────── */}
+        <Card className="shadow-2xl border-0 rounded-2xl overflow-hidden bg-white mt-8">
+          <div className="w-full -mt-2 sm:-mt-3 px-4 sm:px-6 py-2.5 bg-[#f5f9ff] border-b border-slate-200">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
               <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                 <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900">Sales Performance Analytics</h2>
@@ -2001,359 +2332,6 @@ export default function SalesReportsPage() {
           </CardContent>
         </Card>
 
-        {/* ── EMPLOYEE-WISE SALES PERFORMANCE ───────────────────────────── */}
-        <Card className="shadow-2xl border-0 rounded-2xl overflow-hidden bg-white mt-8">
-          <div className="w-full px-4 sm:px-6 py-4 bg-[#f5f9ff] border-b border-slate-200">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-md text-white">
-                    <Trophy className="w-4 h-4" />
-                  </div>
-                  <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900">Employee-wise Sales Performance</h2>
-                </div>
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs sm:text-sm font-semibold bg-blue-100 text-blue-800 whitespace-nowrap">
-                  {employeeSalesPerformance.length} Employees
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <CardContent className="p-0">
-            {employeeSalesPerformance.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-center">
-                <p className="text-base font-semibold text-slate-600 mb-1">No employee sales data found</p>
-                <p className="text-sm text-slate-400">Try adjusting your filters</p>
-              </div>
-            ) : (
-              <div className="p-4 sm:p-6 bg-slate-50/40">
-                <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-                  {/* ── LEFT (~60%): Employee-wise Sales Performance Table ── */}
-                  <div className="xl:col-span-7 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-                    <div className="px-4 py-3 bg-gradient-to-r from-slate-900 to-slate-800 text-white flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Trophy className="w-4 h-4 text-amber-400" />
-                        <span className="text-xs sm:text-sm font-bold tracking-wide uppercase">Employee Performance Rankings</span>
-                      </div>
-                      <span className="text-xs text-slate-300 font-medium">
-                        Sorted by Actual Sales
-                      </span>
-                    </div>
-
-                    <div className="overflow-x-auto w-full" style={{ WebkitOverflowScrolling: "touch" }}>
-                      <table className="border-collapse" style={{ minWidth: "645px", width: "100%", tableLayout: "fixed" }}>
-                        <colgroup>
-                          <col style={{ width: "210px" }} /> {/* Employee Name */}
-                          <col style={{ width: "115px" }} /> {/* Planned Sales */}
-                          <col style={{ width: "115px" }} /> {/* Actual Sales */}
-                          <col style={{ width: "85px" }} />  {/* % Share */}
-                          <col style={{ width: "120px" }} /> {/* Unverified Sales */}
-                        </colgroup>
-                        <thead>
-                          <tr style={{ background: "linear-gradient(to right, #1e293b, #334155, #1e293b)" }}>
-                            <th
-                              style={{
-                                width: "210px",
-                                minWidth: "210px",
-                                maxWidth: "210px",
-                                backgroundColor: "#1e293b",
-                                position: "sticky",
-                                left: 0,
-                                zIndex: 3,
-                                boxShadow: "3px 0 8px -1px rgba(0,0,0,0.35)",
-                              }}
-                              className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-white border-r border-slate-700"
-                            >
-                              Employee Name
-                            </th>
-                            <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3 text-center text-[11px] font-bold uppercase tracking-wider text-blue-300 border-r border-slate-700">
-                              Planned Sales
-                            </th>
-                            <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3 text-center text-[11px] font-bold uppercase tracking-wider text-green-300 border-r border-slate-700">
-                              Actual Sales
-                            </th>
-                            <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3 text-center text-[11px] font-bold uppercase tracking-wider text-cyan-300 border-r border-slate-700">
-                              % Share
-                            </th>
-                            <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3 text-center text-[11px] font-bold uppercase tracking-wider text-amber-300">
-                              Unverified Sales
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {employeeSalesPerformance.map((emp, idx) => {
-                            const evenRow = idx % 2 === 0
-                            const rowBg = evenRow ? "#ffffff" : "#f8fafc"
-
-                            return (
-                              <tr
-                                key={emp.empName}
-                                className="border-b border-slate-100 transition-colors hover:bg-blue-50/40"
-                                style={{ backgroundColor: rowBg }}
-                              >
-                                {/* Employee Name - sticky */}
-                                <td
-                                  style={{
-                                    width: "210px",
-                                    minWidth: "210px",
-                                    maxWidth: "210px",
-                                    backgroundColor: rowBg,
-                                    position: "sticky",
-                                    left: 0,
-                                    zIndex: 2,
-                                    boxShadow: "3px 0 8px -1px rgba(0,0,0,0.08), 1px 0 0 0 #f1f5f9",
-                                    transition: "background-color 150ms",
-                                  }}
-                                  className="px-4 py-2.5 border-r border-slate-100"
-                                >
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    {renderRankBadge(idx)}
-                                    <span
-                                      className="text-xs font-semibold text-slate-800 truncate block"
-                                      style={{ maxWidth: "155px" }}
-                                      title={emp.empName}
-                                    >
-                                      {emp.empName}
-                                    </span>
-                                  </div>
-                                </td>
-
-                                {/* Planned Sales */}
-                                <td className="text-center px-3 py-2.5 text-xs font-bold text-blue-700 border-r border-slate-100 tabular-nums">
-                                  ₹{formatCurrency(emp.plannedSales)}
-                                </td>
-
-                                {/* Actual Sales */}
-                                <td className="text-center px-3 py-2.5 text-xs font-bold text-green-700 border-r border-slate-100 tabular-nums">
-                                  ₹{formatCurrency(emp.actualSales)}
-                                </td>
-
-                                {/* % Share */}
-                                <td className="text-center px-3 py-2.5 text-xs font-bold text-slate-800 border-r border-slate-100 tabular-nums">
-                                  {emp.actualSales > 0 ? `${emp.share.toFixed(1)}%` : "—"}
-                                </td>
-
-                                {/* Unverified Sales */}
-                                <td className="text-center px-3 py-2.5 text-xs font-bold text-amber-700 tabular-nums">
-                                  ₹{formatCurrency(emp.unverifiedSales)}
-                                </td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-
-                        {/* Grand Total Footer */}
-                        {employeeSalesPerformance.length > 1 && (
-                          <tfoot>
-                            <tr style={{ borderTop: "3px solid #f59e0b", backgroundColor: "#0f172a" }}>
-                              <td
-                                style={{
-                                  width: "210px",
-                                  minWidth: "210px",
-                                  maxWidth: "210px",
-                                  backgroundColor: "#0f172a",
-                                  position: "sticky",
-                                  left: 0,
-                                  zIndex: 2,
-                                  boxShadow: "3px 0 8px -1px rgba(0,0,0,0.5)",
-                                }}
-                                className="font-extrabold text-xs text-white text-left px-4 py-3.5 border-r border-slate-700"
-                              >
-                                GRAND TOTAL
-                              </td>
-                              <td style={{ backgroundColor: "#0f172a" }} className="text-center px-3 py-3.5 border-r border-slate-700 font-bold text-xs sm:text-sm text-blue-400 tabular-nums">
-                                ₹{formatCurrency(employeeGrandTotal.planned)}
-                              </td>
-                              <td style={{ backgroundColor: "#0f172a" }} className="text-center px-3 py-3.5 border-r border-slate-700 font-bold text-xs sm:text-sm text-green-400 tabular-nums">
-                                ₹{formatCurrency(employeeGrandTotal.actual)}
-                              </td>
-                              <td style={{ backgroundColor: "#0f172a" }} className="text-center px-3 py-3.5 border-r border-slate-700 font-bold text-xs sm:text-sm text-cyan-300 tabular-nums">
-                                {employeeGrandTotal.actual > 0 ? "100.0%" : "0.0%"}
-                              </td>
-                              <td style={{ backgroundColor: "#0f172a" }} className="text-center px-3 py-3.5 font-bold text-xs sm:text-sm text-amber-400 tabular-nums">
-                                ₹{formatCurrency(employeeGrandTotal.unverified)}
-                              </td>
-                            </tr>
-                          </tfoot>
-                        )}
-                      </table>
-                    </div>
-                  </div>
-
-                  {/* ── RIGHT (~40%): Employee Sales Share Donut Chart + Legend + Supporting Summary ── */}
-                  <div className="xl:col-span-5 bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col justify-between">
-                    <div>
-                      {/* Card Header */}
-                      <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
-                        <div className="flex items-center gap-2">
-                          <div className="p-2 bg-indigo-50 text-indigo-700 rounded-lg">
-                            <PieChartIcon className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <h3 className="text-sm sm:text-base font-bold text-slate-900">
-                              Employee Sales Share
-                            </h3>
-                            <p className="text-[11px] text-slate-500">
-                              {employeeSalesPerformance.filter(e => e.actualSales > 0).length} of {employeeSalesPerformance.length} contributors with sales
-                            </p>
-                          </div>
-                        </div>
-                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs font-semibold px-2 py-0.5">
-                          {employeeSalesPerformance.length === 1 ? "Single Employee" : "Team Breakdown"}
-                        </Badge>
-                      </div>
-
-                      {/* Single Donut Chart where each Employee is a slice */}
-                      <div className="flex flex-col items-center justify-center pt-1">
-                        {renderEmployeeDonutChart()}
-
-                        {/* Interactive Employee Breakdown / Legend List */}
-                        <div className="w-full mt-3.5">
-                          <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-400 px-2 pb-1.5 border-b border-slate-100">
-                            <span>Employee</span>
-                            <div className="flex items-center gap-4">
-                              <span>Actual Sales</span>
-                              <span className="w-14 text-right">% Share</span>
-                            </div>
-                          </div>
-                          <div className="max-h-[150px] overflow-y-auto space-y-1 mt-1.5 pr-1 divide-y divide-slate-50">
-                            {employeeSalesPerformance.map((emp, i) => {
-                              const isHovered = hoveredEmpName === emp.empName
-                              const color = EMPLOYEE_PIE_COLORS[i % EMPLOYEE_PIE_COLORS.length]
-                              const hasSales = emp.actualSales > 0
-
-                              return (
-                                <div
-                                  key={emp.empName}
-                                  onMouseEnter={() => hasSales && setHoveredEmpName(emp.empName)}
-                                  onMouseLeave={() => setHoveredEmpName(null)}
-                                  className={`flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
-                                    isHovered
-                                      ? "bg-blue-50/90 ring-1 ring-blue-300 font-semibold"
-                                      : "hover:bg-slate-50 text-slate-700"
-                                  } ${!hasSales ? "opacity-50" : ""}`}
-                                >
-                                  <div className="flex items-center gap-2 min-w-0 pr-2">
-                                    <span
-                                      className="w-2.5 h-2.5 rounded-full shrink-0 shadow-xs"
-                                      style={{ backgroundColor: hasSales ? color : "#cbd5e1" }}
-                                    />
-                                    <span className="truncate text-slate-800 font-medium" title={emp.empName}>
-                                      {emp.empName}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-4 shrink-0 tabular-nums">
-                                    <span className="font-bold text-slate-900">
-                                      ₹{formatCurrency(emp.actualSales)}
-                                    </span>
-                                    <span
-                                      className={`w-14 text-right font-extrabold ${
-                                        hasSales ? "text-blue-600" : "text-slate-400"
-                                      }`}
-                                    >
-                                      {emp.share.toFixed(1)}%
-                                    </span>
-                                  </div>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Supporting Summary Information: Verified vs Unverified, Total Actual & 100% Share */}
-                    <div className="mt-4 pt-3.5 border-t border-slate-100">
-                      <div className="flex items-center justify-between mb-2 px-0.5">
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                          Verification & Total Summary
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-medium">
-                          Supporting Information
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2.5">
-                        {/* 1. Total Actual Sales */}
-                        <div className="bg-slate-50 rounded-xl p-2.5 sm:p-3 border border-slate-200/80 flex flex-col justify-between">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 truncate">
-                            Total Actual Sales
-                          </span>
-                          <div className="mt-1">
-                            <span className="text-sm sm:text-base font-black text-slate-900 tabular-nums block truncate">
-                              ₹{formatCurrency(employeeGrandTotal.actual)}
-                            </span>
-                            <span className="text-[10px] text-slate-400 block truncate mt-0.5">
-                              Total achieved sales
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* 2. Total % Share */}
-                        <div className="bg-blue-50/60 rounded-xl p-2.5 sm:p-3 border border-blue-100 flex flex-col justify-between">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 truncate">
-                            Total % Share
-                          </span>
-                          <div className="mt-1">
-                            <span className="text-sm sm:text-base font-black text-blue-900 tabular-nums block truncate">
-                              100.0%
-                            </span>
-                            <span className="text-[10px] text-blue-600/80 block truncate mt-0.5">
-                              Sum of employee shares
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* 3. Verified Sales */}
-                        <div className="bg-emerald-50/70 rounded-xl p-2.5 sm:p-3 border border-emerald-200/70 flex flex-col justify-between">
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 truncate">
-                              Verified Sales
-                            </span>
-                            <span className="text-[9px] font-extrabold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded shrink-0">
-                              {employeeGrandTotal.actual > 0
-                                ? `${((employeeGrandTotal.verified / employeeGrandTotal.actual) * 100).toFixed(1)}%`
-                                : "0.0%"}
-                            </span>
-                          </div>
-                          <div className="mt-1">
-                            <span className="text-sm sm:text-base font-black text-emerald-950 tabular-nums block truncate">
-                              ₹{formatCurrency(employeeGrandTotal.verified)}
-                            </span>
-                            <span className="text-[10px] text-emerald-700 block truncate mt-0.5">
-                              Verified revenue
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* 4. Unverified Sales */}
-                        <div className="bg-amber-50/70 rounded-xl p-2.5 sm:p-3 border border-amber-200/70 flex flex-col justify-between">
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 truncate">
-                              Unverified Sales
-                            </span>
-                            <span className="text-[9px] font-extrabold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded shrink-0">
-                              {employeeGrandTotal.actual > 0
-                                ? `${((employeeGrandTotal.unverified / employeeGrandTotal.actual) * 100).toFixed(1)}%`
-                                : "0.0%"}
-                            </span>
-                          </div>
-                          <div className="mt-1">
-                            <span className="text-sm sm:text-base font-black text-amber-950 tabular-nums block truncate">
-                              ₹{formatCurrency(employeeGrandTotal.unverified)}
-                            </span>
-                            <span className="text-[10px] text-amber-700 block truncate mt-0.5">
-                              Pending verification
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
       </div>
     </div>
   )

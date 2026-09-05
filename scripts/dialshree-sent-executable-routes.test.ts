@@ -128,6 +128,56 @@ test('Executable Route Handlers Suite (DialShree Sent Outreach)', async (t) => {
             [],
           ]
         },
+        query: async (sql: string, params: any[] = []) => {
+          executedSql = sql
+          executedParams = params
+          if (dbShouldFail) {
+            throw new Error('Simulated Query Failure')
+          }
+          return [
+            [
+              {
+                id: 101,
+                timestamp: '2026-09-04 18:30:00',
+                enquiry_date_time: '2026-09-04 18:30:00',
+                lead_id: 'VR-101-TEST',
+                name_of_client: 'Test Client',
+                mobile: '+919876543210',
+                email_id: 'test@example.com',
+                subjects: 'Ayurvedic Retreat',
+                notes: 'Inquired about Panchakarma',
+                url: 'https://kairali.com/retreat',
+                website_name: 'Kairali The Ayurvedic Healing Village',
+                data_source: 'Online PPC Enquiry',
+                assign_to: 'KTAHV SALES',
+                remarks_history: 'Lead added to queue',
+                sqv_lead_intent: 'High',
+                campaign_name: 'KTAHV SALES',
+                list_id: '240322102925',
+                sqv_remarks: 'Immediate call required',
+                alt_mobile: '+919876543211',
+                alt_email_id: 'alt@example.com',
+                geo: 'India',
+                response_result: 'Sent to - Sadik Rehman',
+                timestamp_sent_not_sent: '2026-09-04 18:35:00',
+                action_after_getting_exception: null,
+                timestamp_after_action: null,
+                location: 'Delhi',
+                timezone: 'Asia/Kolkata',
+                utc_offset: '+05:30',
+                business_hours_start: '09:00:00',
+                business_hours_end: '18:00:00',
+                weekdays_config: 'Mon-Sat',
+                code: '+91',
+                region: 'North',
+                location_2: 'NCR',
+                created_at: '2026-09-05 05:19:36',
+                updated_at: '2026-09-05 05:19:36',
+              },
+            ],
+            [],
+          ]
+        },
         release: () => {},
       }
     },

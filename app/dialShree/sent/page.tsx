@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef, Suspense } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+
 import { useDialShreeSentLeads, type DialShreeSentLead } from "@/hooks/useDialShreeSentLeads";
 import { useAuth } from "@/hooks/use-auth";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -835,18 +835,6 @@ function DialShreeSentPageInner() {
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                    <div className="hidden sm:inline-flex rounded-lg bg-white/10 p-1 border border-white/15 text-xs font-semibold">
-                        <Link
-                            href="/dialShree/received"
-                            className="px-3 py-1.5 rounded-md text-white/80 hover:text-white hover:bg-white/10 transition-all"
-                        >
-                            Received Leads
-                        </Link>
-                        <span className="px-3 py-1.5 rounded-md bg-white text-indigo-900 shadow-xs font-bold">
-                            Sent Outreach
-                        </span>
-                    </div>
-
                     {hookRefreshing && !isRefreshing && (
                         <div className="hidden md:flex items-center gap-2 text-white/60 text-[11px] font-medium animate-pulse">
                             <Loader2 className="w-3 h-3 animate-spin" />

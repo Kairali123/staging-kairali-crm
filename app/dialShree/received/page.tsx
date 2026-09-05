@@ -1437,17 +1437,6 @@ function DialShreeReceivedPageInner() {
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                    <div className="hidden sm:inline-flex rounded-lg bg-white/10 p-1 border border-white/15 text-xs font-semibold">
-                        <span className="px-3 py-1.5 rounded-md bg-white text-indigo-900 shadow-xs font-bold">
-                            Received Leads
-                        </span>
-                        <Link
-                            href="/dialShree/sent"
-                            className="px-3 py-1.5 rounded-md text-white/80 hover:text-white hover:bg-white/10 transition-all"
-                        >
-                            Sent Outreach
-                        </Link>
-                    </div>
 
                     {hookRefreshing && !isRefreshing && (
                         <div className="hidden md:flex items-center gap-2 text-white/60 text-[11px] font-medium animate-pulse">

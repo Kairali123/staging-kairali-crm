@@ -39,9 +39,51 @@ import {
     RotateCcw,
     Snowflake,
     Share2,
-    AlertTriangle
+    AlertTriangle,
+    Users
 } from "lucide-react"
 
+function isAudioRecordingUrl(url: any): boolean {
+    if (!url) return false
+    const str = String(url).trim().toLowerCase()
+    if (!str.startsWith("http://") && !str.startsWith("https://")) return false
+
+    // Exclude known non-audio landing pages, paths, or CRM internal routes
+    if (
+        str.includes("/fms/ppc") ||
+        str.includes("/fms/") ||
+        str.includes("ayurvedic-treatment") ||
+        str.includes("preventive-health") ||
+        str.includes("kairalihealingvillage.com") ||
+        str.includes("kairali.com")
+    ) {
+        if (
+            !str.endsWith(".mp3") &&
+            !str.endsWith(".wav") &&
+            !str.endsWith(".ogg") &&
+            !str.endsWith(".m4a") &&
+            !str.includes("recording") &&
+            !str.includes("audiostream")
+        ) {
+            return false
+        }
+    }
+
+    // Must have audio extension or known audio host
+    return (
+        str.includes(".mp3") ||
+        str.includes(".wav") ||
+        str.includes(".ogg") ||
+        str.includes(".m4a") ||
+        str.includes("kstorage") ||
+        str.includes("squadiq") ||
+        str.includes("recording") ||
+        str.includes("knowlarity") ||
+        str.includes("dialer") ||
+        str.includes("appsheet.com") ||
+        str.includes("audiostream")
+    )
+}
 
 export default function EnquiryReverificationPage() {
     const { user, isLoading, hasPermission } = useAuth()
@@ -62,12 +104,26 @@ export default function EnquiryReverificationPage() {
     const [websiteFilter, setWebsiteFilter] = useState("all")
     const [coldByFilter, setColdByFilter] = useState("all")
     const [verifyStatusFilter, setVerifyStatusFilter] = useState("all")
+    const [priorityFilter, setPriorityFilter] = useState("all")
+    const [workflowTab, setWorkflowTab] = useState<
+        "manual_review" | "ai_reopen" | "ai_cold" | "ai_reopen_to_other" | "ai_escalate_abhilash"
+    >("manual_review")
+
     const [customDateRange, setCustomDateRange] = useState({ start: "", end: "" })
 
     const [isInitialLoading, setIsInitialLoading] = useState(true)
     const [isFilterFetching, setIsFilterFetching] = useState(false)
     const [totalEnquiries, setTotalEnquiries] = useState(0)
     const [loadError, setLoadError] = useState<string | null>(null)
+    const [tabCounts, setTabCounts] = useState({
+        manualReview: 0,
+        aiReopen: 0,
+        aiCold: 0,
+        aiReopenToOther: 0,
+        aiEscalateAbhilash: 0,
+        aiReopened: 0
+    })
+
 
     const [sortField, setSortField] = useState("generate_date_time")
     const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
@@ -156,6 +212,8 @@ export default function EnquiryReverificationPage() {
             if (websiteFilter !== "all") url += `website=${encodeURIComponent(websiteFilter)}&`
             if (coldByFilter !== "all") url += `coldBy=${encodeURIComponent(coldByFilter)}&`
             if (verifyStatusFilter !== "all") url += `verifyStatus=${encodeURIComponent(verifyStatusFilter)}&`
+            if (priorityFilter !== "all") url += `priority=${encodeURIComponent(priorityFilter)}&`
+            if (workflowTab) url += `workflowTab=${encodeURIComponent(workflowTab)}&`
 
             let fromDate = ""
             let toDate = ""
@@ -233,6 +291,9 @@ export default function EnquiryReverificationPage() {
             setCompletedEnquiries(Array.isArray(json?.completedData) ? json.completedData : [])
             setTotalEnquiries(json.pagination?.total || 0)
             setTotalPages(json.pagination?.totalPages || 1)
+            if (json.tabCounts) {
+                setTabCounts(json.tabCounts)
+            }
             if (json.kpi) {
                 setKpi(json.kpi)
             }
@@ -330,14 +391,29 @@ export default function EnquiryReverificationPage() {
     // Reset to first page on search or filter change
     useEffect(() => {
         setCurrentPage(1)
-    }, [searchInput, dateFilter, selectedCompany, sourceFilter, websiteFilter, coldByFilter, verifyStatusFilter, customDateRange])
+    }, [searchInput, dateFilter, selectedCompany, sourceFilter, websiteFilter, coldByFilter, verifyStatusFilter, priorityFilter, workflowTab, customDateRange])
 
     // Fetch when filters, page, or sorting changes
     useEffect(() => {
         if (!isLoading && user && hasPermission("cold_enquiry_reverification.view")) {
             fetchEnquiries()
         }
-    }, [currentPage, pageSize, searchInput, dateFilter, selectedCompany, sourceFilter, websiteFilter, coldByFilter, verifyStatusFilter, customDateRange, sortField, sortDirection, user, isLoading, hasPermission])
+    }, [currentPage, pageSize, searchInput, dateFilter, selectedCompany, sourceFilter, websiteFilter, coldByFilter, verifyStatusFilter, priorityFilter, workflowTab, customDateRange, sortField, sortDirection, user, isLoading, hasPermission])
+
+    const renderPriorityBadge = (priority?: string | null) => {
+        if (!priority) return <span className="text-slate-400">—</span>
+        const p = priority.trim().toLowerCase()
+        if (p.includes("high")) {
+            return <Badge className="bg-rose-100 text-rose-800 border-rose-300 font-bold px-2 py-0.5 rounded-full text-[11px]">High</Badge>
+        }
+        if (p.includes("med")) {
+            return <Badge className="bg-amber-100 text-amber-800 border-amber-300 font-bold px-2 py-0.5 rounded-full text-[11px]">Medium</Badge>
+        }
+        if (p.includes("low")) {
+            return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 font-bold px-2 py-0.5 rounded-full text-[11px]">Low</Badge>
+        }
+        return <Badge className="bg-slate-100 text-slate-700 border-slate-300 font-semibold px-2 py-0.5 rounded-full text-[11px]">{priority}</Badge>
+    }
 
     const handleSort = (field: string) => {
         if (sortField === field) {
@@ -482,6 +558,7 @@ export default function EnquiryReverificationPage() {
                                     setWebsiteFilter("all")
                                     setColdByFilter("all")
                                     setVerifyStatusFilter("all")
+                                    setPriorityFilter("all")
                                     setCustomDateRange({ start: "", end: "" })
                                 }}
                                 className="w-full sm:w-auto bg-white border-slate-300 text-slate-700 font-medium hover:bg-blue-100"
@@ -492,18 +569,18 @@ export default function EnquiryReverificationPage() {
 
                         {/* CONTENT */}
                         <div className="px-4 sm:px-5 py-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-8 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3.5">
 
                                 {/* SEARCH */}
-                                <div className="flex flex-col gap-1.5 lg:col-span-2">
+                                <div className="flex flex-col gap-1.5">
                                     <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
                                         Search Enquiries
                                     </label>
                                     <Input
-                                        placeholder="Search by ID, name, email, phone..."
+                                        placeholder="Search ID, name, email, phone..."
                                         value={searchInput}
                                         onChange={(e) => setSearchInput(e.target.value)}
-                                        className="h-10 w-full rounded-md border-gray-300"
+                                        className="h-10 w-full rounded-md border-gray-300 text-xs"
                                     />
                                 </div>
 
@@ -583,7 +660,7 @@ export default function EnquiryReverificationPage() {
                                         <SelectContent>
                                             <SelectItem value="all">All</SelectItem>
                                             {websitesOptions.map((web) => (
-                                                <SelectItem key={web} value={web}>
+                                                 <SelectItem key={web} value={web}>
                                                     {web}
                                                 </SelectItem>
                                             ))}
@@ -626,6 +703,24 @@ export default function EnquiryReverificationPage() {
                                             <SelectItem value="Cold">Cold</SelectItem>
                                             <SelectItem value="Reopen to Other">Reopen to Other</SelectItem>
                                             <SelectItem value="Reopen and Escalate To Abhilash Sir">Reopen and Escalate To Abhilash Sir</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                {/* PRIORITY */}
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                                        Priority
+                                    </label>
+                                    <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                                        <SelectTrigger className="h-10 w-full rounded-md border-gray-300">
+                                            <SelectValue placeholder="All Priorities" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All</SelectItem>
+                                            <SelectItem value="High">High</SelectItem>
+                                            <SelectItem value="Medium">Medium</SelectItem>
+                                            <SelectItem value="Low">Low</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -792,11 +887,10 @@ export default function EnquiryReverificationPage() {
                                     {/* 1. Status: Reopen */}
                                     <div
                                         onClick={() => setVerifyStatusFilter(verifyStatusFilter === "Reopen" ? "all" : "Reopen")}
-                                        className={`cursor-pointer rounded-lg p-3 shadow-sm hover:shadow-md transition border-2 ${
-                                            verifyStatusFilter === "Reopen"
-                                                ? "bg-violet-100/90 border-violet-600 ring-2 ring-violet-400"
-                                                : "bg-violet-50/70 border-violet-300 hover:border-violet-400"
-                                        }`}
+                                        className={`cursor-pointer rounded-lg p-3 shadow-sm hover:shadow-md transition border-2 ${verifyStatusFilter === "Reopen"
+                                            ? "bg-violet-100/90 border-violet-600 ring-2 ring-violet-400"
+                                            : "bg-violet-50/70 border-violet-300 hover:border-violet-400"
+                                            }`}
                                     >
                                         <div className="flex items-center justify-between gap-2 mb-2">
                                             <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-800 leading-tight">
@@ -820,11 +914,10 @@ export default function EnquiryReverificationPage() {
                                     {/* 2. Status: Cold */}
                                     <div
                                         onClick={() => setVerifyStatusFilter(verifyStatusFilter === "Cold" ? "all" : "Cold")}
-                                        className={`cursor-pointer rounded-lg p-3 shadow-sm hover:shadow-md transition border-2 ${
-                                            verifyStatusFilter === "Cold"
-                                                ? "bg-cyan-100/90 border-cyan-600 ring-2 ring-cyan-400"
-                                                : "bg-cyan-50/70 border-cyan-300 hover:border-cyan-400"
-                                        }`}
+                                        className={`cursor-pointer rounded-lg p-3 shadow-sm hover:shadow-md transition border-2 ${verifyStatusFilter === "Cold"
+                                            ? "bg-cyan-100/90 border-cyan-600 ring-2 ring-cyan-400"
+                                            : "bg-cyan-50/70 border-cyan-300 hover:border-cyan-400"
+                                            }`}
                                     >
                                         <div className="flex items-center justify-between gap-2 mb-2">
                                             <p className="text-[10px] font-semibold uppercase tracking-wide text-cyan-800 leading-tight">
@@ -848,11 +941,10 @@ export default function EnquiryReverificationPage() {
                                     {/* 3. Status: Reopen to Other */}
                                     <div
                                         onClick={() => setVerifyStatusFilter(verifyStatusFilter === "Reopen to Other" ? "all" : "Reopen to Other")}
-                                        className={`cursor-pointer rounded-lg p-3 shadow-sm hover:shadow-md transition border-2 ${
-                                            verifyStatusFilter === "Reopen to Other"
-                                                ? "bg-indigo-100/90 border-indigo-600 ring-2 ring-indigo-400"
-                                                : "bg-indigo-50/70 border-indigo-300 hover:border-indigo-400"
-                                        }`}
+                                        className={`cursor-pointer rounded-lg p-3 shadow-sm hover:shadow-md transition border-2 ${verifyStatusFilter === "Reopen to Other"
+                                            ? "bg-indigo-100/90 border-indigo-600 ring-2 ring-indigo-400"
+                                            : "bg-indigo-50/70 border-indigo-300 hover:border-indigo-400"
+                                            }`}
                                     >
                                         <div className="flex items-center justify-between gap-2 mb-2">
                                             <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-800 leading-tight">
@@ -876,11 +968,10 @@ export default function EnquiryReverificationPage() {
                                     {/* 4. Status: Escalate To Abhilash Sir */}
                                     <div
                                         onClick={() => setVerifyStatusFilter(verifyStatusFilter === "Reopen and Escalate To Abhilash Sir" ? "all" : "Reopen and Escalate To Abhilash Sir")}
-                                        className={`cursor-pointer rounded-lg p-3 shadow-sm hover:shadow-md transition border-2 ${
-                                            verifyStatusFilter === "Reopen and Escalate To Abhilash Sir"
-                                                ? "bg-rose-100/90 border-rose-600 ring-2 ring-rose-400"
-                                                : "bg-rose-50/70 border-rose-300 hover:border-rose-400"
-                                        }`}
+                                        className={`cursor-pointer rounded-lg p-3 shadow-sm hover:shadow-md transition border-2 ${verifyStatusFilter === "Reopen and Escalate To Abhilash Sir"
+                                            ? "bg-rose-100/90 border-rose-600 ring-2 ring-rose-400"
+                                            : "bg-rose-50/70 border-rose-300 hover:border-rose-400"
+                                            }`}
                                     >
                                         <div className="flex items-center justify-between gap-2 mb-2">
                                             <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-800 leading-tight">
@@ -924,10 +1015,128 @@ export default function EnquiryReverificationPage() {
                                     )}
                                 </h3>
                                 <p className="text-xs text-slate-500">
-                                    Manage and verify the details of incoming customer enquiries
+                                    {workflowTab === "manual_review" && "Pending enquiries requiring manual verification or triage"}
+                                    {workflowTab === "ai_reopen" && "Enquiries validated and marked for follow-up reopening"}
+                                    {workflowTab === "ai_cold" && "Enquiries verified and confirmed as inactive cold"}
+                                    {workflowTab === "ai_reopen_to_other" && "Enquiries reallocated and reassigned to other departments"}
+                                    {workflowTab === "ai_escalate_abhilash" && "Priority enquiries flagged for management escalation"}
                                 </p>
                             </div>
                         </div>
+
+                        {/* 5 WORKFLOW TABS */}
+                        <div className="inline-flex p-1 bg-slate-100/90 rounded-xl border border-slate-200/80 shadow-inner w-full lg:w-auto overflow-x-auto gap-1">
+                            {/* Tab 1: Manual Review (Fixed) */}
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setWorkflowTab("manual_review")
+                                    setCurrentPage(1)
+                                }}
+                                className={`flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex-1 lg:flex-initial ${workflowTab === "manual_review"
+                                    ? "bg-white text-blue-700 shadow-sm border border-slate-200/80"
+                                    : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+                                    }`}
+                            >
+                                <span className={`w-2 h-2 rounded-full ${workflowTab === "manual_review" ? "bg-blue-600" : "bg-slate-400"}`} />
+                                Manual Review
+                                <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${workflowTab === "manual_review"
+                                    ? "bg-blue-100 text-blue-800 border border-blue-200"
+                                    : "bg-slate-200 text-slate-700"
+                                    }`}>
+                                    {(tabCounts.manualReview || 0).toLocaleString()}
+                                </span>
+                            </button>
+
+                            {/* Tab 2: Reopened */}
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setWorkflowTab("ai_reopen")
+                                    setCurrentPage(1)
+                                }}
+                                className={`flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex-1 lg:flex-initial ${workflowTab === "ai_reopen"
+                                    ? "bg-white text-violet-800 shadow-sm border border-slate-200/80"
+                                    : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+                                    }`}
+                            >
+                                <RotateCcw className={`w-3.5 h-3.5 ${workflowTab === "ai_reopen" ? "text-violet-600" : "text-slate-400"}`} />
+                                Reopened
+                                <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${workflowTab === "ai_reopen"
+                                    ? "bg-violet-100 text-violet-800 border border-violet-200"
+                                    : "bg-slate-200 text-slate-700"
+                                    }`}>
+                                    {(tabCounts.aiReopen || tabCounts.aiReopened || 0).toLocaleString()}
+                                </span>
+                            </button>
+
+                            {/* Tab 3: Cold Confirmed */}
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setWorkflowTab("ai_cold")
+                                    setCurrentPage(1)
+                                }}
+                                className={`flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex-1 lg:flex-initial ${workflowTab === "ai_cold"
+                                    ? "bg-white text-cyan-800 shadow-sm border border-slate-200/80"
+                                    : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+                                    }`}
+                            >
+                                <Snowflake className={`w-3.5 h-3.5 ${workflowTab === "ai_cold" ? "text-cyan-600" : "text-slate-400"}`} />
+                                Cold Confirmed
+                                <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${workflowTab === "ai_cold"
+                                    ? "bg-cyan-100 text-cyan-800 border border-cyan-200"
+                                    : "bg-slate-200 text-slate-700"
+                                    }`}>
+                                    {(tabCounts.aiCold || 0).toLocaleString()}
+                                </span>
+                            </button>
+
+                            {/* Tab 4: Reassigned to Team */}
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setWorkflowTab("ai_reopen_to_other")
+                                    setCurrentPage(1)
+                                }}
+                                className={`flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex-1 lg:flex-initial ${workflowTab === "ai_reopen_to_other"
+                                    ? "bg-white text-indigo-800 shadow-sm border border-slate-200/80"
+                                    : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+                                    }`}
+                            >
+                                <Share2 className={`w-3.5 h-3.5 ${workflowTab === "ai_reopen_to_other" ? "text-indigo-600" : "text-slate-400"}`} />
+                                Reassigned to Team
+                                <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${workflowTab === "ai_reopen_to_other"
+                                    ? "bg-indigo-100 text-indigo-800 border border-indigo-200"
+                                    : "bg-slate-200 text-slate-700"
+                                    }`}>
+                                    {(tabCounts.aiReopenToOther || 0).toLocaleString()}
+                                </span>
+                            </button>
+
+                            {/* Tab 5: Management Escalation */}
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setWorkflowTab("ai_escalate_abhilash")
+                                    setCurrentPage(1)
+                                }}
+                                className={`flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex-1 lg:flex-initial ${workflowTab === "ai_escalate_abhilash"
+                                    ? "bg-white text-rose-800 shadow-sm border border-slate-200/80"
+                                    : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+                                    }`}
+                            >
+                                <AlertTriangle className={`w-3.5 h-3.5 ${workflowTab === "ai_escalate_abhilash" ? "text-rose-600" : "text-slate-400"}`} />
+                                Management Escalation
+                                <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${workflowTab === "ai_escalate_abhilash"
+                                    ? "bg-rose-100 text-rose-800 border border-rose-200"
+                                    : "bg-slate-200 text-slate-700"
+                                    }`}>
+                                    {(tabCounts.aiEscalateAbhilash || 0).toLocaleString()}
+                                </span>
+                            </button>
+                        </div>
+
                     </div>
 
                     {loadError && (
@@ -988,6 +1197,14 @@ export default function EnquiryReverificationPage() {
                                     </th>
                                     <th className="sticky left-[400px] z-30 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[220px] w-[220px] border-r-2 border-white/20 shadow-[inset_-8px_0_12px_-6px_rgba(0,0,0,0.35)]" style={{ backgroundColor: '#1e3a5f' }}>Client Details</th>
 
+                                    <th
+                                        className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-white/10 select-none border-r border-white/15"
+                                        onClick={() => handleSort("sqv_priority")}
+                                    >
+                                        <div className="flex items-center gap-1.5">
+                                            Priority {renderSortIcon("sqv_priority")}
+                                        </div>
+                                    </th>
                                     <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">Subject</th>
                                     <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">Notes</th>
                                     <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">IVR URL</th>
@@ -1032,7 +1249,7 @@ export default function EnquiryReverificationPage() {
 
                                 {loadError && sortedEnquiries.length === 0 && (
                                     <tr>
-                                        <td colSpan={19} className="py-10 px-4 text-center">
+                                        <td colSpan={20} className="py-10 px-4 text-center">
                                             <div className="flex flex-col items-center gap-2">
                                                 <AlertCircle className="h-6 w-6 text-red-500" />
                                                 <p className="text-sm font-semibold text-slate-700">Unable to load enquiries</p>
@@ -1049,6 +1266,35 @@ export default function EnquiryReverificationPage() {
                                         </td>
                                     </tr>
                                 )}
+
+                                {!loadError && sortedEnquiries.length === 0 && (
+                                    <tr>
+                                        <td colSpan={20} className="py-12 px-4 text-center">
+                                            <div className="flex flex-col items-center justify-center gap-2">
+                                                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                                                    {workflowTab === "manual_review" && <Users className="w-5 h-5 text-blue-500" />}
+                                                    {workflowTab === "ai_reopen" && <RotateCcw className="w-5 h-5 text-violet-500" />}
+                                                    {workflowTab === "ai_cold" && <Snowflake className="w-5 h-5 text-cyan-500" />}
+                                                    {workflowTab === "ai_reopen_to_other" && <Share2 className="w-5 h-5 text-indigo-500" />}
+                                                    {workflowTab === "ai_escalate_abhilash" && <AlertTriangle className="w-5 h-5 text-rose-500" />}
+                                                </div>
+                                                <p className="text-sm font-bold text-slate-800">
+                                                    {workflowTab === "manual_review" && "No enquiries pending manual review"}
+                                                    {workflowTab === "ai_reopen" && "No reopened enquiries found"}
+                                                    {workflowTab === "ai_cold" && "No cold confirmed enquiries found"}
+                                                    {workflowTab === "ai_reopen_to_other" && "No reassigned enquiries found"}
+                                                    {workflowTab === "ai_escalate_abhilash" && "No management escalation enquiries found"}
+                                                </p>
+                                                <p className="text-xs text-slate-500 max-w-sm">
+                                                    {searchInput || dateFilter !== "all" || selectedCompany !== "ALL" || sourceFilter !== "all" || websiteFilter !== "all" || coldByFilter !== "all" || verifyStatusFilter !== "all" || priorityFilter !== "all"
+                                                        ? "Try adjusting or clearing your filters above to see more records."
+                                                        : "No records found in this workflow queue."}
+                                                </p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )}
+
 
                                 {sortedEnquiries.map((enq) => (
                                     <tr key={enq.id} className="border-b border-slate-100 hover:bg-blue-50 transition group">
@@ -1069,6 +1315,10 @@ export default function EnquiryReverificationPage() {
                                             </div>
                                         </td>
 
+                                        <td className="py-3 px-4 whitespace-nowrap border-r border-slate-100">
+                                            {renderPriorityBadge(enq.sqv_priority || enq.dialer_priority)}
+                                        </td>
+
                                         <td className="py-3 px-4 max-w-[200px] truncate font-medium text-slate-700 border-r border-slate-100" title={enq.subjects}>
                                             {enq.subjects || "—"}
                                         </td>
@@ -1076,7 +1326,7 @@ export default function EnquiryReverificationPage() {
                                             {enq.notes || "—"}
                                         </td>
                                         <td className="py-3 px-4 border-r border-slate-100">
-                                            {enq.ivr_url ? (
+                                            {isAudioRecordingUrl(enq.ivr_url) ? (
                                                 <a href={enq.ivr_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-blue-600 hover:text-blue-800 hover:underline">
                                                     Play Recording <ExternalLink className="h-3 w-3" />
                                                 </a>
@@ -1142,7 +1392,7 @@ export default function EnquiryReverificationPage() {
                                         <td className="py-3 px-4 font-mono font-medium text-slate-500 border-r border-slate-100">{enq.uid}</td>
                                         <td className={`py-3 px-4 font-bold border-r border-slate-100 max-w-[110px] truncate ${getCompanyColorClass(enq.company_belongs_to)}`} title={enq.company_belongs_to || ""}>{enq.company_belongs_to || "—"}</td>
                                         <td className="py-3 px-4 border-r border-slate-100">
-                                            {enq.appsheet_call_recording_url ? (
+                                            {isAudioRecordingUrl(enq.appsheet_call_recording_url) ? (
                                                 <a href={enq.appsheet_call_recording_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-indigo-600 hover:text-indigo-800 hover:underline">
                                                     Appsheet Rec <ExternalLink className="h-3 w-3" />
                                                 </a>
@@ -1318,130 +1568,139 @@ export default function EnquiryReverificationPage() {
                     const compPagedRows = completedEnquiries.slice(compStart, compEnd)
 
                     return (
-                    <div className="rounded-xl border border-green-200 bg-white shadow-md overflow-hidden">
+                        <div className="rounded-xl border border-green-200 bg-white shadow-md overflow-hidden">
 
-                        {/* Header */}
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-4 sm:px-5 py-4 bg-gradient-to-r from-green-50 via-white to-emerald-50/30 border-b border-green-200">
-                            <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-green-100 flex items-center justify-center border border-green-300">
-                                    <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-700" />
-                                </div>
-                                <div>
-                                    <h3 className="text-sm sm:text-base font-semibold text-slate-900 leading-tight flex items-center gap-2">
-                                        Both Verifications Completed
-                                        <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 border border-green-300 rounded-full px-2.5 py-0.5 text-[11px] font-bold">
-                                            <Check className="h-3 w-3" /> {compTotal} records
-                                        </span>
-                                    </h3>
-                                    <p className="text-xs text-slate-500">
-                                        Enquiries where both Executive & Senior verification is fully done
-                                    </p>
+                            {/* Header */}
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-4 sm:px-5 py-4 bg-gradient-to-r from-green-50 via-white to-emerald-50/30 border-b border-green-200">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-green-100 flex items-center justify-center border border-green-300">
+                                        <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-700" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-sm sm:text-base font-semibold text-slate-900 leading-tight flex items-center gap-2">
+                                            Both Verifications Completed
+                                            <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 border border-green-300 rounded-full px-2.5 py-0.5 text-[11px] font-bold">
+                                                <Check className="h-3 w-3" /> {compTotal} records
+                                            </span>
+                                        </h3>
+                                        <p className="text-xs text-slate-500">
+                                            Enquiries where both Executive & Senior verification is fully done
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
 
-                        {/* Table */}
-                        <div className="relative overflow-x-auto w-full">
-                            <table className="min-w-full divide-y divide-slate-200 text-xs border-collapse">
-                                <thead style={{ backgroundColor: '#14532d' }} className="sticky top-0 z-20">
-                                    <tr>
-                                        {/* Sticky cols */}
-                                        <th className="sticky left-0 z-30 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[140px] w-[140px]" style={{ backgroundColor: '#14532d' }}>Timestamp</th>
-                                        <th className="sticky left-[140px] z-30 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[130px] w-[130px]" style={{ backgroundColor: '#14532d' }}>Lead ID</th>
-                                        <th className="sticky left-[270px] z-30 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[180px] w-[180px] border-r-2 border-white/20 shadow-[inset_-8px_0_12px_-6px_rgba(0,0,0,0.35)]" style={{ backgroundColor: '#14532d' }}>Client</th>
-                                        {/* Scrollable cols */}
-                                        <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">Subject</th>
-                                        <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">Company</th>
-                                        <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">Cold By</th>
-                                        <th className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-normal leading-tight border-l-2 border-white/30 min-w-[90px]">Exec Verifier</th>
-                                        <th className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-normal leading-tight min-w-[80px]">Exec Status</th>
-                                        <th className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[70px] border-r border-white/15">Exec Rating</th>
-                                        <th className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-normal leading-tight border-l-2 border-white/30 min-w-[90px]">Senior Verifier</th>
-                                        <th className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-normal leading-tight min-w-[80px]">Senior Status</th>
-                                        <th className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[70px] border-r border-white/15">Senior Rating</th>
-                                        <th className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {compPagedRows.map((enq) => (
-                                        <tr key={enq.id} className="border-b border-slate-100 hover:bg-green-50 transition group">
-                                            {/* Sticky cells */}
-                                            <td className="sticky left-0 z-10 py-3 px-4 font-medium text-slate-600 whitespace-nowrap min-w-[140px] w-[140px] bg-white group-hover:bg-green-50 transition-colors border-r border-slate-100">{formatDateStr(enq.generate_date_time)}</td>
-                                            <td className="sticky left-[140px] z-10 py-3 px-4 font-bold text-blue-700 whitespace-nowrap min-w-[130px] w-[130px] bg-white group-hover:bg-green-50 transition-colors border-r border-slate-100">{enq.lead_id}</td>
-                                            <td className="sticky left-[270px] z-10 py-3 px-4 min-w-[180px] w-[180px] bg-white group-hover:bg-green-50 transition-colors border-r-2 border-slate-200 shadow-[inset_-8px_0_12px_-6px_rgba(15,23,42,0.12)]">
-                                                <p className="font-bold text-slate-900">{enq.name_of_client || "—"}</p>
-                                                <p className="text-slate-500 text-[11px]">{enq.mobile || ""}</p>
-                                            </td>
-                                            {/* Scrollable cells */}
-                                            <td className="py-3 px-4 max-w-[180px] truncate text-slate-700 border-r border-slate-100" title={enq.subjects}>{enq.subjects || "—"}</td>
-                                            <td className={`py-3 px-4 font-bold whitespace-nowrap border-r border-slate-100 ${getCompanyColorClass(enq.company_belongs_to)}`}>{enq.company_belongs_to || "—"}</td>
-                                            <td className="py-3 px-4 font-semibold text-slate-700 whitespace-nowrap border-r border-slate-100">{enq.cold_by_employee_name || "—"}</td>
-                                            {/* Executive */}
-                                            <td className="py-3 px-4 text-center font-medium text-slate-700 border-l-2 border-slate-200 whitespace-nowrap">{enq.CH || "—"}</td>
-                                            <td className="py-3 px-4 text-center">
-                                                {enq.CI ? (
-                                                    <Badge className="bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold px-2 py-0.5 rounded-full text-[11px]">{enq.CI}</Badge>
-                                                ) : "—"}
-                                            </td>
-                                            <td className="py-3 px-4 text-center font-bold text-slate-800 border-r border-slate-100">
-                                                {enq.CL != null ? Number(enq.CL).toFixed(1) : "—"}
-                                            </td>
-                                            {/* Senior */}
-                                            <td className="py-3 px-4 text-center font-medium text-slate-700 border-l-2 border-slate-200 whitespace-nowrap">{enq.CW || "—"}</td>
-                                            <td className="py-3 px-4 text-center">
-                                                {enq.CX ? (
-                                                    <Badge className="bg-violet-100 text-violet-700 border border-violet-200 font-semibold px-2 py-0.5 rounded-full text-[11px]">{enq.CX}</Badge>
-                                                ) : "—"}
-                                            </td>
-                                            <td className="py-3 px-4 text-center font-bold text-slate-800 border-r border-slate-100">
-                                                {enq.DA != null ? Number(enq.DA).toFixed(1) : "—"}
-                                            </td>
-                                            {/* Action */}
-                                            <td className="py-3 px-4 text-center">
-                                                <button
-                                                    onClick={() => { setSelectedCompletedEnquiry(enq); setIsCompletedViewOpen(true) }}
-                                                    className="inline-flex items-center gap-1.5 rounded-lg border border-green-300 text-green-700 font-bold bg-white hover:bg-green-50 px-3.5 py-1.5 text-xs shadow-sm transition"
-                                                >
-                                                    <Eye className="h-3.5 w-3.5" /> View
-                                                </button>
-                                            </td>
+                            {/* Table */}
+                            <div className="relative overflow-x-auto w-full">
+                                <table className="min-w-full divide-y divide-slate-200 text-xs border-collapse">
+                                    <thead style={{ backgroundColor: '#14532d' }} className="sticky top-0 z-20">
+                                        <tr>
+                                            {/* Sticky cols */}
+                                            <th className="sticky left-0 z-30 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[140px] w-[140px]" style={{ backgroundColor: '#14532d' }}>Timestamp</th>
+                                            <th className="sticky left-[140px] z-30 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[190px] w-[190px]" style={{ backgroundColor: '#14532d' }}>Lead ID</th>
+                                            <th className="sticky left-[330px] z-30 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[180px] w-[180px] border-r-2 border-white/20 shadow-[inset_-8px_0_12px_-6px_rgba(0,0,0,0.35)]" style={{ backgroundColor: '#14532d' }}>Client</th>
+                                            {/* Scrollable cols */}
+                                            <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">Priority</th>
+                                            <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">Subject</th>
+                                            <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">Company</th>
+                                            <th className="px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap border-r border-white/15">Cold By</th>
+                                            <th className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-normal leading-tight border-l-2 border-white/30 min-w-[90px]">Exec Verifier</th>
+                                            <th className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-normal leading-tight min-w-[80px]">Exec Status</th>
+                                            <th className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[70px] border-r border-white/15">Exec Rating</th>
+                                            <th className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-normal leading-tight border-l-2 border-white/30 min-w-[90px]">Senior Verifier</th>
+                                            <th className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-normal leading-tight min-w-[80px]">Senior Status</th>
+                                            <th className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap min-w-[70px] border-r border-white/15">Senior Rating</th>
+                                            <th className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">Action</th>
+
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                                    </thead>
+                                    <tbody>
+                                        {compPagedRows.map((enq) => (
+                                            <tr key={enq.id} className="border-b border-slate-100 hover:bg-green-50 transition group">
+                                                {/* Sticky cells */}
+                                                <td className="sticky left-0 z-10 py-3 px-4 font-medium text-slate-600 whitespace-nowrap min-w-[140px] w-[140px] bg-white group-hover:bg-green-50 transition-colors border-r border-slate-100">{formatDateStr(enq.generate_date_time)}</td>
+                                                <td className="sticky left-[140px] z-10 py-3 px-4 font-bold text-blue-700 min-w-[190px] w-[190px] max-w-[190px] bg-white group-hover:bg-green-50 transition-colors border-r border-slate-100 overflow-hidden">
+                                                    <div className="truncate font-mono text-[11.5px]" title={enq.lead_id || "—"}>
+                                                        {enq.lead_id || "—"}
+                                                    </div>
+                                                </td>
+                                                <td className="sticky left-[330px] z-10 py-3 px-4 min-w-[180px] w-[180px] bg-white group-hover:bg-green-50 transition-colors border-r-2 border-slate-200 shadow-[inset_-8px_0_12px_-6px_rgba(15,23,42,0.12)]">
+                                                    <p className="font-bold text-slate-900">{enq.name_of_client || "—"}</p>
+                                                    <p className="text-slate-500 text-[11px]">{enq.mobile || ""}</p>
+                                                </td>
+                                                {/* Scrollable cells */}
+                                                <td className="py-3 px-4 whitespace-nowrap border-r border-slate-100">
+                                                    {renderPriorityBadge(enq.sqv_priority)}
+                                                </td>
+                                                <td className="py-3 px-4 max-w-[180px] truncate text-slate-700 border-r border-slate-100" title={enq.subjects}>{enq.subjects || "—"}</td>
+                                                <td className={`py-3 px-4 font-bold whitespace-nowrap border-r border-slate-100 ${getCompanyColorClass(enq.company_belongs_to)}`}>{enq.company_belongs_to || "—"}</td>
+                                                <td className="py-3 px-4 font-semibold text-slate-700 whitespace-nowrap border-r border-slate-100">{enq.cold_by_employee_name || "—"}</td>
+                                                {/* Executive */}
+                                                <td className="py-3 px-4 text-center font-medium text-slate-700 border-l-2 border-slate-200 whitespace-nowrap">{enq.CH || "—"}</td>
+                                                <td className="py-3 px-4 text-center">
+                                                    {enq.CI ? (
+                                                        <Badge className="bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold px-2 py-0.5 rounded-full text-[11px]">{enq.CI}</Badge>
+                                                    ) : "—"}
+                                                </td>
+                                                <td className="py-3 px-4 text-center font-bold text-slate-800 border-r border-slate-100">
+                                                    {enq.CL != null ? Number(enq.CL).toFixed(1) : "—"}
+                                                </td>
+                                                {/* Senior */}
+                                                <td className="py-3 px-4 text-center font-medium text-slate-700 border-l-2 border-slate-200 whitespace-nowrap">{enq.CW || "—"}</td>
+                                                <td className="py-3 px-4 text-center">
+                                                    {enq.CX ? (
+                                                        <Badge className="bg-violet-100 text-violet-700 border border-violet-200 font-semibold px-2 py-0.5 rounded-full text-[11px]">{enq.CX}</Badge>
+                                                    ) : "—"}
+                                                </td>
+                                                <td className="py-3 px-4 text-center font-bold text-slate-800 border-r border-slate-100">
+                                                    {enq.DA != null ? Number(enq.DA).toFixed(1) : "—"}
+                                                </td>
+                                                {/* Action */}
+                                                <td className="py-3 px-4 text-center">
+                                                    <button
+                                                        onClick={() => { setSelectedCompletedEnquiry(enq); setIsCompletedViewOpen(true) }}
+                                                        className="inline-flex items-center gap-1.5 rounded-lg border border-green-300 text-green-700 font-bold bg-white hover:bg-green-50 px-3.5 py-1.5 text-xs shadow-sm transition"
+                                                    >
+                                                        <Eye className="h-3.5 w-3.5" /> View
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
 
-                        {/* Pagination Footer */}
-                        <div className="bg-green-50 border-t border-green-200 px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3">
-                            <div className="flex items-center gap-3 text-xs font-semibold text-green-800">
-                                <div className="flex items-center gap-2">
-                                    <span>Show</span>
-                                    <Select value={String(completedPageSize)} onValueChange={(v) => { setCompletedPageSize(Number(v)); setCompletedPage(1) }}>
-                                        <SelectTrigger className="w-[64px] h-7 bg-white text-xs border-green-300 font-bold text-slate-700">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="5">5</SelectItem>
-                                            <SelectItem value="10">10</SelectItem>
-                                            <SelectItem value="25">25</SelectItem>
-                                            <SelectItem value="50">50</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <span>entries</span>
+                            {/* Pagination Footer */}
+                            <div className="bg-green-50 border-t border-green-200 px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3">
+                                <div className="flex items-center gap-3 text-xs font-semibold text-green-800">
+                                    <div className="flex items-center gap-2">
+                                        <span>Show</span>
+                                        <Select value={String(completedPageSize)} onValueChange={(v) => { setCompletedPageSize(Number(v)); setCompletedPage(1) }}>
+                                            <SelectTrigger className="w-[64px] h-7 bg-white text-xs border-green-300 font-bold text-slate-700">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="5">5</SelectItem>
+                                                <SelectItem value="10">10</SelectItem>
+                                                <SelectItem value="25">25</SelectItem>
+                                                <SelectItem value="50">50</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <span>entries</span>
+                                    </div>
+                                    <div className="border-l border-green-300 h-4 hidden sm:block" />
+                                    <span>Showing <b className="text-slate-900">{compStart + 1}</b> to <b className="text-slate-900">{compEnd}</b> of <b className="text-slate-900">{compTotal}</b> records</span>
                                 </div>
-                                <div className="border-l border-green-300 h-4 hidden sm:block" />
-                                <span>Showing <b className="text-slate-900">{compStart + 1}</b> to <b className="text-slate-900">{compEnd}</b> of <b className="text-slate-900">{compTotal}</b> records</span>
+                                <div className="flex items-center gap-1">
+                                    <button onClick={() => setCompletedPage(1)} disabled={completedPage === 1} className="h-7 w-7 rounded bg-white border border-green-300 flex items-center justify-center text-green-700 hover:bg-green-100 disabled:opacity-40 shadow-sm transition" title="First"><ChevronsLeft className="h-3.5 w-3.5" /></button>
+                                    <button onClick={() => setCompletedPage(p => Math.max(p - 1, 1))} disabled={completedPage === 1} className="h-7 w-7 rounded bg-white border border-green-300 flex items-center justify-center text-green-700 hover:bg-green-100 disabled:opacity-40 shadow-sm transition" title="Prev"><ChevronLeft className="h-3.5 w-3.5" /></button>
+                                    <div className="flex items-center px-3 h-7 rounded bg-white border border-green-300 text-xs font-bold text-slate-700 shadow-sm select-none">Page {completedPage} of {compTotalPages}</div>
+                                    <button onClick={() => setCompletedPage(p => Math.min(p + 1, compTotalPages))} disabled={completedPage === compTotalPages} className="h-7 w-7 rounded bg-white border border-green-300 flex items-center justify-center text-green-700 hover:bg-green-100 disabled:opacity-40 shadow-sm transition" title="Next"><ChevronRight className="h-3.5 w-3.5" /></button>
+                                    <button onClick={() => setCompletedPage(compTotalPages)} disabled={completedPage === compTotalPages} className="h-7 w-7 rounded bg-white border border-green-300 flex items-center justify-center text-green-700 hover:bg-green-100 disabled:opacity-40 shadow-sm transition" title="Last"><ChevronsRight className="h-3.5 w-3.5" /></button>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-1">
-                                <button onClick={() => setCompletedPage(1)} disabled={completedPage === 1} className="h-7 w-7 rounded bg-white border border-green-300 flex items-center justify-center text-green-700 hover:bg-green-100 disabled:opacity-40 shadow-sm transition" title="First"><ChevronsLeft className="h-3.5 w-3.5" /></button>
-                                <button onClick={() => setCompletedPage(p => Math.max(p - 1, 1))} disabled={completedPage === 1} className="h-7 w-7 rounded bg-white border border-green-300 flex items-center justify-center text-green-700 hover:bg-green-100 disabled:opacity-40 shadow-sm transition" title="Prev"><ChevronLeft className="h-3.5 w-3.5" /></button>
-                                <div className="flex items-center px-3 h-7 rounded bg-white border border-green-300 text-xs font-bold text-slate-700 shadow-sm select-none">Page {completedPage} of {compTotalPages}</div>
-                                <button onClick={() => setCompletedPage(p => Math.min(p + 1, compTotalPages))} disabled={completedPage === compTotalPages} className="h-7 w-7 rounded bg-white border border-green-300 flex items-center justify-center text-green-700 hover:bg-green-100 disabled:opacity-40 shadow-sm transition" title="Next"><ChevronRight className="h-3.5 w-3.5" /></button>
-                                <button onClick={() => setCompletedPage(compTotalPages)} disabled={completedPage === compTotalPages} className="h-7 w-7 rounded bg-white border border-green-300 flex items-center justify-center text-green-700 hover:bg-green-100 disabled:opacity-40 shadow-sm transition" title="Last"><ChevronsRight className="h-3.5 w-3.5" /></button>
-                            </div>
-                        </div>
 
-                    </div>
+                        </div>
                     )
                 })()}
 
@@ -1515,11 +1774,11 @@ export default function EnquiryReverificationPage() {
                                         <p className="text-[10px] font-extrabold tracking-wider uppercase text-[#94a3b8] mb-3">Sections</p>
                                         <div className="space-y-1">
                                             <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-200">
-                                                <div className="w-2 h-2 rounded-full bg-indigo-500"/>
+                                                <div className="w-2 h-2 rounded-full bg-indigo-500" />
                                                 <span className="text-[11.5px] font-bold text-indigo-700">Executive Verifier</span>
                                             </div>
                                             <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-violet-50 border border-violet-200">
-                                                <div className="w-2 h-2 rounded-full bg-violet-500"/>
+                                                <div className="w-2 h-2 rounded-full bg-violet-500" />
                                                 <span className="text-[11.5px] font-bold text-violet-700">Senior Verifier</span>
                                             </div>
                                         </div>
@@ -1852,7 +2111,7 @@ export default function EnquiryReverificationPage() {
                                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                                         <div className="border border-[#e2e8f0] rounded-xl bg-white p-[10px_14px]">
                                                             <div className="text-[10px] font-bold tracking-[0.7px] uppercase text-[#94a3b8] mb-1">IVR Recording URL</div>
-                                                            {selectedEnquiry.ivr_url ? (
+                                                            {isAudioRecordingUrl(selectedEnquiry.ivr_url) ? (
                                                                 <a href={selectedEnquiry.ivr_url} target="_blank" rel="noreferrer" className="text-xs font-bold text-[#4f46e5] hover:underline inline-flex items-center gap-1 mt-1 border border-[#c7d2fe] bg-[#eef2ff] px-2.5 py-1 rounded-md">
                                                                     Listen IVR Call <ExternalLink className="h-3 w-3" />
                                                                 </a>

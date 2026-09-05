@@ -271,7 +271,7 @@ export async function GET(request: NextRequest) {
         let rows: any[];
 
         try {
-            [rows] = await connection.execute(`
+            [rows] = await connection.query(`
                 SELECT
                     id, timestamp, enquiry_date_time, lead_id, name_of_client,
                     mobile, email_id, subjects, notes, url, website_name,

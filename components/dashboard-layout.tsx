@@ -424,6 +424,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
     if (item.name === "DialShree Lead Qual.") {
       const dialShreeSubMenu = [
+        { name: "Summary", href: "/dialShree/summary", icon: BarChart3, permission: "dialshree_menu.view" },
         { name: "Received", href: "/dialShree/received", icon: Phone, permission: "dialshree_received.view" },
         { name: "Sent", href: "/dialShree/sent", icon: Phone, permission: "dialshree_sent.view" },
       ]
