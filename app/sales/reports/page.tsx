@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Download, Printer, TrendingUp, TrendingDown, TableIcon, BarChart3, ChevronUp, ChevronDown, Filter, Search, Award, Target, DollarSign, Activity, ChevronsUpDown, AlertCircle, XCircle, Calendar, ChevronRight } from "lucide-react"
+import { Download, Printer, TrendingUp, TrendingDown, TableIcon, BarChart3, ChevronUp, ChevronDown, Filter, Search, Award, Target, DollarSign, Activity, ChevronsUpDown, AlertCircle, XCircle, Calendar, ChevronRight, Trophy, PieChart as PieChartIcon } from "lucide-react"
 import { format } from "date-fns"
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, ReferenceLine, Cell, LabelList, Area, AreaChart } from "recharts"
 import type { SalesRow } from "@/hooks/useSalesData"
@@ -68,6 +68,8 @@ export default function SalesReportsPage() {
     next.has(date) ? next.delete(date) : next.add(date)
     return next
   })
+
+  const [hoveredEmpName, setHoveredEmpName] = useState<string | null>(null)
 
   const PageLoader = () => (
     <div className="fixed inset-0 z-[30] flex items-center justify-center bg-white pointer-events-auto">
@@ -320,8 +322,6 @@ export default function SalesReportsPage() {
     variancePercentGrowth: grandTotal.variancePercent - previousMonthData.variancePercent,
   }), [grandTotal, previousMonthData])
 
-  const handlePrint = () => window.print()
-
   const handleExcelDownload = async () => {
     const ExcelJS = (await import("exceljs")).default
     const { saveAs } = await import("file-saver")
@@ -345,6 +345,7 @@ export default function SalesReportsPage() {
       { width: 14 }, // Date  (was Month + Year)
       { width: 18 }, // Planned
       { width: 18 }, // Actual
+      { width: 16 }, // % Share of Total
       { width: 18 }, // Variance Amt
       { width: 12 }, // Variance %
       { width: 18 }, // Collection
@@ -364,7 +365,7 @@ export default function SalesReportsPage() {
     const allBorders = { top: thin, left: thin, bottom: thin, right: thin }
 
     // ── ROW 1 — Title ──────────────────────────────────────────────────────────
-    ws.mergeCells("A1:K1")
+    ws.mergeCells("A1:L1")
     const titleRow = ws.getRow(1)
     titleRow.height = 28
     const titleCell = ws.getCell("A1")
@@ -373,10 +374,9 @@ export default function SalesReportsPage() {
     titleCell.fill = titleFill
     titleCell.alignment = { vertical: "middle", horizontal: "center" }
 
-    // ── ROW 2 — Info bar ──────────────────────────────────────────────────────
-    ws.mergeCells("A2:K2")
-    const infoRow = ws.getRow(2)
-    infoRow.height = 20
+    // ── ROW 2 — Metadata ────────────────────────────────────────────────────────
+    ws.mergeCells("A2:L2")
+    ws.getRow(2).height = 20
     const infoCell = ws.getCell("A2")
     infoCell.value = `Company: ${companyLabel}     |     Month: ${monthLabel}     |     Year: ${yearLabel}     |     Employee: ${empLabel}     |     Records: ${sortedData.length}     |     Generated: ${format(new Date(), "dd MMM yyyy, hh:mm a")}`
     infoCell.font = { bold: false, size: 10, color: { argb: "FFE2E8F0" }, name: "Arial" }
@@ -388,7 +388,7 @@ export default function SalesReportsPage() {
 
     // ── ROW 4 — Column Headers ─────────────────────────────────────────────────
     const headers = ["Rank", "Employee Name", "Company", "Date",
-      "Planned Sales", "Actual Sales", "Variance Amt", "Variance %",
+      "Planned Sales", "Actual Sales", "% Share of Total", "Variance Amt", "Variance %",
       "Collection", "Unverified Sales", "Cancelled Sales"]
     const hRow = ws.getRow(4)
     hRow.height = 22
@@ -402,17 +402,19 @@ export default function SalesReportsPage() {
     })
 
     // ── DATA ROWS ──────────────────────────────────────────────────────────────
-    const numCols = [5, 6, 7, 8, 9, 10, 11] // 1-indexed cols with currency values (shifted by -1 vs before)
-    const pctCol = 8 // Variance % (was 9)
+    const numCols = [5, 6, 8, 10, 11, 12] // 1-indexed cols with currency values
+    const pctCols = [7, 9] // 7 = % Share of Total, 9 = Variance %
 
     sortedData.forEach((item, idx) => {
       const r = ws.getRow(5 + idx)
       r.height = 18
       const isAlt = idx % 2 === 1
+      const rowShare = grandTotal.actualSalesAmount > 0 ? ((item.actualSalesAmount || 0) / grandTotal.actualSalesAmount) * 100 : 0
       const values = [
-        item.rank, item.empName, item.company, item.date,  // date replaces month + year
+        item.rank, item.empName, item.company, item.date,
         item.plannedSalesAmount || 0,
         item.actualSalesAmount || 0,
+        rowShare,
         item.varianceAmount || 0,
         item.variancePercent || 0,
         item.collectionAmount || 0,
@@ -428,14 +430,18 @@ export default function SalesReportsPage() {
 
         const colNum = ci + 1
         const isNumeric = numCols.includes(colNum)
-        const isPct = colNum === pctCol
+        const isPct = pctCols.includes(colNum)
 
-        if (isPct) {
+        if (colNum === 9) {
           const v = Number(val)
           cell.font = { size: 10, name: "Arial", bold: true, color: { argb: v >= 0 ? "FF166534" : "FF991B1B" } }
           cell.fill = v >= 0 ? greenFill : redFill
           cell.numFmt = '0.00"%"'
         } else if (colNum === 7) {
+          // % Share of Total
+          cell.numFmt = '0.00"%"'
+          cell.fill = isAlt ? altFill : { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFFFFF" } }
+        } else if (colNum === 8) {
           // Variance Amount — color + highlight
           const v = Number(val)
           cell.font = { size: 10, name: "Arial", bold: true, color: { argb: v >= 0 ? "FF166534" : "FF991B1B" } }
@@ -450,18 +456,60 @@ export default function SalesReportsPage() {
       })
     })
 
-    // ── Save ──────────────────────────────────────────────────────────────────
+    // ── SUMMARY ROW ────────────────────────────────────────────────────────────
+    const totalRowIdx = 5 + sortedData.length
+    const tRow = ws.getRow(totalRowIdx)
+    tRow.height = 20
+    tRow.getCell(1).value = "TOTAL"
+    tRow.getCell(1).font = { bold: true, size: 10, color: { argb: "FFFFFFFF" }, name: "Arial" }
+    tRow.getCell(1).fill = headerFill
+    tRow.getCell(1).border = allBorders
+    tRow.getCell(1).alignment = { vertical: "middle", horizontal: "center" }
+
+    for (let c = 2; c <= 4; c++) {
+      const cell = tRow.getCell(c)
+      cell.value = ""
+      cell.fill = headerFill
+      cell.border = allBorders
+    }
+
+    const sumVals: Record<number, number> = {
+      5: grandTotal.plannedSalesAmount,
+      6: grandTotal.actualSalesAmount,
+      7: grandTotal.actualSalesAmount > 0 ? 100 : 0,
+      8: grandTotal.varianceAmount,
+      9: grandTotal.variancePercent,
+      10: grandTotal.collectionAmount,
+      11: grandTotal.unverifiedSalesAmount,
+      12: grandTotal.cancelledSalesAmount,
+    }
+
+    Object.entries(sumVals).forEach(([colStr, val]) => {
+      const col = Number(colStr)
+      const cell = tRow.getCell(col)
+      cell.value = val
+      cell.font = { bold: true, size: 10, color: { argb: "FFFFFFFF" }, name: "Arial" }
+      cell.fill = headerFill
+      cell.border = allBorders
+      cell.alignment = { vertical: "middle", horizontal: "center" }
+      if (col === 9 || col === 7) cell.numFmt = '0.00"%"'
+      else cell.numFmt = '₹#,##0'
+    })
+
     const buf = await wb.xlsx.writeBuffer()
-    saveAs(new Blob([buf], { type: "application/octet-stream" }), `Sales_${companyLabel}_${monthLabel}_${yearLabel}_${format(new Date(), "yyyy-MM-dd")}.xlsx`)
+    saveAs(new Blob([buf], { type: "application/octet-stream" }), `Sales_Report_${format(new Date(), "yyyyMMdd_HHmm")}.xlsx`)
   }
 
-  const handleTablePrint = () => {
-    const companyLabel = companyFilter === "all" ? "All Companies" : companyFilter
+  // ── Print Function ────────────────────────────────────────────────────────────
+  const handlePrint = () => {
     const monthLabel = monthFilter === "all" ? "All Months" : monthFilter
     const yearLabel = yearFilter === "all" ? "All Years" : yearFilter
+    const companyLabel = companyFilter === "all" ? "All Companies" : companyFilter
     const employeeLabel = employeeFilter === "all" ? "All Employees" : employeeFilter
 
-    const rows = sortedData.map(item => `
+    const rows = sortedData.map(item => {
+      const rowShare = grandTotal.actualSalesAmount > 0 && Number(item.actualSalesAmount) > 0 ? ((Number(item.actualSalesAmount) / grandTotal.actualSalesAmount) * 100).toFixed(1) + "%" : "—"
+      return `
       <tr>
         <td>${item.rank}</td>
         <td>${item.empName}</td>
@@ -469,12 +517,14 @@ export default function SalesReportsPage() {
         <td>${item.date}</td>
         <td>₹${Math.round(item.plannedSalesAmount || 0).toLocaleString("en-IN")}</td>
         <td>₹${Math.round(item.actualSalesAmount || 0).toLocaleString("en-IN")}</td>
+        <td style="font-weight:600">${rowShare}</td>
         <td style="color:${(item.varianceAmount || 0) >= 0 ? '#166534' : '#991b1b'}">₹${Math.round(item.varianceAmount || 0).toLocaleString("en-IN")}</td>
         <td style="color:${(item.variancePercent || 0) >= 0 ? '#166534' : '#991b1b'}">${(item.variancePercent || 0).toFixed(1)}%</td>
         <td>₹${Math.round(item.collectionAmount || 0).toLocaleString("en-IN")}</td>
         <td>₹${Math.round(item.unverifiedSalesAmount || 0).toLocaleString("en-IN")}</td>
         <td>₹${Math.round(item.cancelledSalesAmount || 0).toLocaleString("en-IN")}</td>
-      </tr>`).join("")
+      </tr>`
+    }).join("")
 
     const html = `<!DOCTYPE html>
 <html>
@@ -513,7 +563,7 @@ export default function SalesReportsPage() {
     <thead>
       <tr>
         <th>Rank</th><th>Employee Name</th><th>Company</th><th>Date</th>
-        <th>Planned Sales</th><th>Actual Sales</th><th>Variance Amt</th><th>Variance %</th>
+        <th>Planned Sales</th><th>Actual Sales</th><th>% Share of Total</th><th>Variance Amt</th><th>Variance %</th>
         <th>Collection</th><th>Unverified</th><th>Cancelled</th>
       </tr>
     </thead>
@@ -687,6 +737,381 @@ export default function SalesReportsPage() {
     const variance = actual - planned
     return { planned, actual, unverified, cancelled, collection, variance, variancePercent: planned !== 0 ? (variance / planned) * 100 : 0 }
   }, [filteredDateGroups])
+
+  /* ─── Employee-wise Sales Performance Memo ─────────────────────────────── */
+  const employeeSalesPerformance = useMemo(() => {
+    if (!filteredData.length) return []
+
+    // Total actual sales of the currently filtered dataset
+    const totalActual = filteredData.reduce((s, r) => s + (r.actualSalesAmount || 0), 0)
+
+    const empMap = new Map<string, {
+      empName: string
+      plannedSales: number
+      actualSales: number
+      unverifiedSales: number
+    }>()
+
+    filteredData.forEach(row => {
+      const name = (row.empName || "").trim()
+      if (!name) return
+
+      if (!empMap.has(name)) {
+        empMap.set(name, {
+          empName: name,
+          plannedSales: 0,
+          actualSales: 0,
+          unverifiedSales: 0,
+        })
+      }
+
+      const item = empMap.get(name)!
+      item.plannedSales += (row.plannedSalesAmount || 0)
+      item.actualSales += (row.actualSalesAmount || 0)
+      item.unverifiedSales += (row.unverifiedSalesAmount || 0)
+    })
+
+    const list = Array.from(empMap.values()).map(item => {
+      // Verified Sales = Actual Sales - Unverified Sales
+      const verifiedSales = Math.max(0, item.actualSales - item.unverifiedSales)
+      const share = totalActual > 0 ? (item.actualSales / totalActual) * 100 : 0
+      const verifiedPct = item.actualSales > 0 ? (verifiedSales / item.actualSales) * 100 : 0
+      const unverifiedPct = item.actualSales > 0 ? (item.unverifiedSales / item.actualSales) * 100 : 0
+
+      return {
+        empName: item.empName,
+        plannedSales: item.plannedSales,
+        actualSales: item.actualSales,
+        unverifiedSales: item.unverifiedSales,
+        verifiedSales,
+        share,
+        verifiedPct,
+        unverifiedPct,
+      }
+    })
+
+    // Sort descending by actual sales (highest actual sales first)
+    list.sort((a, b) => {
+      if (b.actualSales !== a.actualSales) return b.actualSales - a.actualSales
+      if (b.plannedSales !== a.plannedSales) return b.plannedSales - a.plannedSales
+      return a.empName.localeCompare(b.empName)
+    })
+
+    return list
+  }, [filteredData])
+
+  const employeeGrandTotal = useMemo(() => {
+    const planned = employeeSalesPerformance.reduce((s, r) => s + r.plannedSales, 0)
+    const actual = employeeSalesPerformance.reduce((s, r) => s + r.actualSales, 0)
+    const unverified = employeeSalesPerformance.reduce((s, r) => s + r.unverifiedSales, 0)
+    const verified = Math.max(0, actual - unverified)
+    const share = employeeSalesPerformance.length > 0 && actual > 0 ? 100 : 0
+    return { planned, actual, unverified, verified, share }
+  }, [employeeSalesPerformance])
+
+  const periodTotalActual = useMemo(() => {
+    const now = new Date()
+    const currentYear = now.getFullYear().toString()
+    const getQuarterMonths = (filter: string) => {
+      const m = now.getMonth()
+      const currentQ = Math.floor(m / 3)
+      if (filter === "this_quarter") {
+        const start = currentQ * 3
+        return { monthNums: _months.slice(start, start + 3).map(monthNameToNum), year: currentYear }
+      }
+      if (filter === "last_quarter") {
+        const prevQ = currentQ === 0 ? 3 : currentQ - 1
+        const prevYear = currentQ === 0 ? (now.getFullYear() - 1).toString() : currentYear
+        const start = prevQ * 3
+        return { monthNums: _months.slice(start, start + 3).map(monthNameToNum), year: prevYear }
+      }
+      return null
+    }
+
+    return salesData.filter(row => {
+      const matchesCompany = companyFilter === "all" || row.company === companyFilter
+      let matchesDate = true
+      if (dateFilter === "custom" && customFromDate && customToDate) {
+        const [dd, mm, yyyy] = row.date.split("-")
+        const rowDate = new Date(Number(yyyy), Number(mm) - 1, Number(dd))
+        const fromDate = new Date(customFromDate); fromDate.setHours(0, 0, 0, 0)
+        const toDate = new Date(customToDate); toDate.setHours(23, 59, 59, 999)
+        matchesDate = rowDate >= fromDate && rowDate <= toDate
+      }
+      if (dateFilter === "this_quarter" || dateFilter === "last_quarter") {
+        const q = getQuarterMonths(dateFilter)!
+        return matchesCompany && q.monthNums.includes(row.month) && row.year === q.year
+      }
+      const activeMonthNum = monthFilter !== "all" ? monthNameToNum(monthFilter) : "all"
+      const matchesMonth = dateFilter === "custom" ? true : activeMonthNum === "all" || row.month === activeMonthNum
+      const matchesYear = dateFilter === "custom" ? true : yearFilter === "all" || row.year === yearFilter
+      return matchesCompany && matchesMonth && matchesYear && matchesDate
+    }).reduce((s, r) => s + (r.actualSalesAmount || 0), 0)
+  }, [salesData, companyFilter, dateFilter, customFromDate, customToDate, monthFilter, yearFilter])
+
+  const actualSalesSharePct = useMemo(() => {
+    if (periodTotalActual > 0) {
+      return (employeeGrandTotal.actual / periodTotalActual) * 100
+    }
+    return employeeGrandTotal.actual > 0 ? 100 : 0
+  }, [employeeGrandTotal.actual, periodTotalActual])
+
+  const renderRankBadge = (idx: number) => {
+    if (idx === 0) {
+      return (
+        <span
+          className="w-6 h-6 rounded-full bg-gradient-to-br from-amber-100 to-yellow-200 text-amber-800 border border-amber-400 flex items-center justify-center text-xs shadow-sm shrink-0 font-extrabold"
+          title="1st Place (Gold)"
+        >
+          🥇
+        </span>
+      )
+    }
+    if (idx === 1) {
+      return (
+        <span
+          className="w-6 h-6 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 text-slate-700 border border-slate-300 flex items-center justify-center text-xs shadow-sm shrink-0 font-extrabold"
+          title="2nd Place (Silver)"
+        >
+          🥈
+        </span>
+      )
+    }
+    if (idx === 2) {
+      return (
+        <span
+          className="w-6 h-6 rounded-full bg-gradient-to-br from-amber-50 to-orange-100 text-amber-900 border border-amber-600/40 flex items-center justify-center text-xs shadow-sm shrink-0 font-extrabold"
+          title="3rd Place (Bronze)"
+        >
+          🥉
+        </span>
+      )
+    }
+    return (
+      <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-600 text-[11px] font-bold flex items-center justify-center shrink-0 border border-slate-200">
+        {idx + 1}
+      </span>
+    )
+  }
+
+  const EMPLOYEE_PIE_COLORS = [
+    "#2563eb", // Blue
+    "#10b981", // Emerald
+    "#f59e0b", // Amber
+    "#8b5cf6", // Purple
+    "#ec4899", // Pink
+    "#06b6d4", // Cyan
+    "#f97316", // Orange
+    "#6366f1", // Indigo
+    "#14b8a6", // Teal
+    "#84cc16", // Lime
+    "#e11d48", // Rose
+    "#0284c7", // Sky
+    "#a855f7", // Violet
+    "#64748b", // Slate
+  ]
+
+  const renderEmployeeDonutChart = () => {
+    const size = 210
+    const center = size / 2
+    const Ro = 94
+    const Ri = 56
+
+    const activeEmps = employeeSalesPerformance.filter(e => e.actualSales > 0)
+    const totalActual = employeeGrandTotal.actual
+
+    if (totalActual <= 0 || activeEmps.length === 0) {
+      return (
+        <div className="relative flex flex-col items-center justify-center py-4">
+          <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0">
+            <circle
+              cx={center}
+              cy={center}
+              r={(Ro + Ri) / 2}
+              fill="none"
+              stroke="#f1f5f9"
+              strokeWidth={Ro - Ri}
+            />
+            <text
+              x={center}
+              y={center}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              className="text-xs font-bold fill-slate-400"
+            >
+              No Sales Data
+            </text>
+          </svg>
+        </div>
+      )
+    }
+
+    const hoveredEmp = hoveredEmpName ? activeEmps.find(e => e.empName === hoveredEmpName) : null
+
+    // Coordinates helper where 0 deg is at 12 o'clock
+    const getPoint = (deg: number, r: number) => {
+      const rad = (deg * Math.PI) / 180
+      return {
+        x: center + r * Math.sin(rad),
+        y: center - r * Math.cos(rad),
+      }
+    }
+
+    // If only 1 employee has actual sales (100%)
+    if (activeEmps.length === 1) {
+      const emp = activeEmps[0]
+      const color = EMPLOYEE_PIE_COLORS[0]
+      const strokeW = Ro - Ri
+      const midR = (Ro + Ri) / 2
+      return (
+        <div className="relative flex items-center justify-center">
+          <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0 drop-shadow-sm">
+            <circle
+              cx={center}
+              cy={center}
+              r={Ro + 4}
+              fill="none"
+              stroke="#f1f5f9"
+              strokeWidth={1.5}
+            />
+            <circle
+              cx={center}
+              cy={center}
+              r={midR}
+              fill="none"
+              stroke={color}
+              strokeWidth={strokeW}
+            />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-3 pointer-events-none">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate max-w-[100px]" title={emp.empName}>
+              {emp.empName}
+            </span>
+            <span className="text-sm sm:text-base font-black text-slate-900 tabular-nums mt-0.5">
+              ₹{formatCurrency(emp.actualSales)}
+            </span>
+            <span className="text-[11px] font-extrabold text-blue-600 tabular-nums mt-0.5">
+              100.0%
+            </span>
+          </div>
+        </div>
+      )
+    }
+
+    // Multiple employees: compute slices
+    let accumulatedAngle = 0
+    const slices = activeEmps.map((emp, i) => {
+      const angle = (emp.actualSales / totalActual) * 360
+      const startAngle = accumulatedAngle
+      const endAngle = accumulatedAngle + angle
+      accumulatedAngle = endAngle
+      const color = EMPLOYEE_PIE_COLORS[i % EMPLOYEE_PIE_COLORS.length]
+      return { emp, startAngle, endAngle, angle, color }
+    })
+
+    return (
+      <div className="relative flex items-center justify-center">
+        <svg
+          width={size}
+          height={size}
+          viewBox={`0 0 ${size} ${size}`}
+          className="shrink-0 drop-shadow-sm"
+        >
+          <defs>
+            <filter id="empSliceShadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="1" stdDeviation="1" floodColor="#000000" floodOpacity="0.45" />
+            </filter>
+          </defs>
+
+          {/* Background track border */}
+          <circle
+            cx={center}
+            cy={center}
+            r={Ro + 4}
+            fill="none"
+            stroke="#f1f5f9"
+            strokeWidth={1.5}
+          />
+
+          {slices.map(({ emp, startAngle, endAngle, angle, color }) => {
+            const isHovered = hoveredEmpName === emp.empName
+            const anyHovered = Boolean(hoveredEmpName)
+            const p1o = getPoint(startAngle, Ro)
+            const p2o = getPoint(endAngle, Ro)
+            const p2i = getPoint(endAngle, Ri)
+            const p1i = getPoint(startAngle, Ri)
+            const largeArc = angle > 180 ? 1 : 0
+            const pathD = `M ${p1o.x} ${p1o.y} A ${Ro} ${Ro} 0 ${largeArc} 1 ${p2o.x} ${p2o.y} L ${p2i.x} ${p2i.y} A ${Ri} ${Ri} 0 ${largeArc} 0 ${p1i.x} ${p1i.y} Z`
+
+            // Midpoint angle for slice percentage label
+            const midAngle = startAngle + angle / 2
+            const labelPos = getPoint(midAngle, (Ro + Ri) / 2)
+
+            return (
+              <g key={emp.empName}>
+                <path
+                  d={pathD}
+                  fill={color}
+                  stroke="#ffffff"
+                  strokeWidth={2}
+                  strokeLinejoin="round"
+                  className="transition-all duration-200 cursor-pointer"
+                  opacity={anyHovered ? (isHovered ? 1 : 0.45) : 1}
+                  onMouseEnter={() => setHoveredEmpName(emp.empName)}
+                  onMouseLeave={() => setHoveredEmpName(null)}
+                >
+                  <title>{`${emp.empName}: ₹${formatCurrency(emp.actualSales)} (${emp.share.toFixed(1)}%)`}</title>
+                </path>
+                {/* Show label inside slice if slice is large enough */}
+                {angle >= 24 && (
+                  <text
+                    x={labelPos.x}
+                    y={labelPos.y}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fill="#ffffff"
+                    filter="url(#empSliceShadow)"
+                    className="font-black text-[10px] tabular-nums pointer-events-none"
+                  >
+                    {emp.share.toFixed(0)}%
+                  </text>
+                )}
+              </g>
+            )
+          })}
+        </svg>
+
+        {/* Center Donut Label */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-3 pointer-events-none">
+          {hoveredEmp ? (
+            <>
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate max-w-[100px]" title={hoveredEmp.empName}>
+                {hoveredEmp.empName}
+              </span>
+              <span className="text-sm sm:text-base font-black text-slate-900 tabular-nums mt-0.5">
+                ₹{formatCurrency(hoveredEmp.actualSales)}
+              </span>
+              <span className="text-[11px] font-extrabold text-blue-600 tabular-nums mt-0.5">
+                {hoveredEmp.share.toFixed(1)}% Share
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Total Sales
+              </span>
+              <span className="text-sm sm:text-base font-black text-slate-900 tabular-nums mt-0.5">
+                ₹{formatCurrency(totalActual)}
+              </span>
+              <span className="text-[11px] font-bold text-slate-500 tabular-nums mt-0.5">
+                100.0%
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   // ── shared inline-style helper for Grand Total dark cells ──────────────────
   const GT_CELL = { backgroundColor: '#0f172a' } as React.CSSProperties
@@ -1032,12 +1457,13 @@ export default function SalesReportsPage() {
                 ) : (
                   <>
                     <div className="overflow-x-auto w-full" style={{ WebkitOverflowScrolling: "touch" }}>
-                      <table className="border-collapse" style={{ minWidth: "1100px", width: "100%", tableLayout: "fixed" }}>
+                      <table className="border-collapse" style={{ minWidth: "1200px", width: "100%", tableLayout: "fixed" }}>
                         <colgroup>
                           <col style={{ width: "220px" }} /> {/* Date / Employee */}
                           <col style={{ width: "100px" }} /> {/* Company */}
                           <col style={{ width: "115px" }} /> {/* Planned Sales */}
                           <col style={{ width: "115px" }} /> {/* Actual Sales */}
+                          <col style={{ width: "100px" }} /> {/* % Share of Total */}
                           <col style={{ width: "105px" }} /> {/* Variance Amt */}
                           <col style={{ width: "75px" }} />  {/* Variance % */}
                           <col style={{ width: "115px" }} /> {/* Collection Amt */}
@@ -1058,6 +1484,7 @@ export default function SalesReportsPage() {
                             <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-slate-300 border-r border-slate-600">Company</th>
                             <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-blue-300 border-r border-slate-600">Planned Sales</th>
                             <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-green-300 border-r border-slate-600">Actual Sales</th>
+                            <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-cyan-300 border-r border-slate-600">% Share of Total</th>
                             <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-white border-r border-slate-600">Variance Amt</th>
                             <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-white border-r border-slate-600">Variance%</th>
                             <th style={{ backgroundColor: "#4c1d95" }} className="px-3 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-violet-200 border-r border-violet-700">Collection Amt</th>
@@ -1129,11 +1556,11 @@ export default function SalesReportsPage() {
                                           ws.columns = [
                                             { key: "emp", width: 26 }, { key: "co", width: 12 },
                                             { key: "pl", width: 14 }, { key: "ac", width: 14 },
+                                            { key: "sh", width: 14 }, { key: "va", width: 14 },
+                                            { key: "vp", width: 10 }, { key: "col", width: 14 },
                                             { key: "uv", width: 14 }, { key: "ca", width: 14 },
-                                            { key: "col", width: 14 }, { key: "va", width: 14 },
-                                            { key: "vp", width: 10 },
                                           ]
-                                          const headerLabels = ["Employee", "Company", "Planned", "Actual", "Unverified", "Cancelled", "Collection", "Variance", "Var%"]
+                                          const headerLabels = ["Employee", "Company", "Planned", "Actual", "% Share of Total", "Variance", "Var%", "Collection", "Unverified", "Cancelled"]
                                           const hRow = ws.getRow(4); hRow.height = 22
                                           const thin = { style: "thin" as const, color: { argb: "FFE2E8F0" } }
                                           const borders = { top: thin, left: thin, bottom: thin, right: thin }
@@ -1149,18 +1576,31 @@ export default function SalesReportsPage() {
                                           const redFill: any = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFEE2E2" } }
                                           group.rows.forEach((row, i) => {
                                             const vp = row.plannedSalesAmount !== 0 ? (row.varianceAmount / row.plannedSalesAmount) * 100 : 0
+                                            const rowShare = grandTotal.actualSalesAmount > 0 ? (row.actualSalesAmount / grandTotal.actualSalesAmount) * 100 : 0
                                             const r = ws.getRow(5 + i); r.height = 18
                                             const altFill: any = i % 2 === 1 ? { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } } : { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFFFFF" } }
-                                            const vals = [row.empName, row.company, row.plannedSalesAmount, row.actualSalesAmount, row.unverifiedSalesAmount, row.cancelledSalesAmount, row.collectionAmount, row.varianceAmount, Number(vp.toFixed(1))]
+                                            const vals = [
+                                              row.empName,
+                                              row.company,
+                                              row.plannedSalesAmount,
+                                              row.actualSalesAmount,
+                                              Number(rowShare.toFixed(1)),
+                                              row.varianceAmount,
+                                              Number(vp.toFixed(1)),
+                                              row.collectionAmount,
+                                              row.unverifiedSalesAmount,
+                                              row.cancelledSalesAmount,
+                                            ]
                                             vals.forEach((val, ci) => {
                                               const cell = r.getCell(ci + 1)
                                               cell.value = val
                                               cell.font = { size: 10, name: "Arial" }
                                               cell.border = borders
                                               cell.alignment = { vertical: "middle", horizontal: ci < 2 ? "left" : "center" }
-                                              if (ci === 8) { cell.font = { size: 10, name: "Arial", bold: true, color: { argb: Number(val) >= 0 ? "FF166534" : "FF991B1B" } }; cell.fill = Number(val) >= 0 ? greenFill : redFill; cell.numFmt = '0.00"%"' }
-                                              else if (ci === 7) { cell.font = { size: 10, name: "Arial", bold: true, color: { argb: Number(val) >= 0 ? "FF166534" : "FF991B1B" } }; cell.fill = Number(val) >= 0 ? greenFill : redFill; cell.numFmt = '₹#,##0' }
-                                              else if (ci >= 2) { cell.numFmt = '₹#,##0'; cell.fill = altFill }
+                                              if (ci === 6) { cell.font = { size: 10, name: "Arial", bold: true, color: { argb: Number(val) >= 0 ? "FF166534" : "FF991B1B" } }; cell.fill = Number(val) >= 0 ? greenFill : redFill; cell.numFmt = '0.00"%"' }
+                                              else if (ci === 4) { cell.numFmt = '0.00"%"'; cell.fill = altFill }
+                                              else if (ci === 5) { cell.font = { size: 10, name: "Arial", bold: true, color: { argb: Number(val) >= 0 ? "FF166534" : "FF991B1B" } }; cell.fill = Number(val) >= 0 ? greenFill : redFill; cell.numFmt = '₹#,##0' }
+                                              else if ([2, 3, 7, 8, 9].includes(ci)) { cell.numFmt = '₹#,##0'; cell.fill = altFill }
                                               else { cell.fill = altFill }
                                             })
                                           })
@@ -1174,9 +1614,10 @@ export default function SalesReportsPage() {
                                         onClick={() => {
                                           const rows = group.rows.map(row => {
                                             const vp = row.plannedSalesAmount !== 0 ? (row.varianceAmount / row.plannedSalesAmount * 100).toFixed(1) : "0.0"
-                                            return `<tr><td>${row.empName}</td><td>${row.company}</td><td>₹${Math.round(row.plannedSalesAmount).toLocaleString("en-IN")}</td><td>₹${Math.round(row.actualSalesAmount).toLocaleString("en-IN")}</td><td>₹${Math.round(row.unverifiedSalesAmount).toLocaleString("en-IN")}</td><td>₹${Math.round(row.cancelledSalesAmount).toLocaleString("en-IN")}</td><td>₹${Math.round(row.collectionAmount).toLocaleString("en-IN")}</td><td style="color:${row.varianceAmount >= 0 ? "#166534" : "#991b1b"}">₹${Math.round(row.varianceAmount).toLocaleString("en-IN")}</td><td style="color:${Number(vp) >= 0 ? "#166534" : "#991b1b"}">${vp}%</td></tr>`
+                                            const rowShare = grandTotal.actualSalesAmount > 0 ? ((row.actualSalesAmount / grandTotal.actualSalesAmount) * 100).toFixed(1) : "0.0"
+                                            return `<tr><td>${row.empName}</td><td>${row.company}</td><td>₹${Math.round(row.plannedSalesAmount).toLocaleString("en-IN")}</td><td>₹${Math.round(row.actualSalesAmount).toLocaleString("en-IN")}</td><td>${rowShare}%</td><td style="color:${row.varianceAmount >= 0 ? "#166534" : "#991b1b"}">₹${Math.round(row.varianceAmount).toLocaleString("en-IN")}</td><td style="color:${Number(vp) >= 0 ? "#166534" : "#991b1b"}">${vp}%</td><td>₹${Math.round(row.collectionAmount).toLocaleString("en-IN")}</td><td>₹${Math.round(row.unverifiedSalesAmount).toLocaleString("en-IN")}</td><td>₹${Math.round(row.cancelledSalesAmount).toLocaleString("en-IN")}</td></tr>`
                                           }).join("")
-                                          const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Sales – ${group.displayDate}</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:11px;color:#1e293b;padding:16px}.title{font-size:16px;font-weight:bold;margin-bottom:4px}.date{font-size:12px;color:#475569;margin-bottom:12px}table{width:100%;border-collapse:collapse}th{background:#1e293b;color:white;padding:6px 8px;text-align:left;font-size:10px}td{padding:5px 8px;border-bottom:1px solid #e2e8f0;font-size:10px}tr:nth-child(even) td{background:#f8fafc}@page{margin:10mm;size:A4 landscape}</style></head><body><div class="title">Sales Report — ${group.displayDate}</div><div class="date">Company: ${companyFilter === "all" ? "All" : companyFilter} · ${group.rows.length} employees</div><table><thead><tr><th>Employee</th><th>Company</th><th>Planned</th><th>Actual</th><th>Unverified</th><th>Cancelled</th><th>Collection</th><th>Variance</th><th>Var%</th></tr></thead><tbody>${rows}</tbody></table></body></html>`
+                                          const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Sales – ${group.displayDate}</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:11px;color:#1e293b;padding:16px}.title{font-size:16px;font-weight:bold;margin-bottom:4px}.date{font-size:12px;color:#475569;margin-bottom:12px}table{width:100%;border-collapse:collapse}th{background:#1e293b;color:white;padding:6px 8px;text-align:left;font-size:10px}td{padding:5px 8px;border-bottom:1px solid #e2e8f0;font-size:10px}tr:nth-child(even) td{background:#f8fafc}@page{margin:10mm;size:A4 landscape}</style></head><body><div class="title">Sales Report — ${group.displayDate}</div><div class="date">Company: ${companyFilter === "all" ? "All" : companyFilter} · ${group.rows.length} employees</div><table><thead><tr><th>Employee</th><th>Company</th><th>Planned</th><th>Actual</th><th>% Share of Total</th><th>Variance</th><th>Var%</th><th>Collection</th><th>Unverified</th><th>Cancelled</th></tr></thead><tbody>${rows}</tbody></table></body></html>`
                                           const win = window.open("", "_blank", "width=1100,height=700")
                                           if (!win) return
                                           win.document.write(html); win.document.close(); win.focus(); win.print(); win.close()
@@ -1188,9 +1629,12 @@ export default function SalesReportsPage() {
                                 </td>
                                 {/* Company col — blank on date row */}
                                 <td className="text-center px-3 py-3 text-xs text-slate-400">—</td>
-                                {/* Date totals — new order: Planned, Actual, Variance, Var%, Collection, Unverified, Cancelled */}
+                                {/* Date totals — new order: Planned, Actual, % Share of Total, Variance, Var%, Collection, Unverified, Cancelled */}
                                 <td className="text-center px-3 py-3 font-bold text-xs text-blue-700 bg-blue-50/60">₹{formatCurrency(group.totalPlanned)}</td>
                                 <td className="text-center px-3 py-3 font-bold text-xs text-green-700 bg-green-50/60">₹{formatCurrency(group.totalActual)}</td>
+                                <td className="text-center px-3 py-3 font-bold text-xs text-slate-800 bg-slate-50/60 tabular-nums">
+                                  {grandTotal.actualSalesAmount > 0 && group.totalActual > 0 ? `${((group.totalActual / grandTotal.actualSalesAmount) * 100).toFixed(1)}%` : "—"}
+                                </td>
                                 <td className={`text-center px-3 py-3 font-bold text-xs ${group.totalVariance >= 0 ? "text-green-700 bg-green-50/40" : "text-red-700 bg-red-50/40"}`}>₹{formatCurrency(group.totalVariance)}</td>
                                 <td className="text-center px-3 py-3">
                                   <Badge variant="outline" className={`font-bold px-1.5 py-0 text-xs ${varPct >= 0 ? "bg-green-100 text-green-800 border-green-300" : "bg-red-100 text-red-800 border-red-300"}`}>
@@ -1251,6 +1695,11 @@ export default function SalesReportsPage() {
                                           <span className="absolute left-1/2 -translate-x-1/2 -top-8 hidden group-hover/tip:block bg-black text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-30">Click for detailed sales report</span>
                                         </span>
                                       ) : <span className="text-green-700 font-medium">₹0</span>}
+                                    </td>
+
+                                    {/* % Share of Total */}
+                                    <td className="text-center px-3 py-2.5 text-xs font-bold text-slate-800 tabular-nums">
+                                      {grandTotal.actualSalesAmount > 0 && Number(row.actualSalesAmount) > 0 ? `${((Number(row.actualSalesAmount) / grandTotal.actualSalesAmount) * 100).toFixed(1)}%` : "—"}
                                     </td>
 
                                     {/* Variance */}
@@ -1320,6 +1769,9 @@ export default function SalesReportsPage() {
                               <td className="text-center px-3 py-4 border-r border-slate-700 text-slate-400" style={{ backgroundColor: "#0f172a" }}>—</td>
                               <td className="font-bold text-sm text-blue-400 text-center px-3 py-4 border-r border-slate-700" style={{ backgroundColor: "#0f172a" }}>₹{formatCurrency(dateGrandTotal.planned)}</td>
                               <td className="font-bold text-sm text-green-400 text-center px-3 py-4 border-r border-slate-700" style={{ backgroundColor: "#0f172a" }}>₹{formatCurrency(dateGrandTotal.actual)}</td>
+                              <td className="font-bold text-sm text-cyan-300 text-center px-3 py-4 border-r border-slate-700 tabular-nums" style={{ backgroundColor: "#0f172a" }}>
+                                {dateGrandTotal.actual > 0 ? "100.0%" : "0.0%"}
+                              </td>
                               <td className={`font-bold text-sm text-center px-3 py-4 border-r border-slate-700 ${dateGrandTotal.variance >= 0 ? "text-green-400" : "text-red-400"}`} style={{ backgroundColor: "#0f172a" }}>₹{formatCurrency(dateGrandTotal.variance)}</td>
                               <td className={`font-bold text-sm text-center px-3 py-4 border-r border-slate-700 ${dateGrandTotal.variancePercent >= 0 ? "text-green-400" : "text-red-400"}`} style={{ backgroundColor: "#0f172a" }}>{dateGrandTotal.variancePercent >= 0 ? "+" : ""}{dateGrandTotal.variancePercent.toFixed(1)}%</td>
                               <td className="font-bold text-sm text-violet-400 text-center px-3 py-4 border-r border-slate-700" style={{ backgroundColor: "#0f172a" }}>₹{formatCurrency(dateGrandTotal.collection)}</td>
@@ -1543,6 +1995,360 @@ export default function SalesReportsPage() {
                       <p className="text-sm text-slate-500">Select a different year or add sales data</p>
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ── EMPLOYEE-WISE SALES PERFORMANCE ───────────────────────────── */}
+        <Card className="shadow-2xl border-0 rounded-2xl overflow-hidden bg-white mt-8">
+          <div className="w-full px-4 sm:px-6 py-4 bg-[#f5f9ff] border-b border-slate-200">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-md text-white">
+                    <Trophy className="w-4 h-4" />
+                  </div>
+                  <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900">Employee-wise Sales Performance</h2>
+                </div>
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs sm:text-sm font-semibold bg-blue-100 text-blue-800 whitespace-nowrap">
+                  {employeeSalesPerformance.length} Employees
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <CardContent className="p-0">
+            {employeeSalesPerformance.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <p className="text-base font-semibold text-slate-600 mb-1">No employee sales data found</p>
+                <p className="text-sm text-slate-400">Try adjusting your filters</p>
+              </div>
+            ) : (
+              <div className="p-4 sm:p-6 bg-slate-50/40">
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+                  {/* ── LEFT (~60%): Employee-wise Sales Performance Table ── */}
+                  <div className="xl:col-span-7 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                    <div className="px-4 py-3 bg-gradient-to-r from-slate-900 to-slate-800 text-white flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Trophy className="w-4 h-4 text-amber-400" />
+                        <span className="text-xs sm:text-sm font-bold tracking-wide uppercase">Employee Performance Rankings</span>
+                      </div>
+                      <span className="text-xs text-slate-300 font-medium">
+                        Sorted by Actual Sales
+                      </span>
+                    </div>
+
+                    <div className="overflow-x-auto w-full" style={{ WebkitOverflowScrolling: "touch" }}>
+                      <table className="border-collapse" style={{ minWidth: "645px", width: "100%", tableLayout: "fixed" }}>
+                        <colgroup>
+                          <col style={{ width: "210px" }} /> {/* Employee Name */}
+                          <col style={{ width: "115px" }} /> {/* Planned Sales */}
+                          <col style={{ width: "115px" }} /> {/* Actual Sales */}
+                          <col style={{ width: "85px" }} />  {/* % Share */}
+                          <col style={{ width: "120px" }} /> {/* Unverified Sales */}
+                        </colgroup>
+                        <thead>
+                          <tr style={{ background: "linear-gradient(to right, #1e293b, #334155, #1e293b)" }}>
+                            <th
+                              style={{
+                                width: "210px",
+                                minWidth: "210px",
+                                maxWidth: "210px",
+                                backgroundColor: "#1e293b",
+                                position: "sticky",
+                                left: 0,
+                                zIndex: 3,
+                                boxShadow: "3px 0 8px -1px rgba(0,0,0,0.35)",
+                              }}
+                              className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-white border-r border-slate-700"
+                            >
+                              Employee Name
+                            </th>
+                            <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3 text-center text-[11px] font-bold uppercase tracking-wider text-blue-300 border-r border-slate-700">
+                              Planned Sales
+                            </th>
+                            <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3 text-center text-[11px] font-bold uppercase tracking-wider text-green-300 border-r border-slate-700">
+                              Actual Sales
+                            </th>
+                            <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3 text-center text-[11px] font-bold uppercase tracking-wider text-cyan-300 border-r border-slate-700">
+                              % Share
+                            </th>
+                            <th style={{ backgroundColor: "#1e293b" }} className="px-3 py-3 text-center text-[11px] font-bold uppercase tracking-wider text-amber-300">
+                              Unverified Sales
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {employeeSalesPerformance.map((emp, idx) => {
+                            const evenRow = idx % 2 === 0
+                            const rowBg = evenRow ? "#ffffff" : "#f8fafc"
+
+                            return (
+                              <tr
+                                key={emp.empName}
+                                className="border-b border-slate-100 transition-colors hover:bg-blue-50/40"
+                                style={{ backgroundColor: rowBg }}
+                              >
+                                {/* Employee Name - sticky */}
+                                <td
+                                  style={{
+                                    width: "210px",
+                                    minWidth: "210px",
+                                    maxWidth: "210px",
+                                    backgroundColor: rowBg,
+                                    position: "sticky",
+                                    left: 0,
+                                    zIndex: 2,
+                                    boxShadow: "3px 0 8px -1px rgba(0,0,0,0.08), 1px 0 0 0 #f1f5f9",
+                                    transition: "background-color 150ms",
+                                  }}
+                                  className="px-4 py-2.5 border-r border-slate-100"
+                                >
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    {renderRankBadge(idx)}
+                                    <span
+                                      className="text-xs font-semibold text-slate-800 truncate block"
+                                      style={{ maxWidth: "155px" }}
+                                      title={emp.empName}
+                                    >
+                                      {emp.empName}
+                                    </span>
+                                  </div>
+                                </td>
+
+                                {/* Planned Sales */}
+                                <td className="text-center px-3 py-2.5 text-xs font-bold text-blue-700 border-r border-slate-100 tabular-nums">
+                                  ₹{formatCurrency(emp.plannedSales)}
+                                </td>
+
+                                {/* Actual Sales */}
+                                <td className="text-center px-3 py-2.5 text-xs font-bold text-green-700 border-r border-slate-100 tabular-nums">
+                                  ₹{formatCurrency(emp.actualSales)}
+                                </td>
+
+                                {/* % Share */}
+                                <td className="text-center px-3 py-2.5 text-xs font-bold text-slate-800 border-r border-slate-100 tabular-nums">
+                                  {emp.actualSales > 0 ? `${emp.share.toFixed(1)}%` : "—"}
+                                </td>
+
+                                {/* Unverified Sales */}
+                                <td className="text-center px-3 py-2.5 text-xs font-bold text-amber-700 tabular-nums">
+                                  ₹{formatCurrency(emp.unverifiedSales)}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+
+                        {/* Grand Total Footer */}
+                        {employeeSalesPerformance.length > 1 && (
+                          <tfoot>
+                            <tr style={{ borderTop: "3px solid #f59e0b", backgroundColor: "#0f172a" }}>
+                              <td
+                                style={{
+                                  width: "210px",
+                                  minWidth: "210px",
+                                  maxWidth: "210px",
+                                  backgroundColor: "#0f172a",
+                                  position: "sticky",
+                                  left: 0,
+                                  zIndex: 2,
+                                  boxShadow: "3px 0 8px -1px rgba(0,0,0,0.5)",
+                                }}
+                                className="font-extrabold text-xs text-white text-left px-4 py-3.5 border-r border-slate-700"
+                              >
+                                GRAND TOTAL
+                              </td>
+                              <td style={{ backgroundColor: "#0f172a" }} className="text-center px-3 py-3.5 border-r border-slate-700 font-bold text-xs sm:text-sm text-blue-400 tabular-nums">
+                                ₹{formatCurrency(employeeGrandTotal.planned)}
+                              </td>
+                              <td style={{ backgroundColor: "#0f172a" }} className="text-center px-3 py-3.5 border-r border-slate-700 font-bold text-xs sm:text-sm text-green-400 tabular-nums">
+                                ₹{formatCurrency(employeeGrandTotal.actual)}
+                              </td>
+                              <td style={{ backgroundColor: "#0f172a" }} className="text-center px-3 py-3.5 border-r border-slate-700 font-bold text-xs sm:text-sm text-cyan-300 tabular-nums">
+                                {employeeGrandTotal.actual > 0 ? "100.0%" : "0.0%"}
+                              </td>
+                              <td style={{ backgroundColor: "#0f172a" }} className="text-center px-3 py-3.5 font-bold text-xs sm:text-sm text-amber-400 tabular-nums">
+                                ₹{formatCurrency(employeeGrandTotal.unverified)}
+                              </td>
+                            </tr>
+                          </tfoot>
+                        )}
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* ── RIGHT (~40%): Employee Sales Share Donut Chart + Legend + Supporting Summary ── */}
+                  <div className="xl:col-span-5 bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col justify-between">
+                    <div>
+                      {/* Card Header */}
+                      <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+                        <div className="flex items-center gap-2">
+                          <div className="p-2 bg-indigo-50 text-indigo-700 rounded-lg">
+                            <PieChartIcon className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h3 className="text-sm sm:text-base font-bold text-slate-900">
+                              Employee Sales Share
+                            </h3>
+                            <p className="text-[11px] text-slate-500">
+                              {employeeSalesPerformance.filter(e => e.actualSales > 0).length} of {employeeSalesPerformance.length} contributors with sales
+                            </p>
+                          </div>
+                        </div>
+                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs font-semibold px-2 py-0.5">
+                          {employeeSalesPerformance.length === 1 ? "Single Employee" : "Team Breakdown"}
+                        </Badge>
+                      </div>
+
+                      {/* Single Donut Chart where each Employee is a slice */}
+                      <div className="flex flex-col items-center justify-center pt-1">
+                        {renderEmployeeDonutChart()}
+
+                        {/* Interactive Employee Breakdown / Legend List */}
+                        <div className="w-full mt-3.5">
+                          <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-400 px-2 pb-1.5 border-b border-slate-100">
+                            <span>Employee</span>
+                            <div className="flex items-center gap-4">
+                              <span>Actual Sales</span>
+                              <span className="w-14 text-right">% Share</span>
+                            </div>
+                          </div>
+                          <div className="max-h-[150px] overflow-y-auto space-y-1 mt-1.5 pr-1 divide-y divide-slate-50">
+                            {employeeSalesPerformance.map((emp, i) => {
+                              const isHovered = hoveredEmpName === emp.empName
+                              const color = EMPLOYEE_PIE_COLORS[i % EMPLOYEE_PIE_COLORS.length]
+                              const hasSales = emp.actualSales > 0
+
+                              return (
+                                <div
+                                  key={emp.empName}
+                                  onMouseEnter={() => hasSales && setHoveredEmpName(emp.empName)}
+                                  onMouseLeave={() => setHoveredEmpName(null)}
+                                  className={`flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                                    isHovered
+                                      ? "bg-blue-50/90 ring-1 ring-blue-300 font-semibold"
+                                      : "hover:bg-slate-50 text-slate-700"
+                                  } ${!hasSales ? "opacity-50" : ""}`}
+                                >
+                                  <div className="flex items-center gap-2 min-w-0 pr-2">
+                                    <span
+                                      className="w-2.5 h-2.5 rounded-full shrink-0 shadow-xs"
+                                      style={{ backgroundColor: hasSales ? color : "#cbd5e1" }}
+                                    />
+                                    <span className="truncate text-slate-800 font-medium" title={emp.empName}>
+                                      {emp.empName}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-4 shrink-0 tabular-nums">
+                                    <span className="font-bold text-slate-900">
+                                      ₹{formatCurrency(emp.actualSales)}
+                                    </span>
+                                    <span
+                                      className={`w-14 text-right font-extrabold ${
+                                        hasSales ? "text-blue-600" : "text-slate-400"
+                                      }`}
+                                    >
+                                      {emp.share.toFixed(1)}%
+                                    </span>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Supporting Summary Information: Verified vs Unverified, Total Actual & 100% Share */}
+                    <div className="mt-4 pt-3.5 border-t border-slate-100">
+                      <div className="flex items-center justify-between mb-2 px-0.5">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                          Verification & Total Summary
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-medium">
+                          Supporting Information
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        {/* 1. Total Actual Sales */}
+                        <div className="bg-slate-50 rounded-xl p-2.5 sm:p-3 border border-slate-200/80 flex flex-col justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 truncate">
+                            Total Actual Sales
+                          </span>
+                          <div className="mt-1">
+                            <span className="text-sm sm:text-base font-black text-slate-900 tabular-nums block truncate">
+                              ₹{formatCurrency(employeeGrandTotal.actual)}
+                            </span>
+                            <span className="text-[10px] text-slate-400 block truncate mt-0.5">
+                              Total achieved sales
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* 2. Total % Share */}
+                        <div className="bg-blue-50/60 rounded-xl p-2.5 sm:p-3 border border-blue-100 flex flex-col justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 truncate">
+                            Total % Share
+                          </span>
+                          <div className="mt-1">
+                            <span className="text-sm sm:text-base font-black text-blue-900 tabular-nums block truncate">
+                              100.0%
+                            </span>
+                            <span className="text-[10px] text-blue-600/80 block truncate mt-0.5">
+                              Sum of employee shares
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* 3. Verified Sales */}
+                        <div className="bg-emerald-50/70 rounded-xl p-2.5 sm:p-3 border border-emerald-200/70 flex flex-col justify-between">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 truncate">
+                              Verified Sales
+                            </span>
+                            <span className="text-[9px] font-extrabold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded shrink-0">
+                              {employeeGrandTotal.actual > 0
+                                ? `${((employeeGrandTotal.verified / employeeGrandTotal.actual) * 100).toFixed(1)}%`
+                                : "0.0%"}
+                            </span>
+                          </div>
+                          <div className="mt-1">
+                            <span className="text-sm sm:text-base font-black text-emerald-950 tabular-nums block truncate">
+                              ₹{formatCurrency(employeeGrandTotal.verified)}
+                            </span>
+                            <span className="text-[10px] text-emerald-700 block truncate mt-0.5">
+                              Verified revenue
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* 4. Unverified Sales */}
+                        <div className="bg-amber-50/70 rounded-xl p-2.5 sm:p-3 border border-amber-200/70 flex flex-col justify-between">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 truncate">
+                              Unverified Sales
+                            </span>
+                            <span className="text-[9px] font-extrabold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded shrink-0">
+                              {employeeGrandTotal.actual > 0
+                                ? `${((employeeGrandTotal.unverified / employeeGrandTotal.actual) * 100).toFixed(1)}%`
+                                : "0.0%"}
+                            </span>
+                          </div>
+                          <div className="mt-1">
+                            <span className="text-sm sm:text-base font-black text-amber-950 tabular-nums block truncate">
+                              ₹{formatCurrency(employeeGrandTotal.unverified)}
+                            </span>
+                            <span className="text-[10px] text-amber-700 block truncate mt-0.5">
+                              Pending verification
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

@@ -157,7 +157,7 @@ export async function POST(req: NextRequest) {
     const totalAgents = dbRows.length
     const teamAvgScore = scoreCount > 0 ? (scoreSum / scoreCount).toFixed(2) : "0.00"
 
-    const targetRecipient = "sysadmin@kairali.com"
+    const targetRecipient = process.env.HR_AUDIT_EMAIL || "ho.hr@kairali.com"
     const displayDate = targetYmd || "Today"
     const subject = `[Daily HR Quality Audit Report] - Agent-wise Call Audit (${displayDate})`
 

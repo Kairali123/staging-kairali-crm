@@ -51,6 +51,7 @@ function formatCallTime(dateVal: any): string {
     const d = new Date(dateVal)
     if (isNaN(d.getTime())) return String(dateVal)
     return d.toLocaleString("en-GB", {
+      timeZone: "Asia/Kolkata",
       day: "2-digit",
       month: "short",
       year: "numeric",

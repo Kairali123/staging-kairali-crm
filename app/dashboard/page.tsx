@@ -347,11 +347,15 @@ export default function DashboardPage() {
   // ── Permission filter ─────────────────────────────────────────────────────
 
   const filteredCards = allCards.filter(
-    (c) =>
+    (c: QuickCard) =>
       !c.permission ||
       user.permissions.includes("all") ||
       user.permissions.includes(c.permission)
   )
+
+  const accessDisplay = user.permissions.includes("all")
+    ? `All (${filteredCards.length}) Modules`
+    : `${filteredCards.length} ${filteredCards.length === 1 ? "Module" : "Modules"}`
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
@@ -383,7 +387,7 @@ export default function DashboardPage() {
                   { icon: "👤", label: "ID", value: user.employeeId },
                   { icon: "🏢", label: "Company", value: user.company },
                   { icon: "🏛️", label: "Dept", value: user.department },
-                  { icon: "🔐", label: "Access", value: `${user.permissions.length} Modules` },
+                  { icon: "🔐", label: "Access", value: accessDisplay },
                 ].map((item) => (
                   <span key={item.label} className="inline-flex items-center gap-1 bg-white/10 border border-white/15 rounded-full px-2.5 py-1 text-[0.7rem] text-slate-300">
                     <span>{item.icon}</span>
@@ -439,7 +443,7 @@ export default function DashboardPage() {
                   <span className="text-white/20">|</span>
                   <span className="flex items-center gap-[5px]">
                     <span>🔐</span><span className="opacity-60">Access</span>
-                    <span className="font-semibold text-slate-200">{user.permissions.length} Modules</span>
+                    <span className="font-semibold text-slate-200">{accessDisplay}</span>
                   </span>
                 </div>
               </div>

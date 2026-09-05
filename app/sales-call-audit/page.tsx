@@ -74,6 +74,13 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 
@@ -150,6 +157,14 @@ export type AuditDay = {
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+const HR_VERIFY_STATUS_OPTIONS = [
+  "Half Day – Call Audit FAIL",
+]
+
+const HR_ACTION_OPTIONS = [
+  "Half day leave Updated on Pagarbook",
+]
 
 function getInitials(name: string): string {
   if (!name) return "AG"
@@ -292,6 +307,9 @@ export default function SalesCallAuditPage() {
           const json = await res.json()
           if (json.success && Array.isArray(json.data)) {
             setModalCalls(json.data)
+            if (json.data.length > 0 && json.data[0].callId) {
+              setExpandedCallId(json.data[0].callId)
+            }
           }
         }
       } catch (e) {
@@ -1803,17 +1821,27 @@ export default function SalesCallAuditPage() {
                     <span className="text-[10px] text-rose-500 font-normal">Required</span>
                   )}
                 </Label>
-                <Input
-                  value={verifyStatus}
-                  disabled={isReadOnly}
-                  readOnly={isReadOnly}
-                  onChange={e => setVerifyStatus(e.target.value)}
-                  placeholder="e.g. Half Day – Call Audit FAIL, Verified, etc."
-                  className={`h-10 text-xs ${isReadOnly
-                    ? "bg-slate-100/90 text-slate-900 font-semibold border-slate-200 cursor-not-allowed opacity-90"
-                    : "border-slate-300 bg-white"
-                    }`}
-                />
+                {isReadOnly ? (
+                  <Input
+                    value={verifyStatus}
+                    disabled
+                    readOnly
+                    className="h-10 text-xs bg-slate-100/90 text-slate-900 font-semibold border-slate-200 cursor-not-allowed opacity-90"
+                  />
+                ) : (
+                  <Select value={verifyStatus} onValueChange={setVerifyStatus}>
+                    <SelectTrigger className="h-10 text-xs border-slate-300 bg-white w-full">
+                      <SelectValue placeholder="Select HR Verify Status..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from(new Set([verifyStatus, ...HR_VERIFY_STATUS_OPTIONS].filter(Boolean))).map((opt) => (
+                        <SelectItem key={opt} value={opt} className="text-xs">
+                          {opt}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               {/* Field 2: HR Action for Calling Fail/Pass */}
@@ -1826,17 +1854,27 @@ export default function SalesCallAuditPage() {
                     <span className="text-[10px] text-rose-500 font-normal">Required</span>
                   )}
                 </Label>
-                <Input
-                  value={callingAction}
-                  disabled={isReadOnly}
-                  readOnly={isReadOnly}
-                  onChange={e => setCallingAction(e.target.value)}
-                  placeholder="e.g. Half day leave Updated on Pagarbook"
-                  className={`h-10 text-xs ${isReadOnly
-                    ? "bg-slate-100/90 text-slate-900 font-semibold border-slate-200 cursor-not-allowed opacity-90"
-                    : "border-slate-300 bg-white"
-                    }`}
-                />
+                {isReadOnly ? (
+                  <Input
+                    value={callingAction}
+                    disabled
+                    readOnly
+                    className="h-10 text-xs bg-slate-100/90 text-slate-900 font-semibold border-slate-200 cursor-not-allowed opacity-90"
+                  />
+                ) : (
+                  <Select value={callingAction} onValueChange={setCallingAction}>
+                    <SelectTrigger className="h-10 text-xs border-slate-300 bg-white w-full">
+                      <SelectValue placeholder="Select HR Action for Calling..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from(new Set([callingAction, ...HR_ACTION_OPTIONS].filter(Boolean))).map((opt) => (
+                        <SelectItem key={opt} value={opt} className="text-xs">
+                          {opt}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
             </div>
 
@@ -2076,6 +2114,48 @@ export default function SalesCallAuditPage() {
                     </span>
                   </div>
                 </div>
+
+                {/* Employee Daily Overall 6 Metrics (Aggregated Daily Audit) */}
+                <div className="mt-3.5 pt-3 border-t border-white/20">
+                  <div className="flex flex-wrap items-center justify-between text-xs text-white/95 mb-2 gap-1">
+                    <span className="font-semibold flex items-center gap-1.5">
+                      <ListChecks className="h-3.5 w-3.5" />
+                      Employee Daily Overall 6 Metrics{" "}
+                      <span className="text-[11px] text-white/75 font-normal">
+                        (Aggregated Daily Audit)
+                      </span>
+                    </span>
+                    <span className="text-[10px] text-white/90 bg-white/15 px-2 py-0.5 rounded font-mono">
+                      Target: Benchmark ≥ 2.5 / 5.0
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                    {[
+                      { label: "PRODUCT KNOWLEDGE", val: callDetailModal.agent.productKnowledge },
+                      { label: "CUSTOMER UNDERSTAND...", val: callDetailModal.agent.customerUnderstanding },
+                      { label: "COMMUNICATION SKILLS", val: callDetailModal.agent.communicationSkills },
+                      { label: "OBJECTION HANDLING", val: callDetailModal.agent.objectionHandling },
+                      { label: "CLOSING SKILLS", val: callDetailModal.agent.closingSkills },
+                      { label: "TONE & VOLUME", val: callDetailModal.agent.toneVolume },
+                    ].map((m, idx) => {
+                      const val = m.val !== null && m.val !== undefined ? Number(m.val) : null
+                      return (
+                        <div key={idx} className="bg-white rounded-lg p-2.5 shadow-xs text-slate-800">
+                          <div className="text-[9px] font-bold text-slate-500 uppercase tracking-tight truncate">
+                            {m.label}
+                          </div>
+                          <div
+                            className={`text-sm font-extrabold mt-0.5 ${
+                              val !== null && val < 2.5 ? "text-rose-600" : "text-emerald-700"
+                            }`}
+                          >
+                            {val !== null ? `${val.toFixed(1)} / 5.0` : "— / 5.0"}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
               </div>
 
               {/* Filter Tabs & Search Bar */}
@@ -2275,26 +2355,26 @@ export default function SalesCallAuditPage() {
                           </div>
 
                           {/* Call Card Body */}
-                          <div className="p-3.5 space-y-2.5">
+                          <div className="p-3.5 space-y-3">
                             {/* Audio Recording Player */}
                             {call.recordingUrl && (
-                              <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                              <div className="bg-slate-50/90 p-2.5 rounded-lg border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                 <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
                                   <Volume2 className="h-4 w-4 text-indigo-600 flex-shrink-0" />
-                                  <span>Call Audio Recording</span>
+                                  <span className="uppercase text-[11px] tracking-wider text-slate-700 font-bold">CALL RECORDING:</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <audio
                                     controls
                                     src={call.recordingUrl}
-                                    className="h-8 max-w-full sm:max-w-[260px] rounded"
+                                    className="h-8 max-w-full sm:max-w-[280px] rounded"
                                     preload="none"
                                   />
                                   <a
                                     href={call.recordingUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 hover:underline px-2 py-1 bg-white rounded border border-indigo-200"
+                                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline px-2.5 py-1 bg-white rounded-md border border-blue-200 shadow-2xs"
                                   >
                                     <ExternalLink className="h-3 w-3" />
                                     Open Audio
@@ -2303,17 +2383,64 @@ export default function SalesCallAuditPage() {
                               </div>
                             )}
 
+                            {/* 6 Call-Specific Metrics Evaluation (Specific to this call) */}
+                            {isExpanded && (
+                              <div className="bg-slate-50/80 border border-slate-200/90 rounded-xl p-3 space-y-2 animate-in fade-in duration-200">
+                                <div className="flex flex-wrap items-center justify-between text-xs gap-1">
+                                  <span className="font-semibold text-slate-700 flex items-center gap-1.5">
+                                    <ListChecks className="h-3.5 w-3.5 text-blue-600" />
+                                    6 Call-Specific Metrics Evaluation{" "}
+                                    <span className="text-[10px] text-slate-500 font-mono font-normal">
+                                      (Strictly for {call.callId}{call.leadId ? ` • Lead: ${call.leadId}` : ""})
+                                    </span>
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 font-mono">Scores out of 5.0</span>
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-0.5">
+                                  {[
+                                    { label: "Product Knowledge", val: call.productKnowledge },
+                                    { label: "Customer Understand...", val: call.customerUnderstanding },
+                                    { label: "Communication Skills", val: call.communicationSkills },
+                                    { label: "Objection Handling", val: call.objectionHandling },
+                                    { label: "Closing Skills", val: call.closingSkills },
+                                    { label: "Tone & Volume", val: call.toneVolume },
+                                  ].map((metric, mIdx) => {
+                                    const score = metric.val !== null && metric.val !== undefined ? Number(metric.val) : null
+                                    return (
+                                      <div key={mIdx} className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs">
+                                        <span className="text-[9px] font-bold text-slate-500 uppercase block truncate">
+                                          {metric.label}
+                                        </span>
+                                        <span
+                                          className={`font-bold text-xs block mt-0.5 ${
+                                            score !== null && score >= 2.5 ? "text-emerald-700" : "text-rose-700"
+                                          }`}
+                                        >
+                                          {score !== null ? `${score.toFixed(1)} / 5.0` : "— / 5.0"}
+                                        </span>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
                             {/* Stated vs Verified Outcomes */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50/70 p-3 rounded-lg border border-slate-200">
                               <div>
-                                <span className="text-[10px] font-bold uppercase text-slate-400">Agent Stated Outcome:</span>
+                                <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                                  AGENT STATED OUTCOME:
+                                </span>
                                 <p className="font-semibold text-slate-800 mt-0.5">{call.statedOutcome || "—"}</p>
                               </div>
                               <div>
-                                <span className="text-[10px] font-bold uppercase text-slate-400">Auditor Evaluation:</span>
+                                <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                                  AUDITOR EVALUATION:
+                                </span>
                                 <p
-                                  className={`font-semibold mt-0.5 ${isGood ? "text-emerald-700" : "text-rose-700 font-bold"
-                                    }`}
+                                  className={`font-semibold mt-0.5 ${
+                                    isGood ? "text-emerald-700" : "text-rose-700 font-bold"
+                                  }`}
                                 >
                                   {call.verifiedOutcome || "—"}
                                 </p>
@@ -2322,8 +2449,8 @@ export default function SalesCallAuditPage() {
 
                             {/* Auditor Observation */}
                             {call.auditorObservation && (
-                              <div className="text-xs text-slate-700 bg-white p-2.5 rounded-lg border border-slate-100">
-                                <span className="font-bold text-slate-900 block mb-0.5">Auditor Quality Finding:</span>
+                              <div className="text-xs text-slate-700 bg-white p-3 rounded-lg border border-slate-200/80 shadow-2xs">
+                                <span className="font-bold text-slate-900 block mb-1">Auditor Quality Finding:</span>
                                 <p className="text-slate-600 leading-relaxed">{call.auditorObservation}</p>
                               </div>
                             )}
@@ -2334,9 +2461,9 @@ export default function SalesCallAuditPage() {
                                 call.strengths.map((str: string, sIdx: number) => (
                                   <span
                                     key={sIdx}
-                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs"
                                   >
-                                    <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                                    <CheckCircle2 className="h-3 w-3 text-emerald-600 flex-shrink-0" />
                                     {str}
                                   </span>
                                 ))}
@@ -2344,51 +2471,13 @@ export default function SalesCallAuditPage() {
                                 call.deficiencies.map((def: string, dIdx: number) => (
                                   <span
                                     key={dIdx}
-                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200"
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs"
                                   >
-                                    <AlertCircle className="h-3 w-3 text-rose-600" />
+                                    <AlertCircle className="h-3 w-3 text-rose-600 flex-shrink-0" />
                                     {def}
                                   </span>
                                 ))}
                             </div>
-
-                            {/* Collapsible 6 Parameters for This Specific Call */}
-                            {isExpanded && (
-                              <div className="mt-3 pt-3 border-t border-slate-200 bg-slate-50/70 p-3 rounded-lg space-y-2 animate-in fade-in duration-200">
-                                <div className="flex items-center justify-between text-[11px] font-bold text-slate-800">
-                                  <span className="flex items-center gap-1">
-                                    <ListChecks className="h-3.5 w-3.5 text-blue-600" />
-                                    Specific Call Parameter Breakdown
-                                  </span>
-                                  <span className="text-[10px] text-slate-400 font-mono">Scores out of 5.0</span>
-                                </div>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
-                                  {[
-                                    { label: "Product Knowledge", val: call.productKnowledge },
-                                    { label: "Customer Understanding", val: call.customerUnderstanding },
-                                    { label: "Communication Skills", val: call.communicationSkills },
-                                    { label: "Objection Handling", val: call.objectionHandling },
-                                    { label: "Closing Skills", val: call.closingSkills },
-                                    { label: "Tone & Volume", val: call.toneVolume },
-                                  ].map((p, pIdx) => {
-                                    const num = Number(p.val || 0)
-                                    return (
-                                      <div key={pIdx} className="bg-white p-2 rounded border border-slate-200 shadow-2xs">
-                                        <span className="text-[9px] font-semibold text-slate-500 uppercase block truncate">
-                                          {p.label}
-                                        </span>
-                                        <span
-                                          className={`font-bold text-xs ${num >= 3.5 ? "text-emerald-700" : num >= 2.5 ? "text-amber-700" : "text-rose-700"
-                                            }`}
-                                        >
-                                          {num.toFixed(1)} / 5.0
-                                        </span>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              </div>
-                            )}
                           </div>
                         </div>
                       )
