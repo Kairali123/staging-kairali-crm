@@ -158,6 +158,35 @@ test('Executable Route Handlers Suite (Sales Call Audit)', async (t) => {
               reason: 'Did not close',
               audio_url: 'https://drive.google.com/file/d/test2/view',
             },
+            {
+              id: 37399,
+              timestamp: '2026-09-02 17:00:00',
+              sales_person_id: 'K473',
+              sales_person_name: 'Zaki Ahmed',
+              lead_id: 'MID_020926170000_36_52099',
+              buffer_lead_id: null,
+              client_name: null,
+              call_count: null,
+              call_type: 'Voicemail',
+              quality_status: 'Bad',
+              avg_score: '0.00',
+              overall_score: '0',
+              lead_outcome_by_agent: 'Not Connected',
+              conversion_outcome: 'No Answer',
+              lead_outcome_verify_status: 'No',
+              product_knowledge: null,
+              customer_understanding: null,
+              communication_skills: null,
+              objection_handling: null,
+              closing_skills: null,
+              tone_and_volume: null,
+              explanation: 'Voicemail detected',
+              what_went_wrong_by_sales_team_senior_verifier: null,
+              complete_explanation: 'Voicemail detected',
+              remarks: 'Voicemail',
+              reason: 'No Answer',
+              audio_url: null,
+            },
           ],
           [],
         ]
@@ -332,6 +361,10 @@ test('Executable Route Handlers Suite (Sales Call Audit)', async (t) => {
     const goodCall = json.calls.find((c: any) => c.callId === 'CALL-37476')
     assert.ok(goodCall, 'Good call record should be found')
     assert.equal(goodCall.qualityType, 'good', 'Explicit Good quality must stay good')
+
+    // Verify Voicemail calls are ignored (not counted as good or bad)
+    const voicemailCall = json.calls.find((c: any) => c.callId === 'CALL-37399')
+    assert.equal(voicemailCall, undefined, 'Voicemail calls must be ignored and excluded from good/bad call breakdown')
   })
 
   await t.test('7. ViewSelf enforces SQL employee isolation and blocks cross-employee actions', async () => {

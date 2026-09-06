@@ -291,7 +291,17 @@ export async function GET(req: NextRequest) {
         hs_status_if_escalate_to_abhilash_sir_by_senior,
         transfer_to_user_fms_if_reopen,
         both_done,
-        AI_Verification_Category
+        AI_Verification_Category,
+        explanation AS ai_explanation,
+        complete_explanation AS ai_complete_explanation,
+        COALESCE(
+          NULLIF(TRIM(explanation), ''),
+          NULLIF(TRIM(remarks_senior_verifier), ''),
+          NULLIF(TRIM(remarks_executive_verifier), ''),
+          NULLIF(TRIM(what_went_wrong_by_sales_team_senior_verifier), ''),
+          NULLIF(TRIM(valid_reason_senior_verifier), ''),
+          NULLIF(TRIM(valid_reason_executive_verifier), '')
+        ) AS ai_remarks
       FROM fms_enquiry_cold_reverification_v2
       ${whereClause}
       ORDER BY ${finalSortField} ${finalSortDirection}

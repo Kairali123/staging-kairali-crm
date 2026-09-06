@@ -2232,6 +2232,9 @@ export default function SalesCallAuditPage() {
                 ) : (
                   (() => {
                     const filtered = modalCalls.filter(call => {
+                      // Rule: if call type = voicemail, do not count good or bad, ignore
+                      const ct = String(call.callType || "").toLowerCase()
+                      if (ct.includes("voicemail") || ct.includes("voice mail") || ct === "left_voicemail") return false
                       if (modalCallTab === "good" && call.qualityType !== "good") return false
                       if (modalCallTab === "bad" && call.qualityType !== "bad") return false
                       if (modalCallSearch.trim()) {
@@ -2317,6 +2320,12 @@ export default function SalesCallAuditPage() {
                                     <>
                                       <span>•</span>
                                       <span>{call.leadId}</span>
+                                    </>
+                                  )}
+                                  {call.callType && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="text-slate-600 font-sans font-medium">{call.callType}</span>
                                     </>
                                   )}
                                   <span>•</span>

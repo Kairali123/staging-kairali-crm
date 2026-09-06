@@ -213,13 +213,38 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Helper to identify voicemail calls — rule: if call type = voicemail, do not count good or bad, ignore
+    const isVoicemailCall = (callTypeVal: any): boolean => {
+      const ct = String(callTypeVal || "").trim().toLowerCase()
+      return ct.includes("voicemail") || ct.includes("voice mail") || ct === "left_voicemail"
+    }
+
+    // Filter raw bot rows for audited calls: ignore voicemails and un-audited/empty rows
+    const eligibleBotRows = rawBotRows.filter(r => {
+      if (isVoicemailCall(r.call_type)) return false
+      const qs = String(r.quality_status || "").trim().toLowerCase()
+      const rawScore = r.avg_score || r.overall_score
+      const score = rawScore !== null && rawScore !== undefined && String(rawScore).trim() !== "" ? parseFloat(String(rawScore)) : NaN
+      const hasScore = !isNaN(score) && score > 0
+      const hasOutcomeEvaluation = Boolean(r.conversion_outcome) || Boolean(r.lead_outcome_verify_status)
+      const hasQualityStatus = qs.includes("bad") || qs.includes("fail") || qs.includes("good") || qs.includes("pass")
+      return hasQualityStatus || hasScore || hasOutcomeEvaluation
+    })
+
     const totalAudited = parentRow?.total_calls_audited !== null && parentRow?.total_calls_audited !== undefined
       ? Number(parentRow.total_calls_audited)
-      : rawBotRows.length
+      : eligibleBotRows.length
 
     const goodCount = parentRow?.good_calls !== null && parentRow?.good_calls !== undefined
       ? Number(parentRow.good_calls)
-      : rawBotRows.filter(r => String(r.quality_status || "").toLowerCase().includes("good")).length
+      : eligibleBotRows.filter(r => {
+          const qs = String(r.quality_status || "").toLowerCase()
+          const rawScore = r.avg_score || r.overall_score
+          const score = rawScore !== null && rawScore !== undefined && String(rawScore).trim() !== "" ? parseFloat(String(rawScore)) : NaN
+          const isExplicitBad = qs.includes("bad") || qs.includes("fail")
+          const isExplicitGood = qs.includes("good") || qs.includes("pass")
+          return isExplicitGood || (!isExplicitBad && (r.lead_outcome_verify_status === "Yes" || (!isNaN(score) && score >= 2.5)))
+        }).length
 
     const badCount = parentRow?.bad_calls !== null && parentRow?.bad_calls !== undefined
       ? Number(parentRow.bad_calls)
@@ -232,9 +257,9 @@ export async function GET(req: NextRequest) {
     // Build the list of real call-specific audited calls — strictly no synthetic fallbacks
     const callsList: AuditedCallDetail[] = []
 
-    if (rawBotRows.length > 0) {
-      for (let idx = 0; idx < rawBotRows.length; idx++) {
-        const r = rawBotRows[idx]
+    if (eligibleBotRows.length > 0) {
+      for (let idx = 0; idx < eligibleBotRows.length; idx++) {
+        const r = eligibleBotRows[idx]
         const qStatus = String(r.quality_status || "").toLowerCase()
         const rawCallScore = r.avg_score || r.overall_score
         const parsedCallScore = rawCallScore !== null && rawCallScore !== undefined && String(rawCallScore).trim() !== "" ? parseFloat(String(rawCallScore)) : NaN
