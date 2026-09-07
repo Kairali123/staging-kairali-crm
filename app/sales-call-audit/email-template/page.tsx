@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import {
   Calendar,
+  CheckCircle2,
   ExternalLink,
   Loader2,
   Mail,
@@ -136,6 +137,7 @@ export default function SalesCallAuditEmailTemplatePage() {
         toast.success(`Report successfully sent to ho.hr@kairali.com!`, {
           description: `Dispatched ${employees.length} employee audit records for ${displayDate}`,
         })
+        fetchData(selectedDate)
       } else {
         toast.error(json.error || "Failed to send email report")
       }
@@ -170,9 +172,21 @@ export default function SalesCallAuditEmailTemplatePage() {
                   <Mail className="h-6 w-6 sm:h-7 sm:w-7 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white tracking-tight leading-tight">
-                    Daily HR Email Template
-                  </h1>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white tracking-tight leading-tight">
+                      Daily HR Email Template
+                    </h1>
+                    {data?.isMailSent ? (
+                      <Badge className="border-emerald-300/60 bg-emerald-500/30 text-emerald-100 font-bold px-2.5 py-1 text-xs inline-flex items-center gap-1.5 shadow-sm backdrop-blur-xs">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                        Mail Sent
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="border-white/20 bg-white/10 text-white/80 font-medium text-xs">
+                        Mail Pending
+                      </Badge>
+                    )}
+                  </div>
                   <p className="text-sm sm:text-base text-white/90 mt-1 font-medium">
                     Quality Assurance • Powered by daily_sales_reports_log_fms
                   </p>

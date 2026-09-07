@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getPool } from "@/lib/db"
 import { getSalesCallAuditScope, getSessionUser, hasSalesCallAuditPageAccess } from "@/lib/authz"
+import { isReportSentForDate } from "@/lib/sales-call-audit-tracker"
 
 export const dynamic = "force-dynamic"
 
@@ -33,6 +34,7 @@ export interface SalesCallAuditEmailData {
     teamPerformancePercentage: number
     failedEmployeesCount: number
   }
+  isMailSent?: boolean
   employees: AgentAuditMetric[]
 }
 
@@ -207,6 +209,8 @@ export async function GET(req: NextRequest) {
 
     const actualDate = selectedDate || (fmsRows[0]?.time_stamp ? new Date(fmsRows[0].time_stamp).toISOString().split("T")[0] : new Date().toISOString().split("T")[0])
 
+    const isMailSent = isReportSentForDate(actualDate)
+
     return NextResponse.json({
       success: true,
       source: "daily_sales_reports_log_fms",
@@ -223,6 +227,7 @@ export async function GET(req: NextRequest) {
           teamPerformancePercentage: Math.min(100, teamPerf),
           failedEmployeesCount: failedCount,
         },
+        isMailSent,
         employees,
       },
     }, { headers: noStoreHeaders })
