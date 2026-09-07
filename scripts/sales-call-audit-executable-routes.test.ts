@@ -9,6 +9,7 @@ import { GET as getAudit, POST as postAudit } from '../app/api/sales-call-audit/
 import { GET as getCalls } from '../app/api/sales-call-audit/calls/route'
 import { GET as getEmailData } from '../app/api/sales-call-audit/email-data/route'
 import { POST as postSendEmail } from '../app/api/sales-call-audit/send-email/route'
+import { GET as getCronEmail } from '../app/api/cron/sales-call-audit-daily-email/route'
 
 const TEST_SECRET = process.env.NEXTAUTH_SECRET || 'test-secret-key-sales-audit-32'
 
@@ -483,5 +484,48 @@ test('Executable Route Handlers Suite (Sales Call Audit)', async (t) => {
     const cc = resCalls.headers.get('cache-control') || ''
     assert.ok(cc.includes('private'), 'Cache-Control must contain private')
     assert.ok(cc.includes('no-store'), 'Cache-Control must contain no-store')
+  })
+
+  await t.test('9. Cron Daily Audit Email: Bearer token auth, skip on empty data, and automated dispatch', async () => {
+    process.env.CRON_SECRET = 'test-cron-secret-token'
+    sentEmails = []
+
+    // 9a. Unauthorized when Authorization header is missing or wrong
+    const reqNoAuth = new NextRequest('http://localhost:3000/api/cron/sales-call-audit-daily-email')
+    const resNoAuth = await getCronEmail(reqNoAuth)
+    assert.equal(resNoAuth.status, 401, 'Cron must require valid bearer token')
+
+    const reqWrongAuth = new NextRequest('http://localhost:3000/api/cron/sales-call-audit-daily-email', {
+      headers: { authorization: 'Bearer wrong-secret' },
+    })
+    const resWrongAuth = await getCronEmail(reqWrongAuth)
+    assert.equal(resWrongAuth.status, 401, 'Cron must reject invalid bearer token')
+
+    // 9b. Skip send when no audit rows found for date
+    dbReturnEmpty = true
+    const reqEmptyDate = new NextRequest('http://localhost:3000/api/cron/sales-call-audit-daily-email?date=2026-09-01', {
+      headers: { authorization: 'Bearer test-cron-secret-token' },
+    })
+    const resEmptyDate = await getCronEmail(reqEmptyDate)
+    assert.equal(resEmptyDate.status, 200)
+    const jsonEmpty = await resEmptyDate.json()
+    assert.equal(jsonEmpty.skipped, true)
+    assert.equal(jsonEmpty.reason, 'no-audit-rows')
+    assert.equal(sentEmails.length, 0, 'No email should be dispatched when no rows exist')
+    dbReturnEmpty = false
+
+    // 9c. Successful dispatch with valid bearer token and audit data
+    const reqValid = new NextRequest('http://localhost:3000/api/cron/sales-call-audit-daily-email?date=2026-09-02', {
+      headers: { authorization: 'Bearer test-cron-secret-token' },
+    })
+    const resValid = await getCronEmail(reqValid)
+    assert.equal(resValid.status, 200)
+    const jsonValid = await resValid.json()
+    assert.equal(jsonValid.success, true)
+    assert.equal(jsonValid.skipped, false)
+    assert.equal(jsonValid.smtpDispatched, true)
+    assert.equal(sentEmails.length, 1, 'Cron must successfully dispatch email')
+    assert.ok(sentEmails[0].html.includes('Agent-wise Call Audit Report'))
+    assert.ok(sentEmails[0].html.includes('Zaki Ahmed'))
   })
 })

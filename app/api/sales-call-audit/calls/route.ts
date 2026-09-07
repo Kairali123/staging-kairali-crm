@@ -385,7 +385,7 @@ export async function GET(req: NextRequest) {
 
     const isDailyPass = parentRow
       ? (parentRow.daily_fail_pass || "").toUpperCase() === "PASS"
-      : (baseScore !== null && baseScore >= 2.5)
+      : (baseScore !== null && baseScore >= 3.0)
 
     return NextResponse.json(
       {
