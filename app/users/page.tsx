@@ -30,6 +30,7 @@ import {
   UserCheck,
   Building2,
   ChevronRight,
+  ChevronDown,
   Shield,
   KeyRound,
   Smartphone,
@@ -58,6 +59,7 @@ import {
   BarChart3,
   TrendingUp,
   Eye,
+  EyeOff,
   CheckCircle,
   TableIcon,
 } from "lucide-react"
@@ -116,6 +118,7 @@ interface ExtendedUser extends User {
   tokenVersion?: number
   registeredDevicesCount?: number
   activeSessionsCount?: number
+  currentPassword?: string
 }
 
 // ─── Page Component ───────────────────────────────────────────────────────────
@@ -1276,10 +1279,20 @@ interface SecurityModalProps {
 }
 
 function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProps) {
+  const { user: currentUser } = useAuth()
+  const isSuperAdmin = currentUser?.role === "super_admin"
+
   const [activeTab, setActiveTab] = useState<"password" | "devices" | "sessions">("password")
+  const [currentPassword, setCurrentPassword] = useState<string>(user.currentPassword || "")
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [copiedPassword, setCopiedPassword] = useState(false)
+
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false)
+
   const [devices, setDevices] = useState<any[]>([])
   const [sessions, setSessions] = useState<any[]>([])
   const [isLoadingDetails, setIsLoadingDetails] = useState(true)
@@ -1292,6 +1305,9 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
         const data = await res.json()
         setDevices(data.devices || [])
         setSessions(data.sessions || [])
+        if (typeof data.currentPassword === "string") {
+          setCurrentPassword(data.currentPassword)
+        }
       }
     } catch {
       toast.error("Failed to load device details")
@@ -1303,6 +1319,26 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
   useEffect(() => {
     loadDetails()
   }, [loadDetails])
+
+  const handleCopyPassword = () => {
+    if (!currentPassword) {
+      toast.error("No password available to copy")
+      return
+    }
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(currentPassword).catch(() => {})
+    } else {
+      const textArea = document.createElement("textarea")
+      textArea.value = currentPassword
+      document.body.appendChild(textArea)
+      textArea.select()
+      document.execCommand("copy")
+      document.body.removeChild(textArea)
+    }
+    setCopiedPassword(true)
+    toast.success("Password copied to clipboard")
+    setTimeout(() => setCopiedPassword(false), 2000)
+  }
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1332,6 +1368,7 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
         `Password updated for ${user.name}! The user will receive an instant real-time alert and be redirected to login.`,
         { duration: 5000 }
       )
+      setCurrentPassword(newPassword.trim())
       setNewPassword("")
       setConfirmPassword("")
       loadDetails()
@@ -1475,28 +1512,116 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
                 </div>
               </div>
 
+              {/* Current Password Card - Super Admin Access */}
+              {isSuperAdmin && (
+                <div className="rounded-2xl border border-purple-100 bg-purple-50/40 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <KeyRound className="h-4 w-4 text-purple-600" />
+                      <span className="text-sm font-semibold text-gray-900">Current Password</span>
+                      <span className="rounded-full bg-purple-100 px-2.5 py-0.5 text-[11px] font-semibold text-purple-700">
+                        Super Admin Access
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCopyPassword}
+                      className="flex items-center gap-1.5 text-xs font-semibold text-purple-700 hover:text-purple-800 hover:bg-purple-100/70 px-2.5 py-1 rounded-md transition-colors"
+                    >
+                      {copiedPassword ? (
+                        <>
+                          <Check className="h-3.5 w-3.5 text-emerald-600" />
+                          <span className="text-emerald-600">Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-3.5 w-3.5" />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  <div className="relative">
+                    <input
+                      type={showCurrentPassword ? "text" : "password"}
+                      readOnly
+                      value={currentPassword || ""}
+                      placeholder={isLoadingDetails ? "Loading password…" : "No password set"}
+                      className="h-10 w-full rounded-xl border border-purple-100 bg-white px-3.5 pr-10 text-sm font-medium tracking-wide text-gray-800 shadow-2xs focus:outline-hidden select-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCurrentPassword((prev) => !prev)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-purple-600 hover:text-purple-800 transition-colors p-1"
+                      title={showCurrentPassword ? "Hide password" : "Show password"}
+                    >
+                      {showCurrentPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-1">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                  Change / Reset Password
+                </p>
+              </div>
+
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-gray-700">New Password</Label>
-                <Input
-                  type="password"
-                  placeholder="Enter new password (min. 6 characters)"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="h-10 rounded-lg text-sm"
-                  required
-                />
+                <div className="relative">
+                  <Input
+                    type={showNewPassword ? "text" : "password"}
+                    placeholder="Enter new password (min. 6 characters)"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="h-10 rounded-lg text-sm pr-10"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword((prev) => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
+                    title={showNewPassword ? "Hide password" : "Show password"}
+                  >
+                    {showNewPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-gray-700">Confirm New Password</Label>
-                <Input
-                  type="password"
-                  placeholder="Re-enter new password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="h-10 rounded-lg text-sm"
-                  required
-                />
+                <div className="relative">
+                  <Input
+                    type={showConfirmPassword ? "text" : "password"}
+                    placeholder="Re-enter new password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="h-10 rounded-lg text-sm pr-10"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((prev) => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
+                    title={showConfirmPassword ? "Hide password" : "Show password"}
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
               </div>
 
               <div className="pt-2 flex justify-end gap-2">
@@ -1653,102 +1778,908 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
 
 // ─── Permission Schema & Definitions ──────────────────────────────────────────
 
+// ─── 45 Page Permission Modules & Actions Configuration ───────────────────────────
+
+export interface PagePermissionModule {
+  key: string
+  label: string
+  category: string
+  actions: string[]
+  description: string
+}
+
+export const PAGE_PERMISSIONS_MODULES: PagePermissionModule[] = [
+  // 1. Core Workspace
+  {
+    key: "dashboard",
+    label: "Dashboard",
+    category: "Core Workspace",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Analytics, summaries & system overview",
+  },
+  {
+    key: "leads",
+    label: "Leads",
+    category: "Core Workspace",
+    actions: ["view", "edit", "delete", "manage", "create", "assign"],
+    description: "Lead pipelines, qualifications & agent allocations",
+  },
+  {
+    key: "employee",
+    label: "Employee Directory",
+    category: "Core Workspace",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Employee registry & personnel records",
+  },
+  {
+    key: "users",
+    label: "User Management",
+    category: "Core Workspace",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Personnel directory, credentials & role access",
+  },
+
+  // 2. Sales & Calling Management
+  {
+    key: "calls",
+    label: "Calls",
+    category: "Sales & Call Management",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Calling operations & logs",
+  },
+  {
+    key: "calls_report",
+    label: "Calls Report",
+    category: "Sales & Call Management",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Call history logs & recording statistics",
+  },
+  {
+    key: "sales_report",
+    label: "Sales Report",
+    category: "Sales & Call Management",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Revenue statistics & sales conversion data",
+  },
+  {
+    key: "performance",
+    label: "Performance",
+    category: "Sales & Call Management",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Agent KPI & conversion performance",
+  },
+  {
+    key: "riya_sharma",
+    label: "Riya Sharma Portal",
+    category: "Sales & Call Management",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Agent dedicated conversion tracking",
+  },
+  {
+    key: "sales_call_audit",
+    label: "Sales Call Audit",
+    category: "Sales & Call Management",
+    actions: ["view", "viewSelf", "viewAll", "write"],
+    description: "QA scorecard evaluation, team reports & HR verification",
+  },
+
+  // 3. FMS & Booking Systems
+  {
+    key: "bookings",
+    label: "Bookings",
+    category: "FMS & Booking Systems",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Reservation & booking lifecycle",
+  },
+  {
+    key: "fms",
+    label: "FMS Systems Hub",
+    category: "FMS & Booking Systems",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "File Management Systems directory",
+  },
+  {
+    key: "team",
+    label: "KTAHV Booking FMS",
+    category: "FMS & Booking Systems",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Manage KTAHV team bookings & confirmations",
+  },
+  {
+    key: "villa_raag",
+    label: "Villa Raag FMS",
+    category: "FMS & Booking Systems",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Manage Villa Raag resort reservations",
+  },
+  {
+    key: "guests",
+    label: "Guests Directory",
+    category: "FMS & Booking Systems",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Guest records & booking history",
+  },
+  {
+    key: "new-order-fms",
+    label: "New Order FMS",
+    category: "FMS & Booking Systems",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Product order lifecycle & dispatch",
+  },
+  {
+    key: "crr_fms",
+    label: "KTAHV CRR Calling FMS",
+    category: "FMS & Booking Systems",
+    actions: [
+      "view",
+      "stage1",
+      "stage2",
+      "stage3",
+      "stage4",
+      "stage5",
+      "stage6",
+      "stage7",
+      "stage8",
+      "Executive",
+      "Senior",
+      "stage9",
+      "stage10",
+      "stage11",
+    ],
+    description: "CRR guest follow-up & multi-stage retention FMS",
+  },
+  {
+    key: "cold_enquiry_reverification",
+    label: "Cold Enquiry Reverification",
+    category: "FMS & Booking Systems",
+    actions: [
+      "view",
+      "stage1",
+      "stage2",
+      "stage3",
+      "stage4",
+      "stage5",
+      "stage6",
+      "stage7",
+      "stage8",
+      "Executive",
+      "Senior",
+      "stage9",
+      "stage10",
+      "stage11",
+    ],
+    description: "Reverify cold customer leads across stages",
+  },
+
+  // 4. DialShree & AI Voice
+  {
+    key: "dialshree_menu.view",
+    label: "DialShree Calling Menu",
+    category: "AI Voice & DialShree",
+    actions: [
+      "view",
+      "stage1",
+      "stage2",
+      "stage3",
+      "stage4",
+      "stage5",
+      "stage6",
+      "stage7",
+      "stage8",
+      "Executive",
+      "Senior",
+      "stage9",
+      "stage10",
+      "stage11",
+    ],
+    description: "DialShree calling stages & campaign menu",
+  },
+  {
+    key: "dialshree_received.view",
+    label: "DialShree Received Leads",
+    category: "AI Voice & DialShree",
+    actions: [
+      "view",
+      "stage1",
+      "stage2",
+      "stage3",
+      "stage4",
+      "stage5",
+      "stage6",
+      "stage7",
+      "stage8",
+      "Executive",
+      "Senior",
+      "stage9",
+      "stage10",
+      "stage11",
+    ],
+    description: "Inbound DialShree received leads & stages",
+  },
+  {
+    key: "dialshree_sent.view",
+    label: "DialShree Sent Leads",
+    category: "AI Voice & DialShree",
+    actions: [
+      "view",
+      "stage1",
+      "stage2",
+      "stage3",
+      "stage4",
+      "stage5",
+      "stage6",
+      "stage7",
+      "stage8",
+      "Executive",
+      "Senior",
+      "stage9",
+      "stage10",
+      "stage11",
+    ],
+    description: "Outbound DialShree campaign stages",
+  },
+  {
+    key: "ai_voice_menu",
+    label: "AI Voice Menu",
+    category: "AI Voice & DialShree",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "AI automated voice calling workflow",
+  },
+  {
+    key: "ai_voice_sent",
+    label: "AI Voice Sent Calls",
+    category: "AI Voice & DialShree",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Outbound AI robotic calling logs",
+  },
+  {
+    key: "ai_voice_received",
+    label: "AI Voice Received Calls",
+    category: "AI Voice & DialShree",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Inbound AI callback records",
+  },
+  {
+    key: "ai_voice_summary",
+    label: "AI Voice Summary",
+    category: "AI Voice & DialShree",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "AI calling analytics & qualification summaries",
+  },
+
+  // 5. Marketing & PPC Analytics
+  {
+    key: "marketing",
+    label: "Marketing Hub",
+    category: "Marketing & Analytics",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Marketing campaigns & overall analytics",
+  },
+  {
+    key: "marketing_funnel",
+    label: "Marketing Funnel",
+    category: "Marketing & Analytics",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Lead stage funnel & drop-off metrics",
+  },
+  {
+    key: "marketing_google_report",
+    label: "Google PPC Reports",
+    category: "Marketing & Analytics",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Google Ads campaign ROAS & expense analytics",
+  },
+  {
+    key: "marketing_facebook_report",
+    label: "Facebook PPC Reports",
+    category: "Marketing & Analytics",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Meta/Facebook ad performance tracking",
+  },
+  {
+    key: "google_adword_report",
+    label: "Google Adwords Reports",
+    category: "Marketing & Analytics",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Adwords spend & source attribution",
+  },
+
+  // 6. Financials & Partner Networks
+  {
+    key: "payments",
+    label: "Payments",
+    category: "Financials & Accounts",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Payment transactions & finance ledger",
+  },
+  {
+    key: "invoices",
+    label: "Invoices",
+    category: "Financials & Accounts",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Invoices, billing & receipts",
+  },
+  {
+    key: "accounts_tracker",
+    label: "KTAHV Accounts Tracker",
+    category: "Financials & Accounts",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Booking revenue, bank reconciliation & receipts",
+  },
+  {
+    key: "partners",
+    label: "Partners Directory",
+    category: "Financials & Accounts",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Corporate & doctor referral partner directory",
+  },
+
+  // 7. Medical & Consultations
+  {
+    key: "consultations",
+    label: "Consultations",
+    category: "Medical & Consultations",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Doctor consultations & clinical case sheets",
+  },
+  {
+    key: "prescriptions",
+    label: "Prescriptions",
+    category: "Medical & Consultations",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Ayurvedic medicines & prescriptions",
+  },
+  {
+    key: "doctor_portal",
+    label: "Doctor Portal",
+    category: "Medical & Consultations",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Doctor consultation CMS & patient appointments",
+  },
+
+  // 8. Portals, Support & Operations
+  {
+    key: "portal_hub",
+    label: "Unified Portal Hub",
+    category: "Portals & Operations",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Access external portal launcher & shortcuts",
+  },
+  {
+    key: "sales_target_portal",
+    label: "Sales Target Portal",
+    category: "Portals & Operations",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Sales target portal integration & quotas",
+  },
+  {
+    key: "call_recording_portal",
+    label: "Call Recording Portal",
+    category: "Portals & Operations",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "IVR audio call recording player & archives",
+  },
+  {
+    key: "partner_onboard_form",
+    label: "Partner Onboard Form",
+    category: "Portals & Operations",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "External partner onboarding intake form",
+  },
+  {
+    key: "meetings",
+    label: "Meetings Hub",
+    category: "Portals & Operations",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Team meeting logs & minutes",
+  },
+  {
+    key: "helpdesk",
+    label: "Helpdesk",
+    category: "Portals & Operations",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Internal support ticketing & issue tracking",
+  },
+  {
+    key: "escalations",
+    label: "Escalations",
+    category: "Portals & Operations",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "Customer service escalations & resolution",
+  },
+  {
+    key: "reports",
+    label: "Reports Hub",
+    category: "Portals & Operations",
+    actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
+    description: "System reports repository & exports",
+  },
+]
+
+export function buildPermissionKey(moduleKey: string, action: string): string {
+  if (moduleKey.includes(".view")) {
+    if (action === "view") return moduleKey
+    return `${moduleKey}.${action}`
+  }
+  return `${moduleKey}.${action}`
+}
+
+export function isActionGranted(
+  permissions: string[],
+  moduleKey: string,
+  action: string
+): boolean {
+  if (permissions.includes("all")) return true
+  const key = buildPermissionKey(moduleKey, action)
+  if (permissions.includes(key)) return true
+  if (moduleKey.includes(".view")) {
+    const base = moduleKey.split(".")[0]
+    if (permissions.includes(`${base}.${action}`)) return true
+  }
+  return false
+}
+
+// ─── Super Admin Dynamic Page Permission & Dropdown Manager Modal ─────────────
+
+interface ManagePagePermissionsModalProps {
+  open: boolean
+  onClose: () => void
+  modules: PagePermissionModule[]
+  onModulesUpdated: (updated: PagePermissionModule[]) => void
+}
+
+function ManagePagePermissionsModal({
+  open,
+  onClose,
+  modules,
+  onModulesUpdated,
+}: ManagePagePermissionsModalProps) {
+  const [tab, setTab] = useState<"add_action" | "add_page">("add_action")
+  // Tab 1: Add action to existing page
+  const [targetModuleKey, setTargetModuleKey] = useState<string>(modules[0]?.key || "dashboard")
+  const [newActionName, setNewActionName] = useState("")
+
+  // Tab 2: Add new page permission module
+  const [newPageLabel, setNewPageLabel] = useState("")
+  const [newPageKey, setNewPageKey] = useState("")
+  const [newPageCategory, setNewPageCategory] = useState("Custom Modules")
+  const [newPageDesc, setNewPageDesc] = useState("")
+  const [newPageActions, setNewPageActions] = useState("view, edit, delete, create")
+
+  const [saving, setSaving] = useState(false)
+
+  if (!open) return null
+
+  const selectedTargetModule = modules.find(m => m.key === targetModuleKey)
+
+  // 1. Add action to existing page
+  const handleAddAction = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const cleanAction = newActionName.trim().replace(/\s+/g, "_")
+    if (!cleanAction) {
+      toast.error("Please enter an action name (e.g. export, approve, refund, stage12)")
+      return
+    }
+    if (!selectedTargetModule) return
+
+    if (selectedTargetModule.actions.includes(cleanAction)) {
+      toast.error(`Action '${cleanAction}' already exists in ${selectedTargetModule.label}`)
+      return
+    }
+
+    const updatedActions = [...selectedTargetModule.actions, cleanAction]
+    const updatedModule: PagePermissionModule = {
+      ...selectedTargetModule,
+      actions: updatedActions,
+    }
+
+    setSaving(true)
+    try {
+      const res = await fetch("/api/admin/page-permissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedModule),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success(`Action '${cleanAction}' added to ${selectedTargetModule.label}!`)
+        setNewActionName("")
+        const updatedList = modules.map(m => m.key === targetModuleKey ? updatedModule : m)
+        onModulesUpdated(updatedList)
+      } else {
+        toast.error(data.error || "Failed to save action to database")
+      }
+    } catch {
+      toast.error("Network error while saving action")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // 2. Remove action from existing module
+  const handleRemoveAction = async (mod: PagePermissionModule, actionToRemove: string) => {
+    if (mod.actions.length <= 1) {
+      toast.error("Each module must retain at least 1 action (e.g. view)")
+      return
+    }
+    if (!confirm(`Remove action '${actionToRemove}' from ${mod.label}?`)) return
+
+    const updatedActions = mod.actions.filter(a => a !== actionToRemove)
+    const updatedModule: PagePermissionModule = { ...mod, actions: updatedActions }
+
+    setSaving(true)
+    try {
+      const res = await fetch("/api/admin/page-permissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedModule),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success(`Action '${actionToRemove}' removed from ${mod.label}`)
+        const updatedList = modules.map(m => m.key === mod.key ? updatedModule : m)
+        onModulesUpdated(updatedList)
+      } else {
+        toast.error(data.error || "Failed to update module")
+      }
+    } catch {
+      toast.error("Network error")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // 3. Create brand new page module
+  const handleCreateNewPage = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newPageLabel.trim() || !newPageKey.trim()) {
+      toast.error("Please provide both a Page Title and Module Key")
+      return
+    }
+    const cleanKey = newPageKey.trim().toLowerCase().replace(/[^a-z0-9_\-\.]/g, "_")
+    if (modules.some(m => m.key === cleanKey)) {
+      toast.error(`A page with key '${cleanKey}' already exists!`)
+      return
+    }
+
+    const actionsList = newPageActions
+      .split(",")
+      .map(a => a.trim().replace(/\s+/g, "_"))
+      .filter(Boolean)
+
+    if (!actionsList.includes("view")) {
+      actionsList.unshift("view")
+    }
+
+    const newMod: PagePermissionModule = {
+      key: cleanKey,
+      label: newPageLabel.trim(),
+      category: newPageCategory.trim() || "Custom Modules",
+      description: newPageDesc.trim() || `${newPageLabel.trim()} page & feature control`,
+      actions: actionsList,
+    }
+
+    setSaving(true)
+    try {
+      const res = await fetch("/api/admin/page-permissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...newMod, isCustom: true }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success(`New page '${newMod.label}' created with ${actionsList.length} actions!`)
+        setNewPageLabel("")
+        setNewPageKey("")
+        setNewPageDesc("")
+        setNewPageActions("view, edit, delete, create")
+        const updatedList = [...modules, newMod]
+        onModulesUpdated(updatedList)
+        setTargetModuleKey(newMod.key)
+        setTab("add_action")
+      } else {
+        toast.error(data.error || "Failed to create new page")
+      }
+    } catch {
+      toast.error("Network error")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // 4. Delete custom page module
+  const handleDeleteCustomPage = async (mod: PagePermissionModule) => {
+    if (!confirm(`Delete custom page permission '${mod.label}' (${mod.key})? This cannot be undone.`)) return
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/admin/page-permissions?key=${encodeURIComponent(mod.key)}`, {
+        method: "DELETE",
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success(`Page '${mod.label}' removed`)
+        const updatedList = modules.filter(m => m.key !== mod.key)
+        onModulesUpdated(updatedList)
+        if (targetModuleKey === mod.key) {
+          setTargetModuleKey(updatedList[0]?.key || "dashboard")
+        }
+      } else {
+        toast.error(data.error || "Failed to delete page")
+      }
+    } catch {
+      toast.error("Network error")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 p-3 sm:p-5 backdrop-blur-sm animate-in fade-in duration-150">
+      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl border border-slate-200">
+        
+        {/* Modal Header */}
+        <div className="flex items-center justify-between bg-gradient-to-r from-purple-700 via-indigo-700 to-indigo-800 px-6 py-4 text-white">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/20 shadow-inner">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold leading-tight">Manage Page Modules &amp; Dropdown Actions</h3>
+              <p className="text-xs text-purple-100 mt-0.5">
+                Add granular actions to existing pages or register brand new CRM page permissions
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition text-white"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Tab Selector */}
+        <div className="flex items-center border-b border-slate-200 bg-slate-50 px-6 pt-3">
+          <button
+            type="button"
+            onClick={() => setTab("add_action")}
+            className={`pb-2.5 px-4 text-xs font-bold border-b-2 transition-all ${
+              tab === "add_action"
+                ? "border-indigo-600 text-indigo-600"
+                : "border-transparent text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            1. Add / Edit Actions in Existing Page
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("add_page")}
+            className={`pb-2.5 px-4 text-xs font-bold border-b-2 transition-all ${
+              tab === "add_page"
+                ? "border-indigo-600 text-indigo-600"
+                : "border-transparent text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            2. + Register New Page Module
+          </button>
+        </div>
+
+        {/* Body Content */}
+        <div className="p-6 overflow-y-auto max-h-[60vh] space-y-5">
+          {tab === "add_action" && (
+            <div className="space-y-4">
+              <div>
+                <Label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Select Target Page Module
+                </Label>
+                <div className="mt-1.5">
+                  <Select value={targetModuleKey} onValueChange={setTargetModuleKey}>
+                    <SelectTrigger className="h-10 text-xs bg-white border-slate-300 rounded-xl">
+                      <SelectValue placeholder="Select a page to modify..." />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[260px]">
+                      {modules.map(m => (
+                        <SelectItem key={m.key} value={m.key}>
+                          {m.label} ({m.key}) — {m.actions.length} actions
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {selectedTargetModule && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-800">{selectedTargetModule.label}</h4>
+                      <p className="text-[11px] text-slate-500 font-mono">{selectedTargetModule.key} • {selectedTargetModule.category}</p>
+                    </div>
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-indigo-100 text-indigo-800">
+                      {selectedTargetModule.actions.length} Actions in Dropdown
+                    </span>
+                  </div>
+
+                  <div>
+                    <Label className="text-[11px] font-semibold text-slate-600">Current Dropdown Values:</Label>
+                    <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                      {selectedTargetModule.actions.map(action => (
+                        <span
+                          key={action}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-white border border-slate-200 text-slate-800 shadow-2xs"
+                        >
+                          <span>{action}</span>
+                          <button
+                            type="button"
+                            title="Remove this action"
+                            onClick={() => handleRemoveAction(selectedTargetModule, action)}
+                            className="text-slate-400 hover:text-rose-600 font-bold ml-0.5 text-[11px]"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Add action form */}
+                  <form onSubmit={handleAddAction} className="pt-2 border-t border-slate-200/80 flex gap-2">
+                    <div className="flex-1">
+                      <Input
+                        placeholder="Type new action name (e.g. export, refund, approve, stage12)..."
+                        value={newActionName}
+                        onChange={e => setNewActionName(e.target.value)}
+                        className="h-9 text-xs rounded-lg border-slate-300 bg-white"
+                      />
+                    </div>
+                    <Button
+                      type="submit"
+                      disabled={saving || !newActionName.trim()}
+                      className="h-9 px-4 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg"
+                    >
+                      {saving ? "Saving..." : "+ Add Action Value"}
+                    </Button>
+                  </form>
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab === "add_page" && (
+            <form onSubmit={handleCreateNewPage} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <Label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Page / Module Title *
+                  </Label>
+                  <Input
+                    placeholder="e.g. Inventory Management"
+                    value={newPageLabel}
+                    onChange={e => {
+                      setNewPageLabel(e.target.value)
+                      if (!newPageKey || newPageKey === newPageLabel.toLowerCase().replace(/[^a-z0-9]/g, "_")) {
+                        setNewPageKey(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, "_"))
+                      }
+                    }}
+                    className="h-9 text-xs rounded-xl border-slate-300 mt-1"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Module Key (Database Identifier) *
+                  </Label>
+                  <Input
+                    placeholder="e.g. inventory_management"
+                    value={newPageKey}
+                    onChange={e => setNewPageKey(e.target.value.toLowerCase().replace(/[^a-z0-9_\-\.]/g, "_"))}
+                    className="h-9 text-xs rounded-xl border-slate-300 font-mono mt-1"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <Label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Category *
+                  </Label>
+                  <Input
+                    placeholder="e.g. Operations & Supply, Custom Modules"
+                    value={newPageCategory}
+                    onChange={e => setNewPageCategory(e.target.value)}
+                    className="h-9 text-xs rounded-xl border-slate-300 mt-1"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Short Description
+                  </Label>
+                  <Input
+                    placeholder="e.g. Warehouse stock & medicine supplies"
+                    value={newPageDesc}
+                    onChange={e => setNewPageDesc(e.target.value)}
+                    className="h-9 text-xs rounded-xl border-slate-300 mt-1"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Initial Allowed Actions (Comma-Separated) *
+                </Label>
+                <Input
+                  placeholder="view, edit, delete, create, manage, export"
+                  value={newPageActions}
+                  onChange={e => setNewPageActions(e.target.value)}
+                  className="h-9 text-xs rounded-xl border-slate-300 mt-1"
+                  required
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  &apos;view&apos; will automatically be included if omitted.
+                </p>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <Button
+                  type="submit"
+                  disabled={saving || !newPageLabel.trim() || !newPageKey.trim()}
+                  className="h-9 px-6 text-xs font-bold bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl shadow-md"
+                >
+                  {saving ? "Creating..." : "Create Page Permission"}
+                </Button>
+              </div>
+            </form>
+          )}
+        </div>
+
+        {/* Modal Footer */}
+        <div className="border-t border-slate-200 bg-slate-50 px-6 py-3 flex items-center justify-between">
+          <span className="text-xs text-slate-500">
+            Total Available Modules: <strong>{modules.length}</strong>
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onClose}
+            className="h-8.5 px-4 text-xs font-semibold rounded-lg"
+          >
+            Close
+          </Button>
+        </div>
+
+      </div>
+    </div>
+  )
+}
+
+// Backward-compatible PERMISSION_GROUPS export
 export const PERMISSION_GROUPS: {
   category: string
   description: string
   permissions: { key: string; label: string; description: string }[]
-}[] = [
-  {
-    category: "Core Workspace & Leads",
-    description: "Main workspace, incoming leads, assignments and AI deals",
-    permissions: [
-      { key: "dashboard.view", label: "Executive Dashboard", description: "View analytics & system overview" },
-      { key: "leads.view", label: "Leads Assignment", description: "Access lead pipeline and assignment hub" },
-      { key: "leads.edit", label: "Edit Lead Details", description: "Update lead status, outcomes & notes" },
-      { key: "leads.assign", label: "Assign Leads to Staff", description: "Reallocate leads across agents & teams" },
-      { key: "deal_assistant.view", label: "AI Deal Assistant", description: "AI-driven deal intelligence & tracking" },
-      { key: "ai_voice_menu.view", label: "AI Voice Lead Qualification", description: "Voice transcription & qualification reports" },
-      { key: "dialshree_menu.view", label: "DialShree Lead Qualification", description: "DialShree calling & callback logs" },
-      { key: "dialshree_received.view", label: "DialShree Received Leads", description: "View DialShree received callback leads" },
-      { key: "dialshree_sent.view", label: "DialShree Sent Leads", description: "View DialShree sent outreach leads" },
-    ],
-  },
-  {
-    category: "Sales & Call Management",
-    description: "Calling pipelines, sales reporting and agent performance",
-    permissions: [
-      { key: "calls_report.view", label: "Calls Report", description: "Call history logs and recording statistics" },
-      { key: "sales_report.view", label: "Sales Report", description: "Revenue statistics and sales conversion data" },
-      { key: "sales_calling.view", label: "Sales Calling Master", description: "Calling schedules, daily master lists & status" },
-      { key: "riya_sharma.view", label: "Riya Sharma Portal", description: "Agent dedicated conversion tracking" },
-      // Sales Call Audit is four composable permissions, not one. `view` opens
-      // the page and grants no data; `viewSelf`/`viewAll` decide how much data
-      // comes through it; `write` decides whether HR actions can be saved. Grant
-      // `view` alongside a scope — `view` on its own renders an empty table.
-      { key: "sales_call_audit.view", label: "Sales Call Audit — Open Page", description: "Open the audit page. Grants no data on its own; pair with Own Data or All Data" },
-      { key: "sales_call_audit.viewSelf", label: "Sales Call Audit — Own Data", description: "See only their own audit scorecard, read-only" },
-      { key: "sales_call_audit.viewAll", label: "Sales Call Audit — All Data", description: "See every agent's audit records and team reports, read-only" },
-      { key: "sales_call_audit.write", label: "Sales Call Audit — HR Actions", description: "Save HR verification, remarks and attendance actions on visible records" },
-    ],
-  },
-  {
-    category: "Marketing & Ads Analytics",
-    description: "Marketing funnels, PPC ads and Google/Facebook campaign reports",
-    permissions: [
-      { key: "marketing.view", label: "Marketing Reports Hub", description: "Access marketing analytics overview" },
-      { key: "marketing_funnel.view", label: "Marketing Funnel", description: "Lead stage funnel & drop-off metrics" },
-      { key: "marketing_google_report.view", label: "Google PPC Reports", description: "Google campaign ROAS & expense analytics" },
-      { key: "marketing_facebook_report.view", label: "Facebook PPC Reports", description: "Meta/Facebook ad performance tracking" },
-      { key: "google_adword_report.view", label: "Google Adwords Reports", description: "Adwords spend and source analysis" },
-    ],
-  },
-  {
-    category: "FMS & Booking Systems",
-    description: "File Management Systems, bookings, task tracking and verification",
-    permissions: [
-      { key: "fms.view", label: "FMS Systems Hub", description: "Main access to all File Management Systems" },
-      { key: "team.view", label: "KTAHV Booking FMS", description: "Manage KTAHV team bookings & confirmations" },
-      { key: "villa_raag.view", label: "Villa Raag Booking FMS", description: "Manage Villa Raag resort reservations" },
-      { key: "ktahv_booking_form.view", label: "KTAHV Booking Intake Form", description: "Direct booking intake submission form" },
-      { key: "crr_fms.view", label: "KTAHV CRR Calling FMS", description: "CRR guest follow-up and retention FMS" },
-      { key: "task_fms.view", label: "FMS Bottleneck Tracker", description: "Pending bottleneck tasks & operational alerts" },
-      { key: "cold_enquiry_reverification.view", label: "Cold Enquiry Reverification", description: "Reverify cold customer leads" },
-      { key: "new-order-fms.view", label: "New Order FMS", description: "Manage product order lifecycle" },
-      { key: "mr-fms.view", label: "MR FMS", description: "Medical Representative field reporting" },
-    ],
-  },
-  {
-    category: "Financials & Partner Networks",
-    description: "Accounts reconciliation, payment tracking and partner onboarding",
-    permissions: [
-      { key: "accounts_tracker.view", label: "KTAHV Accounts Tracker", description: "Reconcile booking accounts, invoices & receipts" },
-      { key: "payments.view", label: "Payments & Invoicing", description: "View financial payment records & ledger" },
-      { key: "partners.view", label: "Partner Onboarding System", description: "Corporate and doctor referral partners" },
-    ],
-  },
-  {
-    category: "Portals & Miscellaneous Tools",
-    description: "External portal shortcuts, doctor CMS, recordings and meetings",
-    permissions: [
-      { key: "portal_hub.view", label: "Unified Portal Hub", description: "Access external portal launcher" },
-      { key: "sales_target_portal.view", label: "Sales Target Portal", description: "Sales target portal integration" },
-      { key: "call_recording_portal.view", label: "Call Recording Portal", description: "IVR audio call recording archives" },
-      { key: "doctor_portal.view", label: "Doctor Portal", description: "Doctor consultation CMS & history" },
-      { key: "partner_onboard_form.view", label: "Partner Onboard Form", description: "External partner onboarding form" },
-      { key: "meetings.view", label: "Meetings Hub", description: "Team meeting logs and action items" },
-    ],
-  },
-  {
-    category: "Administrative & User Management",
-    description: "Personnel directory, account creation and credential security",
-    permissions: [
-      { key: "users.view", label: "View User Directory", description: "Browse personnel directory" },
-      { key: "users.create", label: "Create Employees", description: "Register new team accounts" },
-      { key: "users.edit", label: "Edit Employees", description: "Update profile & role permissions" },
-      { key: "users.delete", label: "Delete Employees", description: "Terminate user accounts" },
-    ],
-  },
-]
+}[] = (() => {
+  const catMap = new Map<string, { category: string; description: string; permissions: any[] }>()
+  for (const m of PAGE_PERMISSIONS_MODULES) {
+    if (!catMap.has(m.category)) {
+      catMap.set(m.category, { category: m.category, description: m.description, permissions: [] })
+    }
+    const cat = catMap.get(m.category)!
+    for (const a of m.actions) {
+      cat.permissions.push({
+        key: buildPermissionKey(m.key, a),
+        label: `${m.label} — ${a}`,
+        description: `${a} action on ${m.label}`,
+      })
+    }
+  }
+  return Array.from(catMap.values())
+})()
 
 export const ROLE_DEFAULT_PERMISSIONS: Record<string, string[]> = {
   super_admin: ["all"],
@@ -1791,6 +2722,7 @@ interface EmployeeProfileModalProps {
 }
 
 function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfileModalProps) {
+  const { user: currentUser } = useAuth()
   const [formData, setFormData] = useState({
     name:       user?.name       || "",
     email:      user?.email      || "",
@@ -1803,11 +2735,56 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
     shift:      user?.shift      || ("morning" as "morning" | "evening" | "night"),
   })
 
+  const [pageModules, setPageModules] = useState<PagePermissionModule[]>(PAGE_PERMISSIONS_MODULES)
+  const [isManagePermsOpen, setIsManagePermsOpen] = useState(false)
+
+  // Load custom modules and action overrides from database
+  useEffect(() => {
+    if (open) {
+      fetch("/api/admin/page-permissions")
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && Array.isArray(data.modules) && data.modules.length > 0) {
+            setPageModules(() => {
+              const map = new Map(PAGE_PERMISSIONS_MODULES.map(m => [m.key, { ...m, actions: [...m.actions] }]))
+              for (const custom of data.modules) {
+                if (map.has(custom.key)) {
+                  const existing = map.get(custom.key)!
+                  map.set(custom.key, {
+                    ...existing,
+                    label: custom.label || existing.label,
+                    category: custom.category || existing.category,
+                    description: custom.description || existing.description,
+                    actions: Array.from(new Set([...existing.actions, ...(custom.actions || [])])),
+                  })
+                } else {
+                  map.set(custom.key, {
+                    key: custom.key,
+                    label: custom.label || custom.key,
+                    category: custom.category || "Custom Modules",
+                    description: custom.description || "",
+                    actions: Array.isArray(custom.actions) && custom.actions.length > 0 ? custom.actions : ["view"],
+                  })
+                }
+              }
+              return Array.from(map.values())
+            })
+          }
+        })
+        .catch(err => {
+          console.error("Failed to load custom page permissions:", err)
+        })
+    }
+  }, [open])
+
   const [permissions, setPermissions] = useState<string[]>(() => {
     if (user?.permissions && user.permissions.length > 0) return user.permissions
     return ROLE_DEFAULT_PERMISSIONS[user?.role || "sales_agent"] || []
   })
   const [permissionSearch, setPermissionSearch] = useState("")
+  const [selectedCategory, setSelectedCategory] = useState<string>("all")
+  const [selectedPageDropdown, setSelectedPageDropdown] = useState<string>("all")
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   // Reset/sync form when modal opens
@@ -1830,6 +2807,9 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
           : ROLE_DEFAULT_PERMISSIONS[user?.role || "sales_agent"] || []
       )
       setPermissionSearch("")
+      setSelectedCategory("all")
+      setSelectedPageDropdown("all")
+      setOpenDropdown(null)
     }
   }, [open, user?.id])
 
@@ -1855,6 +2835,43 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
     })
   }
 
+  // Toggle single action for a module
+  const toggleModuleAction = (moduleKey: string, action: string) => {
+    const key = buildPermissionKey(moduleKey, action)
+    setPermissions(prev => {
+      const isCurrentlyGranted = isActionGranted(prev, moduleKey, action)
+      const withoutAll = prev.filter(p => p !== "all")
+      if (isCurrentlyGranted) {
+        return withoutAll.filter(p => p !== key && !(moduleKey.includes(".view") && p === `${moduleKey.split(".")[0]}.${action}`))
+      } else {
+        return [...withoutAll, key]
+      }
+    })
+  }
+
+  // Toggle or set all actions for a specific module
+  const setAllActionsForModule = (module: PagePermissionModule, grant: boolean) => {
+    const keys = module.actions.map(a => buildPermissionKey(module.key, a))
+    setPermissions(prev => {
+      const withoutAll = prev.filter(p => p !== "all")
+      if (grant) {
+        return Array.from(new Set([...withoutAll, ...keys]))
+      } else {
+        return withoutAll.filter(p => !keys.includes(p) && !(module.key.includes(".view") && p.startsWith(module.key.split(".")[0])))
+      }
+    })
+  }
+
+  const grantViewOnlyForModule = (module: PagePermissionModule) => {
+    const viewKey = buildPermissionKey(module.key, "view")
+    const otherKeys = module.actions.filter(a => a !== "view").map(a => buildPermissionKey(module.key, a))
+    setPermissions(prev => {
+      const withoutAll = prev.filter(p => p !== "all")
+      const cleaned = withoutAll.filter(p => !otherKeys.includes(p))
+      return Array.from(new Set([...cleaned, viewKey]))
+    })
+  }
+
   const toggleCategory = (catPerms: { key: string }[]) => {
     const keys = catPerms.map(p => p.key)
     const allSelected = keys.every(k => permissions.includes(k) || permissions.includes("all"))
@@ -1869,8 +2886,13 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
   }
 
   const selectAllPermissions = () => {
-    const allKeys = PERMISSION_GROUPS.flatMap(g => g.permissions.map(p => p.key))
+    const allKeys = pageModules.flatMap(m => m.actions.map(a => buildPermissionKey(m.key, a)))
     setPermissions(allKeys)
+  }
+
+  const selectViewOnlyAll = () => {
+    const viewKeys = pageModules.map(m => buildPermissionKey(m.key, "view"))
+    setPermissions(viewKeys)
   }
 
   const clearAllPermissions = () => {
@@ -1903,21 +2925,50 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
   const F = "h-11 rounded-xl text-xs bg-slate-50/70 border-slate-200 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all text-slate-800 font-medium"
   const L = "text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1"
 
-  // Filter groups according to search
-  const filteredGroups = permissionSearch.trim()
-    ? PERMISSION_GROUPS.map(g => ({
-        ...g,
-        permissions: g.permissions.filter(
-          p =>
-            p.label.toLowerCase().includes(permissionSearch.toLowerCase()) ||
-            p.key.toLowerCase().includes(permissionSearch.toLowerCase()) ||
-            p.description.toLowerCase().includes(permissionSearch.toLowerCase())
-        ),
-      })).filter(g => g.permissions.length > 0)
-    : PERMISSION_GROUPS
+  // Filter modules according to selected category, page dropdown, and search text
+  const filteredModules = useMemo(() => {
+    return pageModules.filter(m => {
+      // Category filter
+      if (selectedCategory !== "all" && m.category !== selectedCategory) {
+        return false
+      }
+      // Direct page dropdown filter
+      if (selectedPageDropdown !== "all" && m.key !== selectedPageDropdown) {
+        return false
+      }
+      // Search filter
+      if (permissionSearch.trim()) {
+        const query = permissionSearch.toLowerCase()
+        const matchesLabel = m.label.toLowerCase().includes(query)
+        const matchesKey = m.key.toLowerCase().includes(query)
+        const matchesDesc = m.description.toLowerCase().includes(query)
+        const matchesCategory = m.category.toLowerCase().includes(query)
+        const matchesActions = m.actions.some(a => a.toLowerCase().includes(query))
+        return matchesLabel || matchesKey || matchesDesc || matchesCategory || matchesActions
+      }
+      return true
+    })
+  }, [pageModules, selectedCategory, selectedPageDropdown, permissionSearch])
 
-  const totalPossiblePermissions = PERMISSION_GROUPS.flatMap(g => g.permissions).length
-  const activePermissionsCount = permissions.includes("all") ? totalPossiblePermissions : permissions.length
+  // Unique categories for filtering
+  const allCategories = useMemo(() => {
+    return Array.from(new Set(pageModules.map(m => m.category)))
+  }, [pageModules])
+
+  const totalPossiblePermissions = useMemo(() => {
+    return pageModules.reduce((acc, m) => acc + m.actions.length, 0)
+  }, [pageModules])
+
+  const activePermissionsCount = useMemo(() => {
+    if (permissions.includes("all")) return totalPossiblePermissions
+    let count = 0
+    for (const m of pageModules) {
+      for (const a of m.actions) {
+        if (isActionGranted(permissions, m.key, a)) count++
+      }
+    }
+    return count
+  }, [permissions, totalPossiblePermissions, pageModules])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-5 md:p-6 backdrop-blur-sm animate-in fade-in duration-150">
@@ -2136,22 +3187,25 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
             <div className="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
               
               {/* Matrix Control Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 px-4 py-3 border-b border-slate-200">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 px-4 py-3 border-b border-slate-200">
                 <div className="flex items-center gap-2.5">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white shadow-xs">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white shadow-xs shrink-0">
                     <ShieldCheck className="h-4 w-4" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800">
                         Page &amp; Module Permissions
                       </h4>
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-600 text-white shadow-xs">
-                        {permissions.includes("all") ? "Full Super Admin Access" : `${activePermissionsCount} of ${totalPossiblePermissions} Allowed`}
+                        {permissions.includes("all") ? "Full Super Admin Access" : `${activePermissionsCount} of ${totalPossiblePermissions} Actions Granted`}
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-medium hidden sm:inline">
+                        ({pageModules.length} Total Configurable Modules)
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500">
-                      Toggle checkboxes to assign page visibility and feature access
+                      Configure granular action-level access or select full page suites using the dropdowns below
                     </p>
                   </div>
                 </div>
@@ -2185,6 +3239,15 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
                     type="button"
                     variant="outline"
                     size="sm"
+                    onClick={selectViewOnlyAll}
+                    className="h-7 px-2.5 text-[10px] font-medium bg-white text-blue-700 border-blue-200 hover:bg-blue-50"
+                  >
+                    View Only All
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
                     onClick={clearAllPermissions}
                     className="h-7 px-2.5 text-[10px] font-medium bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
                   >
@@ -2199,94 +3262,272 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
                   >
                     Reset Defaults
                   </Button>
+                  {(currentUser?.role === "super_admin" || currentUser?.role === "admin" || !currentUser) && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsManagePermsOpen(true)}
+                      className="h-7 px-2.5 text-[10px] font-bold bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 flex items-center gap-1 shadow-2xs"
+                      title="Add more dropdown values to existing pages or create new page permissions"
+                    >
+                      <Sparkles className="h-3 w-3 text-purple-600" />
+                      + Manage Pages &amp; Actions
+                    </Button>
+                  )}
                 </div>
               </div>
 
-              {/* Search Inside Permissions */}
-              <div className="p-3 bg-slate-50/60 border-b border-slate-200">
-                <div className="relative">
+              {/* Filtering Controls Bar: Page Dropdown, Category Dropdown, Search Input */}
+              <div className="p-3 bg-slate-50/80 border-b border-slate-200 grid grid-cols-1 md:grid-cols-12 gap-2.5">
+                {/* 1. Quick Select Page Dropdown */}
+                <div className="md:col-span-4">
+                  <Select value={selectedPageDropdown} onValueChange={setSelectedPageDropdown}>
+                    <SelectTrigger className="h-8.5 text-xs bg-white border-slate-200 rounded-lg">
+                      <SelectValue placeholder="Quick-jump to page module..." />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[300px]">
+                      <SelectItem value="all">All Pages ({pageModules.length} modules)</SelectItem>
+                      {pageModules.map(m => (
+                        <SelectItem key={m.key} value={m.key}>
+                          {m.label} ({m.actions.length} actions)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* 2. Category Filter Dropdown */}
+                <div className="md:col-span-3">
+                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                    <SelectTrigger className="h-8.5 text-xs bg-white border-slate-200 rounded-lg">
+                      <SelectValue placeholder="Filter by category..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Categories ({allCategories.length})</SelectItem>
+                      {allCategories.map(cat => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* 3. Search Box */}
+                <div className="md:col-span-5 relative">
                   <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
                   <Input
-                    placeholder="Search permission pages by keyword (e.g. leads, marketing, fms, bookings, calls)..."
+                    placeholder="Search by module name, key, action..."
                     value={permissionSearch}
                     onChange={e => setPermissionSearch(e.target.value)}
-                    className="h-8.5 rounded-lg border-slate-200 bg-white pl-8.5 text-xs placeholder:text-slate-400 focus:border-indigo-500"
+                    className="h-8.5 rounded-lg border-slate-200 bg-white pl-8.5 pr-8 text-xs placeholder:text-slate-400 focus:border-indigo-500"
                   />
+                  {permissionSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setPermissionSearch("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Category Checkbox Grid */}
-              <div className="p-4 space-y-3.5 max-h-[360px] overflow-y-auto">
-                {filteredGroups.map(group => {
-                  const isGroupFullySelected = group.permissions.every(
-                    p => permissions.includes(p.key) || permissions.includes("all")
-                  )
-                  const grantedInGroup = group.permissions.filter(
-                    p => permissions.includes(p.key) || permissions.includes("all")
-                  ).length
+              {/* Module Cards List with Dropdowns */}
+              <div className="p-3.5 space-y-2.5 max-h-[380px] overflow-y-auto">
+                {filteredModules.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-slate-500">
+                    No matching modules found for the selected criteria.
+                  </div>
+                ) : (
+                  filteredModules.map(mod => {
+                    const grantedCount = mod.actions.filter(a => isActionGranted(permissions, mod.key, a)).length
+                    const isAllGranted = permissions.includes("all") || grantedCount === mod.actions.length
+                    const isNoneGranted = grantedCount === 0 && !permissions.includes("all")
+                    const isDropdownOpen = openDropdown === mod.key
 
-                  return (
-                    <div
-                      key={group.category}
-                      className="rounded-xl border border-slate-200 bg-slate-50/40 p-3 shadow-2xs space-y-2"
-                    >
-                      {/* Category Header */}
-                      <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-200/80">
-                        <div className="flex items-center gap-2">
-                          <Checkbox
-                            id={`cat-${group.category}`}
-                            checked={isGroupFullySelected}
-                            onCheckedChange={() => toggleCategory(group.permissions)}
-                            className="rounded border-slate-300 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
-                          />
-                          <label
-                            htmlFor={`cat-${group.category}`}
-                            className="text-xs font-bold text-slate-800 cursor-pointer select-none"
-                          >
-                            {group.category}
-                          </label>
-                          <span className="text-[11px] text-slate-400 font-normal hidden sm:inline">
-                            • {group.description}
-                          </span>
-                        </div>
+                    return (
+                      <div
+                        key={mod.key}
+                        className={`rounded-xl border transition-all p-3 ${
+                          isAllGranted
+                            ? "bg-indigo-50/40 border-indigo-200 shadow-2xs"
+                            : grantedCount > 0
+                            ? "bg-blue-50/25 border-blue-200"
+                            : "bg-white border-slate-200 hover:border-slate-300"
+                        }`}
+                      >
+                        {/* Module Header Row */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                          <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+                            <Checkbox
+                              id={`mod-check-${mod.key}`}
+                              checked={isAllGranted}
+                              onCheckedChange={(checked) => setAllActionsForModule(mod, !!checked)}
+                              className="mt-0.5 sm:mt-0 rounded border-slate-300 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600 shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <label
+                                  htmlFor={`mod-check-${mod.key}`}
+                                  className="text-xs font-bold text-slate-800 cursor-pointer hover:text-indigo-600 select-none"
+                                >
+                                  {mod.label}
+                                </label>
+                                <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                                  {mod.key}
+                                </span>
+                                <span className="text-[10px] text-slate-400 font-medium">
+                                  • {mod.category}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-500 truncate max-w-lg mt-0.5">
+                                {mod.description}
+                              </p>
+                            </div>
+                          </div>
 
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white text-slate-600 border border-slate-200">
-                          {grantedInGroup} / {group.permissions.length} allowed
-                        </span>
-                      </div>
-
-                      {/* Checkbox Grid (3 Columns) */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                        {group.permissions.map(perm => {
-                          const isChecked = permissions.includes(perm.key) || permissions.includes("all")
-
-                          return (
-                            <div
-                              key={perm.key}
-                              onClick={() => togglePermission(perm.key)}
-                              className={`flex items-start gap-2 p-2.5 rounded-lg border transition-all cursor-pointer select-none ${
-                                isChecked
-                                  ? "bg-indigo-50/80 border-indigo-300 text-indigo-950 shadow-2xs"
-                                  : "bg-white border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300"
+                          {/* Action Controls & Dropdown Trigger */}
+                          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                            {/* Access Status Badge */}
+                            <span
+                              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                                isAllGranted
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                  : grantedCount > 0
+                                  ? "bg-amber-50 text-amber-700 border-amber-200"
+                                  : "bg-slate-100 text-slate-500 border-slate-200"
                               }`}
                             >
-                              <Checkbox
-                                id={perm.key}
-                                checked={isChecked}
-                                onCheckedChange={() => togglePermission(perm.key)}
-                                className="mt-0.5 rounded border-slate-300 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
-                              />
-                              <div className="min-w-0 flex-1">
-                                <p className="text-xs font-bold leading-tight truncate">{perm.label}</p>
-                                <p className="font-mono text-[9px] text-slate-400 mt-0.5 truncate">{perm.key}</p>
-                              </div>
+                              {permissions.includes("all")
+                                ? `All ${mod.actions.length} Granted`
+                                : grantedCount === mod.actions.length
+                                ? `All ${mod.actions.length} Granted`
+                                : grantedCount > 0
+                                ? `${grantedCount} of ${mod.actions.length} Allowed`
+                                : "No Access"}
+                            </span>
+
+                            {/* Relative Container for the Action Dropdown */}
+                            <div className="relative">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setOpenDropdown(isDropdownOpen ? null : mod.key)}
+                                className={`h-7 px-2 text-[11px] font-semibold rounded-lg flex items-center gap-1 border transition-all ${
+                                  isDropdownOpen
+                                    ? "bg-indigo-600 text-white border-indigo-700 shadow-xs"
+                                    : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                                }`}
+                              >
+                                <span>Permissions ({grantedCount})</span>
+                                <ChevronDown className={`h-3 w-3 transition-transform ${isDropdownOpen ? "rotate-180" : ""}`} />
+                              </Button>
+
+                              {/* Interactive Dropdown Panel */}
+                              {isDropdownOpen && (
+                                <>
+                                  <div
+                                    className="fixed inset-0 z-40"
+                                    onClick={() => setOpenDropdown(null)}
+                                  />
+                                  <div className="absolute right-0 top-full mt-1.5 z-50 w-72 sm:w-80 rounded-xl border border-slate-200 bg-white shadow-xl p-3 animate-in fade-in zoom-in-95 duration-100">
+                                    <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
+                                      <div>
+                                        <div className="text-xs font-bold text-slate-800">{mod.label}</div>
+                                        <div className="text-[10px] text-slate-400">Manage granular permissions</div>
+                                      </div>
+                                      <div className="flex items-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => setAllActionsForModule(mod, true)}
+                                          className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 hover:underline px-1 py-0.5"
+                                        >
+                                          All
+                                        </button>
+                                        <span className="text-slate-300 text-xs">|</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => grantViewOnlyForModule(mod)}
+                                          className="text-[10px] font-semibold text-blue-600 hover:text-blue-800 hover:underline px-1 py-0.5"
+                                        >
+                                          View
+                                        </button>
+                                        <span className="text-slate-300 text-xs">|</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => setAllActionsForModule(mod, false)}
+                                          className="text-[10px] font-semibold text-rose-600 hover:text-rose-800 hover:underline px-1 py-0.5"
+                                        >
+                                          Clear
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* Action Checkboxes List inside Dropdown */}
+                                    <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+                                      {mod.actions.map(action => {
+                                        const granted = isActionGranted(permissions, mod.key, action)
+                                        const actKey = buildPermissionKey(mod.key, action)
+                                        return (
+                                          <div
+                                            key={action}
+                                            onClick={() => toggleModuleAction(mod.key, action)}
+                                            className={`flex items-center justify-between p-1.5 rounded-lg border text-xs cursor-pointer select-none transition-all ${
+                                              granted
+                                                ? "bg-indigo-50/70 border-indigo-200 text-indigo-950 font-medium"
+                                                : "bg-slate-50/50 border-slate-150 text-slate-600 hover:bg-slate-100"
+                                            }`}
+                                          >
+                                            <div className="flex items-center gap-2">
+                                              <Checkbox
+                                                checked={granted}
+                                                onCheckedChange={() => toggleModuleAction(mod.key, action)}
+                                                className="rounded border-slate-300 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
+                                              />
+                                              <span className="capitalize">{action}</span>
+                                            </div>
+                                            <span className="font-mono text-[9px] text-slate-400">
+                                              {actKey}
+                                            </span>
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
+                                  </div>
+                                </>
+                              )}
                             </div>
-                          )
-                        })}
+                          </div>
+                        </div>
+
+                        {/* Inline Action Chips for Quick Visibility & 1-Click Toggling */}
+                        <div className="flex items-center gap-1.5 flex-wrap pt-2 mt-2 border-t border-slate-100">
+                          {mod.actions.map(action => {
+                            const granted = isActionGranted(permissions, mod.key, action)
+                            return (
+                              <button
+                                key={action}
+                                type="button"
+                                onClick={() => toggleModuleAction(mod.key, action)}
+                                className={`text-[10px] font-medium px-2 py-0.5 rounded-md border transition-all ${
+                                  granted
+                                    ? "bg-indigo-600 text-white border-indigo-700 shadow-2xs"
+                                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
+                                }`}
+                              >
+                                {granted ? "✓ " : "+ "}{action}
+                              </button>
+                            )
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })
+                )}
               </div>
 
             </div>
@@ -2304,7 +3545,7 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
               <span>
                 <span className="font-medium uppercase tracking-wide text-slate-400">PERMISSIONS: </span>
                 <span className="text-slate-800 font-semibold">
-                  {permissions.includes("all") ? "Full System Access (Super Admin)" : `${activePermissionsCount} of ${totalPossiblePermissions} Pages Allowed`}
+                  {permissions.includes("all") ? "Full System Access (Super Admin)" : `${activePermissionsCount} of ${totalPossiblePermissions} Actions Granted`}
                 </span>
               </span>
             </div>
@@ -2329,6 +3570,14 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
             </div>
           </div>
         </form>
+
+        {/* Manage Dynamic Page Permissions & Dropdowns Modal */}
+        <ManagePagePermissionsModal
+          open={isManagePermsOpen}
+          onClose={() => setIsManagePermsOpen(false)}
+          modules={pageModules}
+          onModulesUpdated={updated => setPageModules(updated)}
+        />
 
       </div>
     </div>

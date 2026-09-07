@@ -52,10 +52,23 @@ test('rate limits and audits use shared database tables', () => {
   assert.match(security, /INSERT INTO order_form_audit_log/)
 })
 
-test('P1 Issue #77: hot request paths execute pure DML without per-request DDL or random cleanup', () => {
+test('P1 Issue #77: hot request paths execute pure DML without per-request DDL or random cleanup (fail-closed)', () => {
   assert.doesNotMatch(security, /Math\.random\(\)/)
   assert.match(security, /export async function ensureOrderFormTables/)
   assert.match(security, /export async function cleanupExpiredRateLimits/)
+
+  // Verify consumeOrderFormRateLimit does NOT call ensureOrderFormTables or CREATE TABLE
+  const consumeFn = security.slice(
+    security.indexOf('export async function consumeOrderFormRateLimit'),
+    security.indexOf('export async function auditOrderFormAction')
+  )
+  assert.doesNotMatch(consumeFn, /ensureOrderFormTables/)
+  assert.doesNotMatch(consumeFn, /CREATE TABLE/)
+
+  // Verify auditOrderFormAction does NOT call ensureOrderFormTables or CREATE TABLE
+  const auditFn = security.slice(security.indexOf('export async function auditOrderFormAction'))
+  assert.doesNotMatch(auditFn, /ensureOrderFormTables/)
+  assert.doesNotMatch(auditFn, /CREATE TABLE/)
 })
 
 test('Apps Script URL and secret are server-only and safe errors are returned', () => {
