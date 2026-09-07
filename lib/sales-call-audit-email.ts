@@ -259,8 +259,8 @@ export async function dispatchAuditReportEmail({
 
     const info = await transporter.sendMail({
       from: `"Kairali CRM QA Audit" <${smtpUser}>`,
-      to: toList,
-      cc: ccList.length > 0 ? ccList : undefined,
+      to: toList.join(", "),
+      cc: ccList.length > 0 ? ccList.join(", ") : undefined,
       subject,
       html,
     })
