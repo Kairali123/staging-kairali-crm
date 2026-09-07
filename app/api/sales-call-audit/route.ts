@@ -8,6 +8,7 @@ import {
   hasSalesCallAuditWriteAccess,
   isRowInSalesCallAuditScope,
 } from "@/lib/authz"
+import { getSentReportDates } from "@/lib/sales-call-audit-tracker"
 
 export const dynamic = "force-dynamic"
 
@@ -165,7 +166,7 @@ export async function GET(req: NextRequest) {
       hr_verify_status: row.hr_verify_status || null,
       hr_action_for_calling_fail_pass: row.hr_action_for_calling_fail_pass || null,
       other_remarks: row.other_remarks || null,
-      hr_level_whatsapp_update_status_to_sales: null,
+      hr_level_whatsapp_update_status_to_sales: row.hr_level_whatsapp_update_status_to_sales || null,
       update_master_attendance_tracker: row.update_master_attendance_tracker || row.updated_in_master_attendance_tracker || null,
       update_status_of_account_fms: row.update_status_of_account_fms || row.updated_in_pagarbook || null,
       created_at: row.created_at ? new Date(row.created_at).toISOString() : null,
@@ -177,6 +178,7 @@ export async function GET(req: NextRequest) {
       data: records,
       count: records.length,
       scope,
+      sentDates: getSentReportDates(),
     }, { headers: noStoreHeaders })
   } catch (error: any) {
     console.error("[sales-call-audit-api] Error fetching data:", error)

@@ -156,6 +156,7 @@ export type AuditDay = {
   date: string
   label: string
   agents: AgentAudit[]
+  isMailSent: boolean
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -213,14 +214,14 @@ function ResultBadge({ result }: { result: AuditResult }) {
 
 function EmailBadge({ status }: { status: EmailStatus }) {
   return status === "Sent" ? (
-    <Badge className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-50 font-medium">
-      <Mail className="mr-1 h-3 w-3 text-blue-600" />
-      Sent
+    <Badge className="border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-100 font-bold px-2 py-0.5 text-xs inline-flex items-center gap-1 shadow-xs">
+      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+      Mail Sent
     </Badge>
   ) : (
-    <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-500">
-      <CircleAlert className="mr-1 h-3 w-3 text-slate-400" />
-      Not sent
+    <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-500 text-xs inline-flex items-center gap-1 font-medium">
+      <CircleAlert className="h-3 w-3 text-slate-400" />
+      Not Sent
     </Badge>
   )
 }
@@ -241,6 +242,7 @@ export default function SalesCallAuditPage() {
   // the whole team out of the network tab (#48).
   const [scope, setScope] = useState<"all" | "self" | "none">("none")
   const [accessError, setAccessError] = useState<string>("")
+  const [sentDates, setSentDates] = useState<string[]>([])
 
   // Saving HR actions is its own permission. `sales_call_audit.view` used to
   // imply it; now only `.write` grants it, and `super_admin` keeps blanket
@@ -270,6 +272,38 @@ export default function SalesCallAuditPage() {
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(5)
+
+  // Manual mail status toggle state
+  const [togglingDate, setTogglingDate] = useState<string | null>(null)
+
+  const handleToggleMailStatus = async (dateStr: string, currentIsSent: boolean) => {
+    try {
+      setTogglingDate(dateStr)
+      const nextStatus = currentIsSent ? "Pending" : "Sent"
+      const res = await fetch("/api/sales-call-audit/toggle-mail-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: dateStr, status: nextStatus }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        if (Array.isArray(json.sentDates)) {
+          setSentDates(json.sentDates)
+        }
+        toast.success(
+          nextStatus === "Sent"
+            ? `Marked report for ${dateStr} as Mail Sent!`
+            : `Marked report for ${dateStr} as Pending.`
+        )
+      } else {
+        toast.error(json.error || "Failed to update mail status")
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update mail status")
+    } finally {
+      setTogglingDate(null)
+    }
+  }
 
   // Good / Bad Call Detail Modal
   const [callDetailModal, setCallDetailModal] = useState<{
@@ -390,6 +424,9 @@ export default function SalesCallAuditPage() {
       if (json.success && Array.isArray(json.data)) {
         setDbRecords(json.data)
         setScope(json.scope === "all" || json.scope === "self" ? json.scope : "none")
+        if (Array.isArray(json.sentDates)) {
+          setSentDates(json.sentDates)
+        }
         const now = new Date()
         setLastUpdated(
           now.toLocaleDateString("en-GB", {
@@ -439,7 +476,10 @@ export default function SalesCallAuditPage() {
         score: Number(row.avg_score || 0),
         result: isPass ? "Pass" : "Fail",
         disposition: isPass ? "Follow-up / Converted" : "Callback / Not Interested",
-        emailStatus: row.hr_level_whatsapp_update_status_to_sales === "Sent" ? "Sent" : "Not Sent",
+        emailStatus: (() => {
+          const s = String(row.hr_level_whatsapp_update_status_to_sales || "").trim().toLowerCase()
+          return s === "sent" || s === "success" || s === "delivered" ? "Sent" : "Not Sent"
+        })(),
         productKnowledge: row.product_knowledge !== null ? Number(row.product_knowledge) : null,
         customerUnderstanding: row.customer_understanding !== null ? Number(row.customer_understanding) : null,
         communicationSkills: row.communication_skills !== null ? Number(row.communication_skills) : null,
@@ -460,14 +500,34 @@ export default function SalesCallAuditPage() {
       groups[dateKey].agents.push(agent)
     })
 
-    const result = Object.keys(groups).map(dateKey => ({
-      date: dateKey,
-      label: groups[dateKey].label,
-      agents: groups[dateKey].agents,
-    }))
+    const result: AuditDay[] = Object.keys(groups).map(dateKey => {
+      const dayAgents = groups[dateKey].agents
+      const firstRawDate = dayAgents[0]?.rawDate ? dayAgents[0].rawDate.slice(0, 10) : ""
+      const isDateInSentList = sentDates.some(sd => {
+        if (!sd) return false
+        const sdNorm = sd.trim().toLowerCase()
+        const parts = dateKey.split("-")
+        const ymdFromKey = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : ""
+        return sdNorm === dateKey.toLowerCase() || sdNorm === ymdFromKey || (firstRawDate && sdNorm === firstRawDate)
+      })
+      const isMailSent = isDateInSentList || (dayAgents.length > 0 && dayAgents.some(a => a.emailStatus === "Sent"))
+
+      if (isMailSent) {
+        dayAgents.forEach(a => {
+          a.emailStatus = "Sent"
+        })
+      }
+
+      return {
+        date: dateKey,
+        label: groups[dateKey].label,
+        agents: dayAgents,
+        isMailSent,
+      }
+    })
 
     return result
-  }, [dbRecords])
+  }, [dbRecords, sentDates])
 
   // Automatically expand only the first (latest) date on initial load
   const hasInitializedDateRef = useRef(false)
@@ -1491,7 +1551,20 @@ export default function SalesCallAuditPage() {
                             {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                           </Button>
                           <div>
-                            <div className="font-bold text-slate-900">{day.label}</div>
+                            <div className="font-bold text-slate-900 flex items-center gap-2">
+                              <span>{day.label}</span>
+                              {day.isMailSent ? (
+                                <Badge className="border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-100 font-bold px-2 py-0.5 text-xs inline-flex items-center gap-1 shadow-xs">
+                                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                                  Mail Sent
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="border-slate-200 bg-white text-slate-500 font-medium text-[11px] inline-flex items-center gap-1">
+                                  <CircleAlert className="h-3 w-3 text-slate-400" />
+                                  Mail Pending
+                                </Badge>
+                              )}
+                            </div>
                             <div className="text-[11px] text-slate-500 font-medium">{day.agents.length} Audit Records</div>
                           </div>
                         </div>
@@ -1527,6 +1600,62 @@ export default function SalesCallAuditPage() {
                       <TableRow key={`${day.date}-agents`} className="hover:bg-transparent">
                         <TableCell colSpan={8} className="bg-slate-50/50 p-3 sm:p-4">
                           <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+                            {/* Inner Daily Audit Report Status Banner */}
+                            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-semibold text-slate-700">Daily Audit Report ({day.label}):</span>
+                                {day.isMailSent ? (
+                                  <Badge className="border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-100 font-bold px-2.5 py-1 text-xs inline-flex items-center gap-1.5 shadow-xs">
+                                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                                    Mail Sent to HR (ho.hr@kairali.com)
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800 font-semibold px-2.5 py-1 text-xs inline-flex items-center gap-1.5">
+                                    <CircleAlert className="h-3.5 w-3.5 text-amber-600" />
+                                    Report Not Sent Yet
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={e => {
+                                    e.stopPropagation()
+                                    const dStr = day.agents[0]?.rawDate ? day.agents[0].rawDate.slice(0, 10) : day.date
+                                    handleToggleMailStatus(dStr, day.isMailSent)
+                                  }}
+                                  disabled={togglingDate !== null}
+                                  className={
+                                    day.isMailSent
+                                      ? "h-7 text-xs border-slate-200 text-slate-600 hover:text-slate-900 cursor-pointer"
+                                      : "h-7 text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-semibold cursor-pointer"
+                                  }
+                                  title={day.isMailSent ? "Click to revert to pending" : "Click if you already sent the email report manually"}
+                                >
+                                  {togglingDate === (day.agents[0]?.rawDate ? day.agents[0].rawDate.slice(0, 10) : day.date) ? (
+                                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                  ) : day.isMailSent ? (
+                                    <RotateCcw className="mr-1 h-3 w-3 text-slate-400" />
+                                  ) : (
+                                    <CheckCircle2 className="mr-1 h-3.5 w-3.5 text-emerald-600" />
+                                  )}
+                                  {day.isMailSent ? "Mark as Pending" : "Mark as Sent"}
+                                </Button>
+
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  asChild
+                                  className="h-7 text-xs gap-1.5 border-blue-200 text-blue-700 hover:bg-blue-50 font-medium cursor-pointer"
+                                >
+                                  <Link href={`/sales-call-audit/email-template?date=${encodeURIComponent(day.agents[0]?.rawDate ? day.agents[0].rawDate.slice(0, 10) : day.date)}`}>
+                                    <Mail className="h-3.5 w-3.5 text-blue-600" />
+                                    View / Send Report Email
+                                  </Link>
+                                </Button>
+                              </div>
+                            </div>
                             <Table className="min-w-[1100px]">
                               <TableHeader className="bg-slate-800">
                                 <TableRow className="hover:bg-slate-800">
@@ -1536,6 +1665,7 @@ export default function SalesCallAuditPage() {
                                   <TableHead className="text-center text-white font-semibold">Good / Bad</TableHead>
                                   <TableHead className="text-center text-white font-semibold">Avg Score</TableHead>
                                   <TableHead className="text-center text-white font-semibold">Outcome</TableHead>
+                                  <TableHead className="text-center text-white font-semibold">Mail Status</TableHead>
                                   <TableHead className="text-white font-semibold">HR Action Status</TableHead>
                                   <TableHead className="text-white font-semibold">Delay (HR)</TableHead>
                                   {canWrite && <TableHead className="text-right text-white font-semibold">Action</TableHead>}
@@ -1617,6 +1747,9 @@ export default function SalesCallAuditPage() {
                                       </TableCell>
                                       <TableCell className="text-center">
                                         <ResultBadge result={agent.result} />
+                                      </TableCell>
+                                      <TableCell className="text-center">
+                                        <EmailBadge status={agent.emailStatus} />
                                       </TableCell>
                                       <TableCell>
                                         {hasAction ? (

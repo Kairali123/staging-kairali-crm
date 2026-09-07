@@ -5,6 +5,7 @@ import {
   renderAuditReportEmail,
 } from "@/lib/sales-call-audit-email"
 import { buildSalesCallAuditReport } from "@/lib/sales-call-audit-report"
+import { recordSentReport } from "@/lib/sales-call-audit-tracker"
 
 export const dynamic = "force-dynamic"
 
@@ -145,6 +146,14 @@ export async function POST(req: NextRequest) {
       to.join(", "),
       cc.length > 0 ? `cc: ${cc.join(", ")}` : ""
     )
+
+    // Persist sent status for this audit date
+    recordSentReport({
+      date: targetYmd,
+      sentAt: new Date().toISOString(),
+      recipient: to.join(", "),
+      messageId,
+    })
 
     return NextResponse.json(
       {

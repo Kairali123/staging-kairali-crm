@@ -5,6 +5,7 @@ import {
   renderAuditReportEmail,
 } from "@/lib/sales-call-audit-email"
 import { buildSalesCallAuditReport } from "@/lib/sales-call-audit-report"
+import { recordSentReport } from "@/lib/sales-call-audit-tracker"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 60
@@ -123,6 +124,13 @@ export async function GET(req: NextRequest) {
       `[cron:sales-call-audit-daily-email] Sent ${auditDate} report to ${audience} ` +
       `(${data.employees.length} employees, ${data.metrics.failedEmployeesCount} failed)`
     )
+
+    // Persist sent status for this audit date
+    recordSentReport({
+      date: auditDate,
+      sentAt: new Date().toISOString(),
+      recipient: audience,
+    })
 
     return NextResponse.json({
       success: true,
