@@ -278,14 +278,41 @@ export default function SalesCallAuditPage() {
   } | null>(null)
   const [modalCalls, setModalCalls] = useState<any[]>([])
   const [modalCallsLoading, setModalCallsLoading] = useState(false)
+  const [modalAgentMeta, setModalAgentMeta] = useState<any>(null)
   const [modalCallTab, setModalCallTab] = useState<"all" | "good" | "bad">("all")
   const [modalCallSearch, setModalCallSearch] = useState("")
   const [expandedCallId, setExpandedCallId] = useState<string | null>(null)
+
+  // Dynamic counts calculated directly from actual audited calls from kairali_sales_metric_bot_for_ho
+  const modalGoodCallsCount = useMemo(() => {
+    return modalCalls.filter(c => c.qualityType === "good").length
+  }, [modalCalls])
+
+  const modalBadCallsCount = useMemo(() => {
+    return modalCalls.filter(c => c.qualityType === "bad").length
+  }, [modalCalls])
+
+  const modalTotalCallsCount = useMemo(() => {
+    return modalCalls.length
+  }, [modalCalls])
+
+  const displayGoodCalls = modalCallsLoading
+    ? (callDetailModal?.agent.good ?? 0)
+    : (modalAgentMeta?.goodCalls ?? modalGoodCallsCount)
+
+  const displayBadCalls = modalCallsLoading
+    ? (callDetailModal?.agent.bad ?? 0)
+    : (modalAgentMeta?.badCalls ?? modalBadCallsCount)
+
+  const displayTotalCalls = modalCallsLoading
+    ? (callDetailModal?.agent.calls ?? (displayGoodCalls + displayBadCalls))
+    : (modalAgentMeta?.totalCalls ?? modalTotalCallsCount)
 
   // Fetch granular audited call details when modal is opened
   useEffect(() => {
     if (!callDetailModal?.open || !callDetailModal.agent) {
       setModalCalls([])
+      setModalAgentMeta(null)
       return
     }
     setModalCallTab(callDetailModal.type)
@@ -307,6 +334,9 @@ export default function SalesCallAuditPage() {
           const json = await res.json()
           if (json.success && Array.isArray(json.data)) {
             setModalCalls(json.data)
+            if (json.agent) {
+              setModalAgentMeta(json.agent)
+            }
             if (json.data.length > 0 && json.data[0].callId) {
               setExpandedCallId(json.data[0].callId)
             }
@@ -1398,25 +1428,29 @@ export default function SalesCallAuditPage() {
                                       </TableCell>
                                       {canWrite && (
                                         <TableCell className="text-right">
-                                          <Button
-                                            size="sm"
-                                            onClick={event => {
-                                              event.stopPropagation()
-                                              openAction(day.date, agent)
-                                            }}
-                                            className={
-                                              hasAction
-                                                ? "bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 text-xs h-8 cursor-pointer shadow-sm font-semibold"
-                                                : "bg-blue-600 hover:bg-blue-700 text-white text-xs h-8 cursor-pointer shadow-sm font-bold"
-                                            }
-                                          >
-                                            {hasAction ? (
-                                              <CheckCircle2 className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
-                                            ) : (
-                                              <ClipboardCheck className="mr-1.5 h-3.5 w-3.5" />
-                                            )}
-                                            {hasAction ? "View Details" : "Take Action"}
-                                          </Button>
+                                          {agent.result === "Pass" && !hasAction ? (
+                                            <span className="text-xs text-slate-400 font-medium px-2 py-1">—</span>
+                                          ) : (
+                                            <Button
+                                              size="sm"
+                                              onClick={event => {
+                                                event.stopPropagation()
+                                                openAction(day.date, agent)
+                                              }}
+                                              className={
+                                                hasAction
+                                                  ? "bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 text-xs h-8 cursor-pointer shadow-sm font-semibold"
+                                                  : "bg-blue-600 hover:bg-blue-700 text-white text-xs h-8 cursor-pointer shadow-sm font-bold"
+                                              }
+                                            >
+                                              {hasAction ? (
+                                                <CheckCircle2 className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
+                                              ) : (
+                                                <ClipboardCheck className="mr-1.5 h-3.5 w-3.5" />
+                                              )}
+                                              {hasAction ? "View Details" : "Take Action"}
+                                            </Button>
+                                          )}
                                         </TableCell>
                                       )}
                                     </TableRow>
@@ -1564,7 +1598,7 @@ export default function SalesCallAuditPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {canWrite && (
+              {canWrite && (selectedAgent.agent.result !== "Pass" || selectedAgent.agent.hrVerifyStatus || selectedAgent.agent.hrActionForCalling) && (
                 <Button
                   size="sm"
                   onClick={() => openAction(selectedAgent.date, selectedAgent.agent)}
@@ -1602,7 +1636,7 @@ export default function SalesCallAuditPage() {
           <div className="p-5 space-y-4">
             <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
               <Zap className="h-3.5 w-3.5 text-blue-600" />
-              6 Core Evaluation Metrics (Database Scores)
+              6 Core Evaluation Metrics
             </h4>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -1610,54 +1644,96 @@ export default function SalesCallAuditPage() {
               <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 shadow-sm">
                 <p className="text-[10px] font-semibold uppercase text-slate-500">Product Knowledge</p>
                 <p className="text-xl font-bold text-slate-900 mt-1">
-                  {selectedAgent.agent.productKnowledge !== null ? selectedAgent.agent.productKnowledge.toFixed(2) : "—"}
+                  {selectedAgent.agent.productKnowledge !== null ? (
+                    <>
+                      {selectedAgent.agent.productKnowledge.toFixed(2)}
+                      <span className="text-xs font-normal text-slate-400 ml-1">/ 5.0</span>
+                    </>
+                  ) : (
+                    "—"
+                  )}
                 </p>
-                <div className="mt-1 text-[10px] text-slate-400 font-mono">Column: product_knowledge</div>
+                <div className="mt-1 text-[10px] text-slate-400 font-medium">Target: ≥ 2.5 / 5.0</div>
               </div>
 
               {/* Parameter 2: Customer Understanding */}
               <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 shadow-sm">
                 <p className="text-[10px] font-semibold uppercase text-slate-500">Customer Understanding</p>
                 <p className="text-xl font-bold text-slate-900 mt-1">
-                  {selectedAgent.agent.customerUnderstanding !== null ? selectedAgent.agent.customerUnderstanding.toFixed(2) : "—"}
+                  {selectedAgent.agent.customerUnderstanding !== null ? (
+                    <>
+                      {selectedAgent.agent.customerUnderstanding.toFixed(2)}
+                      <span className="text-xs font-normal text-slate-400 ml-1">/ 5.0</span>
+                    </>
+                  ) : (
+                    "—"
+                  )}
                 </p>
-                <div className="mt-1 text-[10px] text-slate-400 font-mono">Column: customer_understanding</div>
+                <div className="mt-1 text-[10px] text-slate-400 font-medium">Target: ≥ 2.5 / 5.0</div>
               </div>
 
               {/* Parameter 3: Communication Skills */}
               <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 shadow-sm">
                 <p className="text-[10px] font-semibold uppercase text-slate-500">Communication Skills</p>
                 <p className="text-xl font-bold text-slate-900 mt-1">
-                  {selectedAgent.agent.communicationSkills !== null ? selectedAgent.agent.communicationSkills.toFixed(2) : "—"}
+                  {selectedAgent.agent.communicationSkills !== null ? (
+                    <>
+                      {selectedAgent.agent.communicationSkills.toFixed(2)}
+                      <span className="text-xs font-normal text-slate-400 ml-1">/ 5.0</span>
+                    </>
+                  ) : (
+                    "—"
+                  )}
                 </p>
-                <div className="mt-1 text-[10px] text-slate-400 font-mono">Column: communication_skills</div>
+                <div className="mt-1 text-[10px] text-slate-400 font-medium">Target: ≥ 2.5 / 5.0</div>
               </div>
 
               {/* Parameter 4: Objection Handling */}
               <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 shadow-sm">
                 <p className="text-[10px] font-semibold uppercase text-slate-500">Objection Handling</p>
                 <p className="text-xl font-bold text-slate-900 mt-1">
-                  {selectedAgent.agent.objectionHandling !== null ? selectedAgent.agent.objectionHandling.toFixed(2) : "—"}
+                  {selectedAgent.agent.objectionHandling !== null ? (
+                    <>
+                      {selectedAgent.agent.objectionHandling.toFixed(2)}
+                      <span className="text-xs font-normal text-slate-400 ml-1">/ 5.0</span>
+                    </>
+                  ) : (
+                    "—"
+                  )}
                 </p>
-                <div className="mt-1 text-[10px] text-slate-400 font-mono">Column: objection_handling</div>
+                <div className="mt-1 text-[10px] text-slate-400 font-medium">Target: ≥ 2.5 / 5.0</div>
               </div>
 
               {/* Parameter 5: Closing Skills */}
               <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 shadow-sm">
                 <p className="text-[10px] font-semibold uppercase text-slate-500">Closing Skills</p>
                 <p className="text-xl font-bold text-slate-900 mt-1">
-                  {selectedAgent.agent.closingSkills !== null ? selectedAgent.agent.closingSkills.toFixed(2) : "—"}
+                  {selectedAgent.agent.closingSkills !== null ? (
+                    <>
+                      {selectedAgent.agent.closingSkills.toFixed(2)}
+                      <span className="text-xs font-normal text-slate-400 ml-1">/ 5.0</span>
+                    </>
+                  ) : (
+                    "—"
+                  )}
                 </p>
-                <div className="mt-1 text-[10px] text-slate-400 font-mono">Column: closing_skills</div>
+                <div className="mt-1 text-[10px] text-slate-400 font-medium">Target: ≥ 2.5 / 5.0</div>
               </div>
 
               {/* Parameter 6: Tone & Volume */}
               <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 shadow-sm">
                 <p className="text-[10px] font-semibold uppercase text-slate-500">Tone & Volume</p>
                 <p className="text-xl font-bold text-slate-900 mt-1">
-                  {selectedAgent.agent.toneVolume !== null ? selectedAgent.agent.toneVolume.toFixed(2) : "—"}
+                  {selectedAgent.agent.toneVolume !== null ? (
+                    <>
+                      {selectedAgent.agent.toneVolume.toFixed(2)}
+                      <span className="text-xs font-normal text-slate-400 ml-1">/ 5.0</span>
+                    </>
+                  ) : (
+                    "—"
+                  )}
                 </p>
-                <div className="mt-1 text-[10px] text-slate-400 font-mono">Column: tone_volume</div>
+                <div className="mt-1 text-[10px] text-slate-400 font-medium">Target: ≥ 2.5 / 5.0</div>
               </div>
             </div>
 
@@ -2074,10 +2150,10 @@ export default function SalesCallAuditPage() {
                           }
                         >
                           {callDetailModal.type === "good"
-                            ? `${callDetailModal.agent.good} Good Calls`
+                            ? `${displayGoodCalls} Good Calls`
                             : callDetailModal.type === "bad"
-                              ? `${callDetailModal.agent.bad} Bad Calls`
-                              : `${callDetailModal.agent.calls} Total Calls`}
+                              ? `${displayBadCalls} Bad Calls`
+                              : `${displayTotalCalls} Total Calls`}
                         </Badge>
                       </div>
                       <DialogDescription className="text-xs text-white/80 mt-0.5">
@@ -2101,16 +2177,16 @@ export default function SalesCallAuditPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="bg-white/15 px-2 py-0.5 rounded text-[11px] text-white">
-                      Avg Score: <strong>{callDetailModal.agent.score.toFixed(2)} / 5</strong>
+                      Avg Score: <strong>{(modalAgentMeta?.avgScore ?? callDetailModal.agent.score).toFixed(2)} / 5</strong>
                     </span>
                     <span
                       className={
-                        callDetailModal.agent.result === "Pass"
+                        (modalAgentMeta?.outcome || callDetailModal.agent.result).toUpperCase() === "PASS"
                           ? "bg-emerald-500 text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-xs"
                           : "bg-rose-500 text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-xs"
                       }
                     >
-                      {callDetailModal.agent.result.toUpperCase()}
+                      {(modalAgentMeta?.outcome || callDetailModal.agent.result).toUpperCase()}
                     </span>
                   </div>
                 </div>
@@ -2169,7 +2245,7 @@ export default function SalesCallAuditPage() {
                       : "text-slate-600 hover:bg-slate-100"
                       }`}
                   >
-                    All Calls ({modalCalls.length})
+                    All Calls ({displayTotalCalls})
                   </button>
                   <button
                     type="button"
@@ -2180,7 +2256,7 @@ export default function SalesCallAuditPage() {
                       }`}
                   >
                     <ThumbsUp className="h-3.5 w-3.5" />
-                    Good Calls ({callDetailModal.agent.good})
+                    Good Calls ({displayGoodCalls})
                   </button>
                   <button
                     type="button"
@@ -2191,7 +2267,7 @@ export default function SalesCallAuditPage() {
                       }`}
                   >
                     <ThumbsDown className="h-3.5 w-3.5" />
-                    Bad Calls ({callDetailModal.agent.bad})
+                    Bad Calls ({displayBadCalls})
                   </button>
                 </div>
 
@@ -2232,9 +2308,14 @@ export default function SalesCallAuditPage() {
                 ) : (
                   (() => {
                     const filtered = modalCalls.filter(call => {
-                      // Rule: if call type = voicemail, do not count good or bad, ignore
+                      // Rule 1: if call type = voicemail, exclude it
                       const ct = String(call.callType || "").toLowerCase()
                       if (ct.includes("voicemail") || ct.includes("voice mail") || ct === "left_voicemail") return false
+                      // Rule 2: IsAudible must be true for showing data
+                      if (call.isAudible !== undefined && call.isAudible === false) return false
+                      // Rule 3: avg score must be greater than 0
+                      if (call.avgScore !== null && call.avgScore !== undefined && call.avgScore <= 0) return false
+
                       if (modalCallTab === "good" && call.qualityType !== "good") return false
                       if (modalCallTab === "bad" && call.qualityType !== "bad") return false
                       if (modalCallSearch.trim()) {

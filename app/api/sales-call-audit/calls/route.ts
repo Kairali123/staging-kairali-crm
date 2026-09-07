@@ -37,6 +37,7 @@ export interface AuditedCallDetail {
   deficiencies: string[]
   recordingUrl?: string | null
   callType?: string | null
+  isAudible?: boolean | null
 }
 
 function parseScore(val: any): number | null {
@@ -118,7 +119,7 @@ const BOT_SELECT_COLUMNS = `
   lead_outcome_verify_status, product_knowledge, customer_understanding,
   communication_skills, objection_handling, closing_skills, tone_and_volume,
   explanation, what_went_wrong_by_sales_team_senior_verifier, complete_explanation,
-  remarks, reason, audio_url
+  remarks, reason, audio_url, is_auditable
 `
 
 export async function GET(req: NextRequest) {
@@ -201,6 +202,9 @@ export async function GET(req: NextRequest) {
           `SELECT ${BOT_SELECT_COLUMNS} FROM kairali_sales_metric_bot_for_ho
            WHERE (sales_person_id = ? OR sales_person_id LIKE ? OR sales_person_name = ? OR sales_person_name LIKE ?)
              AND DATE(timestamp) = ?
+             AND (call_type IS NULL OR (LOWER(call_type) NOT LIKE '%voicemail%' AND LOWER(call_type) NOT LIKE '%voice mail%'))
+             AND (is_auditable = '1' OR is_auditable = 1 OR LOWER(is_auditable) = 'true' OR LOWER(is_auditable) = 'yes')
+             AND (avg_score > 0 OR (avg_score IS NULL AND overall_score > 0))
            ORDER BY (CASE WHEN quality_status IS NOT NULL OR overall_score > 0 OR avg_score > 0 THEN 1 ELSE 0 END) DESC, timestamp DESC, id DESC
            LIMIT ?`,
           [scopedEmpId, `%${scopedEmpId}%`, scopedName, `%${scopedName || scopedEmpId}%`, targetYmd, hardCeilingLimit]
@@ -213,46 +217,76 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Helper to identify voicemail calls — rule: if call type = voicemail, do not count good or bad, ignore
+    // Helper 1: Voicemail calls — rule: if call type = voicemail, exclude it
     const isVoicemailCall = (callTypeVal: any): boolean => {
       const ct = String(callTypeVal || "").trim().toLowerCase()
       return ct.includes("voicemail") || ct.includes("voice mail") || ct === "left_voicemail"
     }
 
-    // Filter raw bot rows for audited calls: ignore voicemails and un-audited/empty rows
+    // Helper 2: IsAudible calls — rule: IsAudible must be true for showing data
+    const isAudibleCall = (audibleVal: any): boolean => {
+      if (audibleVal === true || audibleVal === 1 || audibleVal === "1") return true
+      const s = String(audibleVal || "").trim().toLowerCase()
+      return s === "1" || s === "true" || s === "yes"
+    }
+
+    // Helper 3: Avg score — rule: avg score must be greater than 0
+    const hasPositiveAvgScore = (r: any): boolean => {
+      const raw = r.avg_score !== null && r.avg_score !== undefined && String(r.avg_score).trim() !== ""
+        ? r.avg_score
+        : r.overall_score
+      if (raw === null || raw === undefined || String(raw).trim() === "") return false
+      const score = parseFloat(String(raw))
+      return !isNaN(score) && score > 0
+    }
+
+    // Filter raw bot rows for audited calls strictly checking the 3 conditions:
+    // 1. If call type = voicemail, exclude it
+    // 2. IsAudible must be true for showing data
+    // 3. avg score must be greater than 0
     const eligibleBotRows = rawBotRows.filter(r => {
       if (isVoicemailCall(r.call_type)) return false
-      const qs = String(r.quality_status || "").trim().toLowerCase()
-      const rawScore = r.avg_score || r.overall_score
-      const score = rawScore !== null && rawScore !== undefined && String(rawScore).trim() !== "" ? parseFloat(String(rawScore)) : NaN
-      const hasScore = !isNaN(score) && score > 0
-      const hasOutcomeEvaluation = Boolean(r.conversion_outcome) || Boolean(r.lead_outcome_verify_status)
-      const hasQualityStatus = qs.includes("bad") || qs.includes("fail") || qs.includes("good") || qs.includes("pass")
-      return hasQualityStatus || hasScore || hasOutcomeEvaluation
+      if (!isAudibleCall(r.is_auditable)) return false
+      if (!hasPositiveAvgScore(r)) return false
+      return true
     })
 
-    const totalAudited = parentRow?.total_calls_audited !== null && parentRow?.total_calls_audited !== undefined
-      ? Number(parentRow.total_calls_audited)
-      : eligibleBotRows.length
+    const goodBotRows = eligibleBotRows.filter(r => {
+      const qs = String(r.quality_status || "").toLowerCase()
+      const rawScore = r.avg_score || r.overall_score
+      const score = rawScore !== null && rawScore !== undefined && String(rawScore).trim() !== "" ? parseFloat(String(rawScore)) : NaN
+      const isExplicitBad = qs.includes("bad") || qs.includes("fail")
+      const isExplicitGood = qs.includes("good") || qs.includes("pass")
+      return isExplicitGood || (!isExplicitBad && (r.lead_outcome_verify_status === "Yes" || (!isNaN(score) && score >= 2.5)))
+    })
 
-    const goodCount = parentRow?.good_calls !== null && parentRow?.good_calls !== undefined
-      ? Number(parentRow.good_calls)
-      : eligibleBotRows.filter(r => {
-          const qs = String(r.quality_status || "").toLowerCase()
-          const rawScore = r.avg_score || r.overall_score
-          const score = rawScore !== null && rawScore !== undefined && String(rawScore).trim() !== "" ? parseFloat(String(rawScore)) : NaN
-          const isExplicitBad = qs.includes("bad") || qs.includes("fail")
-          const isExplicitGood = qs.includes("good") || qs.includes("pass")
-          return isExplicitGood || (!isExplicitBad && (r.lead_outcome_verify_status === "Yes" || (!isNaN(score) && score >= 2.5)))
-        }).length
+    const actualGoodCount = goodBotRows.length
+    const actualBadCount = Math.max(0, eligibleBotRows.length - actualGoodCount)
+    const actualTotalCount = eligibleBotRows.length
 
-    const badCount = parentRow?.bad_calls !== null && parentRow?.bad_calls !== undefined
-      ? Number(parentRow.bad_calls)
-      : Math.max(0, totalAudited - goodCount)
+    const totalAudited = actualTotalCount > 0
+      ? actualTotalCount
+      : (parentRow?.total_calls_audited !== null && parentRow?.total_calls_audited !== undefined
+          ? Number(parentRow.total_calls_audited)
+          : 0)
+
+    const goodCount = actualTotalCount > 0
+      ? actualGoodCount
+      : (parentRow?.good_calls !== null && parentRow?.good_calls !== undefined
+          ? Number(parentRow.good_calls)
+          : 0)
+
+    const badCount = actualTotalCount > 0
+      ? actualBadCount
+      : (parentRow?.bad_calls !== null && parentRow?.bad_calls !== undefined
+          ? Number(parentRow.bad_calls)
+          : Math.max(0, totalAudited - goodCount))
 
     const baseScore = parentRow?.avg_score !== null && parentRow?.avg_score !== undefined
       ? Number(parentRow.avg_score)
-      : null
+      : (eligibleBotRows.length > 0
+          ? Number((eligibleBotRows.reduce((sum, r) => sum + (parseFloat(String(r.avg_score || r.overall_score)) || 0), 0) / eligibleBotRows.length).toFixed(2))
+          : null)
 
     // Build the list of real call-specific audited calls — strictly no synthetic fallbacks
     const callsList: AuditedCallDetail[] = []
@@ -344,6 +378,7 @@ export async function GET(req: NextRequest) {
           deficiencies,
           recordingUrl: r.audio_url || null,
           callType: r.call_type || null,
+          isAudible: isAudibleCall(r.is_auditable),
         })
       }
     }

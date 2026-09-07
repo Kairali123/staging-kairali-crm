@@ -128,6 +128,7 @@ test('Executable Route Handlers Suite (Sales Call Audit)', async (t) => {
               remarks: 'Good explanation',
               reason: 'Valid discussion',
               audio_url: 'https://drive.google.com/file/d/test1/view',
+              is_auditable: '1',
             },
             {
               id: 37384,
@@ -157,6 +158,7 @@ test('Executable Route Handlers Suite (Sales Call Audit)', async (t) => {
               remarks: 'Bad call',
               reason: 'Did not close',
               audio_url: 'https://drive.google.com/file/d/test2/view',
+              is_auditable: '1',
             },
             {
               id: 37399,
@@ -186,6 +188,67 @@ test('Executable Route Handlers Suite (Sales Call Audit)', async (t) => {
               remarks: 'Voicemail',
               reason: 'No Answer',
               audio_url: null,
+              is_auditable: '0',
+            },
+            {
+              id: 37400,
+              timestamp: '2026-09-02 17:10:00',
+              sales_person_id: 'K473',
+              sales_person_name: 'Zaki Ahmed',
+              lead_id: 'MID_020926171000_36_52100',
+              buffer_lead_id: null,
+              client_name: null,
+              call_count: null,
+              call_type: 'Silence/Empty Recording',
+              quality_status: 'Bad',
+              avg_score: '0.00',
+              overall_score: '0',
+              lead_outcome_by_agent: null,
+              conversion_outcome: null,
+              lead_outcome_verify_status: null,
+              product_knowledge: null,
+              customer_understanding: null,
+              communication_skills: null,
+              objection_handling: null,
+              closing_skills: null,
+              tone_and_volume: null,
+              explanation: 'Silence',
+              what_went_wrong_by_sales_team_senior_verifier: null,
+              complete_explanation: 'Silence',
+              remarks: null,
+              reason: null,
+              audio_url: null,
+              is_auditable: '0',
+            },
+            {
+              id: 37401,
+              timestamp: '2026-09-02 17:15:00',
+              sales_person_id: 'K473',
+              sales_person_name: 'Zaki Ahmed',
+              lead_id: 'MID_020926171500_36_52101',
+              buffer_lead_id: null,
+              client_name: null,
+              call_count: null,
+              call_type: 'Regular',
+              quality_status: 'Bad',
+              avg_score: '0.00',
+              overall_score: '0',
+              lead_outcome_by_agent: null,
+              conversion_outcome: null,
+              lead_outcome_verify_status: null,
+              product_knowledge: null,
+              customer_understanding: null,
+              communication_skills: null,
+              objection_handling: null,
+              closing_skills: null,
+              tone_and_volume: null,
+              explanation: 'Zero score',
+              what_went_wrong_by_sales_team_senior_verifier: null,
+              complete_explanation: 'Zero score',
+              remarks: null,
+              reason: null,
+              audio_url: null,
+              is_auditable: '1',
             },
           ],
           [],
@@ -365,6 +428,20 @@ test('Executable Route Handlers Suite (Sales Call Audit)', async (t) => {
     // Verify Voicemail calls are ignored (not counted as good or bad)
     const voicemailCall = json.calls.find((c: any) => c.callId === 'CALL-37399')
     assert.equal(voicemailCall, undefined, 'Voicemail calls must be ignored and excluded from good/bad call breakdown')
+
+    // Verify Inaudible calls (is_auditable != '1') are excluded
+    const inaudibleCall = json.calls.find((c: any) => c.callId === 'CALL-37400')
+    assert.equal(inaudibleCall, undefined, 'Inaudible calls must be excluded')
+
+    // Verify 0 avg_score calls are excluded
+    const zeroScoreCall = json.calls.find((c: any) => c.callId === 'CALL-37401')
+    assert.equal(zeroScoreCall, undefined, 'Calls with avg_score <= 0 must be excluded')
+
+    // Verify consistent actual counts from kairali_sales_metric_bot_for_ho: 1 good + 1 bad = 2 total
+    assert.equal(json.calls.length, 2, 'Only the 2 valid audible positive-score calls must be returned')
+    assert.equal(json.agent.totalCalls, 2, 'Total calls must match valid calls count (2)')
+    assert.equal(json.agent.goodCalls, 1, 'Good calls must be 1')
+    assert.equal(json.agent.badCalls, 1, 'Bad calls must be 1')
   })
 
   await t.test('7. ViewSelf enforces SQL employee isolation and blocks cross-employee actions', async () => {
