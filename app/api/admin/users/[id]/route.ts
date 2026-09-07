@@ -59,7 +59,11 @@ export async function PATCH(
       ? String(existingUser.permission).split(',').map((p) => p.trim()).filter(Boolean)
       : []
 
-    const permString = updatedRole === 'super_admin' ? 'all' : permsArr.join(',')
+    const cleanPermsArr = updatedRole === 'super_admin'
+      ? ['all']
+      : permsArr.filter((p) => p.toLowerCase() !== 'all')
+
+    const permString = cleanPermsArr.join(',')
 
     // 2. Update userlogin record and increment token_version
     await pool.query(
@@ -98,7 +102,7 @@ export async function PATCH(
       await syncUserRolePermissions(
         updatedEmail,
         updatedRole,
-        updatedRole === 'super_admin' ? ['all'] : permsArr
+        cleanPermsArr
       )
     }
 
@@ -115,7 +119,7 @@ export async function PATCH(
         employeeId: updatedEmpId,
         phone: updatedPhone,
         isActive: updatedActive === 'Active' || updatedActive === '1',
-        permissions: updatedRole === 'super_admin' ? ['all'] : permsArr,
+        permissions: cleanPermsArr,
       },
     })
   } catch (error: any) {

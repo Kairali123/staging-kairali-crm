@@ -188,7 +188,10 @@ export async function POST(req: NextRequest) {
     }
 
     const permissionsArr: string[] = Array.isArray(permissions) ? permissions : []
-    const permString = role === 'super_admin' ? 'all' : permissionsArr.join(',')
+    const cleanPermsArr = role === 'super_admin'
+      ? ['all']
+      : permissionsArr.filter((p) => p.toLowerCase() !== 'all')
+    const permString = cleanPermsArr.join(',')
     const activeVal = isActive ? 'Active' : 'Inactive'
 
     // Insert new userlogin record
@@ -224,7 +227,7 @@ export async function POST(req: NextRequest) {
     )
 
     // Synchronize user_role_permissions table
-    await syncUserRolePermissions(cleanEmail, role, role === 'super_admin' ? ['all'] : permissionsArr)
+    await syncUserRolePermissions(cleanEmail, role, cleanPermsArr)
 
     return NextResponse.json({
       success: true,

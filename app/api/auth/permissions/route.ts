@@ -92,9 +92,16 @@ export async function POST(req: NextRequest) {
   try {
     const permissions = await getUserPermissionsFromDb(sessionUser.email, sessionUser.role as string | undefined)
 
+    let finalPerms = permissions.length > 0 ? permissions : (Array.isArray(sessionUser.permissions) ? sessionUser.permissions : [])
+    if (sessionUser.role !== 'super_admin') {
+      finalPerms = finalPerms.filter((p: string) => p.toLowerCase() !== 'all')
+    } else if (!finalPerms.includes('all')) {
+      finalPerms.push('all')
+    }
+
     const updatedUser = {
       ...sessionUser,
-      permissions: permissions.length > 0 ? permissions : (Array.isArray(sessionUser.permissions) ? sessionUser.permissions : []),
+      permissions: finalPerms,
     }
 
     const payload = readVerifiedSessionPayload(rawSession)
