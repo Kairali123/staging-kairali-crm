@@ -76,6 +76,41 @@ Sample authenticated runtime entry captured from MySQL `order_form_audit_log`:
 }
 ```
 
+## Staging Verification Test Payload
+
+Sample payload utilized for staging preview end-to-end verification and QA testing:
+```json
+{
+  "submissionId": "TEST-SUB-20260907-001",
+  "orderType": "Institutional",
+  "paymentTerms": "Advance",
+  "buyer": {
+    "name": "TEST - Quality Assurance Verification",
+    "phone": "9876543210",
+    "email": "qa-test@kairali.com",
+    "address": "Kairali Ayurvedic Products Ltd, Staging Test Dept, New Delhi",
+    "state": "Delhi",
+    "pincode": "110001",
+    "gstin": "07AAAAA0000A1Z5"
+  },
+  "items": [
+    {
+      "productName": "Abhayarishtam",
+      "sku": "CAAB02450NP0425",
+      "pack": "450ml",
+      "quantity": 1,
+      "price": 150.00,
+      "discount": 0,
+      "cgst": 6,
+      "sgst": 6,
+      "igst": 0,
+      "total": 168.00
+    }
+  ],
+  "remarks": "AUTOMATED_STAGING_TEST_VERIFICATION_DO_NOT_DISPATCH"
+}
+```
+
 ## Automated checks
 
 Run from the CRM repository:
