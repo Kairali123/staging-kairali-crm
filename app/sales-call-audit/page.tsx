@@ -2755,20 +2755,14 @@ export default function SalesCallAuditPage() {
                                   </Badge>
                                 </div>
                                 <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono mt-0.5">
-                                  <span className="font-semibold text-slate-700">{call.callId}</span>
                                   {call.leadId && (
-                                    <>
-                                      <span>•</span>
-                                      <span>{call.leadId}</span>
-                                    </>
+                                    <span className="font-semibold text-slate-700">{call.leadId}</span>
                                   )}
+                                  {call.leadId && call.callType && <span>•</span>}
                                   {call.callType && (
-                                    <>
-                                      <span>•</span>
-                                      <span className="text-slate-600 font-sans font-medium">{call.callType}</span>
-                                    </>
+                                    <span className="text-slate-600 font-sans font-medium">{call.callType}</span>
                                   )}
-                                  <span>•</span>
+                                  {(call.leadId || call.callType) && <span>•</span>}
                                   <span className="inline-flex items-center gap-1 text-slate-600">
                                     <Clock className="h-3 w-3 text-slate-400" />
                                     {call.callTime} {call.callDuration ? `(${call.callDuration})` : ""}
@@ -2839,9 +2833,11 @@ export default function SalesCallAuditPage() {
                                   <span className="font-semibold text-slate-700 flex items-center gap-1.5">
                                     <ListChecks className="h-3.5 w-3.5 text-blue-600" />
                                     6 Call-Specific Metrics Evaluation{" "}
-                                    <span className="text-[10px] text-slate-500 font-mono font-normal">
-                                      (Strictly for {call.callId}{call.leadId ? ` • Lead: ${call.leadId}` : ""})
-                                    </span>
+                                    {call.leadId && (
+                                      <span className="text-[10px] text-slate-500 font-mono font-normal">
+                                        (Lead: {call.leadId})
+                                      </span>
+                                    )}
                                   </span>
                                   <span className="text-[10px] text-slate-400 font-mono">Scores out of 5.0</span>
                                 </div>
