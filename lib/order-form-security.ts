@@ -113,16 +113,8 @@ export async function consumeOrderFormRateLimit(
      VALUES (?, ?, 1, ?)
      ON DUPLICATE KEY UPDATE request_count = request_count + 1`
 
-  try {
-    await pool.query(insertSql, [rateKey, windowDate, expiryDate])
-  } catch (err: any) {
-    if ((err?.code === 'ER_NO_SUCH_TABLE' || err?.errno === 1146) && !_tablesEnsured) {
-      await ensureOrderFormTables()
-      await pool.query(insertSql, [rateKey, windowDate, expiryDate])
-    } else {
-      throw err
-    }
-  }
+  // Pure DML on hot request path; fail-closed without any runtime DDL fallback.
+  await pool.query(insertSql, [rateKey, windowDate, expiryDate])
 
   const [rows] = await pool.query(
     'SELECT request_count FROM order_form_rate_limits WHERE rate_key = ? LIMIT 1',
@@ -182,17 +174,8 @@ export async function auditOrderFormAction(input: {
 
   try {
     const pool = await getPool()
-    try {
-      await pool.query(auditSql, auditParams)
-    } catch (err: any) {
-      if ((err?.code === 'ER_NO_SUCH_TABLE' || err?.errno === 1146) && !_tablesEnsured) {
-        await ensureOrderFormTables()
-        const retryPool = await getPool()
-        await retryPool.query(auditSql, auditParams)
-      } else {
-        throw err
-      }
-    }
+    // Pure DML; fail-closed without any runtime DDL fallback.
+    await pool.query(auditSql, auditParams)
   } catch {
     // Structured runtime/security logs still retain the event if DB audit storage is unavailable.
     console.warn(`[order-form-audit] durable audit insert failed event=${eventId}`)

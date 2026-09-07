@@ -242,6 +242,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     // { name: "🤝 Add New Partner Contact", description: "Partner contact onboarding", url: "https://script.google.com/a/macros/kairali.com/s/AKfycbydtBk2cLDEHoYAA3IOWys3svtc-QWzQbHdRSG5WnTYi8wVRVk36mW2LHxkhveBK0HReQ/exec", permission: "partner_onboard_form.view" },
     { name: "🤝 Add New Partner Contact", description: "Partner contact onboarding", url: "https://script.google.com/macros/s/AKfycbzZx7Qb7mO4FhIkIMcILVsYk1DNsLM7ncmtpzqxBokcpX0_sbd6WeL8CFy82SlqDtdQAw/exec", permission: "partner_onboard_form.view" },
     { name: "📥 Media Download Centre", description: "Kairali media assets", url: "https://www.kairali.com/media-assets.html", permission: "portal_hub.view" },
+    { name: "📋 Kairali Audit Platform", description: "Audit & compliance platform", url: "https://kaudit-platform.vercel.app/", permission: "portal_hub.view" },
   ]
   // const meetingsSubMenu = [
   //   { name: "View Meetings", href: "/meetings", icon: StickyNote, description: "View all meetings" },

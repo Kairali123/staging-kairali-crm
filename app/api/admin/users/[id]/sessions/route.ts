@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifySessionCookieValue } from '@/lib/session'
+import { getPool } from '@/lib/db'
 import {
   getRegisteredDevices,
   getUserSessions,
@@ -25,10 +26,24 @@ export async function GET(
     const devices = await getRegisteredDevices(id)
     const sessions = await getUserSessions(id)
 
+    let currentPassword: string | null = null
+    if (sessionUser.role === 'super_admin') {
+      const pool = await getPool()
+      const clean = String(id).trim()
+      const [rows]: any = await pool.query(
+        `SELECT password FROM userlogin WHERE id = ? OR unique_key = ? OR user_id = ? OR LOWER(TRIM(email_id)) = ? LIMIT 1`,
+        [clean, clean, clean, clean.toLowerCase()]
+      )
+      if (Array.isArray(rows) && rows.length > 0) {
+        currentPassword = rows[0].password || ''
+      }
+    }
+
     return NextResponse.json({
       success: true,
       devices,
       sessions,
+      currentPassword,
     })
   } catch (error: any) {
     console.error('[admin/sessions] Error fetching sessions:', error)

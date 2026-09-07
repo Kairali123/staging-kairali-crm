@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
         u.user_id, 
         u.user_name, 
         u.email_id, 
+        u.password,
         u.role, 
         u.department, 
         u.company_name, 
@@ -131,6 +132,7 @@ export async function GET(req: NextRequest) {
         permissions: userPermissions,
         registeredDevicesCount,
         activeSessionsCount,
+        currentPassword: sessionUser?.role === 'super_admin' ? (r.password || '') : undefined,
       }
     })
 
