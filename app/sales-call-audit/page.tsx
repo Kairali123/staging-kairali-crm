@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react"
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import {
   Area,
@@ -50,6 +50,8 @@ import {
   ThumbsDown,
   ThumbsUp,
   TrendingUp,
+  Trophy,
+  Medal,
   UserCheck,
   Volume2,
   X,
@@ -467,12 +469,14 @@ export default function SalesCallAuditPage() {
     return result
   }, [dbRecords])
 
-  // Automatically expand only the first (latest) date on initial load (Accordion behavior)
+  // Automatically expand only the first (latest) date on initial load
+  const hasInitializedDateRef = useRef(false)
   useEffect(() => {
-    if (auditDays.length > 0 && expandedDates.size === 0) {
+    if (!hasInitializedDateRef.current && auditDays.length > 0) {
       setExpandedDates(new Set([auditDays[0].date]))
+      hasInitializedDateRef.current = true
     }
-  }, [auditDays, expandedDates.size])
+  }, [auditDays])
 
   // Unique list of sales agents for the filter dropdown
   const uniqueAgents = useMemo(() => {
@@ -519,17 +523,6 @@ export default function SalesCallAuditPage() {
     return filteredDays.slice(start, start + pageSize)
   }, [filteredDays, currentPage, pageSize])
 
-  // Auto-expand paginated dates on page change
-  useEffect(() => {
-    if (paginatedDays.length > 0) {
-      setExpandedDates(prev => {
-        const next = new Set(prev)
-        paginatedDays.forEach(d => next.add(d.date))
-        return next
-      })
-    }
-  }, [paginatedDays])
-
   // Aggregate KPIs calculated from live DB data
   const allFilteredAgents = filteredDays.flatMap(day => day.agents)
   const totalAuditedCalls = allFilteredAgents.reduce((sum, agent) => sum + agent.calls, 0)
@@ -546,6 +539,83 @@ export default function SalesCallAuditPage() {
   ).length
   const pendingHrActions = Math.max(0, failCount - hrActionsCompleted)
   const attendanceSyncCount = allFilteredAgents.filter(agent => agent.attendanceTrackerUpdated || agent.accountFmsUpdated).length
+
+  // Sales Agents Ranking Leaderboard based on average score & pass/fail outcome
+  const agentLeaderboard = useMemo(() => {
+    const map = new Map<string, {
+      id: string
+      name: string
+      designation: string
+      initials: string
+      totalRecords: number
+      totalScore: number
+      totalCalls: number
+      goodCalls: number
+      badCalls: number
+      passCount: number
+      failCount: number
+    }>()
+
+    allFilteredAgents.forEach(agent => {
+      const key = agent.id || agent.name
+      const existing = map.get(key)
+      if (!existing) {
+        map.set(key, {
+          id: agent.id,
+          name: agent.name,
+          designation: agent.designation,
+          initials: agent.initials,
+          totalRecords: 1,
+          totalScore: agent.score,
+          totalCalls: agent.calls,
+          goodCalls: agent.good,
+          badCalls: agent.bad,
+          passCount: agent.result === "Pass" ? 1 : 0,
+          failCount: agent.result === "Fail" ? 1 : 0,
+        })
+      } else {
+        existing.totalRecords += 1
+        existing.totalScore += agent.score
+        existing.totalCalls += agent.calls
+        existing.goodCalls += agent.good
+        existing.badCalls += agent.bad
+        if (agent.result === "Pass") existing.passCount += 1
+        if (agent.result === "Fail") existing.failCount += 1
+      }
+    })
+
+    const list = Array.from(map.values()).map(item => {
+      const avgScore = item.totalRecords > 0 ? Number((item.totalScore / item.totalRecords).toFixed(2)) : 0
+      const outcome: "Pass" | "Fail" = avgScore >= 3.0 ? "Pass" : "Fail"
+
+      return {
+        id: item.id,
+        name: item.name,
+        designation: item.designation,
+        initials: item.initials,
+        avgScore,
+        outcome,
+        totalCalls: item.totalCalls,
+        goodCalls: item.goodCalls,
+        badCalls: item.badCalls,
+        passCount: item.passCount,
+        failCount: item.failCount,
+        totalRecords: item.totalRecords,
+      }
+    })
+
+    // Sort by avgScore descending (highest score first); if tied, sort by Pass outcome then calls
+    list.sort((a, b) => {
+      if (b.avgScore !== a.avgScore) return b.avgScore - a.avgScore
+      if (a.outcome !== b.outcome) return a.outcome === "Pass" ? -1 : 1
+      return b.totalCalls - a.totalCalls
+    })
+
+    return list.map((agent, index) => ({
+      rank: index + 1,
+      ...agent,
+    }))
+  }, [allFilteredAgents])
 
   // Trend Data computed from live DB dates
   const trendData = useMemo(() => {
@@ -591,13 +661,16 @@ export default function SalesCallAuditPage() {
     })
   }, [dbRecords, selectedYear])
 
-  // Single-Accordion toggle behavior: Only ONE date row can be open at a time
+  // Manual accordion toggle: expand or collapse dates on user click
   const toggleDate = (date: string) => {
     setExpandedDates(previous => {
-      if (previous.has(date)) {
-        return new Set() // Collapse if already open
+      const next = new Set(previous)
+      if (next.has(date)) {
+        next.delete(date)
+      } else {
+        next.add(date)
       }
-      return new Set([date]) // Expand ONLY this date, automatically closing all others
+      return next
     })
   }
 
@@ -1129,6 +1202,159 @@ export default function SalesCallAuditPage() {
                 <div className="mt-1 text-[11px] text-slate-500">Half-day / Master tracker synced</div>
               </div>
             </div>
+          </div>
+
+          {/* Row 3: Sales Agents Quality Audit Ranking & Performance Leaderboard */}
+          <div className="bg-gradient-to-br from-slate-50 via-white to-indigo-50/40 border border-slate-200 rounded-xl p-4 sm:p-5 space-y-3.5 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200/80 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 via-amber-600 to-yellow-600 flex items-center justify-center text-white shadow-xs flex-shrink-0">
+                  <Trophy className="h-4 w-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    Sales Agents Quality Ranking Leaderboard
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Ranked by average call audit score & Pass/Fail status (Target: Benchmark ≥ 3.0 / 5.0)
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-semibold text-slate-700 bg-white border border-slate-200 px-2.5 py-1 rounded-full shadow-2xs">
+                  {agentLeaderboard.length} Sales Agents
+                </span>
+              </div>
+            </div>
+
+            {agentLeaderboard.length === 0 ? (
+              <div className="py-8 text-center bg-white rounded-lg border border-slate-200 text-xs text-slate-500">
+                No sales agents found for the selected filters.
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-2xs max-h-96 overflow-y-auto">
+                <Table className="min-w-[640px]">
+                  <TableHeader className="bg-slate-100/90 sticky top-0 z-10">
+                    <TableRow className="hover:bg-slate-100/90 border-b border-slate-200 text-[11px]">
+                      <TableHead className="w-16 font-bold text-slate-700 text-center py-2.5">Rank</TableHead>
+                      <TableHead className="font-bold text-slate-700 py-2.5">Sales Agent</TableHead>
+                      <TableHead className="w-28 font-bold text-slate-700 text-center py-2.5">Outcome</TableHead>
+                      <TableHead className="w-36 font-bold text-slate-700 text-center py-2.5">Avg Score</TableHead>
+                      <TableHead className="w-40 font-bold text-slate-700 text-center py-2.5">Audited Calls</TableHead>
+                      <TableHead className="w-32 font-bold text-slate-700 text-center py-2.5">Audited Days</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {agentLeaderboard.map(agent => {
+                      const isPass = agent.outcome === "Pass"
+                      const isTop1 = agent.rank === 1
+                      const isTop2 = agent.rank === 2
+                      const isTop3 = agent.rank === 3
+
+                      return (
+                        <TableRow
+                          key={agent.id}
+                          className="hover:bg-blue-50/40 transition-colors border-b border-slate-100 text-xs"
+                        >
+                          {/* Rank */}
+                          <TableCell className="text-center font-bold py-2.5">
+                            {isTop1 ? (
+                              <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-extrabold text-[11px] shadow-2xs">
+                                🥇 #1
+                              </span>
+                            ) : isTop2 ? (
+                              <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-slate-200 text-slate-800 border border-slate-300 font-extrabold text-[11px] shadow-2xs">
+                                🥈 #2
+                              </span>
+                            ) : isTop3 ? (
+                              <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 font-extrabold text-[11px] shadow-2xs">
+                                🥉 #3
+                              </span>
+                            ) : (
+                              <span className="text-slate-500 font-mono text-xs">
+                                #{agent.rank}
+                              </span>
+                            )}
+                          </TableCell>
+
+                          {/* Agent Name */}
+                          <TableCell className="py-2.5">
+                            <div className="flex items-center gap-2.5">
+                              <span className="h-7 w-7 rounded-full bg-blue-100 text-blue-800 font-bold flex items-center justify-center text-[10px] flex-shrink-0 border border-blue-200">
+                                {agent.initials}
+                              </span>
+                              <div className="min-w-0">
+                                <div className="font-semibold text-slate-900 text-xs truncate">{agent.name}</div>
+                                <div className="text-[10px] text-slate-500 font-mono flex items-center gap-1.5 mt-0.5">
+                                  <span>{agent.id}</span>
+                                  {agent.designation && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="truncate max-w-[140px] text-slate-600 font-sans">{agent.designation}</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </TableCell>
+
+                          {/* Outcome */}
+                          <TableCell className="text-center py-2.5">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold shadow-2xs ${
+                                isPass
+                                  ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                  : "bg-rose-100 text-rose-800 border border-rose-300"
+                              }`}
+                            >
+                              {isPass ? <CheckCircle2 className="h-3 w-3 text-emerald-600" /> : <XCircle className="h-3 w-3 text-rose-600" />}
+                              {agent.outcome.toUpperCase()}
+                            </span>
+                          </TableCell>
+
+                          {/* Avg Score */}
+                          <TableCell className="text-center py-2.5">
+                            <div className="flex flex-col items-center justify-center">
+                              <span
+                                className={`text-xs font-extrabold ${
+                                  isPass ? "text-emerald-700" : "text-rose-600"
+                                }`}
+                              >
+                                {agent.avgScore.toFixed(2)} <span className="text-[10px] font-normal text-slate-400">/ 5.0</span>
+                              </span>
+                              <div className="w-20 bg-slate-200 rounded-full h-1.5 mt-1 overflow-hidden">
+                                <div
+                                  className={`h-1.5 rounded-full ${isPass ? "bg-emerald-500" : "bg-rose-500"}`}
+                                  style={{ width: `${Math.min(100, Math.max(0, (agent.avgScore / 5) * 100))}%` }}
+                                />
+                              </div>
+                            </div>
+                          </TableCell>
+
+                          {/* Audited Calls */}
+                          <TableCell className="text-center py-2.5">
+                            <span className="font-semibold text-slate-800 text-xs">{agent.totalCalls}</span>
+                            <div className="text-[10px] font-medium text-slate-500 mt-0.5">
+                              <span className="text-emerald-700 font-semibold">{agent.goodCalls} Good</span>
+                              <span className="mx-1 text-slate-300">/</span>
+                              <span className="text-rose-700 font-semibold">{agent.badCalls} Bad</span>
+                            </div>
+                          </TableCell>
+
+                          {/* Records */}
+                          <TableCell className="text-center py-2.5 text-slate-600 text-xs">
+                            <span className="font-medium">{agent.totalRecords} {agent.totalRecords === 1 ? "Day" : "Days"}</span>
+                            <div className="text-[10px] text-slate-400">
+                              {agent.passCount}P • {agent.failCount}F
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </div>
 
           {/* Analytics View Charts */}

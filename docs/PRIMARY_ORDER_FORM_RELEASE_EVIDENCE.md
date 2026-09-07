@@ -6,12 +6,13 @@ Scope: staging review only. No production sales rollout is authorized by this do
 
 1. **Authenticated UI** — The React bundle is hosted at the same-origin protected path `/new-order-fms/primary-order-form/app/`. Middleware validates the signed `kairali_user` session before the wrapper or bundle/assets are served.
 2. **Server-side RBAC** — `/api/order-form` re-verifies the signed session and maps every allowed action to `new-order-fms.view`, `new-order-fms.edit`, or `new-order-fms.manage`. Admin and `all` retain the CRM's existing override behavior.
-3. **Rate limits, audit, safe errors** — A shared MySQL fixed-window limiter protects each actor/IP/action. Security events go to the existing structured logger/webhook and `order_form_audit_log`. Public responses omit stack traces, secrets, raw payloads, and upstream implementation details.
+3. **Rate limits, audit, safe errors** — A shared MySQL fixed-window limiter protects each actor/IP/action. In compliance with **Issue #77**, hot request paths execute pure DML without per-request DDL (`CREATE TABLE`) or random cleanup (`Math.random()`), using decoupled schema provisioning and lazy fallback. Security events go to the existing structured logger/webhook and `order_form_audit_log`. Public responses omit stack traces, secrets, raw payloads, and upstream implementation details.
 4. **Apps Script boundary** — URL and shared secret exist only in server environment variables. Apps Script fails closed unless `_serverSecret` matches the 32+ character Script Property `ORDER_FORM_API_SECRET`. The browser bundle contains neither value.
 5. **Review workflow** — Changes are submitted from feature branches and must be reviewed in PR/Vercel Preview before merge or promotion.
 6. **Data-safety evidence** — The existing suite covers validation, edit-as-new Buyer ID preservation, idempotent duplicate submission, durable queued receipt, and 20 simultaneous submissions without overwritten header/product rows.
 7. **Public standalone retirement** — The legacy form root redirects to the authenticated CRM route and its old API returns `410 MOVED_TO_CRM`, preventing a bypass around CRM authorization.
-8. **Live gate** — Production remains blocked until the preview checks below pass and management approves promotion.
+8. **UI safeguard** — Edit Order tab is restricted and disabled in UI (`ENABLE_EDIT_ORDER = false`) preventing edits until management approves, while business logic remains intact in code.
+9. **Live gate** — Production promotion is gated on passing the preview verification checklist below and receiving management sign-off.
 
 ## Permission policy
 
