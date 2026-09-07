@@ -187,21 +187,57 @@ export async function GET(req: NextRequest) {
             const finalData = finaltrtfMap[resId] ?? EMPTY_ACCOUNTS;
 
             const invoiceAmtRaw = parseFloat(r.invoice_amount) || 0;
-            const currency: string = r.currency || "INR";
+            const currency: string = (r.currency || "INR").trim();
+            const normalizedCurrency = currency.toUpperCase();
+            const isForeign = normalizedCurrency !== "INR";
+            const convRate = CONVERSION_RATES[normalizedCurrency] ?? 1;
+
             const payments = collectionHistoryLogs[resId] || [];
             let totalRecvRaw = 0;
+            let paymentInvoiceAmount = 0;
             if (payments.length > 0) {
                 for (const p of payments) {
                     const amt = Number(p?.receivedAmount ?? p?.[4]) || 0;
                     const pCur = String(p?.currency ?? p?.[3] ?? currency);
                     totalRecvRaw += convertCurrency(amt, pCur, currency);
+                    const pInv = parseFloat(p?.invoiceAmount ?? p?.[11]);
+                    if (pInv > 0 && !paymentInvoiceAmount) {
+                        paymentInvoiceAmount = pInv;
+                    }
                 }
             } else {
                 totalRecvRaw = parseFloat(r.nb_pch_total_recv_amount) || 0;
             }
-            const convRate = CONVERSION_RATES[currency] ?? 1;
-            const convertedAmt = convRate * invoiceAmtRaw;
-            const recvPct = invoiceAmtRaw > 0 ? (totalRecvRaw / invoiceAmtRaw) * 100 : 0;
+
+            let effectiveNativeInvoiceAmt = invoiceAmtRaw;
+            let convertedAmt = 0;
+
+            if (isForeign) {
+                // Determine if invoiceAmtRaw was stored in INR rather than foreign currency
+                // (e.g. PMS tariff synced as INR 327,600 while currency is USD/EUR):
+                const isStoredInINR =
+                    (paymentInvoiceAmount > 0 && invoiceAmtRaw > paymentInvoiceAmount * 5) ||
+                    (invoiceAmtRaw > 25000 && (totalRecvRaw <= 25000 || parseFloat(r.nb_pch_recv_amount_pct) >= 90));
+
+                if (isStoredInINR) {
+                    convertedAmt = invoiceAmtRaw; // Already in INR
+                    effectiveNativeInvoiceAmt = paymentInvoiceAmount > 0
+                        ? paymentInvoiceAmount
+                        : (totalRecvRaw > 0 && parseFloat(r.nb_pch_recv_amount_pct) >= 95
+                            ? totalRecvRaw
+                            : Math.round(invoiceAmtRaw / convRate));
+                } else {
+                    effectiveNativeInvoiceAmt = invoiceAmtRaw;
+                    convertedAmt = convRate * invoiceAmtRaw;
+                }
+            } else {
+                effectiveNativeInvoiceAmt = invoiceAmtRaw;
+                convertedAmt = invoiceAmtRaw;
+            }
+
+            const recvPct = effectiveNativeInvoiceAmt > 0
+                ? (totalRecvRaw / effectiveNativeInvoiceAmt) * 100
+                : (parseFloat(r.nb_pch_recv_amount_pct) || 0);
 
             const underAutoReleaseDate = getUnderAutoReleaseStatus(
                 r.nb_bvs_action_status, r.booking_status,
@@ -253,13 +289,21 @@ export async function GET(req: NextRequest) {
                 departureDate: r.departure_date ? new Date(r.departure_date).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "long", year: "numeric" }) : "-",
                 paymentDetails: {
                     amount: convertedAmt ? Math.round(convertedAmt) : convertedAmt,
-                    amountOriginal: invoiceAmtRaw ? Math.round(invoiceAmtRaw) : invoiceAmtRaw,
+                    amountOriginal: effectiveNativeInvoiceAmt
+                        ? (Number.isInteger(effectiveNativeInvoiceAmt)
+                            ? effectiveNativeInvoiceAmt
+                            : parseFloat(effectiveNativeInvoiceAmt.toFixed(2)))
+                        : effectiveNativeInvoiceAmt,
                     discountPercent: parseFloat(r.discount_percent) || 0,
-                    amountRecieved: totalRecvRaw ? Math.round(totalRecvRaw) : totalRecvRaw,
-                    totalAmountReceived: totalRecvRaw ? Math.round(totalRecvRaw) : totalRecvRaw,
+                    amountRecieved: totalRecvRaw
+                        ? (Number.isInteger(totalRecvRaw) ? totalRecvRaw : parseFloat(totalRecvRaw.toFixed(2)))
+                        : totalRecvRaw,
+                    totalAmountReceived: totalRecvRaw
+                        ? (Number.isInteger(totalRecvRaw) ? totalRecvRaw : parseFloat(totalRecvRaw.toFixed(2)))
+                        : totalRecvRaw,
                     totalAmountBeforeDiscount: parseFloat(r.total_amt_before_disc) || 0,
                     discount: parseFloat(r.discount_amount) || 0,
-                    balance: parseFloat(r.balance_amount) || 0,
+                    balance: Math.max(0, effectiveNativeInvoiceAmt - totalRecvRaw),
                     currency,
                     paymentReceivedDate: parseIndianDateTime(r.nb_pch_payment_recv_dt),
                     paymentReceived: r.nb_pch_received_amount,

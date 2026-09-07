@@ -7321,7 +7321,14 @@ export default function SalesAccountsTeamPage() {
                         <TableCell>{booking.programmeName}</TableCell>
                         <TableCell>{booking.checkIn}</TableCell>
                         <TableCell>{booking.checkOut}</TableCell>
-                        <TableCell className="font-medium">{getCurrencySymbol(String(booking.currency).slice(0, 3))} {booking?.originalAmount?.toLocaleString()}</TableCell>
+                        <TableCell className="font-medium">
+                          <div>{getCurrencySymbol(String(booking.currency).slice(0, 3))} {booking?.originalAmount?.toLocaleString()}</div>
+                          {booking.currency && String(booking.currency).toUpperCase() !== "INR" && booking.amount ? (
+                            <div className="text-xs font-normal text-slate-500">
+                              (₹{Number(booking.amount).toLocaleString()})
+                            </div>
+                          ) : null}
+                        </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center text-sm font-medium">
@@ -7352,7 +7359,7 @@ export default function SalesAccountsTeamPage() {
                               <span className="text-sm font-semibold text-slate-700">
                                 {computeReceivedPercentage(
                                   booking.receivedAmount,
-                                  booking.amount
+                                  booking.originalAmount
                                 )}%
                               </span>
                             </div>
@@ -8168,7 +8175,14 @@ export default function SalesAccountsTeamPage() {
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="font-bold text-slate-900">{getCurrencySymbol(String(booking.currency).slice(0, 3))}{booking?.originalAmount?.toLocaleString()}</TableCell>
+                        <TableCell className="font-bold text-slate-900">
+                          <div>{getCurrencySymbol(String(booking.currency).slice(0, 3))}{booking?.originalAmount?.toLocaleString()}</div>
+                          {booking.currency && String(booking.currency).toUpperCase() !== "INR" && booking.amount ? (
+                            <div className="text-xs font-normal text-slate-500">
+                              (₹{Number(booking.amount).toLocaleString()})
+                            </div>
+                          ) : null}
+                        </TableCell>
                         {/* NEW — Discount % */}
                         <TableCell className="font-semibold text-blue-700">
                           {booking.discountPercent !== null && booking.discountPercent !== undefined
@@ -9051,7 +9065,14 @@ export default function SalesAccountsTeamPage() {
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="font-bold text-slate-900">{getCurrencySymbol(String(booking.currency).slice(0, 3))}{booking.originalAmount?.toLocaleString()}</TableCell>
+                        <TableCell className="font-bold text-slate-900">
+                          <div>{getCurrencySymbol(String(booking.currency).slice(0, 3))}{booking.originalAmount?.toLocaleString()}</div>
+                          {booking.currency && String(booking.currency).toUpperCase() !== "INR" && booking.amount ? (
+                            <div className="text-xs font-normal text-slate-500">
+                              (₹{Number(booking.amount).toLocaleString()})
+                            </div>
+                          ) : null}
+                        </TableCell>
                         {/* NEW — Discount % */}
                         <TableCell className="font-semibold text-blue-700">
                           {booking.discountPercent !== null && booking.discountPercent !== undefined
@@ -9702,7 +9723,12 @@ export default function SalesAccountsTeamPage() {
 
                         {/* Amount */}
                         <TableCell className="font-medium">
-                          ₹{booking.amount?.toLocaleString()}
+                          <div>{getCurrencySymbol(String(booking.currency).slice(0, 3))}{booking?.originalAmount?.toLocaleString()}</div>
+                          {booking.currency && String(booking.currency).toUpperCase() !== "INR" && booking.amount ? (
+                            <div className="text-xs font-normal text-slate-500">
+                              (₹{Number(booking.amount).toLocaleString()})
+                            </div>
+                          ) : null}
                         </TableCell>
 
                         {/* Payment Progress */}
@@ -10211,7 +10237,14 @@ export default function SalesAccountsTeamPage() {
                       <TableCell>{booking.programmeName}</TableCell>
 
                       {/* Amount */}
-                      <TableCell className="font-medium">{getCurrencySymbol(String(booking.currency).slice(0, 3))}{booking.originalAmount?.toLocaleString()}</TableCell>
+                      <TableCell className="font-medium">
+                        <div>{getCurrencySymbol(String(booking.currency).slice(0, 3))}{booking.originalAmount?.toLocaleString()}</div>
+                        {booking.currency && String(booking.currency).toUpperCase() !== "INR" && booking.amount ? (
+                          <div className="text-xs font-normal text-slate-500">
+                            (₹{Number(booking.amount).toLocaleString()})
+                          </div>
+                        ) : null}
+                      </TableCell>
 
                       <TableCell>
                         <div className="space-y-2">
