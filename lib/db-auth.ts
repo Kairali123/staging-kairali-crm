@@ -54,7 +54,7 @@ export function parsePermissionsFromDbRow(row: Record<string, any> | null | unde
 
   const permissionsSet = new Set<string>()
 
-  // If role is super_admin or admin with 'all'
+  // ONLY super_admin role gets blanket 'all'
   if (row.role === 'super_admin') {
     permissionsSet.add('all')
   }
@@ -69,6 +69,7 @@ export function parsePermissionsFromDbRow(row: Record<string, any> | null | unde
 
     // Normalize module key
     const moduleName = key.trim()
+    const hyphenatedModule = moduleName.includes('_') ? moduleName.replace(/_/g, '-') : null
 
     // If val is 'all', '1', 'true', 'yes'
     if (valStr === 'all' || valStr === '1' || valStr === 'true' || valStr === 'yes') {
@@ -77,6 +78,13 @@ export function parsePermissionsFromDbRow(row: Record<string, any> | null | unde
       permissionsSet.add(`${moduleName}.manage`)
       permissionsSet.add(`${moduleName}.admin`)
       permissionsSet.add(moduleName)
+      if (hyphenatedModule) {
+        permissionsSet.add(`${hyphenatedModule}.view`)
+        permissionsSet.add(`${hyphenatedModule}.edit`)
+        permissionsSet.add(`${hyphenatedModule}.manage`)
+        permissionsSet.add(`${hyphenatedModule}.admin`)
+        permissionsSet.add(hyphenatedModule)
+      }
       continue
     }
 
@@ -85,12 +93,24 @@ export function parsePermissionsFromDbRow(row: Record<string, any> | null | unde
     for (const part of parts) {
       if (part.includes('.')) {
         permissionsSet.add(part)
+        if (hyphenatedModule && part.startsWith(`${moduleName}.`)) {
+          permissionsSet.add(part.replace(moduleName, hyphenatedModule))
+        }
       } else {
         // e.g. 'view' -> 'leads.view', plus standalone 'leads'
         permissionsSet.add(`${moduleName}.${part}`)
         permissionsSet.add(moduleName)
+        if (hyphenatedModule) {
+          permissionsSet.add(`${hyphenatedModule}.${part}`)
+          permissionsSet.add(hyphenatedModule)
+        }
       }
     }
+  }
+
+  // Ensure 'all' is never retained for non-super_admin roles
+  if (row.role !== 'super_admin') {
+    permissionsSet.delete('all')
   }
 
   return Array.from(permissionsSet)
@@ -198,6 +218,14 @@ export async function authenticateUserFromDb(
     if (userRow.permission && typeof userRow.permission === 'string') {
       const directPerms = userRow.permission.split(',').map((p: string) => p.trim()).filter(Boolean)
       permissions = Array.from(new Set([...permissions, ...directPerms]))
+    }
+
+    // Enforce role boundary: ONLY super_admin gets wildcard 'all'.
+    // Admin and all other roles are strictly restricted to database permissions.
+    if (userRole !== 'super_admin') {
+      permissions = permissions.filter((p) => p.toLowerCase() !== 'all')
+    } else if (!permissions.includes('all')) {
+      permissions.push('all')
     }
 
     // 6. Assemble action permissions
