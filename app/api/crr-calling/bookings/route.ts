@@ -395,7 +395,7 @@ export async function GET(req: NextRequest) {
 
             // Stage 1: Arrival Welcome on Pickup (CrrCalling / CrrProcess)
             const c1 = findCallingRow(uid, "Welcome Call");
-            const s1Planned = row.stage1_call_date_planned || c1?.planned || null;
+            const s1Planned = c1?.planned || row.stage1_call_date_planned || null;
             const s1Actual = c1?.actual || row.stage1_task_done_actual || null;
             const s1ToShow = parseToShow(c1?.to_show);
             const hasS1Data = Boolean(s1Actual || (c1 && (c1.status || c1.outcome_remarks || c1.did_they_achieve_the_outcomes_planned_for)));
@@ -450,8 +450,8 @@ export async function GET(req: NextRequest) {
             };
 
             // Stage 5: Online Rating & Review Request (CrrCalling / CrrProcess Col AU)
-            const c5 = findCallingRow(uid, "Call after landing, seek feedback") || findCallingRow(uid, "rating");
-            const s5Planned = row.stage4_rating_request_call_date_planned || c5?.planned || null;
+            const c5 = findCallingRow(uid, "Rating Request") || findCallingRow(uid, "rating") || findCallingRow(uid, "Call after landing, seek feedback");
+            const s5Planned = c5?.planned || row.stage4_rating_request_call_date_planned || null;
             const s5Actual = c5?.actual || row.stage4_task_done_actual || null;
             const s5ToShow = parseToShow(c5?.to_show);
             const hasS5Data = Boolean(s5Actual || (c5 && (c5.status || c5.rating_status || c5.outcome_remarks || c5.remarks_why_not_given_ratings)));
@@ -468,8 +468,8 @@ export async function GET(req: NextRequest) {
             } : (bookingTakenBy ? { doer: bookingTakenBy } : null);
 
             // Stage 6: Safe Return Confirmation (CrrCalling / CrrProcess Col BA)
-            const c6 = findCallingRow(uid, "Time to Return") || findCallingRow(uid, "Safe Return");
-            const s6Planned = row.stage6_call_date_planned || c6?.planned || null;
+            const c6 = findCallingRow(uid, "Call after landing") || findCallingRow(uid, "Safe Return") || findCallingRow(uid, "Time to Return");
+            const s6Planned = c6?.planned || row.stage6_call_date_planned || null;
             const s6Actual = c6?.actual || row.stage6_task_done_actual || null;
             const s6ToShow = parseToShow(c6?.to_show);
             const hasS6Data = Boolean(s6Actual || (c6 && (c6.status || c6.stay_feedback || c6.outcome_remarks)));
@@ -484,7 +484,7 @@ export async function GET(req: NextRequest) {
 
             // Stage 7: Result Tracking & Health Progress Check (CrrCalling / CrrProcess Col BQ)
             const c7 = findCallingRow(uid, "Result and Progress Since Return") || findCallingRow(uid, "Result and Progress");
-            const s7Planned = row.stage7_call_date_planned || c7?.planned || null;
+            const s7Planned = c7?.planned || row.stage7_call_date_planned || null;
             const s7Actual = c7?.actual || row.stage7_task_done_actual || null;
             const s7ToShow = parseToShow(c7?.to_show);
             const hasS7Data = Boolean(s7Actual || (c7 && (c7.status || c7.outcome_remarks || c7.did_they_achieve_the_outcomes_planned_for)));
@@ -497,19 +497,20 @@ export async function GET(req: NextRequest) {
                 doer: c7.doer || tracker?.doctor_assigned_to_the_client || bookingTakenBy,
             } : (tracker?.doctor_assigned_to_the_client || bookingTakenBy ? { doer: tracker?.doctor_assigned_to_the_client || bookingTakenBy } : null);
 
-            // Stage 8: Referral Collection & Lead Generation (strictly from ktahv_checkinmasterfms stage5_*)
-            const s8Planned = checkin?.stage5_planned || row.stage8_call_date_planned || null;
-            const s8Actual = checkin?.stage5_actual_referral || row.stage8_task_done_actual || null;
-            const s8DoerRemarks = checkin?.stage5_doer_remarks || row.stage7_referals_details || "";
-            const s8ReferralTakenStatus = checkin?.stage5_referral_taken_status || (row.stage7_referals_details ? "Yes" : "");
-            const s8Doer = checkin?.stage5_doer || "";
+            // Stage 8: Referral Collection & Lead Generation (strictly from ktahv_checkinmasterfms stage5_*, or CrrCalling Referral call)
+            const c8 = findCallingRow(uid, "Referral");
+            const s8Planned = c8?.planned || checkin?.stage5_planned_referral || checkin?.stage5_planned || row.stage8_call_date_planned || null;
+            const s8Actual = c8?.actual || checkin?.stage5_actual_referral || row.stage8_task_done_actual || null;
+            const s8DoerRemarks = (c8 && (c8.outcome_remarks || c8.remarks_why_not_done_or_close)) || checkin?.stage5_doer_remarks || row.stage7_referals_details || "";
+            const s8ReferralTakenStatus = (c8 ? (c8.status || c8.did_they_achieve_the_outcomes_planned_for) : "") || checkin?.stage5_referral_taken_status || (row.stage7_referals_details ? "Yes" : "");
+            const s8Doer = c8?.doer || checkin?.stage5_doer_referral || checkin?.stage5_doer || "";
             const s8Saved = {
                 referralTakenStatus: s8ReferralTakenStatus,
                 doerStatus: s8ReferralTakenStatus,
                 doerRemarks: s8DoerRemarks,
                 remarks: s8DoerRemarks,
                 doer: s8Doer,
-                timeDelay: checkin?.stage5_time_delay || "",
+                timeDelay: checkin?.stage5_time_delay_referral || checkin?.stage5_time_delay || "",
             };
 
             // Stage 9: Driver Assignment – Arrival Pickup (Guest Tracker)
