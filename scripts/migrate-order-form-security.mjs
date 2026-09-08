@@ -1,13 +1,16 @@
 ﻿/**
- * Database Provisioning and Rollback Script for KAPPL Primary Order Form Security
+ * Database Provisioning Script for KAPPL Primary Order Form Security
  *
  * Usage:
+ *   node scripts/migrate-order-form-security.mjs --plan
  *   node scripts/migrate-order-form-security.mjs --status
  *   node scripts/migrate-order-form-security.mjs --up
  *   node scripts/migrate-order-form-security.mjs --down
+ *
+ * `--up` is deliberately fail-closed. It requires an approved change reference and
+ * a recorded recovery point in the process environment. `--down` is intentionally
+ * non-destructive because these additive control tables contain security evidence.
  */
-
-import mysql from 'mysql2/promise'
 
 function resolveConfig() {
   const host = process.env.DB_HOST
@@ -51,10 +54,18 @@ const UP_MIGRATION_SQL = [
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
 ]
 
-const DOWN_ROLLBACK_SQL = [
-  `DROP TABLE IF EXISTS order_form_rate_limits;`,
-  `DROP TABLE IF EXISTS order_form_audit_log;`
-]
+function requireApprovedMigration() {
+  const approval = process.env.ORDER_FORM_MIGRATION_APPROVAL?.trim()
+  const recoveryPoint = process.env.ORDER_FORM_RECOVERY_POINT?.trim()
+  const changeId = process.env.ORDER_FORM_CHANGE_ID?.trim()
+
+  if (approval !== 'APPROVED' || !recoveryPoint || !changeId) {
+    throw new Error(
+      'Migration blocked: set ORDER_FORM_MIGRATION_APPROVAL=APPROVED, ' +
+      'ORDER_FORM_RECOVERY_POINT, and ORDER_FORM_CHANGE_ID only after Gate 4 approval.'
+    )
+  }
+}
 
 async function checkStatus(conn) {
   const [tables] = await conn.query(
@@ -69,8 +80,28 @@ async function checkStatus(conn) {
 
 async function main() {
   const mode = process.argv[2] || '--status'
-  const config = resolveConfig()
-  const conn = await mysql.createConnection(config)
+
+  if (mode === '--plan') {
+    console.log('[migration-plan] Additive objects: order_form_rate_limits, order_form_audit_log')
+    console.log('[migration-plan] Existing objects are preserved; no cleanup or destructive rollback is included.')
+    return
+  }
+
+  if (mode === '--down') {
+    console.log('[rollback] Revert the application deployment/commit and leave additive security tables in place.')
+    console.log('[rollback] No schema objects or stored audit data are deleted by this command.')
+    console.log('[rollback] Any later archival/removal requires a separately approved Gate 4 change with recovery proof.')
+    return
+  }
+
+  if (mode !== '--up' && mode !== '--status') {
+    throw new Error(`Unknown argument: ${mode}. Use --plan, --up, --down, or --status.`)
+  }
+
+  if (mode === '--up') requireApprovedMigration()
+
+  const { default: mysql } = await import('mysql2/promise')
+  const conn = await mysql.createConnection(resolveConfig())
 
   try {
     if (mode === '--up') {
@@ -81,20 +112,9 @@ async function main() {
       const verified = await checkStatus(conn)
       if (!verified) throw new Error('Verification failed after up migration')
       console.log('[migration] Successfully provisioned order form security schema.')
-    } else if (mode === '--down') {
-      console.log('[migration] Applying rollback (down migration)...')
-      for (const sql of DOWN_ROLLBACK_SQL) {
-        await conn.query(sql)
-      }
-      const remaining = await checkStatus(conn)
-      if (remaining) throw new Error('Rollback verification failed: tables still exist')
-      console.log('[migration] Successfully rolled back order form security schema.')
-    } else if (mode === '--status') {
+    } else {
       const verified = await checkStatus(conn)
       console.log(`[migration] Schema readiness: ${verified ? 'PROVISIONED & READY' : 'TABLES MISSING'}`)
-    } else {
-      console.error(`Unknown argument: ${mode}. Use --up, --down, or --status.`)
-      process.exitCode = 1
     }
   } finally {
     await conn.end()

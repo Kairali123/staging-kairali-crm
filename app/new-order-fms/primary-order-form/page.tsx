@@ -13,7 +13,7 @@ import { LoaderCircle } from "lucide-react"
  *   - "Edit order" button is disabled and cannot be clicked.
  * ─────────────────────────────────────────────────────────────────────────────
  */
-export const ENABLE_EDIT_ORDER = false
+const ENABLE_EDIT_ORDER = false
 
 const PRIMARY_ORDER_FORM_URL = "/new-order-fms/primary-order-form/app/index.html"
 
@@ -59,4 +59,3 @@ export default function PrimaryOrderFormPage() {
     </div>
   )
 }
-

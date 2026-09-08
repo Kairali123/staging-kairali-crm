@@ -7,50 +7,6 @@ import { orderFormActionRateLimit, type OrderFormAction } from '@/lib/order-form
 
 type AuditOutcome = 'success' | 'failure' | 'denied'
 
-let _tablesEnsured = false
-
-/**
- * Initializes order_form_rate_limits and order_form_audit_log schema.
- * Exported for migrations/startup setup; not executed on hot request paths.
- */
-export async function ensureOrderFormTables(): Promise<void> {
-  if (_tablesEnsured) return
-  try {
-    const pool = await getPool()
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS order_form_rate_limits (
-        rate_key VARCHAR(64) PRIMARY KEY,
-        window_started_at DATETIME(3) NOT NULL,
-        request_count INT NOT NULL DEFAULT 0,
-        expires_at DATETIME(3) NOT NULL,
-        INDEX idx_order_form_rate_expiry (expires_at)
-      ) ENGINE=InnoDB
-    `)
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS order_form_audit_log (
-        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-        event_id CHAR(36) NOT NULL UNIQUE,
-        created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-        actor VARCHAR(190) NOT NULL,
-        role_name VARCHAR(80) NOT NULL,
-        action_name VARCHAR(40) NOT NULL,
-        outcome ENUM('success','failure','denied') NOT NULL,
-        source_ip VARCHAR(80) NOT NULL,
-        correlation_id VARCHAR(80) NOT NULL,
-        target_id VARCHAR(190) NULL,
-        duration_ms INT UNSIGNED NULL,
-        error_code VARCHAR(80) NULL,
-        INDEX idx_order_form_audit_created (created_at),
-        INDEX idx_order_form_audit_actor (actor, created_at),
-        INDEX idx_order_form_audit_action (action_name, created_at)
-      ) ENGINE=InnoDB
-    `)
-    _tablesEnsured = true
-  } catch (error) {
-    console.error('[order-form-security] Failed to ensure tables:', error)
-  }
-}
-
 function safeString(value: unknown, max = 190): string {
   return typeof value === 'string' ? value.trim().slice(0, max) : ''
 }
@@ -82,15 +38,6 @@ export function isSameOriginOrderFormRequest(req: NextRequest): boolean {
 
 export function orderFormCorrelationId(req: NextRequest): string {
   return safeString(req.headers.get('x-request-id'), 80) || randomUUID()
-}
-
-export async function cleanupExpiredRateLimits(): Promise<void> {
-  try {
-    const pool = await getPool()
-    await pool.query('DELETE FROM order_form_rate_limits WHERE expires_at < NOW(3)')
-  } catch (error) {
-    console.warn('[order-form-security] cleanupExpiredRateLimits failed:', error)
-  }
 }
 
 export async function consumeOrderFormRateLimit(
