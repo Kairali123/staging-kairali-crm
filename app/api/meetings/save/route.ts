@@ -11,7 +11,7 @@ import {
   meetingUnauthorized,
   parseMeetingAudioUrl,
 } from '@/lib/meetings-auth'
-import { isMeetingUploadedFileOwner } from '@/lib/meeting-upload-sessions'
+import { getMeetingAudioOwner } from '@/lib/google-drive'
 
 // ── POST: create a meeting, stamped with the recorder ─────────────────────────
 export async function POST(req: NextRequest) {
@@ -38,7 +38,12 @@ export async function POST(req: NextRequest) {
     if (audio_url) {
       const parsedAudioUrl = parseMeetingAudioUrl(audio_url, req.nextUrl.origin)
       const fileId = parsedAudioUrl?.searchParams.get('id')
-      if (!parsedAudioUrl || !isMeetingUploadedFileOwner(fileId, session.email)) {
+      // Ownership comes from the Drive file's own appProperties rather than an
+      // in-memory map, so a save that lands on a different instance than the
+      // upload — which it almost always does, minutes of transcription later —
+      // still authorizes correctly.
+      const audioOwner = fileId ? await getMeetingAudioOwner(fileId) : null
+      if (!parsedAudioUrl || !audioOwner || audioOwner !== session.email) {
         return NextResponse.json({ error: 'Invalid or unauthorized audio_url' }, { status: 400 })
       }
       safeAudioUrl = `${parsedAudioUrl.pathname}?${parsedAudioUrl.searchParams.toString()}`
