@@ -118,6 +118,34 @@ export async function resolveCanonicalUserId(userIdOrEmail: string): Promise<str
  * Validates and registers a device for a user.
  * Limit: Max 2 devices per user.
  */
+// super_admin is exempt from the device and concurrency limits. Extracted so the
+// two exemptions are decided by the same rule: registerOrValidateDevice waived
+// the 2-device cap while createActiveSession still kicked every other session,
+// so a super_admin could register unlimited devices but hold only one live
+// session — the very cap it was meant to be exempt from, enforced elsewhere.
+async function resolveIsSuperAdmin(
+  pool: any,
+  cleanUserId: string,
+  role?: string,
+): Promise<boolean> {
+  const normalizedRole = String(role || '').toLowerCase().trim().replace(/[\s_-]+/g, '_')
+  if (normalizedRole === 'super_admin' || normalizedRole === 'superadmin') return true
+
+  try {
+    const [roleRows]: any = await pool.query(
+      `SELECT role FROM userlogin WHERE id = ? OR unique_key = ? OR user_id = ? LIMIT 1`,
+      [cleanUserId, cleanUserId, cleanUserId]
+    )
+    if (Array.isArray(roleRows) && roleRows.length > 0) {
+      const dbRole = String(roleRows[0]?.role || '').toLowerCase().trim().replace(/[\s_-]+/g, '_')
+      return dbRole === 'super_admin' || dbRole === 'superadmin'
+    }
+  } catch {
+    // Ignore query error and proceed with the standard check
+  }
+  return false
+}
+
 export async function registerOrValidateDevice(
   rawUserId: string,
   deviceId: string,
@@ -143,24 +171,7 @@ export async function registerOrValidateDevice(
   }
 
   // Check if user is super_admin (exempt from 2-device limit)
-  const normalizedRole = String(meta?.role || '').toLowerCase().trim().replace(/[\s_-]+/g, '_')
-  let isSuperAdmin = normalizedRole === 'super_admin' || normalizedRole === 'superadmin'
-  if (!isSuperAdmin) {
-    try {
-      const [roleRows]: any = await pool.query(
-        `SELECT role FROM userlogin WHERE id = ? OR unique_key = ? OR user_id = ? LIMIT 1`,
-        [cleanUserId, cleanUserId, cleanUserId]
-      )
-      if (Array.isArray(roleRows) && roleRows.length > 0) {
-        const dbRole = String(roleRows[0]?.role || '').toLowerCase().trim().replace(/[\s_-]+/g, '_')
-        if (dbRole === 'super_admin' || dbRole === 'superadmin') {
-          isSuperAdmin = true
-        }
-      }
-    } catch {
-      // Ignore query error and proceed with standard check
-    }
-  }
+  const isSuperAdmin = await resolveIsSuperAdmin(pool, cleanUserId, meta?.role)
 
   // 1. Fetch currently registered devices in one query
   const [rows]: any = await pool.query(
@@ -345,11 +356,19 @@ export async function createActiveSession(
     deviceName?: string
     platform?: string
     ipAddress?: string
+    role?: string
   }
 ): Promise<void> {
   const pool = await getPool()
   const cleanUserId = await resolveCanonicalUserId(rawUserId)
   const cleanDeviceId = String(deviceId).trim()
+
+  // super_admin is exempt from the 2-device cap in registerOrValidateDevice, so
+  // it is exempt from single-session concurrency here too. Without this the
+  // exemption was hollow: unlimited devices could be registered, but each new
+  // login still revoked the rest, so the mobile app was signed out with
+  // "You signed in on another device" every time the CRM was opened on the web.
+  const isSuperAdmin = await resolveIsSuperAdmin(pool, cleanUserId, meta?.role)
 
   // 1. Kick any other active session for this user (Single Active Device Concurrency)
   const [activeSessions]: any = await pool.query(
@@ -357,7 +376,7 @@ export async function createActiveSession(
     [cleanUserId, String(rawUserId).trim()]
   )
 
-  if (Array.isArray(activeSessions) && activeSessions.length > 0) {
+  if (!isSuperAdmin && Array.isArray(activeSessions) && activeSessions.length > 0) {
     await pool.query(
       `UPDATE user_sessions 
        SET is_active = 0, revoked_reason = 'KICKED_BY_CONCURRENT_DEVICE'

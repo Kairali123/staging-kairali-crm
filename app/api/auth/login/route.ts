@@ -197,11 +197,15 @@ export async function POST(req: NextRequest) {
   }
 
   // 3. Enforce Single Active Device Concurrency (Hotstar Model)
-  // This automatically marks previous active sessions as kicked and notifies them via real-time SSE
+  // Marks previous active sessions as kicked and notifies them via real-time SSE.
+  // super_admin is exempt, matching its exemption from the 2-device limit above.
   await createActiveSession(sid, finalUser.id, effectiveDeviceId, {
     deviceName: effectiveDeviceName,
     platform: effectivePlatform,
     ipAddress: sourceIp,
+    // Lets the concurrency check honour the same super_admin exemption the
+    // device-limit check applies, without a second role lookup.
+    role: finalUser.role,
   })
 
   const response = jsonNoStore(
