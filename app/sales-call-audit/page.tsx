@@ -200,12 +200,12 @@ function formatDateKey(isoDate: string | null): { dateKey: string; label: string
 
 function ResultBadge({ result }: { result: AuditResult }) {
   return result === "Pass" ? (
-    <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50 font-bold">
+    <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50 font-semibold text-[11px] py-0 px-2 shadow-none">
       <CheckCircle2 className="mr-1 h-3 w-3 text-emerald-600" />
       PASS
     </Badge>
   ) : (
-    <Badge className="border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-50 font-bold">
+    <Badge className="border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-50 font-semibold text-[11px] py-0 px-2 shadow-none">
       <XCircle className="mr-1 h-3 w-3 text-rose-600" />
       FAIL
     </Badge>
@@ -214,12 +214,12 @@ function ResultBadge({ result }: { result: AuditResult }) {
 
 function EmailBadge({ status }: { status: EmailStatus }) {
   return status === "Sent" ? (
-    <Badge className="border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-100 font-bold px-2 py-0.5 text-xs inline-flex items-center gap-1 shadow-xs">
-      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+    <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50 font-semibold px-2 py-0 text-[11px] inline-flex items-center gap-1 shadow-none">
+      <CheckCircle2 className="h-3 w-3 text-emerald-600" />
       Mail Sent
     </Badge>
   ) : (
-    <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-500 text-xs inline-flex items-center gap-1 font-medium">
+    <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-500 text-[11px] inline-flex items-center gap-1 font-normal py-0 px-2 shadow-none">
       <CircleAlert className="h-3 w-3 text-slate-400" />
       Not Sent
     </Badge>
@@ -1509,15 +1509,16 @@ export default function SalesCallAuditPage() {
           <div className="overflow-x-auto">
             <Table className="min-w-[1000px]">
               <TableHeader className="bg-[#1e3a5f]">
-                <TableRow className="hover:bg-[#1e3a5f]">
-                  <TableHead className="text-white font-semibold">Audit Date</TableHead>
-                  <TableHead className="text-center text-white font-semibold">Total Calls</TableHead>
-                  <TableHead className="text-center text-white font-semibold">Avg Score</TableHead>
-                  <TableHead className="text-center text-white font-semibold">Pass</TableHead>
-                  <TableHead className="text-center text-white font-semibold">Fail</TableHead>
-                  <TableHead className="text-center text-white font-semibold">Fail Rate</TableHead>
-                  <TableHead className="text-center text-white font-semibold">Good / Bad</TableHead>
-                  <TableHead className="text-center text-white font-semibold">HR Actions</TableHead>
+                <TableRow className="hover:bg-[#1e3a5f] border-b-0">
+                  <TableHead className="text-white font-semibold pl-6 pr-3 text-left">Sales Person</TableHead>
+                  <TableHead className="text-white font-semibold px-3 text-left">Designation</TableHead>
+                  <TableHead className="text-white font-semibold px-3 text-right">Calls</TableHead>
+                  <TableHead className="text-white font-semibold px-3 text-center">Good/Bad</TableHead>
+                  <TableHead className="text-white font-semibold px-3 text-right">Avg Score</TableHead>
+                  <TableHead className="text-white font-semibold px-3 text-center">Outcome</TableHead>
+                  <TableHead className="text-white font-semibold px-3 text-left">HR Action Status</TableHead>
+                  <TableHead className="text-white font-semibold px-3 text-left">Delay (HR)</TableHead>
+                  {canWrite && <TableHead className="text-white font-semibold pr-4 pl-3 text-right">Action</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1534,294 +1535,317 @@ export default function SalesCallAuditPage() {
                   const actionDone = day.agents.filter(
                     agent => agent.hrVerifyStatus || agent.hrActionForCalling
                   ).length
+                  const totalCols = canWrite ? 9 : 8
 
-                  return [
-                    <TableRow
-                      key={day.date}
-                      onClick={() => toggleDate(day.date)}
-                      className="cursor-pointer border-b border-blue-100 bg-blue-50/50 hover:bg-blue-100/60 transition-colors"
-                    >
-                      <TableCell className="py-3">
-                        <div className="flex items-center gap-3">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-7 w-7 border-blue-200 bg-white text-blue-600 hover:bg-blue-50"
-                          >
-                            {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                          </Button>
-                          <div>
-                            <div className="font-bold text-slate-900 flex items-center gap-2">
-                              <span>{day.label}</span>
-                              {day.isMailSent ? (
-                                <Badge className="border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-100 font-bold px-2 py-0.5 text-xs inline-flex items-center gap-1 shadow-xs">
-                                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                                  Mail Sent
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="border-slate-200 bg-white text-slate-500 font-medium text-[11px] inline-flex items-center gap-1">
-                                  <CircleAlert className="h-3 w-3 text-slate-400" />
-                                  Mail Pending
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="text-[11px] text-slate-500 font-medium">{day.agents.length} Audit Records</div>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center font-bold text-slate-800">{calls}</TableCell>
-                      <TableCell className="text-center font-bold text-indigo-700">{score.toFixed(2)} / 5</TableCell>
-                      <TableCell className="text-center font-bold text-emerald-700">{pass}</TableCell>
-                      <TableCell className="text-center font-bold text-rose-700">{fail}</TableCell>
-                      <TableCell className="text-center font-medium">
-                        <span className={fail > 0 ? "text-rose-600 font-bold" : "text-slate-600"}>
-                          {day.agents.length ? ((fail / day.agents.length) * 100).toFixed(1) : "0.0"}%
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-center font-semibold">
-                        <span className="text-emerald-700">{goodTotal}</span>
-                        <span className="text-slate-400 mx-1">/</span>
-                        <span className="text-rose-700">{badTotal}</span>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge
-                          variant="outline"
-                          className={
-                            actionDone === fail && fail > 0
-                              ? "border-emerald-300 bg-emerald-50 text-emerald-700 font-bold"
-                              : "border-slate-300 bg-white text-slate-700 font-medium"
-                          }
-                        >
-                          {actionDone} / {day.agents.length}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>,
-                    isOpen && (
-                      <TableRow key={`${day.date}-agents`} className="hover:bg-transparent">
-                        <TableCell colSpan={8} className="bg-slate-50/50 p-3 sm:p-4">
-                          <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-                            {/* Inner Daily Audit Report Status Banner */}
-                            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-slate-50 border-b border-slate-200">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-semibold text-slate-700">Daily Audit Report ({day.label}):</span>
-                                {day.isMailSent ? (
-                                  <Badge className="border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-100 font-bold px-2.5 py-1 text-xs inline-flex items-center gap-1.5 shadow-xs">
-                                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                                    Mail Sent to HR (ho.hr@kairali.com)
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800 font-semibold px-2.5 py-1 text-xs inline-flex items-center gap-1.5">
-                                    <CircleAlert className="h-3.5 w-3.5 text-amber-600" />
-                                    Report Not Sent Yet
-                                  </Badge>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={e => {
-                                    e.stopPropagation()
-                                    const dStr = day.agents[0]?.rawDate ? day.agents[0].rawDate.slice(0, 10) : day.date
-                                    handleToggleMailStatus(dStr, day.isMailSent)
-                                  }}
-                                  disabled={togglingDate !== null}
-                                  className={
-                                    day.isMailSent
-                                      ? "h-7 text-xs border-slate-200 text-slate-600 hover:text-slate-900 cursor-pointer"
-                                      : "h-7 text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-semibold cursor-pointer"
-                                  }
-                                  title={day.isMailSent ? "Click to revert to pending" : "Click if you already sent the email report manually"}
-                                >
-                                  {togglingDate === (day.agents[0]?.rawDate ? day.agents[0].rawDate.slice(0, 10) : day.date) ? (
-                                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                                  ) : day.isMailSent ? (
-                                    <RotateCcw className="mr-1 h-3 w-3 text-slate-400" />
-                                  ) : (
-                                    <CheckCircle2 className="mr-1 h-3.5 w-3.5 text-emerald-600" />
-                                  )}
-                                  {day.isMailSent ? "Mark as Pending" : "Mark as Sent"}
-                                </Button>
-
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  asChild
-                                  className="h-7 text-xs gap-1.5 border-blue-200 text-blue-700 hover:bg-blue-50 font-medium cursor-pointer"
-                                >
-                                  <Link href={`/sales-call-audit/email-template?date=${encodeURIComponent(day.agents[0]?.rawDate ? day.agents[0].rawDate.slice(0, 10) : day.date)}`}>
-                                    <Mail className="h-3.5 w-3.5 text-blue-600" />
-                                    View / Send Report Email
-                                  </Link>
-                                </Button>
-                              </div>
-                            </div>
-                            <Table className="min-w-[1100px]">
-                              <TableHeader className="bg-slate-800">
-                                <TableRow className="hover:bg-slate-800">
-                                  <TableHead className="text-white font-semibold">Sales Person</TableHead>
-                                  <TableHead className="text-white font-semibold">Designation</TableHead>
-                                  <TableHead className="text-center text-white font-semibold">Calls</TableHead>
-                                  <TableHead className="text-center text-white font-semibold">Good / Bad</TableHead>
-                                  <TableHead className="text-center text-white font-semibold">Avg Score</TableHead>
-                                  <TableHead className="text-center text-white font-semibold">Outcome</TableHead>
-                                  <TableHead className="text-center text-white font-semibold">Mail Status</TableHead>
-                                  <TableHead className="text-white font-semibold">HR Action Status</TableHead>
-                                  <TableHead className="text-white font-semibold">Delay (HR)</TableHead>
-                                  {canWrite && <TableHead className="text-right text-white font-semibold">Action</TableHead>}
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {day.agents.map(agent => {
-                                  const hasAction = Boolean(agent.hrVerifyStatus || agent.hrActionForCalling)
-                                  const isSelected =
-                                    selectedAgent?.date === day.date && selectedAgent.agent.recordId === agent.recordId
-
-                                  return (
-                                    <TableRow
-                                      key={agent.recordId}
-                                      onClick={() => setSelectedAgent({ date: day.date, agent })}
-                                      className={`cursor-pointer transition-colors ${isSelected ? "bg-blue-50/80 border-l-4 border-l-blue-600" : "hover:bg-slate-50"
-                                        }`}
-                                    >
-                                      <TableCell>
-                                        <div className="flex items-center gap-3">
-                                          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">
-                                            {agent.initials}
-                                          </span>
-                                          <div>
-                                            <div className="font-bold text-slate-900">{agent.name}</div>
-                                            <div className="text-[11px] text-slate-500 font-mono flex items-center gap-1.5">
-                                              <span>{agent.id}</span>
-                                              <span className="text-slate-300">•</span>
-                                              <span className="text-[10px] text-slate-400">{agent.mid}</span>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </TableCell>
-                                      <TableCell>
-                                        <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-700 text-[11px]">
-                                          {agent.designation}
-                                        </Badge>
-                                      </TableCell>
-                                      <TableCell className="text-center font-semibold text-slate-800">
-                                        <button
-                                          type="button"
-                                          onClick={event => {
-                                            event.stopPropagation()
-                                            setCallDetailModal({ open: true, type: "all", agent, date: day.date })
-                                          }}
-                                          className="hover:underline hover:text-blue-700 transition cursor-pointer"
-                                          title="Click to view full call audit details"
-                                        >
-                                          {agent.calls}
-                                        </button>
-                                      </TableCell>
-                                      <TableCell className="text-center">
-                                        <button
-                                          type="button"
-                                          onClick={event => {
-                                            event.stopPropagation()
-                                            setCallDetailModal({ open: true, type: "good", agent, date: day.date })
-                                          }}
-                                          className="inline-flex items-center text-emerald-700 font-bold hover:bg-emerald-100 hover:text-emerald-900 px-1.5 py-0.5 rounded cursor-pointer transition-colors shadow-xs"
-                                          title="Click to view Good Calls details"
-                                        >
-                                          {agent.good}
-                                        </button>
-                                        <span className="text-slate-400 mx-1">/</span>
-                                        <button
-                                          type="button"
-                                          onClick={event => {
-                                            event.stopPropagation()
-                                            setCallDetailModal({ open: true, type: "bad", agent, date: day.date })
-                                          }}
-                                          className="inline-flex items-center text-rose-700 font-bold hover:bg-rose-100 hover:text-rose-900 px-1.5 py-0.5 rounded cursor-pointer transition-colors shadow-xs"
-                                          title="Click to view Bad Calls details"
-                                        >
-                                          {agent.bad}
-                                        </button>
-                                      </TableCell>
-                                      <TableCell className="text-center font-bold text-indigo-700">
-                                        {agent.score.toFixed(2)} / 5
-                                      </TableCell>
-                                      <TableCell className="text-center">
-                                        <ResultBadge result={agent.result} />
-                                      </TableCell>
-                                      <TableCell className="text-center">
-                                        <EmailBadge status={agent.emailStatus} />
-                                      </TableCell>
-                                      <TableCell>
-                                        {hasAction ? (
-                                          <div>
-                                            <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
-                                              <CheckCircle2 className="mr-1 h-3 w-3" />
-                                              {agent.hrVerifyStatus || "Verified"}
-                                            </Badge>
-                                            <div className="mt-0.5 text-[11px] text-slate-600 font-medium truncate max-w-[200px]">
-                                              {agent.hrActionForCalling}
-                                            </div>
-                                            {agent.accountFmsUpdated && (
-                                              <div className="text-[10px] font-bold text-emerald-700">
-                                                ✓ Pagarbook / FMS Synced
-                                              </div>
-                                            )}
-                                          </div>
-                                        ) : agent.result === "Fail" ? (
-                                          <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800 font-bold">
-                                            Action Pending
-                                          </Badge>
-                                        ) : (
-                                          <span className="text-xs text-slate-400">No action needed</span>
-                                        )}
-                                      </TableCell>
-                                      <TableCell className="text-xs font-mono text-slate-600">
-                                        {agent.timeDelayHr ? (
-                                          <span className="inline-flex items-center gap-1 text-slate-700">
-                                            <Clock className="h-3 w-3 text-slate-400" />
-                                            {agent.timeDelayHr}
-                                          </span>
-                                        ) : (
-                                          "—"
-                                        )}
-                                      </TableCell>
-                                      {canWrite && (
-                                        <TableCell className="text-right">
-                                          {agent.result === "Pass" && !hasAction ? (
-                                            <span className="text-xs text-slate-400 font-medium px-2 py-1">—</span>
-                                          ) : (
-                                            <Button
-                                              size="sm"
-                                              onClick={event => {
-                                                event.stopPropagation()
-                                                openAction(day.date, agent)
-                                              }}
-                                              className={
-                                                hasAction
-                                                  ? "bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 text-xs h-8 cursor-pointer shadow-sm font-semibold"
-                                                  : "bg-blue-600 hover:bg-blue-700 text-white text-xs h-8 cursor-pointer shadow-sm font-bold"
-                                              }
-                                            >
-                                              {hasAction ? (
-                                                <CheckCircle2 className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
-                                              ) : (
-                                                <ClipboardCheck className="mr-1.5 h-3.5 w-3.5" />
-                                              )}
-                                              {hasAction ? "View Details" : "Take Action"}
-                                            </Button>
-                                          )}
-                                        </TableCell>
-                                      )}
-                                    </TableRow>
-                                  )
-                                })}
-                              </TableBody>
-                            </Table>
+                  return (
+                    <Fragment key={day.date}>
+                      {/* Date Row (Parent) - Styled matching /leads/assign Data Source Breakdown */}
+                      <TableRow
+                        onClick={() => toggleDate(day.date)}
+                        className="cursor-pointer font-semibold border-b-2 border-slate-300 hover:opacity-95 transition-all select-none"
+                        style={{ backgroundColor: isOpen ? "#BFDBFF" : "#f1f5f9" }}
+                      >
+                        {/* Column 1: Sales Person -> Date, Records Count, Mail Status */}
+                        <TableCell className="py-2.5 pl-4 pr-3 whitespace-nowrap">
+                          <div className="flex items-center gap-2 min-w-max">
+                            {isOpen ? (
+                              <ChevronDown className="w-4 h-4 text-blue-600 shrink-0" />
+                            ) : (
+                              <ChevronRight className="w-4 h-4 text-blue-600 shrink-0" />
+                            )}
+                            <Calendar className="w-4 h-4 text-slate-600 shrink-0" />
+                            <span className="font-bold text-slate-800 text-xs sm:text-sm">{day.label}</span>
+                            <span className="text-xs text-slate-600">({day.agents.length} Records)</span>
+                            {day.isMailSent ? (
+                              <Badge className="border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-100 font-semibold px-2 py-0 text-[11px] inline-flex items-center gap-1 shadow-none ml-1">
+                                <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                                Mail Sent
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="border-amber-300 bg-amber-100/70 text-amber-800 font-medium text-[11px] px-2 py-0 inline-flex items-center gap-1 shadow-none ml-1">
+                                <CircleAlert className="h-3 w-3 text-amber-600" />
+                                Mail Pending
+                              </Badge>
+                            )}
                           </div>
                         </TableCell>
+
+                        {/* Column 2: Designation */}
+                        <TableCell className="py-2.5 px-3 text-left">
+                          <span className="text-xs text-slate-400 font-normal">—</span>
+                        </TableCell>
+
+                        {/* Column 3: Calls (numeric right-aligned) */}
+                        <TableCell className="py-2.5 px-3 text-right">
+                          <span className="text-sm font-bold text-slate-900 tabular-nums">
+                            {calls}
+                          </span>
+                        </TableCell>
+
+                        {/* Column 4: Good/Bad (centered) */}
+                        <TableCell className="py-2.5 px-3 text-center">
+                          <span className="inline-flex items-center text-xs tabular-nums font-bold">
+                            <span className="text-emerald-700">{goodTotal}</span>
+                            <span className="text-slate-400 mx-1">/</span>
+                            <span className="text-rose-700">{badTotal}</span>
+                          </span>
+                        </TableCell>
+
+                        {/* Column 5: Avg Score (numeric right-aligned) */}
+                        <TableCell className="py-2.5 px-3 text-right">
+                          <span className="text-sm font-bold text-slate-900 tabular-nums">
+                            {score.toFixed(2)}
+                          </span>
+                          <span className="text-slate-500 text-[11px] font-normal ml-1">/ 5</span>
+                        </TableCell>
+
+                        {/* Column 6: Outcome (centered pass / fail counts) */}
+                        <TableCell className="py-2.5 px-3 text-center">
+                          <span className="inline-flex items-center text-xs tabular-nums font-bold">
+                            <span className="text-emerald-700">{pass}P</span>
+                            <span className="text-slate-400 mx-1">•</span>
+                            <span className={fail > 0 ? "text-rose-700" : "text-slate-600"}>{fail}F</span>
+                          </span>
+                        </TableCell>
+
+                        {/* Column 7: HR Action Status */}
+                        <TableCell className="py-2.5 px-3 text-left">
+                          <span className="text-xs font-bold text-slate-900 tabular-nums">
+                            {actionDone} / {day.agents.length}
+                          </span>
+                          <span className="text-[11px] text-slate-500 ml-1 font-normal">Processed</span>
+                        </TableCell>
+
+                        {/* Column 8: Delay (HR) */}
+                        <TableCell className="py-2.5 px-3 text-left">
+                          <span className="text-xs text-slate-400 font-normal">—</span>
+                        </TableCell>
+
+                        {/* Column 9: Action (Date Actions: Mark as Pending/Sent & View / Send Email) */}
+                        {canWrite && (
+                          <TableCell className="py-2.5 pr-4 pl-3 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-2" onClick={e => e.stopPropagation()}>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  const dStr = day.agents[0]?.rawDate ? day.agents[0].rawDate.slice(0, 10) : day.date
+                                  handleToggleMailStatus(dStr, day.isMailSent)
+                                }}
+                                disabled={togglingDate !== null}
+                                className={
+                                  day.isMailSent
+                                    ? "h-7 px-2.5 text-xs border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900 font-medium shadow-none cursor-pointer"
+                                    : "h-7 px-2.5 text-xs border-emerald-400 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-semibold shadow-none cursor-pointer"
+                                }
+                                title={day.isMailSent ? "Click to revert to pending" : "Click if you already sent the email report manually"}
+                              >
+                                {togglingDate === (day.agents[0]?.rawDate ? day.agents[0].rawDate.slice(0, 10) : day.date) ? (
+                                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                ) : day.isMailSent ? (
+                                  <RotateCcw className="mr-1 h-3 w-3 text-slate-500" />
+                                ) : (
+                                  <CheckCircle2 className="mr-1 h-3 w-3 text-emerald-600" />
+                                )}
+                                {day.isMailSent ? "Mark as Pending" : "Mark as Sent"}
+                              </Button>
+
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                asChild
+                                className="h-7 px-2.5 text-xs gap-1 border-blue-300 bg-white text-blue-700 hover:bg-blue-50 font-medium shadow-none cursor-pointer"
+                              >
+                                <Link href={`/sales-call-audit/email-template?date=${encodeURIComponent(day.agents[0]?.rawDate ? day.agents[0].rawDate.slice(0, 10) : day.date)}`}>
+                                  <Mail className="h-3 w-3 text-blue-600" />
+                                  View / Send Email
+                                </Link>
+                              </Button>
+                            </div>
+                          </TableCell>
+                        )}
                       </TableRow>
-                    ),
-                  ]
+
+                      {/* Employee Rows under this Date */}
+                      {isOpen &&
+                        (day.agents.length === 0 ? (
+                          <TableRow key={`${day.date}-empty`}>
+                            <TableCell colSpan={totalCols} className="text-center text-slate-400 py-4 text-xs italic bg-white border-b border-slate-100">
+                              No sales agent records found for this date matching current filters.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          day.agents.map(agent => {
+                            const hasAction = Boolean(agent.hrVerifyStatus || agent.hrActionForCalling)
+                            const isSelected =
+                              selectedAgent?.date === day.date && selectedAgent.agent.recordId === agent.recordId
+
+                            return (
+                              <TableRow
+                                key={`${day.date}-${agent.recordId}`}
+                                onClick={() => setSelectedAgent({ date: day.date, agent })}
+                                className={`cursor-pointer transition-colors border-b border-slate-100 last:border-b-slate-200 ${
+                                  isSelected ? "bg-blue-50/70 border-l-2 border-l-blue-600" : "bg-white hover:bg-slate-50"
+                                }`}
+                              >
+                                {/* Sales Person (indented pl-10 to match nested child hierarchy in /leads/assign) */}
+                                <TableCell className="py-2.5 pl-10 pr-3">
+                                  <div className="flex items-center gap-2.5">
+                                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600 shrink-0 border border-slate-200/60">
+                                      {agent.initials}
+                                    </span>
+                                    <div>
+                                      <div className="font-semibold text-slate-900 text-xs sm:text-sm leading-tight">{agent.name}</div>
+                                      <div className="text-[11px] text-slate-400 font-mono flex items-center gap-1.5 mt-0.5">
+                                        <span>{agent.id}</span>
+                                        <span className="text-slate-300">•</span>
+                                        <span>{agent.mid}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </TableCell>
+
+                                {/* Designation */}
+                                <TableCell className="py-2.5 px-3">
+                                  <span className="inline-block text-[11px] text-slate-600 bg-slate-100/80 border border-slate-200/60 rounded px-2 py-0.5 font-normal">
+                                    {agent.designation}
+                                  </span>
+                                </TableCell>
+
+                                {/* Calls (numeric right-aligned) */}
+                                <TableCell className="py-2.5 px-3 text-right">
+                                  <button
+                                    type="button"
+                                    onClick={event => {
+                                      event.stopPropagation()
+                                      setCallDetailModal({ open: true, type: "all", agent, date: day.date })
+                                    }}
+                                    className="text-xs font-semibold text-slate-800 hover:text-blue-600 tabular-nums cursor-pointer transition-colors"
+                                    title="Click to view full call audit details"
+                                  >
+                                    {agent.calls}
+                                  </button>
+                                </TableCell>
+
+                                {/* Good / Bad (tabular-nums centered) */}
+                                <TableCell className="py-2.5 px-3 text-center">
+                                  <span className="inline-flex items-center text-xs tabular-nums font-medium">
+                                    <button
+                                      type="button"
+                                      onClick={event => {
+                                        event.stopPropagation()
+                                        setCallDetailModal({ open: true, type: "good", agent, date: day.date })
+                                      }}
+                                      className="text-emerald-700 font-semibold hover:underline cursor-pointer"
+                                      title="Click to view Good Calls details"
+                                    >
+                                      {agent.good}
+                                    </button>
+                                    <span className="text-slate-300 mx-1">/</span>
+                                    <button
+                                      type="button"
+                                      onClick={event => {
+                                        event.stopPropagation()
+                                        setCallDetailModal({ open: true, type: "bad", agent, date: day.date })
+                                      }}
+                                      className="text-rose-600 font-semibold hover:underline cursor-pointer"
+                                      title="Click to view Bad Calls details"
+                                    >
+                                      {agent.bad}
+                                    </button>
+                                  </span>
+                                </TableCell>
+
+                                {/* Avg Score (numeric right-aligned) */}
+                                <TableCell className="py-2.5 px-3 text-right">
+                                  <span className="text-xs font-semibold text-slate-900 tabular-nums">
+                                    {agent.score.toFixed(2)}
+                                  </span>
+                                  <span className="text-slate-400 text-[11px] font-normal ml-1">/ 5</span>
+                                </TableCell>
+
+                                {/* Outcome */}
+                                <TableCell className="py-2.5 px-3 text-center">
+                                  <ResultBadge result={agent.result} />
+                                </TableCell>
+
+                                {/* HR Action Status */}
+                                <TableCell className="py-2.5 px-3 text-left">
+                                  {hasAction ? (
+                                    <div className="flex flex-col gap-0.5">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50 text-[11px] font-semibold py-0 px-1.5 shadow-none">
+                                          <CheckCircle2 className="mr-1 h-3 w-3" />
+                                          {agent.hrVerifyStatus || "Verified"}
+                                        </Badge>
+                                        {agent.accountFmsUpdated && (
+                                          <span className="text-[10px] font-medium text-emerald-700">✓ FMS Synced</span>
+                                        )}
+                                      </div>
+                                      {agent.hrActionForCalling && (
+                                        <div className="text-[11px] text-slate-500 truncate max-w-[200px]" title={agent.hrActionForCalling}>
+                                          {agent.hrActionForCalling}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : agent.result === "Fail" ? (
+                                    <Badge variant="outline" className="border-amber-200 bg-amber-50/80 text-amber-800 font-medium text-[11px] py-0 px-1.5 shadow-none">
+                                      Action Pending
+                                    </Badge>
+                                  ) : (
+                                    <span className="text-xs text-slate-400">—</span>
+                                  )}
+                                </TableCell>
+
+                                {/* Delay (HR) */}
+                                <TableCell className="py-2.5 px-3 text-left text-xs font-mono text-slate-600">
+                                  {agent.timeDelayHr ? (
+                                    <span className="inline-flex items-center gap-1 text-slate-600">
+                                      <Clock className="h-3 w-3 text-slate-400" />
+                                      {agent.timeDelayHr}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400">—</span>
+                                  )}
+                                </TableCell>
+
+                                {/* Action */}
+                                {canWrite && (
+                                  <TableCell className="py-2.5 pr-4 pl-3 text-right">
+                                    {agent.result === "Pass" && !hasAction ? (
+                                      <span className="text-xs text-slate-400 pr-2">—</span>
+                                    ) : (
+                                      <Button
+                                        size="sm"
+                                        variant={hasAction ? "outline" : "default"}
+                                        onClick={event => {
+                                          event.stopPropagation()
+                                          openAction(day.date, agent)
+                                        }}
+                                        className={
+                                          hasAction
+                                            ? "h-7 text-xs border-slate-200 text-slate-700 hover:bg-slate-50 font-medium shadow-none cursor-pointer"
+                                            : "h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-none cursor-pointer"
+                                        }
+                                      >
+                                        {hasAction ? (
+                                          <CheckCircle2 className="mr-1 h-3 w-3 text-emerald-600" />
+                                        ) : (
+                                          <ClipboardCheck className="mr-1 h-3 w-3" />
+                                        )}
+                                        {hasAction ? "View" : "Take Action"}
+                                      </Button>
+                                    )}
+                                  </TableCell>
+                                )}
+                              </TableRow>
+                            )
+                          })
+                        ))}
+                    </Fragment>
+                  )
                 })}
               </TableBody>
             </Table>

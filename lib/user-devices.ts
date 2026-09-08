@@ -164,7 +164,19 @@ export async function registerOrValidateDevice(
 
   // 1. Fetch currently registered devices in one query
   const [rows]: any = await pool.query(
-    `SELECT * FROM user_devices WHERE user_id = ? OR user_id = ? ORDER BY last_used_at DESC`,
+    `SELECT 
+       id,
+       user_id,
+       device_id,
+       device_name,
+       platform,
+       browser,
+       ip_address,
+       CONVERT_TZ(created_at, '+00:00', '+05:30') AS created_at,
+       CONVERT_TZ(last_used_at, '+00:00', '+05:30') AS last_used_at
+     FROM user_devices 
+     WHERE user_id = ? OR user_id = ? 
+     ORDER BY last_used_at DESC`,
     [cleanUserId, String(rawUserId).trim()]
   )
 
@@ -249,7 +261,19 @@ export async function getRegisteredDevices(rawUserId: string): Promise<UserDevic
   const cleanUserId = await resolveCanonicalUserId(rawUserId)
 
   const [rows]: any = await pool.query(
-    `SELECT * FROM user_devices WHERE user_id = ? OR user_id = ? ORDER BY last_used_at DESC`,
+    `SELECT 
+       id,
+       user_id,
+       device_id,
+       device_name,
+       platform,
+       browser,
+       ip_address,
+       CONVERT_TZ(created_at, '+00:00', '+05:30') AS created_at,
+       CONVERT_TZ(last_used_at, '+00:00', '+05:30') AS last_used_at
+     FROM user_devices 
+     WHERE user_id = ? OR user_id = ? 
+     ORDER BY last_used_at DESC`,
     [cleanUserId, String(rawUserId).trim()]
   )
 
@@ -506,7 +530,21 @@ export async function getUserSessions(rawUserId: string): Promise<UserSessionRec
   const cleanUserId = await resolveCanonicalUserId(rawUserId)
 
   const [rows]: any = await pool.query(
-    `SELECT * FROM user_sessions WHERE (user_id = ? OR user_id = ?) AND is_active = 1 ORDER BY last_heartbeat DESC LIMIT 20`,
+    `SELECT 
+       sid,
+       user_id,
+       device_id,
+       device_name,
+       platform,
+       ip_address,
+       is_active,
+       revoked_reason,
+       CONVERT_TZ(created_at, '+00:00', '+05:30') AS created_at,
+       CONVERT_TZ(last_heartbeat, '+00:00', '+05:30') AS last_heartbeat
+     FROM user_sessions 
+     WHERE (user_id = ? OR user_id = ?) AND is_active = 1 
+     ORDER BY last_heartbeat DESC 
+     LIMIT 20`,
     [cleanUserId, String(rawUserId).trim()]
   )
 

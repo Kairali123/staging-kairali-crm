@@ -1278,6 +1278,28 @@ interface SecurityModalProps {
   onUpdated: () => void
 }
 
+function formatISTDateTime(val: string | Date | null | undefined): string {
+  if (!val) return "—"
+  try {
+    const d = new Date(val)
+    if (isNaN(d.getTime())) return String(val)
+    return (
+      d.toLocaleString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true,
+      }).replace(/\b(am|pm)\b/i, (m) => m.toUpperCase()) + " (IST)"
+    )
+  } catch {
+    return String(val) || "—"
+  }
+}
+
 function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProps) {
   const { user: currentUser } = useAuth()
   const isSuperAdmin = currentUser?.role === "super_admin"
@@ -1685,8 +1707,8 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
                           <p className="text-[11px] text-gray-500 font-mono">
                             {d.platform} • {d.browser} • IP: {d.ipAddress || "N/A"}
                           </p>
-                          <p className="text-[10px] text-gray-400">
-                            Last Active: {new Date(d.lastUsedAt).toLocaleString()}
+                          <p className="text-[10px] text-gray-500 font-medium">
+                            Last Active: {formatISTDateTime(d.lastUsedAt)}
                           </p>
                         </div>
                       </div>
@@ -1748,8 +1770,8 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
                           <p className="text-[11px] text-gray-500 font-mono">
                             IP: {s.ipAddress || "N/A"} • Platform: {s.platform || "Web"}
                           </p>
-                          <p className="text-[10px] text-gray-400">
-                            Heartbeat: {new Date(s.lastHeartbeat).toLocaleString()}
+                          <p className="text-[10px] text-gray-500 font-medium">
+                            Heartbeat: {formatISTDateTime(s.lastHeartbeat)}
                           </p>
                         </div>
                       </div>
