@@ -142,6 +142,21 @@ export async function POST(req: NextRequest) {
       return error(upstreamResponse.ok ? 422 : 502, safe.code, safe.message, correlationId)
     }
 
+    if (action === 'findBuyer' && upstream.data && typeof upstream.data === 'object') {
+      const data = upstream.data as Record<string, unknown>
+      if (data.found && data.buyer && typeof data.buyer === 'object') {
+        const buyer = data.buyer as Record<string, unknown>
+        if (!buyer.pinCode) {
+          const addr = String(buyer.billingAddress || buyer.shippingAddress || '')
+          const pinMatch = addr.match(/\b\d{6}\b/)
+          if (pinMatch) buyer.pinCode = pinMatch[0]
+        }
+        if (!buyer.pan && typeof buyer.gst === 'string' && buyer.gst.length === 15) {
+          buyer.pan = buyer.gst.slice(2, 12)
+        }
+      }
+    }
+
     await auditOrderFormAction({ req, user, action, outcome: 'success', correlationId, targetId: targetId(body), durationMs: Date.now() - startedAt })
     return json({ ...upstream, correlationId }, 200)
   } catch (caught) {
