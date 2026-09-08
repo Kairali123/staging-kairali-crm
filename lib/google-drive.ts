@@ -123,6 +123,29 @@ export async function uploadAudioToDrive(
   return { fileId, streamUrl, webViewLink }
 }
 
+// Both upload paths stamp appProperties.crmOwnerEmail when the file is created,
+// so the file is its own durable record of who uploaded it. Reading it back is
+// what lets /api/meetings/save authorize an audio_url from any instance,
+// replacing the in-memory map only the uploading instance ever held.
+// Returns the lowercased owner, or null when unknown or unreadable — callers
+// treat null as "not authorized" rather than guessing.
+export async function getMeetingAudioOwner(fileId: string): Promise<string | null> {
+  try {
+    const drive = getDriveClient()
+    const res = await drive.files.get({
+      fileId,
+      supportsAllDrives: true,
+      fields: 'appProperties',
+    } as any)
+
+    const owner = (res.data as any)?.appProperties?.crmOwnerEmail
+    return typeof owner === 'string' && owner.trim() ? owner.trim().toLowerCase() : null
+  } catch (err) {
+    console.error('[Drive] Could not read owner for file', fileId, err)
+    return null
+  }
+}
+
 export async function deleteAudioFromDrive(audioUrl: string): Promise<void> {
   // audioUrl is now "/api/meetings/audio?id=FILE_ID" — extract the id
   const match = audioUrl.match(/[?&]id=([^&]+)/)

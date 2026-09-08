@@ -11,10 +11,7 @@ import {
   meetingUnauthorized,
   parsePositiveInteger,
 } from '@/lib/meetings-auth'
-import {
-  isMeetingUploadSessionOwner,
-  registerMeetingUploadedFile,
-} from '@/lib/meeting-upload-sessions'
+import { verifyAndStripUploadToken } from '@/lib/meeting-upload-sessions'
 import { checkApiRateLimit, rateLimitResponse } from '@/lib/api-rate-limit'
 
 // Force Node.js runtime (not Edge) — Edge has a 4MB hard cap, Node allows more
@@ -59,7 +56,10 @@ export async function PUT(req: NextRequest) {
     if (!isValidContentRange(contentRange) || !parsedContentLength) {
       return NextResponse.json({ error: 'Valid chunk range and size required' }, { status: 400 })
     }
-    if (!isMeetingUploadSessionOwner(uploadUrl, session.email)) {
+    // Verifies the signature the create step put on this URL and hands back the
+    // URL to forward to Google with that token removed.
+    const driveUploadUrl = verifyAndStripUploadToken(uploadUrl, session.email)
+    if (!driveUploadUrl) {
       return NextResponse.json({ error: 'Upload session not found or not owned by this user' }, { status: 403 })
     }
 
@@ -68,7 +68,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'Chunk size mismatch or too large' }, { status: 400 })
     }
 
-    const driveRes = await fetch(uploadUrl, {
+    const driveRes = await fetch(driveUploadUrl, {
       method:  'PUT',
       headers: {
         'Content-Length': String(parsedContentLength),
@@ -83,7 +83,8 @@ export async function PUT(req: NextRequest) {
 
     if (driveRes.status === 200 || driveRes.status === 201) {
       const data = await driveRes.json()
-      registerMeetingUploadedFile(data.id, session.email)
+      // Ownership of the finished file is recorded by Drive itself, via the
+      // appProperties.crmOwnerEmail set when the session was created.
       return NextResponse.json({ status: driveRes.status, fileId: data.id })
     }
 
@@ -115,11 +116,12 @@ export async function POST(req: NextRequest) {
     if (!parsedTotalSize) {
       return NextResponse.json({ error: 'Valid totalSize required' }, { status: 400 })
     }
-    if (!isMeetingUploadSessionOwner(uploadUrl, session.email)) {
+    const driveUploadUrl = verifyAndStripUploadToken(uploadUrl, session.email)
+    if (!driveUploadUrl) {
       return NextResponse.json({ error: 'Upload session not found or not owned by this user' }, { status: 403 })
     }
 
-    const driveRes = await fetch(uploadUrl, {
+    const driveRes = await fetch(driveUploadUrl, {
       method:  'PUT',
       headers: { 'Content-Range': `bytes */${parsedTotalSize}`, 'Content-Length': '0' },
     })
@@ -132,7 +134,6 @@ export async function POST(req: NextRequest) {
 
     if (driveRes.status === 200 || driveRes.status === 201) {
       const data = await driveRes.json()
-      registerMeetingUploadedFile(data.id, session.email)
       return NextResponse.json({ resumeFrom: parsedTotalSize, fileId: data.id, complete: true })
     }
 

@@ -11,7 +11,6 @@ import {
   normalizeMeetingAudioMime,
 } from '@/lib/meetings-auth'
 import { checkApiRateLimit, rateLimitResponse } from '@/lib/api-rate-limit'
-import { registerMeetingUploadedFile } from '@/lib/meeting-upload-sessions'
 
 export async function POST(req: NextRequest) {
   try {
@@ -45,8 +44,6 @@ export async function POST(req: NextRequest) {
       mimeType,
       session.email,
     )
-    registerMeetingUploadedFile(fileId, session.email)
-
     return NextResponse.json({ fileId, streamUrl, webViewLink })
 
   } catch (err: any) {
