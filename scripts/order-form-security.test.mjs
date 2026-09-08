@@ -1,6 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 
 const route = readFileSync(new URL('../app/api/order-form/route.ts', import.meta.url), 'utf8')
 const security = readFileSync(new URL('../lib/order-form-security.ts', import.meta.url), 'utf8')
@@ -9,6 +11,9 @@ const middleware = readFileSync(new URL('../middleware.ts', import.meta.url), 'u
 const nextConfig = readFileSync(new URL('../next.config.mjs', import.meta.url), 'utf8')
 const page = readFileSync(new URL('../app/new-order-fms/primary-order-form/page.tsx', import.meta.url), 'utf8')
 const bundledIndex = readFileSync(new URL('../public/new-order-fms/primary-order-form/app/index.html', import.meta.url), 'utf8')
+const migration = readFileSync(new URL('./migrate-order-form-security.mjs', import.meta.url), 'utf8')
+const evidence = readFileSync(new URL('../docs/PRIMARY_ORDER_FORM_RELEASE_EVIDENCE.md', import.meta.url), 'utf8')
+const migrationPath = fileURLToPath(new URL('./migrate-order-form-security.mjs', import.meta.url))
 
 test('form and browser API stay on the authenticated CRM origin', () => {
   assert.match(page, /PRIMARY_ORDER_FORM_URL = "\/new-order-fms\/primary-order-form\/app\/index\.html"/)
@@ -45,36 +50,61 @@ test('sensitive actions require edit/manage permissions and never view alone', (
   assert.match(policy, /retry: \{ permissions: \['new-order-fms\.manage'\]/)
 })
 
-test('rate limits and audits use shared database tables', () => {
-  assert.match(security, /CREATE TABLE IF NOT EXISTS order_form_rate_limits/)
+test('rate limits and audits use pre-provisioned shared database tables', () => {
   assert.match(security, /ON DUPLICATE KEY UPDATE request_count = request_count \+ 1/)
-  assert.match(security, /CREATE TABLE IF NOT EXISTS order_form_audit_log/)
   assert.match(security, /INSERT INTO order_form_audit_log/)
 })
 
 test('P1 Issue #77: hot request paths execute pure DML without per-request DDL or random cleanup (fail-closed)', () => {
   assert.doesNotMatch(security, /Math\.random\(\)/)
-  assert.match(security, /export async function ensureOrderFormTables/)
-  assert.match(security, /export async function cleanupExpiredRateLimits/)
-
-  // Verify consumeOrderFormRateLimit does NOT call ensureOrderFormTables or CREATE TABLE
-  const consumeFn = security.slice(
-    security.indexOf('export async function consumeOrderFormRateLimit'),
-    security.indexOf('export async function auditOrderFormAction')
-  )
-  assert.doesNotMatch(consumeFn, /ensureOrderFormTables/)
-  assert.doesNotMatch(consumeFn, /CREATE TABLE/)
-
-  // Verify auditOrderFormAction does NOT call ensureOrderFormTables or CREATE TABLE
-  const auditFn = security.slice(security.indexOf('export async function auditOrderFormAction'))
-  assert.doesNotMatch(auditFn, /ensureOrderFormTables/)
-  assert.doesNotMatch(auditFn, /CREATE TABLE/)
+  assert.doesNotMatch(security, /ensureOrderFormTables/)
+  assert.doesNotMatch(security, /cleanupExpiredRateLimits/)
+  assert.doesNotMatch(security, /\b(?:CREATE|ALTER|DROP|TRUNCATE)\s+TABLE\b/i)
+  assert.doesNotMatch(security, /DELETE\s+FROM\s+order_form_rate_limits/i)
 })
 
 test('Apps Script URL and secret are server-only and safe errors are returned', () => {
   assert.match(route, /process\.env\.ORDER_FORM_APPS_SCRIPT_URL/)
   assert.match(route, /process\.env\.ORDER_FORM_APPS_SCRIPT_SECRET/)
-  assert.match(route, /_serverSecret: serverSecret/)
+  assert.match(route, /_serverSecret: appsScript\.secret/)
   assert.doesNotMatch(bundledIndex, /script\.google\.com/)
+  assert.doesNotMatch(route, /kappl-primary-order-form\.vercel\.app/)
+  assert.match(route, /url\.hostname !== 'script\.google\.com'/)
+  assert.match(route, /secret\.length < 32/)
   assert.match(route, /publicUpstreamError/)
+})
+
+test('migration rollback is non-destructive and production execution is explicitly gated', () => {
+  assert.doesNotMatch(migration, /DROP\s+TABLE/i)
+  assert.match(migration, /ORDER_FORM_MIGRATION_APPROVAL/)
+  assert.match(migration, /ORDER_FORM_RECOVERY_POINT/)
+  assert.match(migration, /No schema objects or stored audit data are deleted/)
+})
+
+test('migration commands execute a safe plan/rollback and block an unapproved apply', () => {
+  const cleanEnvironment = { ...process.env }
+  delete cleanEnvironment.ORDER_FORM_MIGRATION_APPROVAL
+  delete cleanEnvironment.ORDER_FORM_RECOVERY_POINT
+  delete cleanEnvironment.ORDER_FORM_CHANGE_ID
+
+  const plan = spawnSync(process.execPath, [migrationPath, '--plan'], { encoding: 'utf8' })
+  assert.equal(plan.status, 0)
+  assert.match(plan.stdout, /no cleanup or destructive rollback is included/i)
+
+  const rollback = spawnSync(process.execPath, [migrationPath, '--down'], { encoding: 'utf8' })
+  assert.equal(rollback.status, 0)
+  assert.match(rollback.stdout, /No schema objects or stored audit data are deleted/)
+
+  const apply = spawnSync(process.execPath, [migrationPath, '--up'], {
+    encoding: 'utf8',
+    env: cleanEnvironment,
+  })
+  assert.notEqual(apply.status, 0)
+  assert.match(`${apply.stdout}\n${apply.stderr}`, /Migration blocked/)
+})
+
+test('release evidence does not present placeholder or localhost samples as completed proof', () => {
+  assert.doesNotMatch(evidence, /DEPLOYMENT_ID/)
+  assert.doesNotMatch(evidence, /"source_ip": "::1"/)
+  assert.match(evidence, /PENDING — attach captured output/)
 })

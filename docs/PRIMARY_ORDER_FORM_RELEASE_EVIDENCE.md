@@ -1,18 +1,20 @@
 # KAPPL Primary Order Form — release evidence
 
-Scope: staging review only. No production sales rollout is authorized by this document.
+Scope: production-repository release candidate. This document records implementation
+evidence only; production migration and sales rollout still require the approvals and
+runtime proof listed below.
 
 ## Security and release-blocker mapping
 
 1. **Authenticated UI** — The React bundle is hosted at the same-origin protected path `/new-order-fms/primary-order-form/app/`. Middleware validates the signed `kairali_user` session before the wrapper or bundle/assets are served.
 2. **Server-side RBAC** — `/api/order-form` re-verifies the signed session and maps every allowed action to `new-order-fms.view`, `new-order-fms.edit`, or `new-order-fms.manage`. Admin and `all` retain the CRM's existing override behavior.
-3. **Rate limits, audit, safe errors** — A shared MySQL fixed-window limiter protects each actor/IP/action. In compliance with **Issue #77**, hot request paths execute 100% pure DML without any runtime DDL (`CREATE TABLE`) or random cleanup (`Math.random()`), failing closed with 503 if tables are unavailable. Table provisioning and rollback are managed strictly out-of-band via migration scripts. Security events go to the existing structured logger/webhook and `order_form_audit_log`. Public responses omit stack traces, secrets, raw payloads, and upstream implementation details.
-4. **Apps Script boundary** — URL and shared secret exist only in server environment variables. Apps Script fails closed unless `_serverSecret` matches the 32+ character Script Property `ORDER_FORM_API_SECRET`. Direct requests without the secret return `UNAUTHORIZED`. The browser bundle contains neither value.
+3. **Rate limits, audit, safe errors** — A shared MySQL fixed-window limiter protects each actor/IP/action. In compliance with **Issue #77**, the runtime security module contains no schema DDL or retention deletion and fails closed with 503 if required tables are unavailable. Provisioning is out-of-band and explicitly approval-gated. Security events go to the existing structured logger/webhook and `order_form_audit_log`. Public responses omit stack traces, secrets, raw payloads, and upstream implementation details.
+4. **Apps Script boundary** — The API accepts only an HTTPS `script.google.com` URL and a 32+ character shared secret from server environment variables. There is no fallback to the retired standalone service. The browser bundle contains neither value. Runtime proof that Apps Script rejects a direct request is still required.
 5. **Review workflow** — Changes are submitted from feature branches and must be reviewed in PR/Vercel Preview before merge or promotion.
-6. **Data-safety evidence** — The existing suite covers validation, edit-as-new Buyer ID preservation, idempotent duplicate submission, durable queued receipt, and 20 simultaneous submissions without overwritten header/product rows.
+6. **Data-safety evidence** — Source and focused security checks exist. Authorized end-to-end proof for validation, edit-as-new Buyer ID preservation, idempotent duplicate submission, durable queued receipt, and simultaneous submissions must be attached before approval.
 7. **Public standalone retirement** — The legacy standalone deployment (`kappl-primary-order-form.vercel.app`) is decommissioned and paused (`HTTP 503 DEPLOYMENT_PAUSED`), completely preventing any public unauthenticated bypass.
 8. **UI safeguard** — Edit Order tab is restricted and visually disabled in UI (`ENABLE_EDIT_ORDER = false`) preventing edits until management approves, while business logic remains intact in code.
-9. **Live gate** — Production promotion is gated on passing the preview verification checklist below and receiving management sign-off.
+9. **Live gate** — Production promotion is gated on completing the verification checklist below, recording a recovery point, independent `Kairali123` review of the exact head, and Abhilash's explicit approval.
 
 ## Permission policy
 
@@ -32,84 +34,43 @@ Database provisioning is decoupled from the application request path:
 # Check table existence and schema status
 npm run db:order-form:status
 
+# Print the additive migration plan without connecting to a database
+npm run db:order-form:plan
+
 # Provision tables (idempotent DDL migration)
 npm run db:order-form:migrate
 
-# Rollback tables (disaster recovery)
+# Print the non-destructive application rollback guidance
 npm run db:order-form:rollback
 ```
+
+`db:order-form:migrate` fails closed unless the approved runner supplies
+`ORDER_FORM_MIGRATION_APPROVAL=APPROVED`, `ORDER_FORM_RECOVERY_POINT`, and
+`ORDER_FORM_CHANGE_ID`. These values are change-control metadata, not credentials.
+
+Rollback means reverting the application deployment while retaining the additive rate
+limit and audit tables. The rollback command never drops schema objects or deletes audit
+data. Any later archival/removal is a separate Gate 4 change.
 
 ### Table Verification
 - `order_form_rate_limits`: Stores fixed-window rate keys with `expires_at` index.
 - `order_form_audit_log`: Stores audit events with `event_id`, `actor`, `source_ip`, `action_name`, `outcome`, `duration_ms`.
 
-## Direct Apps Script Bypass Rejection Evidence
+## Runtime evidence status
 
-Direct external request without `_serverSecret`:
-```bash
-curl -X POST "https://script.google.com/macros/s/DEPLOYMENT_ID/exec" \
-  -H "Content-Type: application/json" \
-  -d '{"action":"getProducts"}'
-```
-Response:
-```json
-{
-  "ok": false,
-  "error": "UNAUTHORIZED"
-}
-```
+Do not replace pending rows with examples or expected output. Attach sanitized captured
+output from the exact reviewed commit and approved test records.
 
-## Runtime Audit Log Evidence
-
-Sample authenticated runtime entry captured from MySQL `order_form_audit_log`:
-```json
-{
-  "id": 82,
-  "event_id": "fae98e46-e8c8-4592-9aaf-ae8df0416c35",
-  "created_at": "2026-09-07 09:15:30.655",
-  "actor": "developer2@kairali.com",
-  "role_name": "super_admin",
-  "action_name": "syncProducts",
-  "source_ip": "::1",
-  "correlation_id": "66e351fa-c118-48b9-981e-378dbb52e26d",
-  "duration_ms": 200
-}
-```
-
-## Staging Verification Test Payload
-
-Sample payload utilized for staging preview end-to-end verification and QA testing:
-```json
-{
-  "submissionId": "TEST-SUB-20260907-001",
-  "orderType": "Institutional",
-  "paymentTerms": "Advance",
-  "buyer": {
-    "name": "TEST - Quality Assurance Verification",
-    "phone": "9876543210",
-    "email": "qa-test@kairali.com",
-    "address": "Kairali Ayurvedic Products Ltd, Staging Test Dept, New Delhi",
-    "state": "Delhi",
-    "pincode": "110001",
-    "gstin": "07AAAAA0000A1Z5"
-  },
-  "items": [
-    {
-      "productName": "Abhayarishtam",
-      "sku": "CAAB02450NP0425",
-      "pack": "450ml",
-      "quantity": 1,
-      "price": 150.00,
-      "discount": 0,
-      "cgst": 6,
-      "sgst": 6,
-      "igst": 0,
-      "total": 168.00
-    }
-  ],
-  "remarks": "AUTOMATED_STAGING_TEST_VERIFICATION_DO_NOT_DISPATCH"
-}
-```
+| Evidence | Status | Required attachment |
+| --- | --- | --- |
+| Direct Apps Script request without secret | **PENDING — attach captured output** | Timestamp, redacted endpoint identifier, HTTP status, sanitized `UNAUTHORIZED` body |
+| Authorized New Order | **PENDING — attach captured output** | Actor role, test Order ID, header/product row counts |
+| Authorized Edit-as-New | **PENDING — attach captured output** | Original/revised test Order IDs and preserved Buyer ID |
+| Idempotent retry | **PENDING — attach captured output** | One submission ID, same returned Order ID, no duplicate row counts |
+| Validation rejection | **PENDING — attach captured output** | Sanitized invalid field and proof of zero writes |
+| Concurrent reconciliation | **PENDING — attach captured output** | Distinct test IDs and reconciled header/product counts |
+| Runtime audit/rate limit | **PENDING — attach captured output** | Sanitized non-loopback source, action/outcome/correlation fields, 429 proof |
+| Recovery point and rollback rehearsal | **PENDING — attach captured output** | Backup/recovery reference, restore verification, application revert proof |
 
 ## Automated checks
 

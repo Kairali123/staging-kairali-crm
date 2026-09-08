@@ -19,6 +19,7 @@
     "test:crr": "npx tsx --test scripts/crr-query-boundary.test.mjs",
     "test:dialshree-sent": "npx tsx --test scripts/dialshree-sent-executable-routes.test.ts",
     "test:order-form-security": "node scripts/order-form-security.test.mjs",
+    "db:order-form:plan": "node scripts/migrate-order-form-security.mjs --plan",
     "db:order-form:status": "node scripts/migrate-order-form-security.mjs --status",
     "db:order-form:migrate": "node scripts/migrate-order-form-security.mjs --up",
     "db:order-form:rollback": "node scripts/migrate-order-form-security.mjs --down",
