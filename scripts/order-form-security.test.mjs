@@ -108,3 +108,11 @@ test('release evidence does not present placeholder or localhost samples as comp
   assert.doesNotMatch(evidence, /"source_ip": "::1"/)
   assert.match(evidence, /PENDING — attach captured output/)
 })
+
+test('P1 Issue #100: server strictly validates statutory PIN code and PAN formats without heuristic derivation', () => {
+  assert.doesNotMatch(route, /\.match\(/)
+  assert.doesNotMatch(route, /\.slice\(2,\s*12\)/)
+  assert.match(route, /\/\^\[1-9]\[0-9]\{5\}\$\//)
+  assert.match(route, /\/\^\[A-Z]\{5\}\[0-9]\{4\}\[A-Z]\$\//)
+})
+
