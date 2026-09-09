@@ -114,7 +114,7 @@ function stageOf(stages: StageInfo[], stageNo: number): StageInfo | undefined {
 }
 
 // Metadata keys that do not represent user-submitted stage data
-const METADATA_KEYS = new Set(["doer", "assignedBy"]);
+const METADATA_KEYS = new Set(["doer", "assignedBy", "stageKey", "stage_key"]);
 
 // True when the saved row has at least one non-empty value —
 // used to decide whether legacy per-stage objects should be hydrated.
@@ -180,7 +180,23 @@ function mapRow(row: GasBookingRow): Guest {
             status: s1!.status,
             notDoneRemarks: s1!.notDoneRemarks,
             followupDate: s1!.followupDate,
+            stageKey: s1!.stageKey,
         } as Guest["arrivalWelcome"])
+        : undefined;
+
+    const nextVisitPlanning = hasAnyValue(s3)
+        ? ({
+            nextVisitDate: s3!.nextVisitDate,
+            remarks: s3!.remarks,
+            status: s3!.status,
+            actualDate: s3!.actualDate,
+            timeDelay: s3!.timeDelay,
+            shouldWeRequestRatings: s3!.shouldWeRequestRatings,
+            proofOfRating: s3!.proofOfRating,
+            link: s3!.link,
+            stageKey: s3!.stageKey,
+            doer: s3!.doer,
+        } as Guest["nextVisitPlanning"])
         : undefined;
 
     const guestFeedback = hasAnyValue(s4)
@@ -201,6 +217,7 @@ function mapRow(row: GasBookingRow): Guest {
             notDoneRemarks: s5!.notDoneRemarks,
             followupDate: s5!.followupDate,
             outcomeAchieved: s5!.outcomeAchieved,
+            stageKey: s5!.stageKey,
         } as Guest["ratingRequest"])
         : undefined;
 
@@ -212,6 +229,7 @@ function mapRow(row: GasBookingRow): Guest {
             status: s6!.status,
             notDoneRemarks: s6!.notDoneRemarks,
             followupDate: "", // no followupDate column for stage 6 (confirmed intentional)
+            stageKey: s6!.stageKey,
         } as Guest["safeReturn"])
         : undefined;
 
@@ -222,6 +240,7 @@ function mapRow(row: GasBookingRow): Guest {
             status: s7!.status,
             notDoneRemarks: s7!.notDoneRemarks,
             followupDate: s7!.followupDate,
+            stageKey: s7!.stageKey,
         } as Guest["resultProgress"])
         : undefined;
 
@@ -306,6 +325,7 @@ function mapRow(row: GasBookingRow): Guest {
 
         // Persisted stage form data (prefill for completed / partially saved stages)
         arrivalWelcome,
+        nextVisitPlanning,
         guestFeedback,
         ratingRequest,
         safeReturn,
@@ -371,7 +391,9 @@ export function useCrrBookings(from?: string, to?: string) {
 
 export function isStageLocked(guest: Guest, stageNo: number): boolean {
     const info = guest.stages.find((s) => s.stage === stageNo);
-    if (!info || !info.available) return true; // stage missing from GAS response = locked (safe default)
+    if (!info || !info.available) return false;
+    // If planned date is not set, stage is not locked
+    if (!info.plannedDate || String(info.plannedDate).trim() === "") return false;
     return info.locked;
 }
 
@@ -449,6 +471,12 @@ export function getStageSavedData(
 ): Record<string, string> | null {
     const info = guest.stages.find((s) => s.stage === stageNo);
     return normalizeSavedData(info?.savedData);
+}
+
+// Stage key for a stage (e.g. ${uid}_Stage1) from KTAHV_CRR_Calling_FMS.stage_key or derived from UID
+export function getStageKey(guest: Guest, stageNo: number): string | null {
+    const info = guest.stages?.find((s) => s.stage === stageNo);
+    return info?.stageKey ?? (guest.uid ? `${guest.uid}_Stage${stageNo}` : null);
 }
 
 export async function saveStage(

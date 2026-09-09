@@ -1184,9 +1184,14 @@ export default function CRRCallingProcessPage() {
 
         const guestId = activeGuest.id;
         const targetId = activeGuest.uid || activeGuest.bookingId;
+        const stageKey = `${String(activeGuest.uid || targetId).trim()}_Stage3`;
         const data = {
+            stageKey,
+            stage_key: stageKey,
             nextVisitDate: modalDate,
             remarks: modalRemark,
+            stage2_next_visit_date: modalDate,
+            stage2_remarks: modalRemark,
         };
 
         closeModal();
@@ -1374,7 +1379,10 @@ export default function CRRCallingProcessPage() {
 
         const guestId = activeWelcomeGuest.id;
         const targetId = activeWelcomeGuest.uid || activeWelcomeGuest.bookingId;
+        const stageKey = `${String(activeWelcomeGuest.uid || targetId).trim()}_Stage1`;
         const data = {
+            stageKey,
+            stage_key: stageKey,
             outcomeRemarks: welcomeOutcomeRemarks,
             status: welcomeStatus,
             notDoneRemarks: welcomeStatus === "Not Done - Close" ? welcomeNotDoneRemarks : "",
@@ -1451,7 +1459,10 @@ export default function CRRCallingProcessPage() {
 
         const guestId = activeSafeReturnGuest.id;
         const targetId = activeSafeReturnGuest.uid || activeSafeReturnGuest.bookingId;
+        const stageKey = `${String(activeSafeReturnGuest.uid || targetId).trim()}_Stage6`;
         const data = {
+            stageKey,
+            stage_key: stageKey,
             stayFeedback: safeReturnStayFeedback,
             outcomeAchieved: safeReturnOutcomeAchieved,
             outcomeRemarks: safeReturnOutcomeRemarks,
@@ -1526,7 +1537,10 @@ export default function CRRCallingProcessPage() {
 
         const guestId = activeResultProgressGuest.id;
         const targetId = activeResultProgressGuest.uid || activeResultProgressGuest.bookingId;
+        const stageKey = `${String(activeResultProgressGuest.uid || targetId).trim()}_Stage7`;
         const data = {
+            stageKey,
+            stage_key: stageKey,
             outcomeAchieved: resultOutcomeAchieved,
             outcomeRemarks: resultOutcomeRemarks,
             status: resultStatus,
@@ -1735,7 +1749,10 @@ export default function CRRCallingProcessPage() {
 
         const guestId = activeRatingGuest.id;
         const targetId = activeRatingGuest.uid || activeRatingGuest.bookingId;
+        const stageKey = `${String(activeRatingGuest.uid || targetId).trim()}_Stage5`;
         const data = {
+            stageKey,
+            stage_key: stageKey,
             ratingStatus: ratingStatus,
             notGivenRemarks: ratingStatus !== "Given" ? ratingNotGivenRemarks : "",
             proofFileName: proofFileName,
