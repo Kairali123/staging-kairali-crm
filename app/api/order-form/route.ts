@@ -146,13 +146,15 @@ export async function POST(req: NextRequest) {
       const data = upstream.data as Record<string, unknown>
       if (data.found && data.buyer && typeof data.buyer === 'object') {
         const buyer = data.buyer as Record<string, unknown>
-        if (!buyer.pinCode) {
-          const addr = String(buyer.billingAddress || buyer.shippingAddress || '')
-          const pinMatch = addr.match(/\b\d{6}\b/)
-          if (pinMatch) buyer.pinCode = pinMatch[0]
+        // Validate pincode if present (strict 6-digit PIN code, no heuristic string derivation)
+        if (buyer.pinCode !== undefined && buyer.pinCode !== null) {
+          const pin = String(buyer.pinCode).trim()
+          buyer.pinCode = /^[1-9][0-9]{5}$/.test(pin) ? pin : ''
         }
-        if (!buyer.pan && typeof buyer.gst === 'string' && buyer.gst.length === 15) {
-          buyer.pan = buyer.gst.slice(2, 12)
+        // Validate PAN if present (strict 10-character format, no heuristic substring derivation)
+        if (buyer.pan !== undefined && buyer.pan !== null) {
+          const pan = String(buyer.pan).trim().toUpperCase()
+          buyer.pan = /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan) ? pan : ''
         }
       }
     }

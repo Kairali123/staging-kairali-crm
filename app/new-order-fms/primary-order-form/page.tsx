@@ -10,7 +10,7 @@ import { LoaderCircle } from "lucide-react"
  * Set `ENABLE_EDIT_ORDER = true` if you want to re-enable "Edit order" mode.
  * When `ENABLE_EDIT_ORDER = false` (default):
  *   - Only "New order" will be opened.
- *   - "Edit order" button is disabled and cannot be clicked.
+ *   - "Edit order" button is completely hidden from the UI.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 const ENABLE_EDIT_ORDER = false

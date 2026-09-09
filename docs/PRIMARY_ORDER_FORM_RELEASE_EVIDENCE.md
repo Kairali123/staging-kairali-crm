@@ -13,7 +13,7 @@ runtime proof listed below.
 5. **Review workflow** — Changes are submitted from feature branches and must be reviewed in PR/Vercel Preview before merge or promotion.
 6. **Data-safety evidence** — Source and focused security checks exist. Authorized end-to-end proof for validation, edit-as-new Buyer ID preservation, idempotent duplicate submission, durable queued receipt, and simultaneous submissions must be attached before approval.
 7. **Public standalone retirement** — The legacy standalone deployment (`kappl-primary-order-form.vercel.app`) is decommissioned and paused (`HTTP 503 DEPLOYMENT_PAUSED`), completely preventing any public unauthenticated bypass.
-8. **UI safeguard** — Edit Order tab is restricted and visually disabled in UI (`ENABLE_EDIT_ORDER = false`) preventing edits until management approves, while business logic remains intact in code.
+8. **UI safeguard** — Edit Order tab is restricted and completely hidden from the UI (`ENABLE_EDIT_ORDER = false`) preventing edits until management approves, while business logic remains intact in code.
 9. **Live gate** — Production promotion is gated on completing the verification checklist below, recording a recovery point, independent `Kairali123` review of the exact head, and Abhilash's explicit approval.
 
 ## Permission policy
