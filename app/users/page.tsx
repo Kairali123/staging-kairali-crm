@@ -2860,11 +2860,27 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
   // Toggle single action for a module
   const toggleModuleAction = (moduleKey: string, action: string) => {
     const key = buildPermissionKey(moduleKey, action)
+    const baseKey = moduleKey.replace(/\.view$/, "")
+    const hyphenBase = baseKey.replace(/_/g, "-")
+
     setPermissions(prev => {
       const isCurrentlyGranted = isActionGranted(prev, moduleKey, action)
       const withoutAll = prev.filter(p => p !== "all")
       if (isCurrentlyGranted) {
-        return withoutAll.filter(p => p !== key && !(moduleKey.includes(".view") && p === `${moduleKey.split(".")[0]}.${action}`))
+        const filtered = withoutAll.filter(p => {
+          if (p === key) return false
+          if (p === `${baseKey}.${action}`) return false
+          if (p === `${hyphenBase}.${action}`) return false
+          return true
+        })
+        const anyRemaining = filtered.some(p => {
+          if (p === baseKey || p === hyphenBase || p === moduleKey) return false
+          return p.startsWith(`${baseKey}.`) || p.startsWith(`${hyphenBase}.`)
+        })
+        if (!anyRemaining) {
+          return filtered.filter(p => p !== baseKey && p !== hyphenBase && p !== moduleKey)
+        }
+        return filtered
       } else {
         return [...withoutAll, key]
       }
@@ -2874,22 +2890,36 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
   // Toggle or set all actions for a specific module
   const setAllActionsForModule = (module: PagePermissionModule, grant: boolean) => {
     const keys = module.actions.map(a => buildPermissionKey(module.key, a))
+    const baseKey = module.key.replace(/\.view$/, "")
+    const hyphenBase = baseKey.replace(/_/g, "-")
+
     setPermissions(prev => {
       const withoutAll = prev.filter(p => p !== "all")
       if (grant) {
         return Array.from(new Set([...withoutAll, ...keys]))
       } else {
-        return withoutAll.filter(p => !keys.includes(p) && !(module.key.includes(".view") && p.startsWith(module.key.split(".")[0])))
+        return withoutAll.filter(p => {
+          if (keys.includes(p)) return false
+          if (p === module.key || p === baseKey || p === hyphenBase) return false
+          if (p.startsWith(`${baseKey}.`) || p.startsWith(`${hyphenBase}.`)) return false
+          return true
+        })
       }
     })
   }
 
   const grantViewOnlyForModule = (module: PagePermissionModule) => {
     const viewKey = buildPermissionKey(module.key, "view")
-    const otherKeys = module.actions.filter(a => a !== "view").map(a => buildPermissionKey(module.key, a))
+    const baseKey = module.key.replace(/\.view$/, "")
+    const hyphenBase = baseKey.replace(/_/g, "-")
+
     setPermissions(prev => {
       const withoutAll = prev.filter(p => p !== "all")
-      const cleaned = withoutAll.filter(p => !otherKeys.includes(p))
+      const cleaned = withoutAll.filter(p => {
+        if (p === module.key || p === baseKey || p === hyphenBase) return false
+        if (p.startsWith(`${baseKey}.`) || p.startsWith(`${hyphenBase}.`)) return false
+        return true
+      })
       return Array.from(new Set([...cleaned, viewKey]))
     })
   }
@@ -2934,9 +2964,22 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
     }
     setSubmitting(true)
     try {
+      const sanitizedPermissions = permissions.filter(p => {
+        if (!p.includes(".")) {
+          const pNorm = p.replace(/_/g, "-").toLowerCase()
+          const hasAction = permissions.some(other => {
+            if (!other.includes(".")) return false
+            const otherBaseNorm = other.split(".")[0].replace(/_/g, "-").toLowerCase()
+            return otherBaseNorm === pNorm
+          })
+          if (!hasAction) return false
+        }
+        return true
+      })
+
       await onSubmit({
         ...formData,
-        permissions,
+        permissions: sanitizedPermissions,
         joinDate: user?.joinDate || new Date().toISOString().split("T")[0],
       })
     } finally {

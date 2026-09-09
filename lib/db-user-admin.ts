@@ -111,12 +111,18 @@ export function mapPermissionsToColumns(permissions: string[]): Record<string, s
       continue
     }
 
-    const actions = matchingPerms.map((p) => {
-      const lastDot = p.lastIndexOf('.')
-      return lastDot >= 0 ? p.substring(lastDot + 1) : 'view'
-    })
+    const explicitActions = matchingPerms
+      .filter((p) => p.includes('.'))
+      .map((p) => p.substring(p.lastIndexOf('.') + 1).trim())
+      .filter(Boolean)
 
-    record[col] = Array.from(new Set(actions)).join(', ') || 'view'
+    if (explicitActions.length > 0) {
+      record[col] = Array.from(new Set(explicitActions)).join(', ')
+    } else if (matchingPerms.length > 0) {
+      record[col] = 'view'
+    } else {
+      record[col] = ''
+    }
   }
 
   return record
