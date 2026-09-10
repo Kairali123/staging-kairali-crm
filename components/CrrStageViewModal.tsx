@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import type { Guest, Stage, StageStatus } from "@/types/crr";
 import { getDoctorEmail } from "@/components/Guestrequirementverificationmodal";
+import { getStageDoer } from "@/hooks/use-crr-bookings";
 
 interface CrrStageViewModalProps {
     open: boolean;
@@ -317,7 +318,7 @@ export default function CrrStageViewModal({
         const hasSaved =
             !!info?.savedData &&
             Object.entries(info.savedData).some(
-                ([k, v]) => !["doer", "assignedBy"].includes(k) && v !== null && String(v).trim() !== ""
+                ([k, v]) => !["doer", "assignedBy", "stageKey", "stage_key"].includes(k) && v !== null && String(v).trim() !== ""
             );
         return {
             ...cfg,
@@ -1053,21 +1054,25 @@ export default function CrrStageViewModal({
                                                 </span>
                                             </div>
                                         )}
-                                        {stageInfo?.savedData?.doer && (
-                                            <div
-                                                style={{
-                                                    background: "#f0fdf4",
-                                                    padding: "6px 12px",
-                                                    borderRadius: 8,
-                                                    border: "1px solid #bbf7d0",
-                                                }}
-                                            >
-                                                <span style={{ color: "#166534", fontWeight: 600 }}>Doer: </span>
-                                                <span style={{ color: "#14532d", fontWeight: 700 }}>
-                                                    {String(stageInfo.savedData.doer)}
-                                                </span>
-                                            </div>
-                                        )}
+                                        {(() => {
+                                            const doerVal = getStageDoer(guest, activeStageNo) || stageInfo?.savedData?.doer;
+                                            if (!doerVal) return null;
+                                            return (
+                                                <div
+                                                    style={{
+                                                        background: "#f0fdf4",
+                                                        padding: "6px 12px",
+                                                        borderRadius: 8,
+                                                        border: "1px solid #bbf7d0",
+                                                    }}
+                                                >
+                                                    <span style={{ color: "#166534", fontWeight: 600 }}>Doer: </span>
+                                                    <span style={{ color: "#14532d", fontWeight: 700 }}>
+                                                        {String(doerVal)}
+                                                    </span>
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
                             </div>

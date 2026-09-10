@@ -337,11 +337,22 @@ function mapRow(row: GasBookingRow): Guest {
     };
 }
 
+interface CacheEntry {
+    guests: Guest[];
+    stageUsers: StageUser[];
+    timestamp: number;
+}
+
+const crrClientCache = new Map<string, CacheEntry>();
+
 export function useCrrBookings(from?: string, to?: string) {
-    const [guests, setGuests] = useState<Guest[]>([]);
-    const [stageUsers, setStageUsers] = useState<StageUser[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [isRevalidating, setIsRevalidating] = useState(false);
+    const cacheKey = `${from || ""}_${to || ""}`;
+    const cached = crrClientCache.get(cacheKey);
+
+    const [guests, setGuests] = useState<Guest[]>(() => cached?.guests ?? []);
+    const [stageUsers, setStageUsers] = useState<StageUser[]>(() => cached?.stageUsers ?? []);
+    const [loading, setLoading] = useState(() => !cached);
+    const [isRevalidating, setIsRevalidating] = useState(() => Boolean(cached));
     const [error, setError] = useState<string | null>(null);
 
     const fetchBookings = useCallback(async (isBackground = false) => {
@@ -365,7 +376,13 @@ export function useCrrBookings(from?: string, to?: string) {
 
             const mapped = json.data.map(mapRow).sort((a, b) => b.id - a.id);
             setGuests(mapped);
-            setStageUsers(json.stageUsers || []);
+            const fetchedUsers = json.stageUsers || [];
+            setStageUsers(fetchedUsers);
+            crrClientCache.set(cacheKey, {
+                guests: mapped,
+                stageUsers: fetchedUsers,
+                timestamp: Date.now(),
+            });
         } catch (err) {
             console.error("[useCrrBookings] fetch failed:", err);
             setError(err instanceof Error ? err.message : "Failed to load bookings");
@@ -373,11 +390,12 @@ export function useCrrBookings(from?: string, to?: string) {
             setLoading(false);
             setIsRevalidating(false);
         }
-    }, [from, to]);
+    }, [from, to, cacheKey]);
 
     useEffect(() => {
-        fetchBookings(guests.length > 0);
-    }, [fetchBookings]);
+        const hasCached = crrClientCache.has(cacheKey);
+        fetchBookings(hasCached);
+    }, [fetchBookings, cacheKey]);
 
     const refetch = useCallback(() => fetchBookings(true), [fetchBookings]);
 
@@ -413,8 +431,18 @@ export function getStageActualDate(guest: Guest, stageNo: number): string | null
 export function getStageDoer(guest: Guest, stageNo: number): string {
     const info = guest.stages?.find((s) => s.stage === stageNo);
     const doer = info?.savedData?.doer;
-    if (doer && String(doer).trim() !== "") {
-        return String(doer).trim();
+
+    // Stage 3 & 7: Doctor stages -> must strictly be doctor, never salesperson / bookingTakenBy
+    if (stageNo === 3 || stageNo === 7) {
+        if (doer && String(doer).trim() !== "" && doer !== guest.takenBy) {
+            return String(doer).trim();
+        }
+        const doc = guest.guestRequirementVerification?.doctorAssignedToClient ||
+                    guest.guestRequirementVerification?.changedDoctor ||
+                    guest.stages?.find((s) => s.stage === 11)?.savedData?.doctorAssignedToClient ||
+                    guest.stages?.find((s) => s.stage === 11)?.savedData?.changedDoctor;
+        if (doc && String(doc).trim() !== "") return String(doc).trim();
+        return "Doctor";
     }
 
     // Stage 2, 4 & 8 strictly use database doer from checkinmasterfms
@@ -422,11 +450,8 @@ export function getStageDoer(guest: Guest, stageNo: number): string {
         return "";
     }
 
-    // Stage 3 & 7: Doctor stages -> assigned doctor
-    if (stageNo === 3 || stageNo === 7) {
-        const doc = guest.guestRequirementVerification?.doctorAssignedToClient ||
-                    guest.stages?.find((s) => s.stage === 11)?.savedData?.doctorAssignedToClient;
-        if (doc && String(doc).trim() !== "") return String(doc).trim();
+    if (doer && String(doer).trim() !== "") {
+        return String(doer).trim();
     }
 
     // Stage 9: Arrival Driver / FO

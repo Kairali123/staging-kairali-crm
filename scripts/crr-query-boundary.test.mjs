@@ -30,7 +30,7 @@ const mockPool = {
 
 global._sqlPool = mockPool;
 
-const { GET } = await import('../app/api/crr-calling/bookings/route.ts');
+const { GET, POST } = await import('../app/api/crr-calling/bookings/route.ts');
 
 function createMockRequest(url, cookieState = 'valid', role = 'admin', permissions = ['all']) {
     const req = new NextRequest(new URL(url, 'http://localhost:3000'));
@@ -316,5 +316,157 @@ test('CRR Query Boundary & Security Contract Suite', async (t) => {
         for (const st of guest.stages) {
             assert.equal(st.locked, false, `Stage ${st.stage} should not be locked when planned date is missing`);
         }
+    });
+
+    await t.test('14. POST sanitizes fields and strips stageKey before forwarding to GAS', async () => {
+        const originalFetch = global.fetch;
+        let interceptedBody = null;
+        global.fetch = async (url, options) => {
+            if (options?.body) {
+                interceptedBody = JSON.parse(options.body);
+            }
+            return new Response(JSON.stringify({ success: true, message: 'Stage saved' }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' },
+            });
+        };
+
+        try {
+            const req = createMockRequest('http://localhost:3000/api/crr-calling/bookings', 'valid');
+            const postReq = new NextRequest(req.url, {
+                method: 'POST',
+                headers: {
+                    cookie: req.headers.get('cookie'),
+                    'content-type': 'application/json',
+                },
+                body: JSON.stringify({
+                    bookingId: 'BK-1001',
+                    stage: 1,
+                    fields: {
+                        stageKey: 'BK-1001_Stage1',
+                        stage_key: 'BK-1001_Stage1',
+                        stage2_next_visit_date: '2026-12-15',
+                        outcomeRemarks: 'Welcome completed',
+                        status: 'Done',
+                        outcomeAchieved: 'Yes',
+                    },
+                }),
+            });
+
+            const res = await POST(postReq);
+            assert.equal(res.status, 200);
+            assert.ok(interceptedBody, 'GAS request must be dispatched');
+            assert.equal(interceptedBody.bookingId, 'BK-1001');
+            assert.equal(interceptedBody.stage, 1);
+            assert.equal(interceptedBody.fields.outcomeRemarks, 'Welcome completed');
+            assert.equal(interceptedBody.fields.status, 'Done');
+            assert.equal(interceptedBody.fields.outcomeAchieved, 'Yes');
+            assert.equal(interceptedBody.fields.stageKey, undefined, 'stageKey must NOT be sent in fields to GAS');
+            assert.equal(interceptedBody.fields.stage_key, undefined, 'stage_key must NOT be sent in fields to GAS');
+            assert.equal(interceptedBody.fields.stage2_next_visit_date, undefined, 'stage2_next_visit_date must NOT be sent in fields to GAS');
+        } finally {
+            global.fetch = originalFetch;
+        }
+    });
+
+    await t.test('15. Stages 2, 4, and 8 strictly map to ktahv_checkinmasterfms and do not bleed from CRR process or calling rows', async () => {
+        mockProcessRows = [{
+            id: 1,
+            timestamp: '2026-09-02 14:00:00',
+            check_in_date: '2026-09-05',
+            check_out_date: '2026-09-10',
+            client_name: 'Strict Checkin Client',
+            booking_id: 'BK-2001',
+            uid: 'UID-2001',
+            reservation_id: 'RES-2001',
+            booking_status: 'Confirmed',
+            // CRR process stage columns that previously bled
+            stage2_planned: '2026-09-06',
+            stage2_actual: '2026-09-06',
+            stage2_remarks: 'Doctor Note',
+            stage4_rating_request_call_date_planned: '2026-09-08',
+            stage4_task_done_actual: '2026-09-08',
+            stage4_remarks_for_next_visit_date: 'Process Feedback',
+            stage8_call_date_planned: '2026-09-12',
+            stage8_task_done_actual: '2026-09-12',
+            stage7_referals_details: 'Process Referral Details',
+        }];
+        mockCallingRows = [
+            { id: 301, uid: 'UID-2001', call_purpose: 'Referral', planned: '2026-09-12', actual: '2026-09-12', status: 'Done', outcome_remarks: 'Calling Referral' }
+        ];
+        mockCheckinRows = []; // No checkinmasterfms row exists
+
+        const req = createMockRequest('http://localhost:3000/api/crr-calling/bookings', 'valid');
+        const res = await GET(req);
+        assert.equal(res.status, 200);
+        const json = await res.json();
+        const guest = json.data[0];
+
+        const s2 = guest.stages.find(s => s.stage === 2);
+        assert.ok(s2, 'Stage 2 must exist');
+        assert.equal(s2.completed, false, 'Stage 2 must be incomplete when checkin record is empty');
+        assert.equal(s2.plannedDate, '', 'Stage 2 plannedDate must be empty');
+        assert.ok(!s2.actualDate, 'Stage 2 actualDate must be falsy');
+        assert.equal(s2.savedData?.remarks, '', 'Stage 2 remarks must be empty');
+
+        const s4 = guest.stages.find(s => s.stage === 4);
+        assert.ok(s4, 'Stage 4 must exist');
+        assert.equal(s4.completed, false, 'Stage 4 must be incomplete when checkin record is empty');
+        assert.equal(s4.plannedDate, '', 'Stage 4 plannedDate must be empty');
+        assert.ok(!s4.actualDate, 'Stage 4 actualDate must be falsy');
+        assert.equal(s4.savedData?.remarks, '', 'Stage 4 remarks must be empty');
+
+        const s8 = guest.stages.find(s => s.stage === 8);
+        assert.ok(s8, 'Stage 8 must exist');
+        assert.equal(s8.completed, false, 'Stage 8 must be incomplete when checkin record is empty');
+        assert.equal(s8.plannedDate, '', 'Stage 8 plannedDate must be empty');
+        assert.ok(!s8.actualDate, 'Stage 8 actualDate must be falsy');
+        assert.equal(s8.savedData?.referralTakenStatus, '', 'Stage 8 referralTakenStatus must be empty');
+    });
+
+    await t.test('16. Stage 5 does not steal Stage 6 calling row when purpose is "Call after landing, seek feedback"', async () => {
+        mockProcessRows = [{
+            id: 1,
+            timestamp: '2026-05-24 10:30:00',
+            check_in_date: '2026-05-24',
+            check_out_date: '2026-05-31',
+            client_name: 'MR. Ashish Kohli',
+            booking_id: 'KTAHV-PMS-8617',
+            uid: 'KTAHV-PMS-8617',
+            reservation_id: 'RES-8617',
+            booking_status: 'Confirmed',
+        }];
+        mockCallingRows = [
+            {
+                id: 6865,
+                uid: 'KTAHV-PMS-8617',
+                stage_key: 'KTAHV-PMS-8617_Stage6',
+                call_purpose: 'Call after landing, seek feedback',
+                planned: '2026-06-03T10:30:00.000Z',
+                actual: '2026-06-02T20:30:00.000Z',
+                to_show: 'true',
+                status: 'Done',
+                did_they_achieve_the_outcomes_planned_for: 'Yes',
+            },
+        ];
+        mockCheckinRows = [];
+
+        const req = createMockRequest('http://localhost:3000/api/crr-calling/bookings', 'valid');
+        const res = await GET(req);
+        assert.equal(res.status, 200);
+        const json = await res.json();
+        const guest = json.data[0];
+
+        const s5 = guest.stages.find(s => s.stage === 5);
+        assert.ok(s5, 'Stage 5 must exist');
+        assert.equal(s5.completed, false, 'Stage 5 must NOT be completed using Stage 6 row');
+        assert.equal(s5.plannedDate, '', 'Stage 5 plannedDate must not be stolen from Stage 6');
+        assert.ok(!s5.actualDate, 'Stage 5 actualDate must be falsy');
+
+        const s6 = guest.stages.find(s => s.stage === 6);
+        assert.ok(s6, 'Stage 6 must exist');
+        assert.equal(s6.completed, true, 'Stage 6 must be completed using its own row');
+        assert.equal(s6.plannedDate, '03-Jun-2026');
+        assert.equal(s6.actualDate, '03-Jun-2026');
     });
 });
