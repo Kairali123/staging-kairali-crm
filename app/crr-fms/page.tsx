@@ -16,10 +16,24 @@ import type {
 } from "@/types/crr";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { toast } from "sonner";
-import DriverAssignmentArrivalModal from "@/components/Driverassignmentarrivalmodal";
-import DriverAssignmentDepartureModal from "@/components/Driverassignmentdeparturemodal";
-import GuestRequirementVerificationModal from "@/components/Guestrequirementverificationmodal";
-import CrrStageViewModal from "@/components/CrrStageViewModal";
+import dynamic from "next/dynamic";
+
+const DriverAssignmentArrivalModal = dynamic(
+    () => import("@/components/Driverassignmentarrivalmodal"),
+    { ssr: false }
+);
+const DriverAssignmentDepartureModal = dynamic(
+    () => import("@/components/Driverassignmentdeparturemodal"),
+    { ssr: false }
+);
+const GuestRequirementVerificationModal = dynamic(
+    () => import("@/components/Guestrequirementverificationmodal"),
+    { ssr: false }
+);
+const CrrStageViewModal = dynamic(
+    () => import("@/components/CrrStageViewModal"),
+    { ssr: false }
+);
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,6 +74,7 @@ import {
     Loader2,
     Eye,
     ClipboardCheck,
+    Check,
 } from "lucide-react";
 
 /* =========================================================
@@ -529,7 +544,7 @@ export default function CRRCallingProcessPage() {
     // pagination
     // View mode and tables tab
     const [viewMode, setViewMode] = useState<"table" | "chart">("table");
-    const [recordsViewTab, setRecordsViewTab] = useState<"both" | "pending" | "completed">("both");
+    const [recordsViewTab, setRecordsViewTab] = useState<"all" | "pending" | "completed" | "cancelled">("all");
 
     // Pending records pagination
     const [pendingPage, setPendingPage] = useState(1);
@@ -540,6 +555,11 @@ export default function CRRCallingProcessPage() {
     const [completedPage, setCompletedPage] = useState(1);
     const [completedItemsPerPage, setCompletedItemsPerPage] = useState(5);
     const [completedGotoPage, setCompletedGotoPage] = useState("");
+
+    // Cancelled records pagination
+    const [cancelledPage, setCancelledPage] = useState(1);
+    const [cancelledItemsPerPage, setCancelledItemsPerPage] = useState(5);
+    const [cancelledGotoPage, setCancelledGotoPage] = useState("");
 
     // modal edit fields
     const [modalDate, setModalDate] = useState("");
@@ -647,12 +667,53 @@ export default function CRRCallingProcessPage() {
     const isStage7Processing = activeResultProgressGuest?.stageStatus?.[6] === "Processing";
     const isStage8Complete = activeReferralGuest?.stageStatus?.[7] === "Complete";
 
-    // Combined read-only flags: locked (planned date not reached) OR completed OR processing.
-    // Processing stages are accessible (modal opens) but fully non-editable — same as Complete.
-    const isRatingDisabled = !activeRatingGuest || (!isAdminRole && isStageLocked(activeRatingGuest, 5)) || isStage5Complete || isStage5Processing;
-    const isSafeReturnDisabled = !activeSafeReturnGuest || (!isAdminRole && isStageLocked(activeSafeReturnGuest, 6)) || isStage6Complete || isStage6Processing;
-    const isResultDisabled = !activeResultProgressGuest || (!isAdminRole && isStageLocked(activeResultProgressGuest, 7)) || isStage7Complete || isStage7Processing;
-    const isReferralDisabled = !activeReferralGuest || (!isAdminRole && isStageLocked(activeReferralGuest, 8)) || isStage8Complete;
+    // Helper: Form lock state inside stage modals.
+    // If planned date is missing/empty, stage remains clickable in the menu, but form is locked with an explicit message.
+    // If planned date is in the future, form is locked until that planned date.
+    // Admin role bypasses form locks.
+    const getStageFormLockState = (guest: Guest | null, stageNo: number) => {
+        if (!guest) return { isLocked: false, reason: null, message: "" };
+        const stageInfo = guest.stages?.find((s) => s.stage === stageNo);
+        const plannedDate = stageInfo?.plannedDate;
+        const hasPlanned = plannedDate && String(plannedDate).trim() !== "" && String(plannedDate).trim() !== "-";
+
+        if (!hasPlanned) {
+            return {
+                isLocked: !isAdminRole,
+                reason: "missing_planned",
+                message: "Form is locked: Planned date is not scheduled yet. Please wait until the planned date is set in the system before filling this stage.",
+            };
+        }
+
+        if (stageInfo?.locked) {
+            return {
+                isLocked: !isAdminRole,
+                reason: "future_date",
+                message: `Form is locked: This stage unlocks on ${formatISTDate(plannedDate)}. Fields are read-only until then.`,
+            };
+        }
+
+        return { isLocked: false, reason: null, message: "" };
+    };
+
+    const s1Lock = getStageFormLockState(activeWelcomeGuest, 1);
+    const s2Lock = getStageFormLockState(activeCallGuest, 2);
+    const s3Lock = getStageFormLockState(activeGuest, 3);
+    const s4Lock = getStageFormLockState(activeFeedbackGuest, 4);
+    const s5Lock = getStageFormLockState(activeRatingGuest, 5);
+    const s6Lock = getStageFormLockState(activeSafeReturnGuest, 6);
+    const s7Lock = getStageFormLockState(activeResultProgressGuest, 7);
+    const s8Lock = getStageFormLockState(activeReferralGuest, 8);
+
+    // Combined read-only flags: locked (planned date not reached or missing planned date) OR completed OR processing.
+    const isWelcomeDisabled = !activeWelcomeGuest || s1Lock.isLocked || isStage1Complete || isStage1Processing;
+    const isCallDisabled = !activeCallGuest || s2Lock.isLocked || isStage2Complete;
+    const isGuestDisabled = !activeGuest || s3Lock.isLocked || isStage3Complete || activeGuest.allComplete;
+    const isFeedbackDisabled = !activeFeedbackGuest || s4Lock.isLocked || isStage4Complete;
+    const isRatingDisabled = !activeRatingGuest || s5Lock.isLocked || isStage5Complete || isStage5Processing;
+    const isSafeReturnDisabled = !activeSafeReturnGuest || s6Lock.isLocked || isStage6Complete || isStage6Processing;
+    const isResultDisabled = !activeResultProgressGuest || s7Lock.isLocked || isStage7Complete || isStage7Processing;
+    const isReferralDisabled = !activeReferralGuest || s8Lock.isLocked || isStage8Complete;
 
     // "Driver Assignment - Arrival Pickup" modal (Stage 9)
     const [activeDriverArrivalGuestId, setActiveDriverArrivalGuestId] = useState<number | null>(null);
@@ -780,7 +841,8 @@ export default function CRRCallingProcessPage() {
     useEffect(() => {
         setPendingPage(1);
         setCompletedPage(1);
-    }, [search, stageFilter, respFilter, statusFilter, dateRangeFilter, customStartDate, customEndDate, pendingItemsPerPage, completedItemsPerPage]);
+        setCancelledPage(1);
+    }, [search, stageFilter, respFilter, statusFilter, dateRangeFilter, customStartDate, customEndDate, pendingItemsPerPage, completedItemsPerPage, cancelledItemsPerPage]);
 
     // Safety net: Radix Dropdown -> Dialog transitions can occasionally leave
     // `pointer-events: none` stuck on <body>, freezing the whole page (clicks
@@ -847,24 +909,21 @@ export default function CRRCallingProcessPage() {
     //     }
     // }, [activeGuestId, activeCallGuestId, activeDetailsGuestId, activeWelcomeGuestId, activeSafeReturnGuestId, activeFeedbackGuestId, activeReferralGuestId, activeRatingGuestId, activeResultProgressGuestId]);
 
-    // Record-level separation into Pending and Completed:
+    // Record-level separation into Pending, Completed, and Cancelled:
     const pendingRows = useMemo(() => {
-        if (statusFilter === "complete") return [];
-        if (statusFilter === "cancelled") {
-            // Cancelled bookings show in the Pending table
-            return rows.filter((g) => isBookingCancelled(g));
-        }
-        if (statusFilter === "pending") {
-            return rows.filter((g) => !isRecordCompleted(g) && !isBookingCancelled(g));
-        }
-        // statusFilter === "all": cancelled records are shown in the Pending table
-        return rows.filter((g) => !isRecordCompleted(g));
+        if (statusFilter === "complete" || statusFilter === "cancelled") return [];
+        return rows.filter((g) => !isRecordCompleted(g) && !isBookingCancelled(g));
     }, [rows, isRecordCompleted, statusFilter]);
 
     const completedRows = useMemo(() => {
         if (statusFilter === "pending" || statusFilter === "cancelled") return [];
-        return rows.filter((g) => isRecordCompleted(g));
+        return rows.filter((g) => isRecordCompleted(g) && !isBookingCancelled(g));
     }, [rows, isRecordCompleted, statusFilter]);
+
+    const cancelledRows = useMemo(() => {
+        if (statusFilter === "pending" || statusFilter === "complete") return [];
+        return rows.filter((g) => isBookingCancelled(g));
+    }, [rows, statusFilter]);
 
     // Pending pagination derived
     const pendingTotalPages = Math.max(1, Math.ceil(pendingRows.length / pendingItemsPerPage));
@@ -892,6 +951,20 @@ export default function CRRCallingProcessPage() {
             setCompletedPage(p);
         }
         setCompletedGotoPage("");
+    }
+
+    // Cancelled pagination derived
+    const cancelledTotalPages = Math.max(1, Math.ceil(cancelledRows.length / cancelledItemsPerPage));
+    const cancelledStartIndex = (cancelledPage - 1) * cancelledItemsPerPage;
+    const cancelledEndIndex = Math.min(cancelledStartIndex + cancelledItemsPerPage, cancelledRows.length);
+    const pagedCancelledRows = cancelledRows.slice(cancelledStartIndex, cancelledEndIndex);
+
+    function handleCancelledGotoPage() {
+        const p = parseInt(cancelledGotoPage, 10);
+        if (!isNaN(p) && p >= 1 && p <= cancelledTotalPages) {
+            setCancelledPage(p);
+        }
+        setCancelledGotoPage("");
     }
 
     const isStagePending = (g: Guest, stageNo: number) =>
@@ -1178,7 +1251,8 @@ export default function CRRCallingProcessPage() {
     async function saveModal() {
         if (!canEditStage(3)) return; // permission gate — Stage 3
         if (!activeGuest) return closeModal();
-        if (!isAdminRole && isStageLocked(activeGuest, 3)) return;
+        const s3Lock = getStageFormLockState(activeGuest, 3);
+        if (!isAdminRole && s3Lock.isLocked) return;
         if (isStage3Complete) return; // completed stage is read-only
         if (!isModalFormComplete() || modalSaved) return;
 
@@ -1355,8 +1429,9 @@ export default function CRRCallingProcessPage() {
     async function saveWelcomeModal() {
         if (!canEditStage(1)) return; // permission gate — Stage 1
         if (!activeWelcomeGuest) return;
-        if (!isAdminRole && isStageLocked(activeWelcomeGuest, 1)) {
-            setWelcomeFormError("This stage is locked until its planned date.");
+        const s1Lock = getStageFormLockState(activeWelcomeGuest, 1);
+        if (!isAdminRole && s1Lock.isLocked) {
+            setWelcomeFormError(s1Lock.message || "This stage is locked.");
             return;
         }
         if (isStage1Complete) {
@@ -1432,8 +1507,9 @@ export default function CRRCallingProcessPage() {
     async function saveSafeReturnModal() {
         if (!canEditStage(6)) return; // permission gate — Stage 6
         if (!activeSafeReturnGuest) return;
-        if (!isAdminRole && isStageLocked(activeSafeReturnGuest, 6)) {
-            setSafeReturnFormError("This stage is locked until its planned date.");
+        const s6Lock = getStageFormLockState(activeSafeReturnGuest, 6);
+        if (!isAdminRole && s6Lock.isLocked) {
+            setSafeReturnFormError(s6Lock.message || "This stage is locked.");
             return;
         }
         if (isStage6Complete) {
@@ -1507,8 +1583,9 @@ export default function CRRCallingProcessPage() {
     async function saveResultProgressModal() {
         if (!canEditStage(7)) return; // permission gate — Stage 7
         if (!activeResultProgressGuest) return;
-        if (!isAdminRole && isStageLocked(activeResultProgressGuest, 7)) {
-            setResultFormError("This stage is locked until its planned date.");
+        const s7Lock = getStageFormLockState(activeResultProgressGuest, 7);
+        if (!isAdminRole && s7Lock.isLocked) {
+            setResultFormError(s7Lock.message || "This stage is locked.");
             return;
         }
         if (isStage7Complete) {
@@ -1573,8 +1650,9 @@ export default function CRRCallingProcessPage() {
     async function saveFeedbackModal() {
         if (!canEditStage(4)) return; // permission gate — Stage 4
         if (!activeFeedbackGuest) return;
-        if (!isAdminRole && isStageLocked(activeFeedbackGuest, 4)) {
-            setFeedbackFormError("This stage is locked until its planned date.");
+        const s4Lock = getStageFormLockState(activeFeedbackGuest, 4);
+        if (!isAdminRole && s4Lock.isLocked) {
+            setFeedbackFormError(s4Lock.message || "This stage is locked.");
             return;
         }
         if (isStage4Complete) {
@@ -1636,8 +1714,9 @@ export default function CRRCallingProcessPage() {
     async function saveReferralModal() {
         if (!canEditStage(8)) return; // permission gate — Stage 8
         if (!activeReferralGuest) return;
-        if (!isAdminRole && isStageLocked(activeReferralGuest, 8)) {
-            setReferralFormError("This stage is locked until its planned date.");
+        const s8Lock = getStageFormLockState(activeReferralGuest, 8);
+        if (!isAdminRole && s8Lock.isLocked) {
+            setReferralFormError(s8Lock.message || "This stage is locked.");
             return;
         }
         if (isStage8Complete) {
@@ -1715,8 +1794,9 @@ export default function CRRCallingProcessPage() {
     async function saveRatingModal() {
         if (!canEditStage(5)) return; // permission gate — Stage 5
         if (!activeRatingGuest) return;
-        if (!isAdminRole && isStageLocked(activeRatingGuest, 5)) {
-            setRatingFormError("This stage is locked until its planned date.");
+        const s5Lock = getStageFormLockState(activeRatingGuest, 5);
+        if (!isAdminRole && s5Lock.isLocked) {
+            setRatingFormError(s5Lock.message || "This stage is locked.");
             return;
         }
         if (isStage5Complete) {
@@ -1780,8 +1860,9 @@ export default function CRRCallingProcessPage() {
     async function saveCallModal() {
         if (!canEditStage(2)) return; // permission gate — Stage 2
         if (!activeCallGuest) return;
-        if (!isAdminRole && isStageLocked(activeCallGuest, 2)) {
-            setCallFormError("This stage is locked until its planned date.");
+        const s2Lock = getStageFormLockState(activeCallGuest, 2);
+        if (!isAdminRole && s2Lock.isLocked) {
+            setCallFormError(s2Lock.message || "This stage is locked.");
             return;
         }
         if (isStage2Complete) {
@@ -1849,46 +1930,59 @@ export default function CRRCallingProcessPage() {
         ]
         : [];
 
-    /* ---------- RENDER A RECORDS TABLE (Pending or Completed) ---------- */
-    const renderRecordsTable = (tableType: "pending" | "completed") => {
+    /* ---------- RENDER A RECORDS TABLE (Pending, Completed, or Cancelled) ---------- */
+    const renderRecordsTable = (tableType: "pending" | "completed" | "cancelled") => {
         const isPendingTable = tableType === "pending";
-        const tableRows = isPendingTable ? pendingRows : completedRows;
-        const pagedList = isPendingTable ? pagedPendingRows : pagedCompletedRows;
-        const curPage = isPendingTable ? pendingPage : completedPage;
-        const setCurPage = isPendingTable ? setPendingPage : setCompletedPage;
-        const itemsPage = isPendingTable ? pendingItemsPerPage : completedItemsPerPage;
-        const setItemsPage = isPendingTable ? setPendingItemsPerPage : setCompletedItemsPerPage;
-        const totalP = isPendingTable ? pendingTotalPages : completedTotalPages;
-        const startIdx = isPendingTable ? pendingStartIndex : completedStartIndex;
-        const endIdx = isPendingTable ? pendingEndIndex : completedEndIndex;
-        const gotoP = isPendingTable ? pendingGotoPage : completedGotoPage;
-        const setGotoP = isPendingTable ? setPendingGotoPage : setCompletedGotoPage;
-        const onGoto = isPendingTable ? handlePendingGotoPage : handleCompletedGotoPage;
+        const isCompletedTable = tableType === "completed";
+        const isCancelledTable = tableType === "cancelled";
 
-        const title = isPendingTable ? "Pending Records" : "Completed Records";
+        const tableRows = isPendingTable ? pendingRows : isCompletedTable ? completedRows : cancelledRows;
+        const pagedList = isPendingTable ? pagedPendingRows : isCompletedTable ? pagedCompletedRows : pagedCancelledRows;
+        const curPage = isPendingTable ? pendingPage : isCompletedTable ? completedPage : cancelledPage;
+        const setCurPage = isPendingTable ? setPendingPage : isCompletedTable ? setCompletedPage : setCancelledPage;
+        const itemsPage = isPendingTable ? pendingItemsPerPage : isCompletedTable ? completedItemsPerPage : cancelledItemsPerPage;
+        const setItemsPage = isPendingTable ? setPendingItemsPerPage : isCompletedTable ? setCompletedItemsPerPage : setCancelledItemsPerPage;
+        const totalP = isPendingTable ? pendingTotalPages : isCompletedTable ? completedTotalPages : cancelledTotalPages;
+        const startIdx = isPendingTable ? pendingStartIndex : isCompletedTable ? completedStartIndex : cancelledStartIndex;
+        const endIdx = isPendingTable ? pendingEndIndex : isCompletedTable ? completedEndIndex : cancelledEndIndex;
+        const gotoP = isPendingTable ? pendingGotoPage : isCompletedTable ? completedGotoPage : cancelledGotoPage;
+        const setGotoP = isPendingTable ? setPendingGotoPage : isCompletedTable ? setCompletedGotoPage : setCancelledGotoPage;
+        const onGoto = isPendingTable ? handlePendingGotoPage : isCompletedTable ? handleCompletedGotoPage : handleCancelledGotoPage;
+
+        const title = isPendingTable ? "Pending Records" : isCompletedTable ? "Completed Records" : "Cancelled Records";
         const subtitle = isPendingTable
             ? (isAdminRole
                 ? "Records where one or more required workflow stages are still pending"
                 : `Records where one or more of your accessible stages (${userAccessibleStages.map(n => `Stage ${n}`).join(", ")}) are pending`)
-            : (isAdminRole
+            : isCompletedTable
+            ? (isAdminRole
                 ? "Records where all 11 required workflow stages are completed"
-                : `Records where all stages accessible to you (${userAccessibleStages.map(n => `Stage ${n}`).join(", ")}) are completed`);
+                : `Records where all stages accessible to you (${userAccessibleStages.map(n => `Stage ${n}`).join(", ")}) are completed`)
+            : "Cancelled bookings with auto-closed guest journeys (no pending tasks required)";
 
         const badgeClass = isPendingTable
             ? "bg-amber-100 text-amber-800 border-amber-300"
-            : "bg-emerald-100 text-emerald-800 border-emerald-300";
+            : isCompletedTable
+            ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+            : "bg-rose-100 text-rose-800 border-rose-300";
 
         const iconHeaderBg = isPendingTable
             ? "bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 border-amber-600/30"
-            : "bg-gradient-to-br from-emerald-500 via-teal-500 to-emerald-600 border-emerald-600/30";
+            : isCompletedTable
+            ? "bg-gradient-to-br from-emerald-500 via-teal-500 to-emerald-600 border-emerald-600/30"
+            : "bg-gradient-to-br from-rose-500 via-red-500 to-rose-600 border-rose-600/30";
 
         const headerGradient = isPendingTable
             ? "bg-gradient-to-r from-amber-50 via-white to-orange-50 border-b border-amber-200"
-            : "bg-gradient-to-r from-emerald-50 via-white to-teal-50 border-b border-emerald-200";
+            : isCompletedTable
+            ? "bg-gradient-to-r from-emerald-50 via-white to-teal-50 border-b border-emerald-200"
+            : "bg-gradient-to-r from-rose-50 via-white to-red-50 border-b border-rose-200";
 
         const cardBorder = isPendingTable
             ? "border-amber-200/90"
-            : "border-emerald-200/90";
+            : isCompletedTable
+            ? "border-emerald-200/90"
+            : "border-rose-200/90";
 
         return (
             <div className={`rounded-xl border ${cardBorder} bg-white shadow-md overflow-hidden`}>
@@ -1898,8 +1992,10 @@ export default function CRRCallingProcessPage() {
                         <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center shadow-md border ${iconHeaderBg}`}>
                             {isPendingTable ? (
                                 <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-                            ) : (
+                            ) : isCompletedTable ? (
                                 <CheckCircle2 className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+                            ) : (
+                                <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                             )}
                         </div>
                         <div>
@@ -2010,7 +2106,9 @@ export default function CRRCallingProcessPage() {
                                         <td colSpan={19} className="text-center py-10 text-slate-400 font-semibold text-sm">
                                             {isPendingTable
                                                 ? "No pending records match the current filters."
-                                                : "No completed records match the current filters."}
+                                                : isCompletedTable
+                                                ? "No completed records match the current filters."
+                                                : "No cancelled records match the current filters."}
                                         </td>
                                     </tr>
                                 )}
@@ -2175,172 +2273,260 @@ export default function CRRCallingProcessPage() {
                                                                         </div>
                                                                     )}
                                                                     {/* Stage 1 */}
-                                                                    {canEditStage(1) && (
-                                                                        <DropdownMenuItem
-                                                                            disabled={!isAdminRole && isStageLocked(g, 1) && g.stageStatus[0] !== "Complete"}
-                                                                            onSelect={(e) => {
-                                                                                e.preventDefault();
-                                                                                setTimeout(() => openWelcomeModal(g.id), 0);
-                                                                            }}
-                                                                            className="gap-2.5 text-sky-600 focus:text-sky-700 cursor-pointer disabled:opacity-40"
-                                                                        >
-                                                                            <Home className="h-4 w-4" />
-                                                                            Arrival Welcome on Pickup
-                                                                        </DropdownMenuItem>
-                                                                    )}
+                                                                    {canEditStage(1) && (() => {
+                                                                        const isComplete = g.stageStatus[0] === "Complete";
+                                                                        const isDisabled = !isAdminRole && isComplete;
+                                                                        return (
+                                                                            <DropdownMenuItem
+                                                                                disabled={isDisabled}
+                                                                                onSelect={(e) => {
+                                                                                    e.preventDefault();
+                                                                                    if (!isAdminRole && isComplete) return;
+                                                                                    setTimeout(() => openWelcomeModal(g.id), 0);
+                                                                                }}
+                                                                                className="flex items-center justify-between gap-2.5 text-sky-600 focus:text-sky-700 cursor-pointer disabled:opacity-40"
+                                                                            >
+                                                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                                                    <Home className="h-4 w-4 shrink-0" />
+                                                                                    <span className="truncate">Arrival Welcome on Pickup</span>
+                                                                                </div>
+                                                                                {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                            </DropdownMenuItem>
+                                                                        );
+                                                                    })()}
                                                                     {/* Stage 2 */}
-                                                                    {canEditStage(2) && (
-                                                                        <DropdownMenuItem
-                                                                            disabled={!isAdminRole && isStageLocked(g, 2) && g.stageStatus[1] !== "Complete"}
-                                                                            onSelect={(e) => {
-                                                                                e.preventDefault();
-                                                                                setTimeout(() => openCallModal(g.id), 0);
-                                                                            }}
-                                                                            className="gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
-                                                                        >
-                                                                            <PhoneCall className="h-4 w-4" />
-                                                                            Guest Request &amp; Complaint Management
-                                                                        </DropdownMenuItem>
-                                                                    )}
+                                                                    {canEditStage(2) && (() => {
+                                                                        const isComplete = g.stageStatus[1] === "Complete";
+                                                                        const isDisabled = !isAdminRole && isComplete;
+                                                                        return (
+                                                                            <DropdownMenuItem
+                                                                                disabled={isDisabled}
+                                                                                onSelect={(e) => {
+                                                                                    e.preventDefault();
+                                                                                    if (!isAdminRole && isComplete) return;
+                                                                                    setTimeout(() => openCallModal(g.id), 0);
+                                                                                }}
+                                                                                className="flex items-center justify-between gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
+                                                                            >
+                                                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                                                    <PhoneCall className="h-4 w-4 shrink-0" />
+                                                                                    <span className="truncate">Guest Request &amp; Complaint Management</span>
+                                                                                </div>
+                                                                                {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                            </DropdownMenuItem>
+                                                                        );
+                                                                    })()}
 
                                                                     {(canEditStage(1) || canEditStage(2)) && (canEditStage(3) || canEditStage(4) || canEditStage(5)) && <DropdownMenuSeparator />}
 
                                                                     {/* Stage 3 */}
-                                                                    {canEditStage(3) && (
-                                                                        <DropdownMenuItem
-                                                                            disabled={!isAdminRole && isStageLocked(g, 3) && g.stageStatus[2] !== "Complete"}
-                                                                            onSelect={(e) => {
-                                                                                e.preventDefault();
-                                                                                setTimeout(() => openModal(g.id), 0);
-                                                                            }}
-                                                                            className="gap-2.5 text-blue-600 focus:text-blue-700 cursor-pointer disabled:opacity-40"
-                                                                        >
-                                                                            <Calendar className="h-4 w-4" />
-                                                                            Next Visit Planning &amp; Confirmation
-                                                                        </DropdownMenuItem>
-                                                                    )}
+                                                                    {canEditStage(3) && (() => {
+                                                                        const isComplete = g.stageStatus[2] === "Complete";
+                                                                        const isDisabled = !isAdminRole && isComplete;
+                                                                        return (
+                                                                            <DropdownMenuItem
+                                                                                disabled={isDisabled}
+                                                                                onSelect={(e) => {
+                                                                                    e.preventDefault();
+                                                                                    if (!isAdminRole && isComplete) return;
+                                                                                    setTimeout(() => openModal(g.id), 0);
+                                                                                }}
+                                                                                className="flex items-center justify-between gap-2.5 text-blue-600 focus:text-blue-700 cursor-pointer disabled:opacity-40"
+                                                                            >
+                                                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                                                    <Calendar className="h-4 w-4 shrink-0" />
+                                                                                    <span className="truncate">Next Visit Planning &amp; Confirmation</span>
+                                                                                </div>
+                                                                                {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                            </DropdownMenuItem>
+                                                                        );
+                                                                    })()}
                                                                     {/* Stage 4 */}
-                                                                    {canEditStage(4) && (
-                                                                        <DropdownMenuItem
-                                                                            disabled={!isAdminRole && isStageLocked(g, 4) && g.stageStatus[3] !== "Complete"}
-                                                                            onSelect={(e) => {
-                                                                                e.preventDefault();
-                                                                                setTimeout(() => openFeedbackModal(g.id), 0);
-                                                                            }}
-                                                                            className="gap-2.5 text-amber-600 focus:text-amber-700 cursor-pointer disabled:opacity-40"
-                                                                        >
-                                                                            <Star className="h-4 w-4" />
-                                                                            Guest Feedback &amp; Outcome Confirmation
-                                                                        </DropdownMenuItem>
-                                                                    )}
+                                                                    {canEditStage(4) && (() => {
+                                                                        const isComplete = g.stageStatus[3] === "Complete";
+                                                                        const isDisabled = !isAdminRole && isComplete;
+                                                                        return (
+                                                                            <DropdownMenuItem
+                                                                                disabled={isDisabled}
+                                                                                onSelect={(e) => {
+                                                                                    e.preventDefault();
+                                                                                    if (!isAdminRole && isComplete) return;
+                                                                                    setTimeout(() => openFeedbackModal(g.id), 0);
+                                                                                }}
+                                                                                className="flex items-center justify-between gap-2.5 text-amber-600 focus:text-amber-700 cursor-pointer disabled:opacity-40"
+                                                                            >
+                                                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                                                    <Star className="h-4 w-4 shrink-0" />
+                                                                                    <span className="truncate">Guest Feedback &amp; Outcome Confirmation</span>
+                                                                                </div>
+                                                                                {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                            </DropdownMenuItem>
+                                                                        );
+                                                                    })()}
                                                                     {/* Stage 5 */}
-                                                                    {canEditStage(5) && (
-                                                                        <DropdownMenuItem
-                                                                            disabled={!isAdminRole && isStageLocked(g, 5) && g.stageStatus[4] !== "Complete"}
-                                                                            onSelect={(e) => {
-                                                                                e.preventDefault();
-                                                                                setTimeout(() => openRatingModal(g.id), 0);
-                                                                            }}
-                                                                            className="gap-2.5 text-orange-600 focus:text-orange-700 cursor-pointer disabled:opacity-40"
-                                                                        >
-                                                                            <Send className="h-4 w-4" />
-                                                                            Online Rating &amp; Review Request
-                                                                        </DropdownMenuItem>
-                                                                    )}
+                                                                    {canEditStage(5) && (() => {
+                                                                        const isComplete = g.stageStatus[4] === "Complete";
+                                                                        const isDisabled = !isAdminRole && isComplete;
+                                                                        return (
+                                                                            <DropdownMenuItem
+                                                                                disabled={isDisabled}
+                                                                                onSelect={(e) => {
+                                                                                    e.preventDefault();
+                                                                                    if (!isAdminRole && isComplete) return;
+                                                                                    setTimeout(() => openRatingModal(g.id), 0);
+                                                                                }}
+                                                                                className="flex items-center justify-between gap-2.5 text-orange-600 focus:text-orange-700 cursor-pointer disabled:opacity-40"
+                                                                            >
+                                                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                                                    <Send className="h-4 w-4 shrink-0" />
+                                                                                    <span className="truncate">Online Rating &amp; Review Request</span>
+                                                                                </div>
+                                                                                {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                            </DropdownMenuItem>
+                                                                        );
+                                                                    })()}
 
                                                                     {(canEditStage(1) || canEditStage(2) || canEditStage(3) || canEditStage(4) || canEditStage(5)) && (canEditStage(6) || canEditStage(7) || canEditStage(8)) && <DropdownMenuSeparator />}
 
                                                                     {/* Stage 6 */}
-                                                                    {canEditStage(6) && (
-                                                                        <DropdownMenuItem
-                                                                            disabled={!isAdminRole && isStageLocked(g, 6) && g.stageStatus[5] !== "Complete"}
-                                                                            onSelect={(e) => {
-                                                                                e.preventDefault();
-                                                                                setTimeout(() => openSafeReturnModal(g.id), 0);
-                                                                            }}
-                                                                            className="gap-2.5 text-emerald-600 focus:text-emerald-700 cursor-pointer disabled:opacity-40"
-                                                                        >
-                                                                            <RotateCcw className="h-4 w-4" />
-                                                                            Safe Return Confirmation
-                                                                        </DropdownMenuItem>
-                                                                    )}
+                                                                    {canEditStage(6) && (() => {
+                                                                        const isComplete = g.stageStatus[5] === "Complete";
+                                                                        const isDisabled = !isAdminRole && isComplete;
+                                                                        return (
+                                                                            <DropdownMenuItem
+                                                                                disabled={isDisabled}
+                                                                                onSelect={(e) => {
+                                                                                    e.preventDefault();
+                                                                                    if (!isAdminRole && isComplete) return;
+                                                                                    setTimeout(() => openSafeReturnModal(g.id), 0);
+                                                                                }}
+                                                                                className="flex items-center justify-between gap-2.5 text-emerald-600 focus:text-emerald-700 cursor-pointer disabled:opacity-40"
+                                                                            >
+                                                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                                                    <RotateCcw className="h-4 w-4 shrink-0" />
+                                                                                    <span className="truncate">Safe Return Confirmation</span>
+                                                                                </div>
+                                                                                {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                            </DropdownMenuItem>
+                                                                        );
+                                                                    })()}
                                                                     {/* Stage 7 */}
-                                                                    {canEditStage(7) && (
-                                                                        <DropdownMenuItem
-                                                                            disabled={!isAdminRole && isStageLocked(g, 7) && g.stageStatus[6] !== "Complete"}
-                                                                            onSelect={(e) => {
-                                                                                e.preventDefault();
-                                                                                setTimeout(() => openResultProgressModal(g.id), 0);
-                                                                            }}
-                                                                            className="gap-2.5 text-purple-600 focus:text-purple-700 cursor-pointer disabled:opacity-40"
-                                                                        >
-                                                                            <TrendingUp className="h-4 w-4" />
-                                                                            Result Tracking &amp; Health Progress Check
-                                                                        </DropdownMenuItem>
-                                                                    )}
+                                                                    {canEditStage(7) && (() => {
+                                                                        const isComplete = g.stageStatus[6] === "Complete";
+                                                                        const isDisabled = !isAdminRole && isComplete;
+                                                                        return (
+                                                                            <DropdownMenuItem
+                                                                                disabled={isDisabled}
+                                                                                onSelect={(e) => {
+                                                                                    e.preventDefault();
+                                                                                    if (!isAdminRole && isComplete) return;
+                                                                                    setTimeout(() => openResultProgressModal(g.id), 0);
+                                                                                }}
+                                                                                className="flex items-center justify-between gap-2.5 text-purple-600 focus:text-purple-700 cursor-pointer disabled:opacity-40"
+                                                                            >
+                                                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                                                    <TrendingUp className="h-4 w-4 shrink-0" />
+                                                                                    <span className="truncate">Result Tracking &amp; Health Progress Check</span>
+                                                                                </div>
+                                                                                {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                            </DropdownMenuItem>
+                                                                        );
+                                                                    })()}
                                                                     {/* Stage 8 */}
-                                                                    {canEditStage(8) && (
-                                                                        <DropdownMenuItem
-                                                                            disabled={!isAdminRole && isStageLocked(g, 8) && g.stageStatus[7] !== "Complete"}
-                                                                            onSelect={(e) => {
-                                                                                e.preventDefault();
-                                                                                if (g.stageStatus[7] === "Complete") {
-                                                                                    setTimeout(() => openReferralModal(g.id), 0);
-                                                                                } else {
-                                                                                    window.open(buildReferralFormUrl(g.bookingId), "_blank", "noopener,noreferrer");
-                                                                                }
-                                                                            }}
-                                                                            className="gap-2.5 text-green-600 focus:text-green-700 cursor-pointer disabled:opacity-40"
-                                                                        >
-                                                                            <Users className="h-4 w-4" />
-                                                                            Referral Collection &amp; Lead Generation
-                                                                        </DropdownMenuItem>
-                                                                    )}
+                                                                    {canEditStage(8) && (() => {
+                                                                        const isComplete = g.stageStatus[7] === "Complete";
+                                                                        const isDisabled = !isAdminRole && isComplete;
+                                                                        return (
+                                                                            <DropdownMenuItem
+                                                                                disabled={isDisabled}
+                                                                                onSelect={(e) => {
+                                                                                    e.preventDefault();
+                                                                                    if (!isAdminRole && isComplete) return;
+                                                                                    if (isComplete) {
+                                                                                        setTimeout(() => openReferralModal(g.id), 0);
+                                                                                    } else {
+                                                                                        window.open(buildReferralFormUrl(g.bookingId), "_blank", "noopener,noreferrer");
+                                                                                    }
+                                                                                }}
+                                                                                className="flex items-center justify-between gap-2.5 text-green-600 focus:text-green-700 cursor-pointer disabled:opacity-40"
+                                                                            >
+                                                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                                                    <Users className="h-4 w-4 shrink-0" />
+                                                                                    <span className="truncate">Referral Collection &amp; Lead Generation</span>
+                                                                                </div>
+                                                                                {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                            </DropdownMenuItem>
+                                                                        );
+                                                                    })()}
 
                                                                     {(canEditStage(1) || canEditStage(2) || canEditStage(3) || canEditStage(4) || canEditStage(5) || canEditStage(6) || canEditStage(7) || canEditStage(8)) && (canEditStage(9) || canEditStage(10) || canEditStage(11)) && <DropdownMenuSeparator />}
 
                                                                     {/* Stage 9 */}
-                                                                    {canEditStage(9) && (
-                                                                        <DropdownMenuItem
-                                                                            disabled={!isAdminRole && isStageLocked(g, 9) && g.stageStatus[8] !== "Complete"}
-                                                                            onSelect={(e) => {
-                                                                                e.preventDefault();
-                                                                                setTimeout(() => openDriverArrivalModal(g.id), 0);
-                                                                            }}
-                                                                            className="gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
-                                                                        >
-                                                                            <Briefcase className="h-4 w-4" />
-                                                                            Driver Assignment – Arrival Pickup
-                                                                        </DropdownMenuItem>
-                                                                    )}
+                                                                    {canEditStage(9) && (() => {
+                                                                        const isComplete = g.stageStatus[8] === "Complete";
+                                                                        const isDisabled = !isAdminRole && isComplete;
+                                                                        return (
+                                                                            <DropdownMenuItem
+                                                                                disabled={isDisabled}
+                                                                                onSelect={(e) => {
+                                                                                    e.preventDefault();
+                                                                                    if (!isAdminRole && isComplete) return;
+                                                                                    setTimeout(() => openDriverArrivalModal(g.id), 0);
+                                                                                }}
+                                                                                className="flex items-center justify-between gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
+                                                                            >
+                                                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                                                    <Briefcase className="h-4 w-4 shrink-0" />
+                                                                                    <span className="truncate">Driver Assignment – Arrival Pickup</span>
+                                                                                </div>
+                                                                                {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                            </DropdownMenuItem>
+                                                                        );
+                                                                    })()}
                                                                     {/* Stage 10 */}
-                                                                    {canEditStage(10) && (
-                                                                        <DropdownMenuItem
-                                                                            disabled={!isAdminRole && isStageLocked(g, 10) && g.stageStatus[9] !== "Complete"}
-                                                                            onSelect={(e) => {
-                                                                                e.preventDefault();
-                                                                                setTimeout(() => openDriverDepartureModal(g.id), 0);
-                                                                            }}
-                                                                            className="gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
-                                                                        >
-                                                                            <Briefcase className="h-4 w-4" />
-                                                                            Driver Assignment – Departure Drop
-                                                                        </DropdownMenuItem>
-                                                                    )}
+                                                                    {canEditStage(10) && (() => {
+                                                                        const isComplete = g.stageStatus[9] === "Complete";
+                                                                        const isDisabled = !isAdminRole && isComplete;
+                                                                        return (
+                                                                            <DropdownMenuItem
+                                                                                disabled={isDisabled}
+                                                                                onSelect={(e) => {
+                                                                                    e.preventDefault();
+                                                                                    if (!isAdminRole && isComplete) return;
+                                                                                    setTimeout(() => openDriverDepartureModal(g.id), 0);
+                                                                                }}
+                                                                                className="flex items-center justify-between gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
+                                                                            >
+                                                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                                                    <Briefcase className="h-4 w-4 shrink-0" />
+                                                                                    <span className="truncate">Driver Assignment – Departure Drop</span>
+                                                                                </div>
+                                                                                {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                            </DropdownMenuItem>
+                                                                        );
+                                                                    })()}
                                                                     {/* Stage 11 */}
-                                                                    {canEditStage(11) && (
-                                                                        <DropdownMenuItem
-                                                                            disabled={!isAdminRole && isStageLocked(g, 11) && g.stageStatus[10] !== "Complete"}
-                                                                            onSelect={(e) => {
-                                                                                e.preventDefault();
-                                                                                setTimeout(() => openRequirementVerificationModal(g.id), 0);
-                                                                            }}
-                                                                            className="gap-2.5 text-teal-600 focus:text-teal-700 cursor-pointer disabled:opacity-40"
-                                                                        >
-                                                                            <CheckCircle2 className="h-4 w-4" />
-                                                                            Guest Requirement Verification
-                                                                        </DropdownMenuItem>
-                                                                    )}
+                                                                    {canEditStage(11) && (() => {
+                                                                        const isComplete = g.stageStatus[10] === "Complete";
+                                                                        const isDisabled = !isAdminRole && isComplete;
+                                                                        return (
+                                                                            <DropdownMenuItem
+                                                                                disabled={isDisabled}
+                                                                                onSelect={(e) => {
+                                                                                    e.preventDefault();
+                                                                                    if (!isAdminRole && isComplete) return;
+                                                                                    setTimeout(() => openRequirementVerificationModal(g.id), 0);
+                                                                                }}
+                                                                                className="flex items-center justify-between gap-2.5 text-teal-600 focus:text-teal-700 cursor-pointer disabled:opacity-40"
+                                                                            >
+                                                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                                                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                                                                    <span className="truncate">Guest Requirement Verification</span>
+                                                                                </div>
+                                                                                {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                            </DropdownMenuItem>
+                                                                        );
+                                                                    })()}
 
                                                                     {![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].some((n) => canEditStage(n)) && (
                                                                         <DropdownMenuItem disabled className="gap-2.5 text-slate-400 opacity-70">
@@ -2467,7 +2653,7 @@ export default function CRRCallingProcessPage() {
                                 />
                                 <Button
                                     size="sm"
-                                    className={`h-8 text-xs px-3 text-white ${isPendingTable ? "bg-amber-600 hover:bg-amber-700" : "bg-emerald-600 hover:bg-emerald-700"}`}
+                                    className={`h-8 text-xs px-3 text-white ${isPendingTable ? "bg-amber-600 hover:bg-amber-700" : isCompletedTable ? "bg-emerald-600 hover:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700"}`}
                                     onClick={onGoto}
                                 >Go</Button>
                             </div>
@@ -2888,7 +3074,7 @@ export default function CRRCallingProcessPage() {
                                 <div>
                                     <h3 className="text-sm sm:text-base font-semibold text-slate-900 leading-tight">Guest Follow-up Records</h3>
                                     <p className="text-xs text-slate-500 mt-0.5">
-                                        Showing guest follow-up records separated into Pending and Completed
+                                        Showing guest follow-up records separated into Pending, Completed, and Cancelled
                                     </p>
                                 </div>
                             </div>
@@ -2897,13 +3083,13 @@ export default function CRRCallingProcessPage() {
                                 <div className="flex items-center p-1 bg-white/90 border border-slate-300 rounded-lg shadow-2xs">
                                     <button
                                         type="button"
-                                        onClick={() => setRecordsViewTab("both")}
-                                        className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${recordsViewTab === "both"
+                                        onClick={() => setRecordsViewTab("all")}
+                                        className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${recordsViewTab === "all"
                                                 ? "bg-slate-800 text-white shadow-xs font-bold"
                                                 : "text-slate-600 hover:text-slate-900"
                                             }`}
                                     >
-                                        Both Tables ({rows.length})
+                                        All Tables ({rows.length})
                                     </button>
                                     <button
                                         type="button"
@@ -2926,6 +3112,17 @@ export default function CRRCallingProcessPage() {
                                     >
                                         <CheckCircle2 className="w-3.5 h-3.5" />
                                         Completed ({completedRows.length})
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setRecordsViewTab("cancelled")}
+                                        className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${recordsViewTab === "cancelled"
+                                                ? "bg-rose-600 text-white shadow-xs font-bold"
+                                                : "text-slate-600 hover:text-rose-700"
+                                            }`}
+                                    >
+                                        <AlertTriangle className="w-3.5 h-3.5" />
+                                        Cancelled ({cancelledRows.length})
                                     </button>
                                 </div>
 
@@ -2970,8 +3167,9 @@ export default function CRRCallingProcessPage() {
 
                         {viewMode === "table" ? (
                             <div className="space-y-6">
-                                {(recordsViewTab === "both" || recordsViewTab === "pending") && renderRecordsTable("pending")}
-                                {(recordsViewTab === "both" || recordsViewTab === "completed") && renderRecordsTable("completed")}
+                                {(recordsViewTab === "all" || recordsViewTab === "pending") && renderRecordsTable("pending")}
+                                {(recordsViewTab === "all" || recordsViewTab === "completed") && renderRecordsTable("completed")}
+                                {(recordsViewTab === "all" || recordsViewTab === "cancelled") && renderRecordsTable("cancelled")}
                             </div>
                         ) : (
                             <div className="rounded-xl border border-slate-200 bg-white shadow-md overflow-hidden">
@@ -3238,10 +3436,10 @@ export default function CRRCallingProcessPage() {
                                         {isStage3Complete || activeGuest.allComplete ? "Read Only" : "Fill in below"}
                                     </span>
                                 </div>
-                                {activeGuest && !isAdminRole && isStageLocked(activeGuest, 3) && !isStage3Complete && (
+                                {activeGuest && !isAdminRole && s3Lock.isLocked && !isStage3Complete && (
                                     <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                                         <Clock className="h-4 w-4 shrink-0" />
-                                        This stage unlocks on {formatISTDate(getStagePlannedDate(activeGuest, 3))}. Fields are read-only until then.
+                                        {s3Lock.message}
                                     </div>
                                 )}
                                 {isStage3Complete && (
@@ -3259,7 +3457,7 @@ export default function CRRCallingProcessPage() {
                                         <Input
                                             type="date"
                                             value={modalDate}
-                                            disabled={(!isAdminRole && isStageLocked(activeGuest, 3)) || isStage3Complete || activeGuest.allComplete}
+                                            disabled={isGuestDisabled}
                                             onChange={(e) => { setModalDate(e.target.value); setModalSaved(false); }}
                                             className="h-10 border-blue-200 focus:border-blue-500 bg-white w-full"
                                         />
@@ -3271,7 +3469,7 @@ export default function CRRCallingProcessPage() {
                                         </Label>
                                         <Textarea
                                             value={modalRemark}
-                                            disabled={(!isAdminRole && isStageLocked(activeGuest, 3)) || isStage3Complete || activeGuest.allComplete}
+                                            disabled={isGuestDisabled}
                                             onChange={(e) => { setModalRemark(e.target.value); setModalSaved(false); }}
                                             placeholder="Add remarks for this stage..."
                                             className="min-h-[80px] border-blue-200 focus:border-blue-500 bg-white"
@@ -3289,7 +3487,7 @@ export default function CRRCallingProcessPage() {
                                 <Button
                                     size="sm"
                                     onClick={saveModal}
-                                    disabled={(!isAdminRole && isStageLocked(activeGuest, 3)) || isStage3Complete || activeGuest.allComplete || !isModalFormComplete() || modalSaved}
+                                    disabled={isGuestDisabled || !isModalFormComplete() || modalSaved}
                                     className="min-w-[112px] bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                                 >
                                     {modalSaved ? (
@@ -3370,10 +3568,10 @@ export default function CRRCallingProcessPage() {
                                         {isStage6Complete ? "Read Only" : isStage6Processing ? "Processing" : "Fill in below"}
                                     </span>
                                 </div>
-                                {activeSafeReturnGuest && !isAdminRole && isStageLocked(activeSafeReturnGuest, 6) && !isStage6Complete && !isStage6Processing && (
+                                {activeSafeReturnGuest && !isAdminRole && s6Lock.isLocked && !isStage6Complete && !isStage6Processing && (
                                     <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                                         <Clock className="h-4 w-4 shrink-0" />
-                                        This stage unlocks on {formatISTDate(getStagePlannedDate(activeSafeReturnGuest, 6))}. Fields are read-only until then.
+                                        {s6Lock.message}
                                     </div>
                                 )}
                                 {isStage6Processing && (
@@ -3592,10 +3790,10 @@ export default function CRRCallingProcessPage() {
                                         {isStage5Complete ? "Read Only" : isStage5Processing ? "Processing" : "Fill in below"}
                                     </span>
                                 </div>
-                                {activeRatingGuest && !isAdminRole && isStageLocked(activeRatingGuest, 5) && !isStage5Complete && !isStage5Processing && (
+                                {activeRatingGuest && !isAdminRole && s5Lock.isLocked && !isStage5Complete && !isStage5Processing && (
                                     <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                                         <Clock className="h-4 w-4 shrink-0" />
-                                        This stage unlocks on {formatISTDate(getStagePlannedDate(activeRatingGuest, 5))}. Fields are read-only until then.
+                                        {s5Lock.message}
                                     </div>
                                 )}
                                 {isStage5Processing && (
@@ -3862,6 +4060,12 @@ export default function CRRCallingProcessPage() {
                                                 {hasData ? "Read Only" : "Fill in below"}
                                             </span>
                                         </div>
+                                        {activeFeedbackGuest && !isAdminRole && s4Lock.isLocked && !isStage4Complete && (
+                                            <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                                                <Clock className="h-4 w-4 shrink-0" />
+                                                {s4Lock.message}
+                                            </div>
+                                        )}
                                         <div className="grid grid-cols-1 gap-4">
                                             {/* Row 1: Feedback Taking URL — only shown when pending / no data */}
                                             {!hasData && (
@@ -3898,7 +4102,7 @@ export default function CRRCallingProcessPage() {
                                                 ) : (
                                                     <Textarea
                                                         value={feedbackDoerRemarks}
-                                                        disabled={!activeFeedbackGuest || (!isAdminRole && isStageLocked(activeFeedbackGuest, 4)) || isStage4Complete}
+                                                        disabled={isFeedbackDisabled}
                                                         onChange={(e) => { setFeedbackDoerRemarks(e.target.value); setFeedbackSaved(false); }}
                                                         placeholder="Remarks from the doer regarding the feedback / outcome..."
                                                         className="min-h-[90px] border-amber-200 focus:border-amber-500 bg-white"
@@ -3925,7 +4129,7 @@ export default function CRRCallingProcessPage() {
                                 <Button
                                     size="sm"
                                     onClick={saveFeedbackModal}
-                                    disabled={!activeFeedbackGuest || (!isAdminRole && (isStageLocked(activeFeedbackGuest, 4) || isStage4Complete)) || !isFeedbackFormComplete() || feedbackSaved}
+                                    disabled={isFeedbackDisabled || !isFeedbackFormComplete() || feedbackSaved}
                                     className="min-w-[112px] bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                                 >
                                     {feedbackSaved ? (
@@ -4006,6 +4210,12 @@ export default function CRRCallingProcessPage() {
                                                 {hasData ? "Read Only" : "Fill in below"}
                                             </span>
                                         </div>
+                                        {activeReferralGuest && !isAdminRole && s8Lock.isLocked && !isStage8Complete && (
+                                            <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                                                <Clock className="h-4 w-4 shrink-0" />
+                                                {s8Lock.message}
+                                            </div>
+                                        )}
                                         <div className="grid grid-cols-1 gap-4">
                                             {/* Row 1: Referral Taking URL — hidden once data exists */}
                                             {!hasData && (
@@ -4042,7 +4252,7 @@ export default function CRRCallingProcessPage() {
                                                 ) : (
                                                     <Input
                                                         value={referralTakenStatus}
-                                                        disabled={!activeReferralGuest || (!isAdminRole && isStageLocked(activeReferralGuest, 8)) || isStage8Complete}
+                                                        disabled={isReferralDisabled}
                                                         onChange={(e) => { setReferralTakenStatus(e.target.value); setReferralSaved(false); }}
                                                         placeholder="e.g. Referral given, Follow-up needed, Declined..."
                                                         className="h-10 border-green-200 focus:border-green-500 bg-white"
@@ -4062,7 +4272,7 @@ export default function CRRCallingProcessPage() {
                                                 ) : (
                                                     <Textarea
                                                         value={referralDoerRemarks}
-                                                        disabled={!activeReferralGuest || (!isAdminRole && isStageLocked(activeReferralGuest, 8)) || isStage8Complete}
+                                                        disabled={isReferralDisabled}
                                                         onChange={(e) => { setReferralDoerRemarks(e.target.value); setReferralSaved(false); }}
                                                         placeholder="Remarks from the doer regarding the referral collection..."
                                                         className="min-h-[90px] border-green-200 focus:border-green-500 bg-white"
@@ -4089,7 +4299,7 @@ export default function CRRCallingProcessPage() {
                                 <Button
                                     size="sm"
                                     onClick={saveReferralModal}
-                                    disabled={!activeReferralGuest || (!isAdminRole && (isStageLocked(activeReferralGuest, 8) || isStage8Complete)) || !isReferralFormComplete() || referralSaved}
+                                    disabled={isReferralDisabled || !isReferralFormComplete() || referralSaved}
                                     className="min-w-[112px] bg-green-600 hover:bg-green-700 text-white font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                                 >
                                     {referralSaved ? (
@@ -4109,8 +4319,6 @@ export default function CRRCallingProcessPage() {
 
             <Dialog open={activeWelcomeGuestId !== null} onOpenChange={(open) => !open && closeWelcomeModal()}>
                 {activeWelcomeGuest && (() => {
-                    // (isStage1Complete / isStage1Processing are the top-level to_show-driven flags).
-                    const isWelcomeDisabled = !activeWelcomeGuest || (!isAdminRole && isStageLocked(activeWelcomeGuest, 1)) || isStage1Complete || isStage1Processing;
                     return (
                         <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col">
                             <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white shrink-0">
@@ -4169,10 +4377,10 @@ export default function CRRCallingProcessPage() {
                                             {isWelcomeDisabled ? "Read Only" : "Fill in below"}
                                         </span>
                                     </div>
-                                    {activeWelcomeGuest && !isAdminRole && isStageLocked(activeWelcomeGuest, 1) && !isStage1Complete && !isStage1Processing && (
+                                    {activeWelcomeGuest && !isAdminRole && s1Lock.isLocked && !isStage1Complete && !isStage1Processing && (
                                         <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                                             <Clock className="h-4 w-4 shrink-0" />
-                                            This stage unlocks on {formatISTDate(getStagePlannedDate(activeWelcomeGuest, 1))}. Fields are read-only until then.
+                                            {s1Lock.message}
                                         </div>
                                     )}
                                     {isStage1Processing && (
@@ -4376,10 +4584,10 @@ export default function CRRCallingProcessPage() {
                                         {isStage7Complete ? "Read Only" : isStage7Processing ? "Processing" : "Fill in below"}
                                     </span>
                                 </div>
-                                {activeResultProgressGuest && !isAdminRole && isStageLocked(activeResultProgressGuest, 7) && !isStage7Complete && !isStage7Processing && (
+                                {activeResultProgressGuest && !isAdminRole && s7Lock.isLocked && !isStage7Complete && !isStage7Processing && (
                                     <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                                         <Clock className="h-4 w-4 shrink-0" />
-                                        This stage unlocks on {formatISTDate(getStagePlannedDate(activeResultProgressGuest, 7))}. Fields are read-only until then.
+                                        {s7Lock.message}
                                     </div>
                                 )}
                                 {isStage7Processing && (
@@ -4622,6 +4830,12 @@ export default function CRRCallingProcessPage() {
                                             <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-600">QR Code</h4>
                                         </div>
                                     </div>
+                                    {activeCallGuest && !isAdminRole && s2Lock.isLocked && !isStage2Complete && (
+                                        <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mt-3">
+                                            <Clock className="h-4 w-4 shrink-0" />
+                                            {s2Lock.message}
+                                        </div>
+                                    )}
 
                                     {/* KTAHV QR leaflet — visible when pending */}
                                     <div className="mt-3 pt-3 border-t border-indigo-200 rounded-lg bg-white p-3 space-y-3">
@@ -4657,7 +4871,7 @@ export default function CRRCallingProcessPage() {
                                 <Button
                                     size="sm"
                                     onClick={saveCallModal}
-                                    disabled={!activeCallGuest || (!isAdminRole && (isStageLocked(activeCallGuest, 2) || isStage2Complete)) || !isCallFormComplete() || callSaved}
+                                    disabled={!activeCallGuest || isCallDisabled || !isCallFormComplete() || callSaved}
                                     className="min-w-[112px] bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                                 >
                                     {callSaved ? (

@@ -114,7 +114,7 @@ function stageOf(stages: StageInfo[], stageNo: number): StageInfo | undefined {
 }
 
 // Metadata keys that do not represent user-submitted stage data
-const METADATA_KEYS = new Set(["doer", "assignedBy"]);
+const METADATA_KEYS = new Set(["doer", "assignedBy", "stageKey", "stage_key"]);
 
 // True when the saved row has at least one non-empty value —
 // used to decide whether legacy per-stage objects should be hydrated.
@@ -180,7 +180,23 @@ function mapRow(row: GasBookingRow): Guest {
             status: s1!.status,
             notDoneRemarks: s1!.notDoneRemarks,
             followupDate: s1!.followupDate,
+            stageKey: s1!.stageKey,
         } as Guest["arrivalWelcome"])
+        : undefined;
+
+    const nextVisitPlanning = hasAnyValue(s3)
+        ? ({
+            nextVisitDate: s3!.nextVisitDate,
+            remarks: s3!.remarks,
+            status: s3!.status,
+            actualDate: s3!.actualDate,
+            timeDelay: s3!.timeDelay,
+            shouldWeRequestRatings: s3!.shouldWeRequestRatings,
+            proofOfRating: s3!.proofOfRating,
+            link: s3!.link,
+            stageKey: s3!.stageKey,
+            doer: s3!.doer,
+        } as Guest["nextVisitPlanning"])
         : undefined;
 
     const guestFeedback = hasAnyValue(s4)
@@ -201,6 +217,7 @@ function mapRow(row: GasBookingRow): Guest {
             notDoneRemarks: s5!.notDoneRemarks,
             followupDate: s5!.followupDate,
             outcomeAchieved: s5!.outcomeAchieved,
+            stageKey: s5!.stageKey,
         } as Guest["ratingRequest"])
         : undefined;
 
@@ -212,6 +229,7 @@ function mapRow(row: GasBookingRow): Guest {
             status: s6!.status,
             notDoneRemarks: s6!.notDoneRemarks,
             followupDate: "", // no followupDate column for stage 6 (confirmed intentional)
+            stageKey: s6!.stageKey,
         } as Guest["safeReturn"])
         : undefined;
 
@@ -222,6 +240,7 @@ function mapRow(row: GasBookingRow): Guest {
             status: s7!.status,
             notDoneRemarks: s7!.notDoneRemarks,
             followupDate: s7!.followupDate,
+            stageKey: s7!.stageKey,
         } as Guest["resultProgress"])
         : undefined;
 
@@ -306,6 +325,7 @@ function mapRow(row: GasBookingRow): Guest {
 
         // Persisted stage form data (prefill for completed / partially saved stages)
         arrivalWelcome,
+        nextVisitPlanning,
         guestFeedback,
         ratingRequest,
         safeReturn,
@@ -317,11 +337,22 @@ function mapRow(row: GasBookingRow): Guest {
     };
 }
 
+interface CacheEntry {
+    guests: Guest[];
+    stageUsers: StageUser[];
+    timestamp: number;
+}
+
+const crrClientCache = new Map<string, CacheEntry>();
+
 export function useCrrBookings(from?: string, to?: string) {
-    const [guests, setGuests] = useState<Guest[]>([]);
-    const [stageUsers, setStageUsers] = useState<StageUser[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [isRevalidating, setIsRevalidating] = useState(false);
+    const cacheKey = `${from || ""}_${to || ""}`;
+    const cached = crrClientCache.get(cacheKey);
+
+    const [guests, setGuests] = useState<Guest[]>(() => cached?.guests ?? []);
+    const [stageUsers, setStageUsers] = useState<StageUser[]>(() => cached?.stageUsers ?? []);
+    const [loading, setLoading] = useState(() => !cached);
+    const [isRevalidating, setIsRevalidating] = useState(() => Boolean(cached));
     const [error, setError] = useState<string | null>(null);
 
     const fetchBookings = useCallback(async (isBackground = false) => {
@@ -345,7 +376,13 @@ export function useCrrBookings(from?: string, to?: string) {
 
             const mapped = json.data.map(mapRow).sort((a, b) => b.id - a.id);
             setGuests(mapped);
-            setStageUsers(json.stageUsers || []);
+            const fetchedUsers = json.stageUsers || [];
+            setStageUsers(fetchedUsers);
+            crrClientCache.set(cacheKey, {
+                guests: mapped,
+                stageUsers: fetchedUsers,
+                timestamp: Date.now(),
+            });
         } catch (err) {
             console.error("[useCrrBookings] fetch failed:", err);
             setError(err instanceof Error ? err.message : "Failed to load bookings");
@@ -353,11 +390,12 @@ export function useCrrBookings(from?: string, to?: string) {
             setLoading(false);
             setIsRevalidating(false);
         }
-    }, [from, to]);
+    }, [from, to, cacheKey]);
 
     useEffect(() => {
-        fetchBookings(guests.length > 0);
-    }, [fetchBookings]);
+        const hasCached = crrClientCache.has(cacheKey);
+        fetchBookings(hasCached);
+    }, [fetchBookings, cacheKey]);
 
     const refetch = useCallback(() => fetchBookings(true), [fetchBookings]);
 
@@ -371,7 +409,9 @@ export function useCrrBookings(from?: string, to?: string) {
 
 export function isStageLocked(guest: Guest, stageNo: number): boolean {
     const info = guest.stages.find((s) => s.stage === stageNo);
-    if (!info || !info.available) return true; // stage missing from GAS response = locked (safe default)
+    if (!info || !info.available) return false;
+    // If planned date is not set, stage is not locked
+    if (!info.plannedDate || String(info.plannedDate).trim() === "") return false;
     return info.locked;
 }
 
@@ -391,8 +431,18 @@ export function getStageActualDate(guest: Guest, stageNo: number): string | null
 export function getStageDoer(guest: Guest, stageNo: number): string {
     const info = guest.stages?.find((s) => s.stage === stageNo);
     const doer = info?.savedData?.doer;
-    if (doer && String(doer).trim() !== "") {
-        return String(doer).trim();
+
+    // Stage 3 & 7: Doctor stages -> must strictly be doctor, never salesperson / bookingTakenBy
+    if (stageNo === 3 || stageNo === 7) {
+        if (doer && String(doer).trim() !== "" && doer !== guest.takenBy) {
+            return String(doer).trim();
+        }
+        const doc = guest.guestRequirementVerification?.doctorAssignedToClient ||
+                    guest.guestRequirementVerification?.changedDoctor ||
+                    guest.stages?.find((s) => s.stage === 11)?.savedData?.doctorAssignedToClient ||
+                    guest.stages?.find((s) => s.stage === 11)?.savedData?.changedDoctor;
+        if (doc && String(doc).trim() !== "") return String(doc).trim();
+        return "Doctor";
     }
 
     // Stage 2, 4 & 8 strictly use database doer from checkinmasterfms
@@ -400,11 +450,8 @@ export function getStageDoer(guest: Guest, stageNo: number): string {
         return "";
     }
 
-    // Stage 3 & 7: Doctor stages -> assigned doctor
-    if (stageNo === 3 || stageNo === 7) {
-        const doc = guest.guestRequirementVerification?.doctorAssignedToClient ||
-                    guest.stages?.find((s) => s.stage === 11)?.savedData?.doctorAssignedToClient;
-        if (doc && String(doc).trim() !== "") return String(doc).trim();
+    if (doer && String(doer).trim() !== "") {
+        return String(doer).trim();
     }
 
     // Stage 9: Arrival Driver / FO
@@ -449,6 +496,12 @@ export function getStageSavedData(
 ): Record<string, string> | null {
     const info = guest.stages.find((s) => s.stage === stageNo);
     return normalizeSavedData(info?.savedData);
+}
+
+// Stage key for a stage (e.g. ${uid}_Stage1) from KTAHV_CRR_Calling_FMS.stage_key or derived from UID
+export function getStageKey(guest: Guest, stageNo: number): string | null {
+    const info = guest.stages?.find((s) => s.stage === stageNo);
+    return info?.stageKey ?? (guest.uid ? `${guest.uid}_Stage${stageNo}` : null);
 }
 
 export async function saveStage(
