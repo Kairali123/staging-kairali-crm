@@ -62,6 +62,7 @@ import {
     Briefcase,
     Calendar,
     ChevronRight,
+    ChevronDown,
     MoreVertical,
     Home,
     Star,
@@ -549,17 +550,17 @@ export default function CRRCallingProcessPage() {
 
     // Pending records pagination
     const [pendingPage, setPendingPage] = useState(1);
-    const [pendingItemsPerPage, setPendingItemsPerPage] = useState(5);
+    const [pendingItemsPerPage, setPendingItemsPerPage] = useState(20);
     const [pendingGotoPage, setPendingGotoPage] = useState("");
 
     // Completed records pagination
     const [completedPage, setCompletedPage] = useState(1);
-    const [completedItemsPerPage, setCompletedItemsPerPage] = useState(5);
+    const [completedItemsPerPage, setCompletedItemsPerPage] = useState(20);
     const [completedGotoPage, setCompletedGotoPage] = useState("");
 
     // Cancelled records pagination
     const [cancelledPage, setCancelledPage] = useState(1);
-    const [cancelledItemsPerPage, setCancelledItemsPerPage] = useState(5);
+    const [cancelledItemsPerPage, setCancelledItemsPerPage] = useState(20);
     const [cancelledGotoPage, setCancelledGotoPage] = useState("");
 
     // modal edit fields
@@ -1119,13 +1120,46 @@ export default function CRRCallingProcessPage() {
         const stagePending = pendingReport.totals;
         const maxStagePending = Math.max(1, ...stagePending);
 
-        // Active (not-yet-complete, not-cancelled) guests grouped by responsible role
-        const respCounts: Record<string, number> = { GRE: 0, Doctor: 0, FO: 0, GM: 0 };
-        rows.forEach((g) => {
-            if (g.allComplete || isBookingCancelled(g)) return;
-            const resp = STAGES[g.currentStage - 1]?.resp;
-            if (resp && respCounts[resp] !== undefined) respCounts[resp] += 1;
-        });
+        // Active guest rows (excluding cancelled)
+        const activeRows = rows.filter((g) => !isBookingCancelled(g));
+
+        // Active workload and unique guest counts grouped by responsible role across active guest journeys
+        const roleStats: Record<string, { tasks: number; guests: number }> = {
+            GRE: { tasks: 0, guests: 0 },
+            Doctor: { tasks: 0, guests: 0 },
+            FO: { tasks: 0, guests: 0 },
+            GM: { tasks: 0, guests: 0 },
+        };
+        const guestsByRole: Record<string, Set<number>> = {
+            GRE: new Set(),
+            Doctor: new Set(),
+            FO: new Set(),
+            GM: new Set(),
+        };
+
+        for (const g of activeRows) {
+            for (let idx = 0; idx < STAGES.length; idx++) {
+                if (g.stageStatus[idx] !== "Complete") {
+                    const role = STAGES[idx].resp;
+                    if (roleStats[role]) {
+                        roleStats[role].tasks++;
+                        guestsByRole[role]?.add(g.id);
+                    }
+                }
+            }
+        }
+
+        for (const role of Object.keys(roleStats)) {
+            roleStats[role].guests = guestsByRole[role]?.size || 0;
+        }
+
+        const respCounts: Record<string, number> = {
+            GRE: roleStats.GRE.tasks,
+            Doctor: roleStats.Doctor.tasks,
+            FO: roleStats.FO.tasks,
+            GM: roleStats.GM.tasks,
+        };
+        const totalRoleWorkload = Object.values(respCounts).reduce((a, b) => a + b, 0);
         const maxResp = Math.max(1, ...Object.values(respCounts));
 
         // Top pending workload by employee (from the same doer attribution as the report table)
@@ -1135,12 +1169,25 @@ export default function CRRCallingProcessPage() {
             .slice(0, 8);
         const maxEmployee = Math.max(1, ...employeeTotals.map((e) => e.total));
 
-        const totalActive = rows.filter((g) => !g.allComplete && !isBookingCancelled(g)).length;
-        const totalComplete = rows.filter((g) => g.allComplete && !isBookingCancelled(g)).length;
+        // Consistent with pendingRows and completedRows used in KPI and tables
+        const totalActive = pendingRows.length;
+        const totalComplete = completedRows.length;
         const totalAll = Math.max(1, totalActive + totalComplete);
 
-        return { stagePending, maxStagePending, respCounts, maxResp, employeeTotals, maxEmployee, totalActive, totalComplete, totalAll };
-    }, [rows, pendingReport]);
+        return {
+            stagePending,
+            maxStagePending,
+            respCounts,
+            roleStats,
+            maxResp,
+            totalRoleWorkload,
+            employeeTotals,
+            maxEmployee,
+            totalActive,
+            totalComplete,
+            totalAll,
+        };
+    }, [rows, pendingReport, pendingRows.length, completedRows.length]);
 
     /* ---------- SCROLL TO TABLE ON SEARCH MATCH ---------- */
     // Ref attached to the "Guest Follow-up Records" table card below.
@@ -2313,26 +2360,316 @@ export default function CRRCallingProcessPage() {
                                                         <span>View Details</span>
                                                     </Button>
 
-                                                    {isBookingCancelled(g) ? (
+                                                    {isBookingCancelled(g) && !isAdminRole ? (
                                                         <span className="inline-flex items-center text-xs font-medium text-slate-400 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg">
                                                             Cancelled
                                                         </span>
-                                                    ) : isPendingStage ? (
-                                                        <Button
-                                                            size="sm"
-                                                            onClick={() => handleWorkOnStage(g.id, activeStageNum)}
-                                                            disabled={!canEditStage(activeStageNum)}
-                                                            title={canEditStage(activeStageNum) ? `Work on Stage ${activeStageNum}: ${stageObj.name}` : `Stage ${activeStageNum} not assigned or locked`}
-                                                            className="h-8 px-3 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 border border-blue-600 rounded-lg flex items-center gap-1.5 shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
-                                                        >
-                                                            <ClipboardEdit className="h-3.5 w-3.5 text-white" />
-                                                            <span>Work on Stage</span>
-                                                        </Button>
                                                     ) : (
-                                                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
-                                                            <Check className="h-3.5 w-3.5 text-emerald-600" />
-                                                            <span>Completed</span>
-                                                        </span>
+                                                        <DropdownMenu>
+                                                            <DropdownMenuTrigger asChild>
+                                                                {isBookingCancelled(g) ? (
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        className="h-8 px-2.5 text-xs font-semibold text-red-700 bg-red-50 border-red-200 hover:bg-red-100 rounded-lg flex items-center gap-1 shadow-2xs"
+                                                                    >
+                                                                        <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
+                                                                        <span>Cancelled</span>
+                                                                        <ChevronDown className="h-3 w-3 text-red-500/70" />
+                                                                    </Button>
+                                                                ) : !isPendingStage ? (
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        className="h-8 px-2.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100 rounded-lg flex items-center gap-1 shadow-2xs"
+                                                                        title="All stages completed. Click to view stage list."
+                                                                    >
+                                                                        <Check className="h-3.5 w-3.5 text-emerald-600" />
+                                                                        <span>Completed</span>
+                                                                        <ChevronDown className="h-3 w-3 text-emerald-600/70" />
+                                                                    </Button>
+                                                                ) : (
+                                                                    <Button
+                                                                        size="sm"
+                                                                        className="h-8 px-3 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 border border-blue-600 rounded-lg flex items-center gap-1.5 shadow-xs"
+                                                                        title="Choose stage to work on"
+                                                                    >
+                                                                        <ClipboardEdit className="h-3.5 w-3.5 text-white" />
+                                                                        <span>Work on Stage</span>
+                                                                        <ChevronDown className="h-3.5 w-3.5 text-white/80" />
+                                                                    </Button>
+                                                                )}
+                                                            </DropdownMenuTrigger>
+                                                            <DropdownMenuContent align="end" className="w-64 max-h-96 overflow-y-auto">
+                                                                {isBookingCancelled(g) && (
+                                                                    <div className="px-2.5 py-1.5 mx-1 my-1 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-md flex items-center gap-1.5">
+                                                                        <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                                                                        <span>Cancelled Booking (Admin Access)</span>
+                                                                    </div>
+                                                                )}
+                                                                {/* Stage 1 */}
+                                                                {canEditStage(1) && (() => {
+                                                                    const isComplete = g.stageStatus[0] === "Complete";
+                                                                    const isDisabled = isComplete;
+                                                                    return (
+                                                                        <DropdownMenuItem
+                                                                            disabled={isDisabled}
+                                                                            onSelect={(e) => {
+                                                                                e.preventDefault();
+                                                                                if (isComplete) return;
+                                                                                setTimeout(() => openWelcomeModal(g.id), 0);
+                                                                            }}
+                                                                            className="flex items-center justify-between gap-2.5 text-sky-600 focus:text-sky-700 cursor-pointer disabled:opacity-40"
+                                                                        >
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <Home className="h-4 w-4 shrink-0" />
+                                                                                <span className="truncate">Arrival Welcome on Pickup</span>
+                                                                            </div>
+                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                        </DropdownMenuItem>
+                                                                    );
+                                                                })()}
+                                                                {/* Stage 2 */}
+                                                                {canEditStage(2) && (() => {
+                                                                    const isComplete = g.stageStatus[1] === "Complete";
+                                                                    const isDisabled = isComplete;
+                                                                    return (
+                                                                        <DropdownMenuItem
+                                                                            disabled={isDisabled}
+                                                                            onSelect={(e) => {
+                                                                                e.preventDefault();
+                                                                                if (isComplete) return;
+                                                                                setTimeout(() => openCallModal(g.id), 0);
+                                                                            }}
+                                                                            className="flex items-center justify-between gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
+                                                                        >
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <PhoneCall className="h-4 w-4 shrink-0" />
+                                                                                <span className="truncate">Guest Request &amp; Complaint Management</span>
+                                                                            </div>
+                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                        </DropdownMenuItem>
+                                                                    );
+                                                                })()}
+
+                                                                {(canEditStage(1) || canEditStage(2)) && (canEditStage(3) || canEditStage(4) || canEditStage(5)) && <DropdownMenuSeparator />}
+
+                                                                {/* Stage 3 */}
+                                                                {canEditStage(3) && (() => {
+                                                                    const isComplete = g.stageStatus[2] === "Complete";
+                                                                    const isDisabled = isComplete;
+                                                                    return (
+                                                                        <DropdownMenuItem
+                                                                            disabled={isDisabled}
+                                                                            onSelect={(e) => {
+                                                                                e.preventDefault();
+                                                                                if (isComplete) return;
+                                                                                setTimeout(() => openModal(g.id), 0);
+                                                                            }}
+                                                                            className="flex items-center justify-between gap-2.5 text-blue-600 focus:text-blue-700 cursor-pointer disabled:opacity-40"
+                                                                        >
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <Calendar className="h-4 w-4 shrink-0" />
+                                                                                <span className="truncate">Next Visit Planning &amp; Confirmation</span>
+                                                                            </div>
+                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                        </DropdownMenuItem>
+                                                                    );
+                                                                })()}
+                                                                {/* Stage 4 */}
+                                                                {canEditStage(4) && (() => {
+                                                                    const isComplete = g.stageStatus[3] === "Complete";
+                                                                    const isDisabled = isComplete;
+                                                                    return (
+                                                                        <DropdownMenuItem
+                                                                            disabled={isDisabled}
+                                                                            onSelect={(e) => {
+                                                                                e.preventDefault();
+                                                                                if (isComplete) return;
+                                                                                setTimeout(() => openFeedbackModal(g.id), 0);
+                                                                            }}
+                                                                            className="flex items-center justify-between gap-2.5 text-amber-600 focus:text-amber-700 cursor-pointer disabled:opacity-40"
+                                                                        >
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <Star className="h-4 w-4 shrink-0" />
+                                                                                <span className="truncate">Guest Feedback &amp; Outcome Confirmation</span>
+                                                                            </div>
+                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                        </DropdownMenuItem>
+                                                                    );
+                                                                })()}
+                                                                {/* Stage 5 */}
+                                                                {canEditStage(5) && (() => {
+                                                                    const isComplete = g.stageStatus[4] === "Complete";
+                                                                    const isDisabled = isComplete;
+                                                                    return (
+                                                                        <DropdownMenuItem
+                                                                            disabled={isDisabled}
+                                                                            onSelect={(e) => {
+                                                                                e.preventDefault();
+                                                                                if (isComplete) return;
+                                                                                setTimeout(() => openRatingModal(g.id), 0);
+                                                                            }}
+                                                                            className="flex items-center justify-between gap-2.5 text-orange-600 focus:text-orange-700 cursor-pointer disabled:opacity-40"
+                                                                        >
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <Send className="h-4 w-4 shrink-0" />
+                                                                                <span className="truncate">Online Rating &amp; Review Request</span>
+                                                                            </div>
+                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                        </DropdownMenuItem>
+                                                                    );
+                                                                })()}
+
+                                                                {(canEditStage(1) || canEditStage(2) || canEditStage(3) || canEditStage(4) || canEditStage(5)) && (canEditStage(6) || canEditStage(7) || canEditStage(8)) && <DropdownMenuSeparator />}
+
+                                                                {/* Stage 6 */}
+                                                                {canEditStage(6) && (() => {
+                                                                    const isComplete = g.stageStatus[5] === "Complete";
+                                                                    const isDisabled = isComplete;
+                                                                    return (
+                                                                        <DropdownMenuItem
+                                                                            disabled={isDisabled}
+                                                                            onSelect={(e) => {
+                                                                                e.preventDefault();
+                                                                                if (isComplete) return;
+                                                                                setTimeout(() => openSafeReturnModal(g.id), 0);
+                                                                            }}
+                                                                            className="flex items-center justify-between gap-2.5 text-emerald-600 focus:text-emerald-700 cursor-pointer disabled:opacity-40"
+                                                                        >
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <RotateCcw className="h-4 w-4 shrink-0" />
+                                                                                <span className="truncate">Safe Return Confirmation</span>
+                                                                            </div>
+                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                        </DropdownMenuItem>
+                                                                    );
+                                                                })()}
+                                                                {/* Stage 7 */}
+                                                                {canEditStage(7) && (() => {
+                                                                    const isComplete = g.stageStatus[6] === "Complete";
+                                                                    const isDisabled = isComplete;
+                                                                    return (
+                                                                        <DropdownMenuItem
+                                                                            disabled={isDisabled}
+                                                                            onSelect={(e) => {
+                                                                                e.preventDefault();
+                                                                                if (isComplete) return;
+                                                                                setTimeout(() => openResultProgressModal(g.id), 0);
+                                                                            }}
+                                                                            className="flex items-center justify-between gap-2.5 text-teal-600 focus:text-teal-700 cursor-pointer disabled:opacity-40"
+                                                                        >
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <FileText className="h-4 w-4 shrink-0" />
+                                                                                <span className="truncate">Result Tracking &amp; Health Progress Check</span>
+                                                                            </div>
+                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                        </DropdownMenuItem>
+                                                                    );
+                                                                })()}
+                                                                {/* Stage 8 */}
+                                                                {canEditStage(8) && (() => {
+                                                                    const isComplete = g.stageStatus[7] === "Complete";
+                                                                    const isDisabled = isComplete;
+                                                                    return (
+                                                                        <DropdownMenuItem
+                                                                            disabled={isDisabled}
+                                                                            onSelect={(e) => {
+                                                                                e.preventDefault();
+                                                                                if (isComplete) return;
+                                                                                if (isComplete) {
+                                                                                    setTimeout(() => openReferralModal(g.id), 0);
+                                                                                } else {
+                                                                                    window.open(buildReferralFormUrl(g.bookingId), "_blank", "noopener,noreferrer");
+                                                                                }
+                                                                            }}
+                                                                            className="flex items-center justify-between gap-2.5 text-green-600 focus:text-green-700 cursor-pointer disabled:opacity-40"
+                                                                        >
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <Users className="h-4 w-4 shrink-0" />
+                                                                                <span className="truncate">Referral Collection &amp; Lead Generation</span>
+                                                                            </div>
+                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                        </DropdownMenuItem>
+                                                                    );
+                                                                })()}
+
+                                                                {(canEditStage(1) || canEditStage(2) || canEditStage(3) || canEditStage(4) || canEditStage(5) || canEditStage(6) || canEditStage(7) || canEditStage(8)) && (canEditStage(9) || canEditStage(10) || canEditStage(11)) && <DropdownMenuSeparator />}
+
+                                                                {/* Stage 9 */}
+                                                                {canEditStage(9) && (() => {
+                                                                    const isComplete = g.stageStatus[8] === "Complete";
+                                                                    const isDisabled = isComplete;
+                                                                    return (
+                                                                        <DropdownMenuItem
+                                                                            disabled={isDisabled}
+                                                                            onSelect={(e) => {
+                                                                                e.preventDefault();
+                                                                                if (isComplete) return;
+                                                                                setTimeout(() => openDriverArrivalModal(g.id), 0);
+                                                                            }}
+                                                                            className="flex items-center justify-between gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
+                                                                        >
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <Briefcase className="h-4 w-4 shrink-0" />
+                                                                                <span className="truncate">Driver Assignment – Arrival Pickup</span>
+                                                                            </div>
+                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                        </DropdownMenuItem>
+                                                                    );
+                                                                })()}
+                                                                {/* Stage 10 */}
+                                                                {canEditStage(10) && (() => {
+                                                                    const isComplete = g.stageStatus[9] === "Complete";
+                                                                    const isDisabled = isComplete;
+                                                                    return (
+                                                                        <DropdownMenuItem
+                                                                            disabled={isDisabled}
+                                                                            onSelect={(e) => {
+                                                                                e.preventDefault();
+                                                                                if (isComplete) return;
+                                                                                setTimeout(() => openDriverDepartureModal(g.id), 0);
+                                                                            }}
+                                                                            className="flex items-center justify-between gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
+                                                                        >
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <Briefcase className="h-4 w-4 shrink-0" />
+                                                                                <span className="truncate">Driver Assignment – Departure Drop</span>
+                                                                            </div>
+                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                        </DropdownMenuItem>
+                                                                    );
+                                                                })()}
+                                                                {/* Stage 11 */}
+                                                                {canEditStage(11) && (() => {
+                                                                    const isComplete = g.stageStatus[10] === "Complete";
+                                                                    const isDisabled = isComplete;
+                                                                    return (
+                                                                        <DropdownMenuItem
+                                                                            disabled={isDisabled}
+                                                                            onSelect={(e) => {
+                                                                                e.preventDefault();
+                                                                                if (isComplete) return;
+                                                                                setTimeout(() => openRequirementVerificationModal(g.id), 0);
+                                                                            }}
+                                                                            className="flex items-center justify-between gap-2.5 text-teal-600 focus:text-teal-700 cursor-pointer disabled:opacity-40"
+                                                                        >
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                                                                <span className="truncate">Guest Requirement Verification</span>
+                                                                            </div>
+                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                        </DropdownMenuItem>
+                                                                    );
+                                                                })()}
+
+                                                                {![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].some((n) => canEditStage(n)) && (
+                                                                    <DropdownMenuItem disabled className="gap-2.5 text-slate-400 opacity-70">
+                                                                        No stage permissions assigned
+                                                                    </DropdownMenuItem>
+                                                                )}
+                                                            </DropdownMenuContent>
+                                                        </DropdownMenu>
                                                     )}
                                                 </div>
                                             </td>
@@ -2430,7 +2767,7 @@ export default function CRRCallingProcessPage() {
                                     }}
                                     className="h-8 rounded-md border border-slate-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                                 >
-                                    {[5, 10, 15, 25, 50, 100].map((size) => (
+                                    {[5, 10, 15, 20, 25, 50, 100].map((size) => (
                                         <option key={size} value={size}>{size}</option>
                                     ))}
                                 </select>
@@ -2924,28 +3261,34 @@ export default function CRRCallingProcessPage() {
                                 </div>
 
                                 {/* Table vs Chart View Toggle */}
-                                <div className="flex items-center gap-1.5">
-                                    <Button
-                                        variant={viewMode === "table" ? "secondary" : "outline"}
-                                        size="sm"
-                                        onClick={() => setViewMode("table")}
-                                        className={`font-semibold shadow-2xs ${viewMode === "table" ? "" : "border-slate-300 text-slate-700 hover:bg-slate-50"
-                                            }`}
-                                    >
-                                        <Users className="h-3.5 w-3.5 mr-1.5" />
-                                        Table View
-                                    </Button>
-                                    <Button
-                                        variant={viewMode === "chart" ? "secondary" : "outline"}
-                                        size="sm"
-                                        onClick={() => setViewMode("chart")}
-                                        className={`font-semibold shadow-2xs ${viewMode === "chart" ? "" : "border-slate-300 text-slate-700 hover:bg-slate-50"
-                                            }`}
-                                    >
-                                        <BarChart3 className="h-3.5 w-3.5 mr-1.5" />
-                                        Chart View
-                                    </Button>
-                                </div>
+                                <div className="flex items-center gap-1.5 bg-slate-100/90 p-1 rounded-lg border border-slate-200">
+                                     <Button
+                                         variant="ghost"
+                                         size="sm"
+                                         onClick={() => setViewMode("table")}
+                                         className={`font-bold text-xs h-8 px-3 rounded-md transition-all ${
+                                             viewMode === "table"
+                                                 ? "bg-blue-600 text-white hover:bg-blue-700 hover:text-white shadow-xs"
+                                                 : "text-slate-600 hover:text-slate-900 hover:bg-white/70"
+                                         }`}
+                                     >
+                                         <Users className={`h-3.5 w-3.5 mr-1.5 ${viewMode === "table" ? "text-white" : "text-slate-500"}`} />
+                                         Table View
+                                     </Button>
+                                     <Button
+                                         variant="ghost"
+                                         size="sm"
+                                         onClick={() => setViewMode("chart")}
+                                         className={`font-bold text-xs h-8 px-3 rounded-md transition-all ${
+                                             viewMode === "chart"
+                                                 ? "bg-blue-600 text-white hover:bg-blue-700 hover:text-white shadow-xs"
+                                                 : "text-slate-600 hover:text-slate-900 hover:bg-white/70"
+                                         }`}
+                                     >
+                                         <BarChart3 className={`h-3.5 w-3.5 mr-1.5 ${viewMode === "chart" ? "text-white" : "text-slate-500"}`} />
+                                         Chart View
+                                     </Button>
+                                 </div>
                             </div>
                         </div>
 
@@ -3027,8 +3370,9 @@ export default function CRRCallingProcessPage() {
                                                                 { key: "GM", label: "General Manager (GM)", icon: ClipboardCheck, from: "from-amber-500", to: "to-amber-600" },
                                                             ] as const
                                                         ).map((r) => {
-                                                            const value = chartData.respCounts[r.key] ?? 0;
-                                                            const pct = chartData.totalActive > 0 ? (value / chartData.totalActive) * 100 : 0;
+                                                            const stats = chartData.roleStats[r.key] ?? { tasks: 0, guests: 0 };
+                                                            const totalWorkload = chartData.totalRoleWorkload || 1;
+                                                            const pct = (stats.tasks / totalWorkload) * 100;
                                                             const Icon = r.icon;
                                                             return (
                                                                 <div key={r.key} className="flex items-center gap-4">
@@ -3039,13 +3383,16 @@ export default function CRRCallingProcessPage() {
                                                                         <div className="flex items-center justify-between mb-1.5 gap-2">
                                                                             <span className="text-xs font-bold uppercase tracking-wide text-slate-500 truncate">{r.label}</span>
                                                                             <span className="text-sm font-extrabold text-slate-900 shrink-0">
-                                                                                {value} <span className="text-xs font-medium text-slate-400">({pct.toFixed(0)}%)</span>
+                                                                                {stats.guests.toLocaleString()} <span className="text-xs font-semibold text-slate-500">guests</span>
+                                                                                <span className="text-xs font-medium text-slate-400 ml-1.5">
+                                                                                    ({stats.tasks.toLocaleString()} tasks • {pct < 1 && pct > 0 ? pct.toFixed(1) : pct.toFixed(0)}%)
+                                                                                </span>
                                                                             </span>
                                                                         </div>
                                                                         <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                                                                             <div
                                                                                 className={`h-full rounded-full bg-gradient-to-r ${r.from} ${r.to} transition-all`}
-                                                                                style={{ width: `${value === 0 ? 0 : Math.max(pct, 4)}%` }}
+                                                                                style={{ width: `${stats.tasks === 0 ? 0 : Math.max(pct, 2)}%` }}
                                                                             />
                                                                         </div>
                                                                     </div>
@@ -3064,7 +3411,7 @@ export default function CRRCallingProcessPage() {
                                                     </div>
                                                     <div>
                                                         <h4 className="text-sm font-semibold text-slate-900 leading-tight">Pending Actions by Stage</h4>
-                                                        <p className="text-xs text-slate-500 mt-0.5">Unlocked and awaiting action, across all 8 stages</p>
+                                                        <p className="text-xs text-slate-500 mt-0.5">Unlocked and awaiting action, across all {STAGES.length} stages</p>
                                                     </div>
                                                 </div>
                                                 <div className="p-3 sm:p-4">
@@ -3079,8 +3426,23 @@ export default function CRRCallingProcessPage() {
                                                                 <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-slate-800 text-white text-[10px] sm:text-[11px] font-bold flex items-center justify-center shrink-0">
                                                                     {s.no}
                                                                 </div>
-                                                                <div className="w-32 sm:w-72 shrink-0 text-xs font-semibold text-slate-700 truncate" title={s.name}>
-                                                                    {s.name}
+                                                                <div className="w-48 sm:w-84 md:w-96 shrink-0 flex items-center gap-2 min-w-0" title={`${s.name} (${s.resp})`}>
+                                                                    <span className="text-xs font-semibold text-slate-800 truncate">
+                                                                        {s.name}
+                                                                    </span>
+                                                                    <span
+                                                                        className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wider uppercase border shadow-2xs ${
+                                                                            s.resp === "Doctor"
+                                                                                ? "bg-teal-50 text-teal-700 border-teal-200/80"
+                                                                                : s.resp === "FO"
+                                                                                ? "bg-purple-50 text-purple-700 border-purple-200/80"
+                                                                                : s.resp === "GM"
+                                                                                ? "bg-amber-50 text-amber-800 border-amber-200/80"
+                                                                                : "bg-sky-50 text-sky-700 border-sky-200/80"
+                                                                        }`}
+                                                                    >
+                                                                        {s.resp}
+                                                                    </span>
                                                                 </div>
                                                                 <div className="flex-1 h-2.5 rounded-full bg-slate-100 overflow-hidden">
                                                                     <div
