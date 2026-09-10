@@ -10,6 +10,7 @@ import { GET as getCalls } from '../app/api/sales-call-audit/calls/route'
 import { GET as getEmailData } from '../app/api/sales-call-audit/email-data/route'
 import { POST as postSendEmail } from '../app/api/sales-call-audit/send-email/route'
 import { GET as getCronEmail } from '../app/api/cron/sales-call-audit-daily-email/route'
+import { middleware } from '../middleware'
 
 const TEST_SECRET = process.env.NEXTAUTH_SECRET || 'test-secret-key-sales-audit-32'
 
@@ -528,4 +529,17 @@ test('Executable Route Handlers Suite (Sales Call Audit)', async (t) => {
     assert.ok(sentEmails[0].html.includes('Agent-wise Call Audit Report'))
     assert.ok(sentEmails[0].html.includes('Zaki Ahmed'))
   })
+
+  await t.test('10. Middleware session boundary allows cron endpoint without session cookie', async () => {
+    const cronReq = new NextRequest('http://localhost:3000/api/cron/sales-call-audit-daily-email')
+    const res = await middleware(cronReq)
+    assert.equal(res.status, 200, 'Middleware should pass through cron request without session')
+    assert.notEqual(res.status, 401, 'Middleware must not block cron endpoint with 401')
+
+    // Non-exempt endpoint without session is still blocked with 401
+    const protectedReq = new NextRequest('http://localhost:3000/api/cron/other-unexempt-endpoint')
+    const resProtected = await middleware(protectedReq)
+    assert.equal(resProtected.status, 401, 'Middleware must block non-exempt endpoint')
+  })
 })
+

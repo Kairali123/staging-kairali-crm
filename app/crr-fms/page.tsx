@@ -74,6 +74,7 @@ import {
     Loader2,
     Eye,
     ClipboardCheck,
+    ClipboardEdit,
     Check,
 } from "lucide-react";
 
@@ -1851,6 +1852,56 @@ export default function CRRCallingProcessPage() {
         setActiveDetailsAction("");
     }
 
+    function handleWorkOnStage(guestId: number, stageNo: number) {
+        if (!canEditStage(stageNo)) return;
+        const g = guests.find((x) => x.id === guestId);
+        if (!g) return;
+
+        switch (stageNo) {
+            case 1:
+                openWelcomeModal(guestId);
+                break;
+            case 2:
+                openCallModal(guestId);
+                break;
+            case 3:
+                openModal(guestId);
+                break;
+            case 4:
+                openFeedbackModal(guestId);
+                break;
+            case 5:
+                openRatingModal(guestId);
+                break;
+            case 6:
+                openSafeReturnModal(guestId);
+                break;
+            case 7:
+                openResultProgressModal(guestId);
+                break;
+            case 8: {
+                const isComplete = g.stageStatus[7] === "Complete";
+                if (isComplete) {
+                    openReferralModal(guestId);
+                } else {
+                    window.open(buildReferralFormUrl(g.bookingId), "_blank", "noopener,noreferrer");
+                }
+                break;
+            }
+            case 9:
+                openDriverArrivalModal(guestId);
+                break;
+            case 10:
+                openDriverDepartureModal(guestId);
+                break;
+            case 11:
+                openRequirementVerificationModal(guestId);
+                break;
+            default:
+                break;
+        }
+    }
+
     function isCallFormComplete() {
         // The QR leaflet is always displayed in the modal now (no show/hide
         // toggle), so viewing is implicit — saving is always allowed.
@@ -2113,7 +2164,10 @@ export default function CRRCallingProcessPage() {
                                     </tr>
                                 )}
                                 {pagedList.map((g) => {
-                                    const stageObj = STAGES[Math.min(g.currentStage, STAGES.length) - 1];
+                                    const activeStageNum = stageFilter !== "all" ? Number(stageFilter) : Math.min(g.currentStage, STAGES.length);
+                                    const stageObj = STAGES[activeStageNum - 1] || STAGES[0];
+                                    const isCurrentStageComplete = g.allComplete || (g.stageStatus && g.stageStatus[activeStageNum - 1] === "Complete");
+                                    const isPendingStage = !isCurrentStageComplete && !isBookingCancelled(g);
                                     return (
                                         <tr key={g.id} className="group border-b border-slate-200 hover:bg-slate-50/80 transition-colors">
                                             {/* Timestamp */}
@@ -2207,17 +2261,27 @@ export default function CRRCallingProcessPage() {
                                             </td>
 
                                             {/* Current Stage */}
-                                            <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                                                {g.allComplete ? (
-                                                    <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-md shadow-2xs">
-                                                        <span className="w-1.5 h-1.5 bg-emerald-600 rounded-full" />
-                                                        All Complete
-                                                    </span>
+                                            <td className="px-4 py-3 text-center whitespace-nowrap">
+                                                {isCurrentStageComplete ? (
+                                                    <div className="inline-flex flex-col items-center">
+                                                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-md shadow-2xs">
+                                                            <span className="w-2 h-2 bg-emerald-500 rounded-full shrink-0" />
+                                                            {g.allComplete ? "All Stages Complete" : `Stage ${stageObj.no}: ${stageObj.name}`}
+                                                        </span>
+                                                        <span className="text-[10px] font-semibold text-emerald-600 mt-0.5">
+                                                            Completed
+                                                        </span>
+                                                    </div>
                                                 ) : (
-                                                    <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-md shadow-2xs">
-                                                        <span className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
-                                                        {stageObj.no}: {stageObj.name}
-                                                    </span>
+                                                    <div className="inline-flex flex-col items-center">
+                                                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-md shadow-2xs">
+                                                            <span className="w-2 h-2 bg-amber-500 rounded-full shrink-0" />
+                                                            Stage {stageObj.no}: {stageObj.name}
+                                                        </span>
+                                                        <span className="text-[10px] font-semibold text-amber-600 mt-0.5">
+                                                            Pending • Your Action
+                                                        </span>
+                                                    </div>
                                                 )}
                                                 <div className="flex gap-0.5 mt-1.5 justify-center">
                                                     {STAGES.map((s, idx) => {
@@ -2237,306 +2301,39 @@ export default function CRRCallingProcessPage() {
                                             </td>
                                             {/* Action */}
                                             <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                                                <div className="flex items-center justify-center gap-1.5">
+                                                <div className="flex items-center justify-center gap-2">
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
-                                                        onClick={() => openViewModal(g.id, 1)}
+                                                        onClick={() => openViewModal(g.id, activeStageNum)}
                                                         title="View All Stages & Filled Data"
-                                                        className="h-8 px-2.5 text-xs font-semibold text-blue-600 bg-blue-50/80 border-blue-200 hover:bg-blue-100 hover:text-blue-700 hover:border-blue-300 rounded-lg flex items-center gap-1 shadow-2xs"
+                                                        className="h-8 px-2.5 text-xs font-semibold text-slate-700 bg-white border-slate-300 hover:bg-slate-50 hover:text-slate-900 rounded-lg flex items-center gap-1.5 shadow-2xs"
                                                     >
-                                                        <Eye className="h-3.5 w-3.5 text-blue-600" />
-                                                        <span>View</span>
+                                                        <Eye className="h-3.5 w-3.5 text-slate-500" />
+                                                        <span>View Details</span>
                                                     </Button>
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                className="h-8 w-8 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg"
-                                                            >
-                                                                <MoreVertical className="h-4 w-4" />
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end" className="w-60">
-                                                            {isBookingCancelled(g) && !isAdminRole ? (
-                                                                <DropdownMenuItem disabled className="gap-2.5 text-red-500 opacity-70">
-                                                                    <AlertTriangle className="h-4 w-4" />
-                                                                    Booking cancelled — stages closed
-                                                                </DropdownMenuItem>
-                                                            ) : (
-                                                                <>
-                                                                    {isBookingCancelled(g) && (
-                                                                        <div className="px-2.5 py-1.5 mx-1 my-1 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-md flex items-center gap-1.5">
-                                                                            <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-                                                                            <span>Cancelled Booking (Admin Access)</span>
-                                                                        </div>
-                                                                    )}
-                                                                    {/* Stage 1 */}
-                                                                    {canEditStage(1) && (() => {
-                                                                        const isComplete = g.stageStatus[0] === "Complete";
-                                                                        const isDisabled = !isAdminRole && isComplete;
-                                                                        return (
-                                                                            <DropdownMenuItem
-                                                                                disabled={isDisabled}
-                                                                                onSelect={(e) => {
-                                                                                    e.preventDefault();
-                                                                                    if (!isAdminRole && isComplete) return;
-                                                                                    setTimeout(() => openWelcomeModal(g.id), 0);
-                                                                                }}
-                                                                                className="flex items-center justify-between gap-2.5 text-sky-600 focus:text-sky-700 cursor-pointer disabled:opacity-40"
-                                                                            >
-                                                                                <div className="flex items-center gap-2.5 min-w-0">
-                                                                                    <Home className="h-4 w-4 shrink-0" />
-                                                                                    <span className="truncate">Arrival Welcome on Pickup</span>
-                                                                                </div>
-                                                                                {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
-                                                                            </DropdownMenuItem>
-                                                                        );
-                                                                    })()}
-                                                                    {/* Stage 2 */}
-                                                                    {canEditStage(2) && (() => {
-                                                                        const isComplete = g.stageStatus[1] === "Complete";
-                                                                        const isDisabled = !isAdminRole && isComplete;
-                                                                        return (
-                                                                            <DropdownMenuItem
-                                                                                disabled={isDisabled}
-                                                                                onSelect={(e) => {
-                                                                                    e.preventDefault();
-                                                                                    if (!isAdminRole && isComplete) return;
-                                                                                    setTimeout(() => openCallModal(g.id), 0);
-                                                                                }}
-                                                                                className="flex items-center justify-between gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
-                                                                            >
-                                                                                <div className="flex items-center gap-2.5 min-w-0">
-                                                                                    <PhoneCall className="h-4 w-4 shrink-0" />
-                                                                                    <span className="truncate">Guest Request &amp; Complaint Management</span>
-                                                                                </div>
-                                                                                {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
-                                                                            </DropdownMenuItem>
-                                                                        );
-                                                                    })()}
 
-                                                                    {(canEditStage(1) || canEditStage(2)) && (canEditStage(3) || canEditStage(4) || canEditStage(5)) && <DropdownMenuSeparator />}
-
-                                                                    {/* Stage 3 */}
-                                                                    {canEditStage(3) && (() => {
-                                                                        const isComplete = g.stageStatus[2] === "Complete";
-                                                                        const isDisabled = !isAdminRole && isComplete;
-                                                                        return (
-                                                                            <DropdownMenuItem
-                                                                                disabled={isDisabled}
-                                                                                onSelect={(e) => {
-                                                                                    e.preventDefault();
-                                                                                    if (!isAdminRole && isComplete) return;
-                                                                                    setTimeout(() => openModal(g.id), 0);
-                                                                                }}
-                                                                                className="flex items-center justify-between gap-2.5 text-blue-600 focus:text-blue-700 cursor-pointer disabled:opacity-40"
-                                                                            >
-                                                                                <div className="flex items-center gap-2.5 min-w-0">
-                                                                                    <Calendar className="h-4 w-4 shrink-0" />
-                                                                                    <span className="truncate">Next Visit Planning &amp; Confirmation</span>
-                                                                                </div>
-                                                                                {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
-                                                                            </DropdownMenuItem>
-                                                                        );
-                                                                    })()}
-                                                                    {/* Stage 4 */}
-                                                                    {canEditStage(4) && (() => {
-                                                                        const isComplete = g.stageStatus[3] === "Complete";
-                                                                        const isDisabled = !isAdminRole && isComplete;
-                                                                        return (
-                                                                            <DropdownMenuItem
-                                                                                disabled={isDisabled}
-                                                                                onSelect={(e) => {
-                                                                                    e.preventDefault();
-                                                                                    if (!isAdminRole && isComplete) return;
-                                                                                    setTimeout(() => openFeedbackModal(g.id), 0);
-                                                                                }}
-                                                                                className="flex items-center justify-between gap-2.5 text-amber-600 focus:text-amber-700 cursor-pointer disabled:opacity-40"
-                                                                            >
-                                                                                <div className="flex items-center gap-2.5 min-w-0">
-                                                                                    <Star className="h-4 w-4 shrink-0" />
-                                                                                    <span className="truncate">Guest Feedback &amp; Outcome Confirmation</span>
-                                                                                </div>
-                                                                                {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
-                                                                            </DropdownMenuItem>
-                                                                        );
-                                                                    })()}
-                                                                    {/* Stage 5 */}
-                                                                    {canEditStage(5) && (() => {
-                                                                        const isComplete = g.stageStatus[4] === "Complete";
-                                                                        const isDisabled = !isAdminRole && isComplete;
-                                                                        return (
-                                                                            <DropdownMenuItem
-                                                                                disabled={isDisabled}
-                                                                                onSelect={(e) => {
-                                                                                    e.preventDefault();
-                                                                                    if (!isAdminRole && isComplete) return;
-                                                                                    setTimeout(() => openRatingModal(g.id), 0);
-                                                                                }}
-                                                                                className="flex items-center justify-between gap-2.5 text-orange-600 focus:text-orange-700 cursor-pointer disabled:opacity-40"
-                                                                            >
-                                                                                <div className="flex items-center gap-2.5 min-w-0">
-                                                                                    <Send className="h-4 w-4 shrink-0" />
-                                                                                    <span className="truncate">Online Rating &amp; Review Request</span>
-                                                                                </div>
-                                                                                {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
-                                                                            </DropdownMenuItem>
-                                                                        );
-                                                                    })()}
-
-                                                                    {(canEditStage(1) || canEditStage(2) || canEditStage(3) || canEditStage(4) || canEditStage(5)) && (canEditStage(6) || canEditStage(7) || canEditStage(8)) && <DropdownMenuSeparator />}
-
-                                                                    {/* Stage 6 */}
-                                                                    {canEditStage(6) && (() => {
-                                                                        const isComplete = g.stageStatus[5] === "Complete";
-                                                                        const isDisabled = !isAdminRole && isComplete;
-                                                                        return (
-                                                                            <DropdownMenuItem
-                                                                                disabled={isDisabled}
-                                                                                onSelect={(e) => {
-                                                                                    e.preventDefault();
-                                                                                    if (!isAdminRole && isComplete) return;
-                                                                                    setTimeout(() => openSafeReturnModal(g.id), 0);
-                                                                                }}
-                                                                                className="flex items-center justify-between gap-2.5 text-emerald-600 focus:text-emerald-700 cursor-pointer disabled:opacity-40"
-                                                                            >
-                                                                                <div className="flex items-center gap-2.5 min-w-0">
-                                                                                    <RotateCcw className="h-4 w-4 shrink-0" />
-                                                                                    <span className="truncate">Safe Return Confirmation</span>
-                                                                                </div>
-                                                                                {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
-                                                                            </DropdownMenuItem>
-                                                                        );
-                                                                    })()}
-                                                                    {/* Stage 7 */}
-                                                                    {canEditStage(7) && (() => {
-                                                                        const isComplete = g.stageStatus[6] === "Complete";
-                                                                        const isDisabled = !isAdminRole && isComplete;
-                                                                        return (
-                                                                            <DropdownMenuItem
-                                                                                disabled={isDisabled}
-                                                                                onSelect={(e) => {
-                                                                                    e.preventDefault();
-                                                                                    if (!isAdminRole && isComplete) return;
-                                                                                    setTimeout(() => openResultProgressModal(g.id), 0);
-                                                                                }}
-                                                                                className="flex items-center justify-between gap-2.5 text-purple-600 focus:text-purple-700 cursor-pointer disabled:opacity-40"
-                                                                            >
-                                                                                <div className="flex items-center gap-2.5 min-w-0">
-                                                                                    <TrendingUp className="h-4 w-4 shrink-0" />
-                                                                                    <span className="truncate">Result Tracking &amp; Health Progress Check</span>
-                                                                                </div>
-                                                                                {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
-                                                                            </DropdownMenuItem>
-                                                                        );
-                                                                    })()}
-                                                                    {/* Stage 8 */}
-                                                                    {canEditStage(8) && (() => {
-                                                                        const isComplete = g.stageStatus[7] === "Complete";
-                                                                        const isDisabled = !isAdminRole && isComplete;
-                                                                        return (
-                                                                            <DropdownMenuItem
-                                                                                disabled={isDisabled}
-                                                                                onSelect={(e) => {
-                                                                                    e.preventDefault();
-                                                                                    if (!isAdminRole && isComplete) return;
-                                                                                    if (isComplete) {
-                                                                                        setTimeout(() => openReferralModal(g.id), 0);
-                                                                                    } else {
-                                                                                        window.open(buildReferralFormUrl(g.bookingId), "_blank", "noopener,noreferrer");
-                                                                                    }
-                                                                                }}
-                                                                                className="flex items-center justify-between gap-2.5 text-green-600 focus:text-green-700 cursor-pointer disabled:opacity-40"
-                                                                            >
-                                                                                <div className="flex items-center gap-2.5 min-w-0">
-                                                                                    <Users className="h-4 w-4 shrink-0" />
-                                                                                    <span className="truncate">Referral Collection &amp; Lead Generation</span>
-                                                                                </div>
-                                                                                {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
-                                                                            </DropdownMenuItem>
-                                                                        );
-                                                                    })()}
-
-                                                                    {(canEditStage(1) || canEditStage(2) || canEditStage(3) || canEditStage(4) || canEditStage(5) || canEditStage(6) || canEditStage(7) || canEditStage(8)) && (canEditStage(9) || canEditStage(10) || canEditStage(11)) && <DropdownMenuSeparator />}
-
-                                                                    {/* Stage 9 */}
-                                                                    {canEditStage(9) && (() => {
-                                                                        const isComplete = g.stageStatus[8] === "Complete";
-                                                                        const isDisabled = !isAdminRole && isComplete;
-                                                                        return (
-                                                                            <DropdownMenuItem
-                                                                                disabled={isDisabled}
-                                                                                onSelect={(e) => {
-                                                                                    e.preventDefault();
-                                                                                    if (!isAdminRole && isComplete) return;
-                                                                                    setTimeout(() => openDriverArrivalModal(g.id), 0);
-                                                                                }}
-                                                                                className="flex items-center justify-between gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
-                                                                            >
-                                                                                <div className="flex items-center gap-2.5 min-w-0">
-                                                                                    <Briefcase className="h-4 w-4 shrink-0" />
-                                                                                    <span className="truncate">Driver Assignment – Arrival Pickup</span>
-                                                                                </div>
-                                                                                {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
-                                                                            </DropdownMenuItem>
-                                                                        );
-                                                                    })()}
-                                                                    {/* Stage 10 */}
-                                                                    {canEditStage(10) && (() => {
-                                                                        const isComplete = g.stageStatus[9] === "Complete";
-                                                                        const isDisabled = !isAdminRole && isComplete;
-                                                                        return (
-                                                                            <DropdownMenuItem
-                                                                                disabled={isDisabled}
-                                                                                onSelect={(e) => {
-                                                                                    e.preventDefault();
-                                                                                    if (!isAdminRole && isComplete) return;
-                                                                                    setTimeout(() => openDriverDepartureModal(g.id), 0);
-                                                                                }}
-                                                                                className="flex items-center justify-between gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
-                                                                            >
-                                                                                <div className="flex items-center gap-2.5 min-w-0">
-                                                                                    <Briefcase className="h-4 w-4 shrink-0" />
-                                                                                    <span className="truncate">Driver Assignment – Departure Drop</span>
-                                                                                </div>
-                                                                                {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
-                                                                            </DropdownMenuItem>
-                                                                        );
-                                                                    })()}
-                                                                    {/* Stage 11 */}
-                                                                    {canEditStage(11) && (() => {
-                                                                        const isComplete = g.stageStatus[10] === "Complete";
-                                                                        const isDisabled = !isAdminRole && isComplete;
-                                                                        return (
-                                                                            <DropdownMenuItem
-                                                                                disabled={isDisabled}
-                                                                                onSelect={(e) => {
-                                                                                    e.preventDefault();
-                                                                                    if (!isAdminRole && isComplete) return;
-                                                                                    setTimeout(() => openRequirementVerificationModal(g.id), 0);
-                                                                                }}
-                                                                                className="flex items-center justify-between gap-2.5 text-teal-600 focus:text-teal-700 cursor-pointer disabled:opacity-40"
-                                                                            >
-                                                                                <div className="flex items-center gap-2.5 min-w-0">
-                                                                                    <CheckCircle2 className="h-4 w-4 shrink-0" />
-                                                                                    <span className="truncate">Guest Requirement Verification</span>
-                                                                                </div>
-                                                                                {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
-                                                                            </DropdownMenuItem>
-                                                                        );
-                                                                    })()}
-
-                                                                    {![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].some((n) => canEditStage(n)) && (
-                                                                        <DropdownMenuItem disabled className="gap-2.5 text-slate-400 opacity-70">
-                                                                            No stage permissions assigned
-                                                                        </DropdownMenuItem>
-                                                                    )}
-                                                                </>
-                                                            )}
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
+                                                    {isBookingCancelled(g) ? (
+                                                        <span className="inline-flex items-center text-xs font-medium text-slate-400 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg">
+                                                            Cancelled
+                                                        </span>
+                                                    ) : isPendingStage ? (
+                                                        <Button
+                                                            size="sm"
+                                                            onClick={() => handleWorkOnStage(g.id, activeStageNum)}
+                                                            disabled={!canEditStage(activeStageNum)}
+                                                            title={canEditStage(activeStageNum) ? `Work on Stage ${activeStageNum}: ${stageObj.name}` : `Stage ${activeStageNum} not assigned or locked`}
+                                                            className="h-8 px-3 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 border border-blue-600 rounded-lg flex items-center gap-1.5 shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        >
+                                                            <ClipboardEdit className="h-3.5 w-3.5 text-white" />
+                                                            <span>Work on Stage</span>
+                                                        </Button>
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
+                                                            <Check className="h-3.5 w-3.5 text-emerald-600" />
+                                                            <span>Completed</span>
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -3367,13 +3164,17 @@ export default function CRRCallingProcessPage() {
                 {activeGuest && activeStage && (
                     <DialogContent style={{ width: "min(98vw, 1400px)", maxWidth: "min(98vw, 1400px)" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl">
                         <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white">
-                            <DialogTitle className="text-lg font-bold text-white leading-tight">
-                                {activeGuest.allComplete ? `All Stages Complete — ${activeGuest.name}` : `Stage ${activeStage.no}: ${activeStage.name}`}
-                            </DialogTitle>
-                            <DialogDescription className="text-xs text-white/90 mt-1.5 font-medium">
-                                {activeStage.no === 3
-                                    ? "The doctor consults with the guest, confirms the recommended next visit date and treatment plan, and updates the next visit details in the CRM."
-                                    : <>Responsible: {activeStage.resp} &nbsp;·&nbsp; Trigger: {activeStage.trigger}</>}
+                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                                <DialogTitle className="text-lg font-bold text-white leading-tight">
+                                    {activeGuest.allComplete ? `All Stages Complete — ${activeGuest.name}` : `Stage ${activeStage.no}: ${activeStage.name}`}
+                                </DialogTitle>
+                                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold bg-amber-500/20 text-amber-200 border border-amber-400/40 px-2.5 py-0.5 rounded-full shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                    Action Required
+                                </span>
+                            </div>
+                            <DialogDescription className="text-xs text-white/90 mt-1 font-medium">
+                                Complete the required details below and submit this stage.
                             </DialogDescription>
                         </DialogHeader>
 
@@ -3510,11 +3311,17 @@ export default function CRRCallingProcessPage() {
                 {activeSafeReturnGuest && (
                     <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col">
                         <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white shrink-0">
-                            <DialogTitle className="text-lg font-bold text-white leading-tight">
-                                Safe Return Confirmation
-                            </DialogTitle>
-                            <DialogDescription className="text-xs text-white/90 mt-1.5 font-medium">
-                                GRE contacts the guest after departure to ensure they had a safe and comfortable journey back home and address any immediate concerns.
+                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                                <DialogTitle className="text-lg font-bold text-white leading-tight">
+                                    Safe Return Confirmation
+                                </DialogTitle>
+                                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold bg-amber-500/20 text-amber-200 border border-amber-400/40 px-2.5 py-0.5 rounded-full shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                    Action Required
+                                </span>
+                            </div>
+                            <DialogDescription className="text-xs text-white/90 mt-1 font-medium">
+                                Complete the required details below and submit this stage.
                             </DialogDescription>
                         </DialogHeader>
 
@@ -3732,11 +3539,17 @@ export default function CRRCallingProcessPage() {
                 {activeRatingGuest && (
                     <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col">
                         <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white shrink-0">
-                            <DialogTitle className="text-lg font-bold text-white leading-tight">
-                                Online Rating &amp; Review Request
-                            </DialogTitle>
-                            <DialogDescription className="text-xs text-white/90 mt-1.5 font-medium">
-                                Assist guests in submitting ratings and reviews on TripAdvisor, Google, and Booking.com using the reception hotspot.
+                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                                <DialogTitle className="text-lg font-bold text-white leading-tight">
+                                    Online Rating &amp; Review Request
+                                </DialogTitle>
+                                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold bg-amber-500/20 text-amber-200 border border-amber-400/40 px-2.5 py-0.5 rounded-full shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                    Action Required
+                                </span>
+                            </div>
+                            <DialogDescription className="text-xs text-white/90 mt-1 font-medium">
+                                Complete the required details below and submit this stage.
                             </DialogDescription>
                         </DialogHeader>
 
@@ -4002,11 +3815,17 @@ export default function CRRCallingProcessPage() {
                 {activeFeedbackGuest && (
                     <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col">
                         <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white shrink-0">
-                            <DialogTitle className="text-lg font-bold text-white leading-tight">
-                                Guest Feedback &amp; Outcome Confirmation
-                            </DialogTitle>
-                            <DialogDescription className="text-xs text-white/90 mt-1.5 font-medium">
-                                GRE collects video, audio, and text feedback from every guest, uploads it in the HTML form, collects feedback and suggestions, and confirms whether the desired treatment outcome was achieved.
+                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                                <DialogTitle className="text-lg font-bold text-white leading-tight">
+                                    Guest Feedback &amp; Outcome Confirmation
+                                </DialogTitle>
+                                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold bg-amber-500/20 text-amber-200 border border-amber-400/40 px-2.5 py-0.5 rounded-full shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                    Action Required
+                                </span>
+                            </div>
+                            <DialogDescription className="text-xs text-white/90 mt-1 font-medium">
+                                Complete the required details below and submit this stage.
                             </DialogDescription>
                         </DialogHeader>
 
@@ -4152,11 +3971,17 @@ export default function CRRCallingProcessPage() {
                 {activeReferralGuest && (
                     <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col">
                         <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white shrink-0">
-                            <DialogTitle className="text-lg font-bold text-white leading-tight">
-                                Referral Collection &amp; Lead Generation
-                            </DialogTitle>
-                            <DialogDescription className="text-xs text-white/90 mt-1.5 font-medium">
-                                GRE contacts the guest and requests referral details, collects the referred person's information, and uploads the details into the CRM for future follow-up and lead generation.
+                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                                <DialogTitle className="text-lg font-bold text-white leading-tight">
+                                    Referral Collection &amp; Lead Generation
+                                </DialogTitle>
+                                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold bg-amber-500/20 text-amber-200 border border-amber-400/40 px-2.5 py-0.5 rounded-full shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                    Action Required
+                                </span>
+                            </div>
+                            <DialogDescription className="text-xs text-white/90 mt-1 font-medium">
+                                Complete the required details below and submit this stage.
                             </DialogDescription>
                         </DialogHeader>
 
@@ -4322,11 +4147,17 @@ export default function CRRCallingProcessPage() {
                     return (
                         <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col">
                             <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white shrink-0">
-                                <DialogTitle className="text-lg font-bold text-white leading-tight">
-                                    Arrival Welcome on Pickup
-                                </DialogTitle>
-                                <DialogDescription className="text-xs text-white/90 mt-1.5 font-medium">
-                                    GRE coordinates with the driver and connects with the guest via video or audio call during pickup to confirm a smooth pickup experience, check on the journey, and provide a personalized welcome.
+                                <div className="flex items-center justify-between gap-3 flex-wrap">
+                                    <DialogTitle className="text-lg font-bold text-white leading-tight">
+                                        Arrival Welcome on Pickup
+                                    </DialogTitle>
+                                    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold bg-amber-500/20 text-amber-200 border border-amber-400/40 px-2.5 py-0.5 rounded-full shrink-0">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                        Action Required
+                                    </span>
+                                </div>
+                                <DialogDescription className="text-xs text-white/90 mt-1 font-medium">
+                                    Complete the required details below and submit this stage.
                                 </DialogDescription>
                             </DialogHeader>
 
@@ -4527,11 +4358,17 @@ export default function CRRCallingProcessPage() {
                 {activeResultProgressGuest && (
                     <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col">
                         <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white shrink-0">
-                            <DialogTitle className="text-lg font-bold text-white leading-tight">
-                                Result Tracking &amp; Health Progress Check
-                            </DialogTitle>
-                            <DialogDescription className="text-xs text-white/90 mt-1.5 font-medium">
-                                The doctor contacts the guest to review their health condition, treatment progress, and overall well-being after returning home and records the outcome and recommendations in the CRM.
+                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                                <DialogTitle className="text-lg font-bold text-white leading-tight">
+                                    Result Tracking &amp; Health Progress Check
+                                </DialogTitle>
+                                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold bg-amber-500/20 text-amber-200 border border-amber-400/40 px-2.5 py-0.5 rounded-full shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                    Action Required
+                                </span>
+                            </div>
+                            <DialogDescription className="text-xs text-white/90 mt-1 font-medium">
+                                Complete the required details below and submit this stage.
                             </DialogDescription>
                         </DialogHeader>
 
@@ -4733,11 +4570,17 @@ export default function CRRCallingProcessPage() {
                 {activeCallGuest && (
                     <DialogContent style={{ width: "min(98vw, 1400px)", maxWidth: "min(98vw, 1400px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col">
                         <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white shrink-0">
-                            <DialogTitle className="text-lg font-bold text-white leading-tight">
-                                Guest Request &amp; Complaint Management (QR Scan)
-                            </DialogTitle>
-                            <DialogDescription className="text-xs text-white/90 mt-1.5 font-medium">
-                                GRE requests the guest to scan the QR code to submit requests or complaints. If the guest is unable to do so, GRE can upload the request or complaint on the guest's behalf.
+                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                                <DialogTitle className="text-lg font-bold text-white leading-tight">
+                                    Guest Request &amp; Complaint Management (QR Scan)
+                                </DialogTitle>
+                                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold bg-amber-500/20 text-amber-200 border border-amber-400/40 px-2.5 py-0.5 rounded-full shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                    Action Required
+                                </span>
+                            </div>
+                            <DialogDescription className="text-xs text-white/90 mt-1 font-medium">
+                                Complete the required details below and submit this stage.
                             </DialogDescription>
                         </DialogHeader>
 

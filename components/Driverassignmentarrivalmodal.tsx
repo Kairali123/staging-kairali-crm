@@ -182,11 +182,28 @@ export default function DriverAssignmentArrivalModal({ open = true, onClose = ()
                             <Repeat size={18} color="#fff" />
                         </div>
                         <div>
-                            <p style={{ color: "#fff", fontWeight: 700, fontSize: 17, margin: 0 }}>
-                                Driver Assignment – Arrival Pickup
-                            </p>
-                            <p style={{ color: "rgba(255,255,255,0.8)", fontSize: 13, margin: "2px 0 0" }}>
-                                Complete all fields to proceed
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                <p style={{ color: "#fff", fontWeight: 700, fontSize: 17, margin: 0 }}>
+                                    Driver Assignment – Arrival Pickup
+                                </p>
+                                <span style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 5,
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    background: "rgba(245, 158, 11, 0.25)",
+                                    color: "#fef3c7",
+                                    border: "1px solid rgba(251, 191, 36, 0.4)",
+                                    padding: "2px 8px",
+                                    borderRadius: 9999,
+                                }}>
+                                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#fbbf24" }} />
+                                    Action Required
+                                </span>
+                            </div>
+                            <p style={{ color: "rgba(255,255,255,0.9)", fontSize: 12, margin: "3px 0 0", fontWeight: 500 }}>
+                                Complete the required details below and submit this stage.
                             </p>
                         </div>
                     </div>
