@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto"
 import { NextRequest, NextResponse } from "next/server"
 
 import {
@@ -39,6 +40,13 @@ function istYesterday(at: Date): string {
   return d.toISOString().slice(0, 10)
 }
 
+function safeCompare(a: string, b: string): boolean {
+  const bufA = Buffer.from(a)
+  const bufB = Buffer.from(b)
+  if (bufA.length !== bufB.length) return false
+  return timingSafeEqual(bufA, bufB)
+}
+
 // Vercel attaches `Authorization: Bearer $CRON_SECRET` to every cron invocation.
 // Fails closed: with no secret configured the endpoint is unreachable rather than
 // open, because reaching it mails the whole team's scorecard out of the system.
@@ -46,7 +54,7 @@ function isAuthorizedCron(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET
   if (!secret) return false
   const header = req.headers.get("authorization") || ""
-  return header === `Bearer ${secret}`
+  return safeCompare(header, `Bearer ${secret}`)
 }
 
 export async function GET(req: NextRequest) {

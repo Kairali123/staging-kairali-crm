@@ -281,6 +281,8 @@ const exemptApiPaths = new Set([
   // OWNER-DEFERRED: anonymous mobile access, preserved as-is for now.
   '/api/calendar/mobile',
   '/api/sales-call-audit',
+  // Scheduled Vercel cron job — handler enforces Bearer $CRON_SECRET
+  '/api/cron/sales-call-audit-daily-email',
 ])
 
 // No active API prefix exemptions. `/api/meetings/*` stays behind the signed
