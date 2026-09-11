@@ -210,7 +210,7 @@ export async function GET(req: NextRequest) {
 
         const [processRows] = await pool.query<any[]>(
             hasDateFilter && fromTimestamp && toTimestamp
-                ? `${PROJECTION_SQL} WHERE timestamp BETWEEN ? AND ? ORDER BY id DESC LIMIT ?`
+                ? `${PROJECTION_SQL} WHERE check_in_date BETWEEN ? AND ? ORDER BY id DESC LIMIT ?`
                 : `${PROJECTION_SQL} ORDER BY id DESC LIMIT ?`,
             hasDateFilter && fromTimestamp && toTimestamp
                 ? [fromTimestamp, toTimestamp, effectiveLimit]
