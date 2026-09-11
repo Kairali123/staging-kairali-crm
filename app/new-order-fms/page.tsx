@@ -40,6 +40,7 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { OrderStageWisePendingsReport } from "@/components/fms/order-stage-wise-pendings"
 
 /* ─────────────────────────────────────────────
    TYPES
@@ -528,6 +529,38 @@ function getStageStatusDataRaw(stageIndex: number, order: any) {
 function isStageCompleted(stageIdx: number, order: any): boolean {
     const raw = getStageStatusDataRaw(stageIdx, order);
     return raw.type === "done";
+}
+
+function getOrderStageDoer(order: any, stageIdx: number): string {
+    const stageUser = order.stages?.[stageIdx]?.user?.trim();
+    if (stageUser && stageUser !== '-' && stageUser !== '—' && stageUser !== 'N/A' && stageUser !== 'undefined') {
+        return stageUser;
+    }
+
+    switch (stageIdx) {
+        case 0:
+            // fmsUserName is the FMS user who processed this order (the actual doer)
+            // orderTakenBy is the sales person — do NOT use it as the stage doer
+            return order.fmsUserName?.trim() || 'Unassigned';
+        case 1:
+            return order.stages?.[1]?.DispatchVerFMS_fms_users_name?.trim() || 'Sakthivel S';
+        case 2:
+            return order.stages?.[2]?.AccoutsVerFMS_fms_users_name?.trim() || 'Manonmani';
+        case 3:
+            return 'Shakti';
+        case 4:
+            return order.qcDoer?.trim() || 'Sathish & Balavignesh S';
+        case 5:
+            return 'Address Verify Team';
+        case 6:
+            return 'Sakthivel & Dinesh Kumar';
+        case 7:
+            return 'Thangarasu';
+        case 8:
+            return order.deductedBy?.trim() || 'Sakthivel & Dinesh Kumar';
+        default:
+            return 'Unassigned';
+    }
 }
 
 function getStageStatusData(stageIndex: number, order: any, fetchingStageIndex?: number | null) {
@@ -1495,6 +1528,8 @@ export default function NewOrderFMS() {
     const [goPage, setGoPage] = useState('');
     const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>({ key: 'timestamp', direction: 'desc' });
     const [lastUpdated, setLastUpdated] = useState('');
+    const [reportSelectedDoer, setReportSelectedDoer] = useState<string | null>(null);
+    const [reportSelectedStage, setReportSelectedStage] = useState<number | null>(null);
 
     useEffect(() => {
         const now = new Date();
@@ -1726,6 +1761,34 @@ export default function NewOrderFMS() {
 
         const delayed = filtered.filter((o) => o.actualDelay !== '—').length;
 
+        // Derived KPI metrics
+        const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+        const cancellationRate = total > 0 ? Math.round((cancelled / total) * 100) : 0;
+        const holdRate = total > 0 ? Math.round((hold / total) * 100) : 0;
+        const avgOrderValue = total > 0 ? totalValue / total : 0;
+        const avgPendingValue = (pending) > 0 ? pendingValue / pending : 0;
+
+        // Stage-wise pending breakdown (count orders at each active stage)
+        const stagePendingBreakdown: number[] = new Array(9).fill(0);
+        for (const o of filtered) {
+            const stageStatuses = Array.from({ length: 9 }, (_, i) => getStageStatusData(i, o));
+            const hasCancelled = stageStatuses.some((s) => s.label === 'Cancelled' || s.label === 'Edited-Cancelled');
+            const hasHold = stageStatuses.some((s) => s.label === 'Hold');
+            if (hasCancelled || hasHold) continue;
+            for (let i = 0; i <= 8; i++) {
+                if (!isStageCompleted(i, o)) {
+                    stagePendingBreakdown[i]++;
+                    break;
+                }
+            }
+        }
+        // Top 2 most loaded pending stages for the pending card hint
+        const topPendingStages = stagePendingBreakdown
+            .map((count, idx) => ({ stage: idx + 1, count }))
+            .filter((s) => s.count > 0)
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 2);
+
         return {
             total, totalValue,
             inProgress, inProgressValue,
@@ -1733,15 +1796,44 @@ export default function NewOrderFMS() {
             pending, pendingValue,
             delayed,
             cancelled, cancelledValue,
-            hold, holdValue
+            hold, holdValue,
+            completionRate, cancellationRate, holdRate,
+            avgOrderValue, avgPendingValue,
+            topPendingStages,
         };
     }, [filtered]);
 
 
+    /* FILTER BY STAGE WISE REPORT SELECTION */
+    const finalFiltered = useMemo(() => {
+        if (!reportSelectedDoer && reportSelectedStage === null) return filtered;
+        return filtered.filter((o) => {
+            let activeIdx = 9;
+            for (let i = 0; i <= 8; i++) {
+                if (!isStageCompleted(i, o)) {
+                    activeIdx = i;
+                    break;
+                }
+            }
+            if (reportSelectedDoer) {
+                const doer = activeIdx < 9 ? getOrderStageDoer(o, activeIdx) : (o.orderTakenBy || o.fmsUserName);
+                const orderDoerLower = (doer || '').trim().toLowerCase();
+                const selectedLower = reportSelectedDoer.trim().toLowerCase();
+                if (orderDoerLower !== selectedLower) {
+                    return false;
+                }
+            }
+            if (reportSelectedStage !== null) {
+                if (activeIdx !== reportSelectedStage - 1) return false;
+            }
+            return true;
+        });
+    }, [filtered, reportSelectedDoer, reportSelectedStage]);
+
     /* SORTING */
     const sortedData = useMemo(() => {
-        if (!sortConfig) return filtered;
-        return [...filtered].sort((a, b) => {
+        if (!sortConfig) return finalFiltered;
+        return [...finalFiltered].sort((a, b) => {
             const key = sortConfig.key as keyof Order;
             const aVal = a[key] ?? '';
             const bVal = b[key] ?? '';
@@ -1756,7 +1848,7 @@ export default function NewOrderFMS() {
             if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [filtered, sortConfig]);
+    }, [finalFiltered, sortConfig]);
 
     /* PAGINATION */
     const totalPages = Math.max(1, Math.ceil(sortedData.length / rowsPerPage));
@@ -1771,6 +1863,8 @@ export default function NewOrderFMS() {
         setDatePreset('all');
         setCustomDateRange({ start: '', end: '' });
         setSortConfig({ key: 'timestamp', direction: 'desc' });
+        setReportSelectedDoer(null);
+        setReportSelectedStage(null);
         setCurrentPage(1);
     };
 
@@ -2188,10 +2282,20 @@ export default function NewOrderFMS() {
                                         </div>
                                     </div>
 
-                                    <div className="mt-3 flex items-center gap-2">
-                                        <span className="text-xs px-2 py-1 rounded-md bg-blue-100 text-blue-700">
-                                            All Records
-                                        </span>
+                                    <div className="mt-3 flex flex-col gap-1.5">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs px-2 py-1 rounded-md bg-blue-100 text-blue-700">
+                                                All Records
+                                            </span>
+                                        </div>
+                                        <p className="text-[11px] text-slate-500">
+                                            Avg value: <span className="font-semibold text-slate-700">{formatCurrency(kpi.avgOrderValue)}</span>
+                                        </p>
+                                        {kpi.delayed > 0 && (
+                                            <p className="text-[11px] text-amber-600 font-medium">
+                                                ⚠ {kpi.delayed} delayed
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
 
@@ -2213,11 +2317,16 @@ export default function NewOrderFMS() {
                                         </div>
                                     </div>
 
-                                    {/* <div className="mt-3">
-                                        <span className="text-xs px-2 py-1 rounded-md bg-emerald-100 text-emerald-700">
-                                            Stage 6
-                                        </span>
-                                    </div> */}
+                                    <div className="mt-3 flex flex-col gap-1.5">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs px-2 py-1 rounded-md bg-emerald-100 text-emerald-700 font-semibold">
+                                                {kpi.completionRate}% completion rate
+                                            </span>
+                                        </div>
+                                        <p className="text-[11px] text-slate-500">
+                                            All 9 stages done
+                                        </p>
+                                    </div>
                                 </div>
 
                                 {/* PENDING */}
@@ -2238,11 +2347,20 @@ export default function NewOrderFMS() {
                                         </div>
                                     </div>
 
-                                    {/* <div className="mt-3">
-                                        <span className="text-xs px-2 py-1 rounded-md bg-rose-100 text-rose-600">
-                                            Stage 0
-                                        </span>
-                                    </div> */}
+                                    <div className="mt-3 flex flex-col gap-1.5">
+                                        {kpi.topPendingStages.length > 0 && (
+                                            <div className="flex items-center flex-wrap gap-1">
+                                                {kpi.topPendingStages.map((s) => (
+                                                    <span key={s.stage} className="text-[11px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 font-medium">
+                                                        St{s.stage}: {s.count}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                        <p className="text-[11px] text-slate-500">
+                                            In Progress: <span className="font-semibold text-slate-700">{kpi.inProgress}</span>
+                                        </p>
+                                    </div>
                                 </div>
 
                                 {/* HOLD */}
@@ -2263,10 +2381,18 @@ export default function NewOrderFMS() {
                                         </div>
                                     </div>
 
-                                    <div className="mt-3">
-                                        <span className="text-xs px-2 py-1 rounded-md bg-violet-100 text-violet-700">
-                                            On Hold
-                                        </span>
+                                    <div className="mt-3 flex flex-col gap-1.5">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs px-2 py-1 rounded-md bg-violet-100 text-violet-700">
+                                                On Hold
+                                            </span>
+                                            <span className="text-[11px] text-violet-600 font-medium">
+                                                {kpi.holdRate}% of total
+                                            </span>
+                                        </div>
+                                        <p className="text-[11px] text-slate-500">
+                                            Awaiting action
+                                        </p>
                                     </div>
                                 </div>
 
@@ -2288,17 +2414,38 @@ export default function NewOrderFMS() {
                                         </div>
                                     </div>
 
-                                    <div className="mt-3">
-                                        <span className="text-xs px-2 py-1 rounded-md bg-slate-100 text-slate-700">
-                                            Terminated
-                                        </span>
+                                    <div className="mt-3 flex flex-col gap-1.5">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs px-2 py-1 rounded-md bg-slate-100 text-slate-700">
+                                                Terminated
+                                            </span>
+                                            <span className="text-[11px] text-slate-500 font-medium">
+                                                {kpi.cancellationRate}% of total
+                                            </span>
+                                        </div>
+                                        <p className="text-[11px] text-slate-500">
+                                            Lost revenue
+                                        </p>
                                     </div>
                                 </div>
 
 
                             </div>
+
                         </div>
                     </div>
+
+                    {/* ── STAGE WISE PENDINGS REPORT ── */}
+                    <OrderStageWisePendingsReport
+                        orders={filtered}
+                        isStageCompletedFn={isStageCompleted}
+                        getOrderStageDoerFn={getOrderStageDoer}
+                        currentUser={user}
+                        selectedDoer={reportSelectedDoer}
+                        onSelectDoer={setReportSelectedDoer}
+                        selectedStage={reportSelectedStage}
+                        onSelectStage={setReportSelectedStage}
+                    />
 
                     {/* ── TABLE SECTION ── */}
                     <div className="bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden">
@@ -2319,13 +2466,18 @@ export default function NewOrderFMS() {
                                 <div>
                                     <h3 className="text-sm font-bold text-[#1e3a8a] uppercase tracking-wider leading-none">Order FMS Records</h3>
                                     <p className="text-[10px] text-slate-500 mt-1 font-medium">
-                                        {filtered.length} of {orders.length} total orders
+                                        {finalFiltered.length} of {orders.length} total orders
+                                        {(reportSelectedDoer || reportSelectedStage !== null) && (
+                                            <span className="ml-1 text-blue-600 font-semibold">
+                                                (Filtered by: {reportSelectedDoer || `Stage ${reportSelectedStage}`})
+                                            </span>
+                                        )}
                                     </p>
 
                                 </div>
                             </div>
                             <Badge variant="secondary" className="bg-blue-600 text-white hover:bg-blue-600 border-none font-bold">
-                                {filtered.length} Records
+                                {finalFiltered.length} Records
                             </Badge>
                         </div>
 
@@ -2541,8 +2693,8 @@ export default function NewOrderFMS() {
                                     {[5, 10, 20, 50].map((n) => <option key={n}>{n}</option>)}
                                 </select>
                                 <span>
-                                    Showing {filtered.length === 0 ? 0 : (currentPage - 1) * rowsPerPage + 1}–
-                                    {Math.min(currentPage * rowsPerPage, filtered.length)} of {filtered.length}
+                                    Showing {finalFiltered.length === 0 ? 0 : (currentPage - 1) * rowsPerPage + 1}–
+                                    {Math.min(currentPage * rowsPerPage, finalFiltered.length)} of {finalFiltered.length}
                                 </span>
                             </div>
 
