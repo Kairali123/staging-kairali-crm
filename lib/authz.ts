@@ -315,6 +315,18 @@ export function hasAccountsTrackerAccess(user: unknown): boolean {
   )
 }
 
+export function hasDialShreeSummaryAccess(user: unknown): boolean {
+  return (
+    hasAnyPermission(user, [
+      'dialshree_menu.view',
+      'dialshree_received.view',
+      'dialshree_sent.view',
+      'dialshree.view',
+    ]) ||
+    hasAdminRole(user, 'lower')
+  )
+}
+
 // ── Sales Call Audit: page access, data scope, and write are three axes ──────
 //
 // Owner ruling (2026-09-01): this page has four *composable* permissions, not a
