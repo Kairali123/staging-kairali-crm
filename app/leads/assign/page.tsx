@@ -199,7 +199,7 @@ export default function LeadAssignmentPage() {
       const requestUrl = new URL(url, window.location.origin)
       if (force) requestUrl.searchParams.set("force", "1")
 
-      const cacheKey = `leads_v2_${from || "all"}_${to || "all"}`
+      const cacheKey = `leads_v3_ist_${from || "all"}_${to || "all"}`
       let leadsData = null
 
       if (!force) {
@@ -1194,7 +1194,7 @@ export default function LeadAssignmentPage() {
           }
         }
 
-        const cacheKey = `leads_v2_${from || "all"}_${to || "all"}`;
+        const cacheKey = `leads_v3_ist_${from || "all"}_${to || "all"}`;
 
         // If already in memory cache or session cache, skip it
         if (globalLeadsCache.has(cacheKey)) continue;

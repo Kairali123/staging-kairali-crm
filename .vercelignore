@@ -1,0 +1,11 @@
+.env*
+.vercel
+.git
+node_modules
+.next
+docs
+scripts
+*.md
+scratch*
+temp*
+check*.js

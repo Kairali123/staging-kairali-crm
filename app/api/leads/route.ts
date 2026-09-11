@@ -2,57 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
 import { authorizeApiRequest, isBearerTokenRequest, unauthorizedResponse } from '@/lib/api-auth'
 
-// function safeDate(val: any, fallback = ''): string {
-//     if (val === null || val === undefined || val === '') return fallback
-//     try {
-//         let d: Date
-//         if (val instanceof Date) {
-//             d = val
-//         } else {
-//             let str = String(val).trim()
-//             if (!/Z$|[+\-]\d{2}:?\d{2}$/.test(str)) {
-//                 str = str.replace(' ', 'T') + 'Z'
-//             }
-//             d = new Date(str)
-//         }
+import { serializeLeadDateIST as safeDate } from '@/lib/lead-date-serialization'
 
-//         if (isNaN(d.getTime())) return fallback
-
-//         const p = (n: number) => String(n).padStart(2, '0')
-//         return `${p(d.getUTCDate())}/${p(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`
-
-//     } catch {
-//         return fallback
-//     }
-// }
-
-function safeDate(val: any, fallback = ''): string {
-    if (val === null || val === undefined || val === '') return fallback
-    try {
-        const p = (n: number) => String(n).padStart(2, '0')
-
-        if (val instanceof Date) {
-            // mysql2 returns DATETIME as Date in server's LOCAL timezone
-            // Use getHours() NOT getUTCHours() — works on both local & Vercel
-            if (isNaN(val.getTime())) return fallback
-            return `${p(val.getDate())}/${p(val.getMonth() + 1)}/${val.getFullYear()} ${p(val.getHours())}:${p(val.getMinutes())}:${p(val.getSeconds())}`
-        }
-
-        const str = String(val).trim()
-        if (!str) return fallback
-
-        // "YYYY-MM-DD HH:MM:SS" string — direct reformat, zero Date parsing
-        const m = str.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/)
-        if (m) {
-            return `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}:${m[6]}`
-        }
-
-        return str
-
-    } catch {
-        return fallback
-    }
-}
 function safeStr(val: any): string {
     if (val === null || val === undefined) return ''
     if (val instanceof Date) return safeDate(val)
