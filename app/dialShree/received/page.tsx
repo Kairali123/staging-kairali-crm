@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef, Suspense } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useDialShreeReceivedLeads, type DialShreeReceivedLead } from "@/hooks/useDialShreeReceivedLeads";
 import { useAuth } from "@/hooks/use-auth";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -120,7 +121,7 @@ function getCanonicalOutcome(rawVal: string): string | null {
     return null;
 }
 
-function isAudioUrl(url: any): boolean {
+export function isAudioUrl(url: any): boolean {
     if (!url) return false;
     const u = String(url).toLowerCase().trim();
     if (!u.startsWith("http")) return false;
@@ -138,7 +139,7 @@ function isAudioUrl(url: any): boolean {
 }
 
 /** Format ISO or MySQL date/time strings into "DD/MM/YYYY HH:MM" */
-function formatDisplayDateTime(val: any): string {
+export function formatDisplayDateTime(val: any): string {
     if (!val || val === "—" || val === "null" || val === "undefined") return "—";
     const s = String(val).trim();
     if (!s) return "—";
@@ -170,11 +171,11 @@ function formatDisplayDateTime(val: any): string {
     return s;
 }
 
-function formatDate(val: any): string {
+export function formatDate(val: any): string {
     return formatDisplayDateTime(val);
 }
 
-function formatCallDateTime(val: any): string {
+export function formatCallDateTime(val: any): string {
     if (!val || val === "—" || val === "null" || val === "undefined") return "—";
     const s = String(val).trim();
     if (!s) return "—";
@@ -393,13 +394,13 @@ function buildConsistentReceivedCounts(rows: DialShreeRow[]) {
             else stats.low++;
         };
 
-        addIntent(counts.total_received);
-
         const ls = (r.leadstatus || "").toLowerCase().trim();
         if (ls.includes("qualified") && !ls.includes("non") && !ls.includes("not") && !ls.includes("un")) {
             addIntent(counts.qualified);
+            addIntent(counts.total_received);
         } else if (ls.includes("non") || ls.includes("not") || ls.includes("un") || ls.includes("junk") || ls.includes("cold")) {
             addIntent(counts.not_qualified);
+            addIntent(counts.total_received);
         } else {
             addIntent(counts.reschedule);
         }
@@ -897,7 +898,7 @@ function CallStatusBreakdown({ counts, total, loading }: { counts: Record<Status
                                 const count = stats.total;
                                 const calculatePercent = (value: number, totalAmount: number) =>
                                     totalAmount > 0 ? ((value / totalAmount) * 100).toFixed(1) : "0.0";
-                                const denom = total > 0 ? total : 1;
+                                const denom = (cfg.key === "qualified" || cfg.key === "not_qualified" || cfg.key === "total_received") ? respondedTotal : total;
                                 const pct = calculatePercent(count, denom);
                                 const isEmpty = count === 0;
                                 return (
@@ -912,11 +913,13 @@ function CallStatusBreakdown({ counts, total, loading }: { counts: Record<Status
                                             <div style={{ fontSize: 16, opacity: 0.9, display: "flex", alignItems: "center", justifyContent: "center" }}>{StatusIcons[cfg.key]}</div>
                                         </div>
                                         <div style={{ fontSize: 30, fontWeight: 800, color: "#0f172a", lineHeight: 1, letterSpacing: "-1.5px" }}>{count}</div>
-                                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                            <div style={{ display: "inline-flex", alignItems: "center", background: cfg.color + "18", borderRadius: 20, padding: "2px 9px", width: "fit-content" }}>
-                                                <span style={{ fontSize: 11.5, fontWeight: 700, color: cfg.color }}>{pct}%</span>
+                                        {cfg.key !== "reschedule" && (
+                                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                                <div style={{ display: "inline-flex", alignItems: "center", background: cfg.color + "18", borderRadius: 20, padding: "2px 9px", width: "fit-content" }}>
+                                                    <span style={{ fontSize: 11.5, fontWeight: 700, color: cfg.color }}>{pct}%</span>
+                                                </div>
                                             </div>
-                                        </div>
+                                        )}
 
                                         {/* Intent Breakdown */}
                                         <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 4, borderTop: "1px dashed rgba(0,0,0,0.08)", paddingTop: 8 }}>
@@ -1250,16 +1253,11 @@ function DialShreeReceivedPageInner() {
         setCustomDate({ start: "", end: "" });
     };
 
-    const isFirstRender = useRef(true);
     useEffect(() => {
-        if (isFirstRender.current) {
-            isFirstRender.current = false;
-            return;
-        }
         if (tableRef.current) {
             tableRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
         }
-    }, [dateFilter, company, dataSource, status, intent, leadStatus, nonQualifiedOutcome]);
+    }, [search, dateFilter, company, dataSource, status, intent, leadStatus]);
 
     const dateWindow = useMemo(() => {
         if (dateFilter === "custom") return { from: customDate.start ? new Date(customDate.start) : null, to: customDate.end ? new Date(customDate.end + "T23:59:59") : null };
@@ -1439,6 +1437,7 @@ function DialShreeReceivedPageInner() {
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+
                     {hookRefreshing && !isRefreshing && (
                         <div className="hidden md:flex items-center gap-2 text-white/60 text-[11px] font-medium animate-pulse">
                             <Loader2 className="w-3 h-3 animate-spin" />
@@ -1474,17 +1473,7 @@ function DialShreeReceivedPageInner() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3">
                             <div className="flex flex-col gap-1.5 sm:col-span-2 xl:col-span-2">
                                 <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Search Leads</label>
-                                <Input
-                                    placeholder="Name, email, phone, ID, subject, remarks..."
-                                    value={search}
-                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-                                    onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-                                        if (e.key === "Enter") {
-                                            tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-                                        }
-                                    }}
-                                    className="h-10 w-full rounded-md border-gray-300"
-                                />
+                                <Input placeholder="Name, email, phone, ID, subject, remarks..." value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)} className="h-10 w-full rounded-md border-gray-300" />
                             </div>
                             <div className="flex flex-col gap-1.5">
                                 <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Date Range</label>

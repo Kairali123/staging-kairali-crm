@@ -16,10 +16,24 @@ import type {
 } from "@/types/crr";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { toast } from "sonner";
-import DriverAssignmentArrivalModal from "@/components/Driverassignmentarrivalmodal";
-import DriverAssignmentDepartureModal from "@/components/Driverassignmentdeparturemodal";
-import GuestRequirementVerificationModal from "@/components/Guestrequirementverificationmodal";
-import CrrStageViewModal from "@/components/CrrStageViewModal";
+import dynamic from "next/dynamic";
+
+const DriverAssignmentArrivalModal = dynamic(
+    () => import("@/components/Driverassignmentarrivalmodal"),
+    { ssr: false }
+);
+const DriverAssignmentDepartureModal = dynamic(
+    () => import("@/components/Driverassignmentdeparturemodal"),
+    { ssr: false }
+);
+const GuestRequirementVerificationModal = dynamic(
+    () => import("@/components/Guestrequirementverificationmodal"),
+    { ssr: false }
+);
+const CrrStageViewModal = dynamic(
+    () => import("@/components/CrrStageViewModal"),
+    { ssr: false }
+);
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,6 +62,7 @@ import {
     Briefcase,
     Calendar,
     ChevronRight,
+    ChevronDown,
     MoreVertical,
     Home,
     Star,
@@ -60,6 +75,8 @@ import {
     Loader2,
     Eye,
     ClipboardCheck,
+    ClipboardEdit,
+    Check,
 } from "lucide-react";
 
 /* =========================================================
@@ -334,7 +351,22 @@ const SCROLLABLE_HEADERS = [
    COMPONENT
 ========================================================= */
 export default function CRRCallingProcessPage() {
-    const { guests, setGuests, loading: guestsLoading, isRevalidating, error: guestsError, refetch: refetchGuests, stageUsers } = useCrrBookings();
+    // Date range states — declared here so the API params are ready before
+    // useCrrBookings is called (React hooks must be called in a fixed order).
+    const [dateRangeFilter, setDateRangeFilter] = useState<DateRangePreset>("all");
+    const [customStartDate, setCustomStartDate] = useState("");
+    const [customEndDate, setCustomEndDate] = useState("");
+
+    // Compute concrete Date bounds from the preset, then convert to ISO strings
+    // for the API. "all" produces null bounds → no params → full table returned.
+    const { start: dateRangeStart, end: dateRangeEnd } = useMemo(
+        () => getDateRangeBounds(dateRangeFilter, customStartDate, customEndDate),
+        [dateRangeFilter, customStartDate, customEndDate]
+    );
+    const apiFrom = dateRangeStart ? dateRangeStart.toISOString().slice(0, 10) : undefined;
+    const apiTo = dateRangeEnd ? dateRangeEnd.toISOString().slice(0, 10) : undefined;
+
+    const { guests, setGuests, loading: guestsLoading, isRevalidating, error: guestsError, refetch: refetchGuests, stageUsers } = useCrrBookings(apiFrom, apiTo);
 
     // ---------- REAL ROLE (from auth) — no manual switching, ever ----------
     const { user } = useAuth();
@@ -493,7 +525,7 @@ export default function CRRCallingProcessPage() {
             }
         }
     }, [user, isAdminRole, responsiblePersonList]);
-    const [dateRangeFilter, setDateRangeFilter] = useState<DateRangePreset>("all");
+
 
     // ---------- Sorting for the main data table ----------
     const [sortColumn, setSortColumn] = useState<string | null>(null);
@@ -508,24 +540,28 @@ export default function CRRCallingProcessPage() {
             setSortDirection("asc");
         }
     }
-    const [customStartDate, setCustomStartDate] = useState("");
-    const [customEndDate, setCustomEndDate] = useState("");
+
     const [activeGuestId, setActiveGuestId] = useState<number | null>(null);
 
     // pagination
     // View mode and tables tab
     const [viewMode, setViewMode] = useState<"table" | "chart">("table");
-    const [recordsViewTab, setRecordsViewTab] = useState<"both" | "pending" | "completed">("both");
+    const [recordsViewTab, setRecordsViewTab] = useState<"all" | "pending" | "completed" | "cancelled">("all");
 
     // Pending records pagination
     const [pendingPage, setPendingPage] = useState(1);
-    const [pendingItemsPerPage, setPendingItemsPerPage] = useState(5);
+    const [pendingItemsPerPage, setPendingItemsPerPage] = useState(20);
     const [pendingGotoPage, setPendingGotoPage] = useState("");
 
     // Completed records pagination
     const [completedPage, setCompletedPage] = useState(1);
-    const [completedItemsPerPage, setCompletedItemsPerPage] = useState(5);
+    const [completedItemsPerPage, setCompletedItemsPerPage] = useState(20);
     const [completedGotoPage, setCompletedGotoPage] = useState("");
+
+    // Cancelled records pagination
+    const [cancelledPage, setCancelledPage] = useState(1);
+    const [cancelledItemsPerPage, setCancelledItemsPerPage] = useState(20);
+    const [cancelledGotoPage, setCancelledGotoPage] = useState("");
 
     // modal edit fields
     const [modalDate, setModalDate] = useState("");
@@ -633,12 +669,53 @@ export default function CRRCallingProcessPage() {
     const isStage7Processing = activeResultProgressGuest?.stageStatus?.[6] === "Processing";
     const isStage8Complete = activeReferralGuest?.stageStatus?.[7] === "Complete";
 
-    // Combined read-only flags: locked (planned date not reached) OR completed OR processing.
-    // Processing stages are accessible (modal opens) but fully non-editable — same as Complete.
-    const isRatingDisabled = !activeRatingGuest || (!isAdminRole && isStageLocked(activeRatingGuest, 5)) || isStage5Complete || isStage5Processing;
-    const isSafeReturnDisabled = !activeSafeReturnGuest || (!isAdminRole && isStageLocked(activeSafeReturnGuest, 6)) || isStage6Complete || isStage6Processing;
-    const isResultDisabled = !activeResultProgressGuest || (!isAdminRole && isStageLocked(activeResultProgressGuest, 7)) || isStage7Complete || isStage7Processing;
-    const isReferralDisabled = !activeReferralGuest || (!isAdminRole && isStageLocked(activeReferralGuest, 8)) || isStage8Complete;
+    // Helper: Form lock state inside stage modals.
+    // If planned date is missing/empty, stage remains clickable in the menu, but form is locked with an explicit message.
+    // If planned date is in the future, form is locked until that planned date.
+    // Admin role bypasses form locks.
+    const getStageFormLockState = (guest: Guest | null, stageNo: number) => {
+        if (!guest) return { isLocked: false, reason: null, message: "" };
+        const stageInfo = guest.stages?.find((s) => s.stage === stageNo);
+        const plannedDate = stageInfo?.plannedDate;
+        const hasPlanned = plannedDate && String(plannedDate).trim() !== "" && String(plannedDate).trim() !== "-";
+
+        if (!hasPlanned) {
+            return {
+                isLocked: !isAdminRole,
+                reason: "missing_planned",
+                message: "Form is locked: Planned date is not scheduled yet. Please wait until the planned date is set in the system before filling this stage.",
+            };
+        }
+
+        if (stageInfo?.locked) {
+            return {
+                isLocked: !isAdminRole,
+                reason: "future_date",
+                message: `Form is locked: This stage unlocks on ${formatISTDate(plannedDate)}. Fields are read-only until then.`,
+            };
+        }
+
+        return { isLocked: false, reason: null, message: "" };
+    };
+
+    const s1Lock = getStageFormLockState(activeWelcomeGuest, 1);
+    const s2Lock = getStageFormLockState(activeCallGuest, 2);
+    const s3Lock = getStageFormLockState(activeGuest, 3);
+    const s4Lock = getStageFormLockState(activeFeedbackGuest, 4);
+    const s5Lock = getStageFormLockState(activeRatingGuest, 5);
+    const s6Lock = getStageFormLockState(activeSafeReturnGuest, 6);
+    const s7Lock = getStageFormLockState(activeResultProgressGuest, 7);
+    const s8Lock = getStageFormLockState(activeReferralGuest, 8);
+
+    // Combined read-only flags: locked (planned date not reached or missing planned date) OR completed OR processing.
+    const isWelcomeDisabled = !activeWelcomeGuest || s1Lock.isLocked || isStage1Complete || isStage1Processing;
+    const isCallDisabled = !activeCallGuest || s2Lock.isLocked || isStage2Complete;
+    const isGuestDisabled = !activeGuest || s3Lock.isLocked || isStage3Complete || activeGuest.allComplete;
+    const isFeedbackDisabled = !activeFeedbackGuest || s4Lock.isLocked || isStage4Complete;
+    const isRatingDisabled = !activeRatingGuest || s5Lock.isLocked || isStage5Complete || isStage5Processing;
+    const isSafeReturnDisabled = !activeSafeReturnGuest || s6Lock.isLocked || isStage6Complete || isStage6Processing;
+    const isResultDisabled = !activeResultProgressGuest || s7Lock.isLocked || isStage7Complete || isStage7Processing;
+    const isReferralDisabled = !activeReferralGuest || s8Lock.isLocked || isStage8Complete;
 
     // "Driver Assignment - Arrival Pickup" modal (Stage 9)
     const [activeDriverArrivalGuestId, setActiveDriverArrivalGuestId] = useState<number | null>(null);
@@ -682,11 +759,7 @@ export default function CRRCallingProcessPage() {
     const clientStickyWidth = isMobile ? 150 : STICKY_COLS.client.width;
     const frozenColsSticky = !isMobile;
 
-    /* ---------- DATE RANGE BOUNDS ---------- */
-    const { start: dateRangeStart, end: dateRangeEnd } = useMemo(
-        () => getDateRangeBounds(dateRangeFilter, customStartDate, customEndDate),
-        [dateRangeFilter, customStartDate, customEndDate]
-    );
+
 
     /* ---------- OVERALL ACCESSIBLE RECORDS (Before Stage & Status Filtering) ---------- */
     const overallRecords = useMemo(() => {
@@ -770,7 +843,8 @@ export default function CRRCallingProcessPage() {
     useEffect(() => {
         setPendingPage(1);
         setCompletedPage(1);
-    }, [search, stageFilter, respFilter, statusFilter, dateRangeFilter, customStartDate, customEndDate, pendingItemsPerPage, completedItemsPerPage]);
+        setCancelledPage(1);
+    }, [search, stageFilter, respFilter, statusFilter, dateRangeFilter, customStartDate, customEndDate, pendingItemsPerPage, completedItemsPerPage, cancelledItemsPerPage]);
 
     // Safety net: Radix Dropdown -> Dialog transitions can occasionally leave
     // `pointer-events: none` stuck on <body>, freezing the whole page (clicks
@@ -837,24 +911,21 @@ export default function CRRCallingProcessPage() {
     //     }
     // }, [activeGuestId, activeCallGuestId, activeDetailsGuestId, activeWelcomeGuestId, activeSafeReturnGuestId, activeFeedbackGuestId, activeReferralGuestId, activeRatingGuestId, activeResultProgressGuestId]);
 
-    // Record-level separation into Pending and Completed:
+    // Record-level separation into Pending, Completed, and Cancelled:
     const pendingRows = useMemo(() => {
-        if (statusFilter === "complete") return [];
-        if (statusFilter === "cancelled") {
-            // Cancelled bookings show in the Pending table
-            return rows.filter((g) => isBookingCancelled(g));
-        }
-        if (statusFilter === "pending") {
-            return rows.filter((g) => !isRecordCompleted(g) && !isBookingCancelled(g));
-        }
-        // statusFilter === "all": cancelled records are shown in the Pending table
-        return rows.filter((g) => !isRecordCompleted(g));
+        if (statusFilter === "complete" || statusFilter === "cancelled") return [];
+        return rows.filter((g) => !isRecordCompleted(g) && !isBookingCancelled(g));
     }, [rows, isRecordCompleted, statusFilter]);
 
     const completedRows = useMemo(() => {
         if (statusFilter === "pending" || statusFilter === "cancelled") return [];
-        return rows.filter((g) => isRecordCompleted(g));
+        return rows.filter((g) => isRecordCompleted(g) && !isBookingCancelled(g));
     }, [rows, isRecordCompleted, statusFilter]);
+
+    const cancelledRows = useMemo(() => {
+        if (statusFilter === "pending" || statusFilter === "complete") return [];
+        return rows.filter((g) => isBookingCancelled(g));
+    }, [rows, statusFilter]);
 
     // Pending pagination derived
     const pendingTotalPages = Math.max(1, Math.ceil(pendingRows.length / pendingItemsPerPage));
@@ -884,53 +955,97 @@ export default function CRRCallingProcessPage() {
         setCompletedGotoPage("");
     }
 
+    // Cancelled pagination derived
+    const cancelledTotalPages = Math.max(1, Math.ceil(cancelledRows.length / cancelledItemsPerPage));
+    const cancelledStartIndex = (cancelledPage - 1) * cancelledItemsPerPage;
+    const cancelledEndIndex = Math.min(cancelledStartIndex + cancelledItemsPerPage, cancelledRows.length);
+    const pagedCancelledRows = cancelledRows.slice(cancelledStartIndex, cancelledEndIndex);
+
+    function handleCancelledGotoPage() {
+        const p = parseInt(cancelledGotoPage, 10);
+        if (!isNaN(p) && p >= 1 && p <= cancelledTotalPages) {
+            setCancelledPage(p);
+        }
+        setCancelledGotoPage("");
+    }
+
     const isStagePending = (g: Guest, stageNo: number) =>
         !isBookingCancelled(g) && g.stageStatus[stageNo - 1] !== "Complete";
 
     const isStageCompleted = (g: Guest, stageNo: number) =>
         !isBookingCancelled(g) && g.stageStatus[stageNo - 1] === "Complete";
 
-    const activePendingCount = rows.filter((g) => !isRecordCompleted(g) && !isBookingCancelled(g)).length;
-    const pendingCount = statusFilter === "complete" || statusFilter === "cancelled" ? 0 : activePendingCount;
-    const completeCount = statusFilter === "pending" || statusFilter === "cancelled" ? 0 : completedRows.length;
+    // Optimized single-pass memoized aggregation for all KPI counters
+    const {
+        activePendingCount,
+        pendingCount,
+        completeCount,
+        actionablePendingCount,
+        cancelledCount,
+        totalPipelineCount,
+        referralsGeneratedCount,
+    } = useMemo(() => {
+        let activePend = 0;
+        let actionablePend = 0;
+        let cancelled = 0;
+        let referrals = 0;
 
-    // "Actionable now" = the subset of pendingRows that is already unlocked
-    const actionablePendingCount = pendingRows.filter((g) => {
-        if (isBookingCancelled(g)) return false;
-        if (stageFilter !== "all") {
-            const stageNum = Number(stageFilter);
-            return g.stageStatus[stageNum - 1] !== "Complete" && !isStageLocked(g, stageNum);
-        }
+        const stageNum = stageFilter !== "all" ? Number(stageFilter) : null;
         const stagesToCheck = isAdminRole ? STAGES.map((s) => s.no) : userAccessibleStages;
-        return stagesToCheck.some((n) => g.stageStatus[n - 1] !== "Complete" && !isStageLocked(g, n));
-    }).length;
 
-    const cancelledCount = statusFilter === "pending" || statusFilter === "complete" ? 0 : rows.filter((g) => isBookingCancelled(g)).length;
-    const totalPipelineCount = overallRecords.length;
-    const referralsGeneratedCount = rows.filter(
-        (g) => g.referralCollection?.referralTakenStatus === "Yes"
-    ).length;
+        for (const g of rows) {
+            const isCancelled = isBookingCancelled(g);
+            if (isCancelled) {
+                cancelled++;
+            } else if (!isRecordCompleted(g)) {
+                activePend++;
+                // "Actionable now" = the subset of pendingRows that is already unlocked
+                if (stageNum !== null) {
+                    if (g.stageStatus[stageNum - 1] !== "Complete" && !isStageLocked(g, stageNum)) {
+                        actionablePend++;
+                    }
+                } else {
+                    if (stagesToCheck.some((n) => g.stageStatus[n - 1] !== "Complete" && !isStageLocked(g, n))) {
+                        actionablePend++;
+                    }
+                }
+            }
+
+            if (g.referralCollection?.referralTakenStatus === "Yes") {
+                referrals++;
+            }
+        }
+
+        const pendCount = statusFilter === "complete" || statusFilter === "cancelled" ? 0 : activePend;
+        const compCount = statusFilter === "pending" || statusFilter === "cancelled" ? 0 : completedRows.length;
+        const cancCount = statusFilter === "pending" || statusFilter === "complete" ? 0 : cancelled;
+
+        return {
+            activePendingCount: activePend,
+            pendingCount: pendCount,
+            completeCount: compCount,
+            actionablePendingCount: actionablePend,
+            cancelledCount: cancCount,
+            totalPipelineCount: overallRecords.length,
+            referralsGeneratedCount: referrals,
+        };
+    }, [rows, statusFilter, completedRows.length, isRecordCompleted, stageFilter, isAdminRole, userAccessibleStages, overallRecords.length]);
 
     /* ---------- PENDING REPORT (doer x stage) ---------- */
-    // Also scoped to the current filtered `rows`, so the stage-wise pending
-    // breakdown table updates alongside the KPI cards when filters change.
-    //
-    // Semantics (per business rule):
-    //   pending  = stage is UNLOCKED (planned date reached) AND not completed.
-    //              Locked/future stages do NOT count — nobody can act on them yet.
-    //   attribution = STRICTLY the stage's own DOER (GAS savedData.doer).
-    //              No fallback to the booking creator (takenBy) — that fallback
-    //              previously leaked non-doers (booking creators, travel agents)
-    //              into the row list. Pending stages with NO doer recorded are
-    //              grouped into a single "Unassigned" row so that real pending
-    //              work stays visible instead of silently disappearing.
+    // Scoped to the current filtered `rows`, with single-pass stage tallying for high performance
     const pendingReport = useMemo(() => {
         // Cancelled bookings are auto-closed: none of their stages count as pending.
         const activeRows = rows.filter((g) => !isBookingCancelled(g));
 
-        // A booking stage idx is pending if that stage is not Complete
-        const isPendingTask = (g: Guest, idx: number) =>
-            !isBookingCancelled(g) && g.stageStatus[idx] !== "Complete";
+        // Pre-calculate pending counts per stage in a single pass over activeRows (O(N) instead of O(users * stages * N))
+        const stagePendingCountArray = new Array(STAGES.length).fill(0);
+        for (const g of activeRows) {
+            for (let idx = 0; idx < STAGES.length; idx++) {
+                if (g.stageStatus[idx] !== "Complete") {
+                    stagePendingCountArray[idx]++;
+                }
+            }
+        }
 
         // Use responsiblePersonList (which merges DB stageUsers with DEFAULT_STAGE_USERS)
         const usersToDisplay = responsiblePersonList;
@@ -955,7 +1070,7 @@ export default function CRRCallingProcessPage() {
                 if (!effectiveStages.includes(stageNo)) {
                     return 0;
                 }
-                return activeRows.filter((g) => isPendingTask(g, idx)).length;
+                return stagePendingCountArray[idx];
             });
             return { emp: su.name || su.email, email: su.email, counts };
         });
@@ -1005,13 +1120,46 @@ export default function CRRCallingProcessPage() {
         const stagePending = pendingReport.totals;
         const maxStagePending = Math.max(1, ...stagePending);
 
-        // Active (not-yet-complete, not-cancelled) guests grouped by responsible role
-        const respCounts: Record<string, number> = { GRE: 0, Doctor: 0, FO: 0, GM: 0 };
-        rows.forEach((g) => {
-            if (g.allComplete || isBookingCancelled(g)) return;
-            const resp = STAGES[g.currentStage - 1]?.resp;
-            if (resp && respCounts[resp] !== undefined) respCounts[resp] += 1;
-        });
+        // Active guest rows (excluding cancelled)
+        const activeRows = rows.filter((g) => !isBookingCancelled(g));
+
+        // Active workload and unique guest counts grouped by responsible role across active guest journeys
+        const roleStats: Record<string, { tasks: number; guests: number }> = {
+            GRE: { tasks: 0, guests: 0 },
+            Doctor: { tasks: 0, guests: 0 },
+            FO: { tasks: 0, guests: 0 },
+            GM: { tasks: 0, guests: 0 },
+        };
+        const guestsByRole: Record<string, Set<number>> = {
+            GRE: new Set(),
+            Doctor: new Set(),
+            FO: new Set(),
+            GM: new Set(),
+        };
+
+        for (const g of activeRows) {
+            for (let idx = 0; idx < STAGES.length; idx++) {
+                if (g.stageStatus[idx] !== "Complete") {
+                    const role = STAGES[idx].resp;
+                    if (roleStats[role]) {
+                        roleStats[role].tasks++;
+                        guestsByRole[role]?.add(g.id);
+                    }
+                }
+            }
+        }
+
+        for (const role of Object.keys(roleStats)) {
+            roleStats[role].guests = guestsByRole[role]?.size || 0;
+        }
+
+        const respCounts: Record<string, number> = {
+            GRE: roleStats.GRE.tasks,
+            Doctor: roleStats.Doctor.tasks,
+            FO: roleStats.FO.tasks,
+            GM: roleStats.GM.tasks,
+        };
+        const totalRoleWorkload = Object.values(respCounts).reduce((a, b) => a + b, 0);
         const maxResp = Math.max(1, ...Object.values(respCounts));
 
         // Top pending workload by employee (from the same doer attribution as the report table)
@@ -1021,12 +1169,25 @@ export default function CRRCallingProcessPage() {
             .slice(0, 8);
         const maxEmployee = Math.max(1, ...employeeTotals.map((e) => e.total));
 
-        const totalActive = rows.filter((g) => !g.allComplete && !isBookingCancelled(g)).length;
-        const totalComplete = rows.filter((g) => g.allComplete && !isBookingCancelled(g)).length;
+        // Consistent with pendingRows and completedRows used in KPI and tables
+        const totalActive = pendingRows.length;
+        const totalComplete = completedRows.length;
         const totalAll = Math.max(1, totalActive + totalComplete);
 
-        return { stagePending, maxStagePending, respCounts, maxResp, employeeTotals, maxEmployee, totalActive, totalComplete, totalAll };
-    }, [rows, pendingReport]);
+        return {
+            stagePending,
+            maxStagePending,
+            respCounts,
+            roleStats,
+            maxResp,
+            totalRoleWorkload,
+            employeeTotals,
+            maxEmployee,
+            totalActive,
+            totalComplete,
+            totalAll,
+        };
+    }, [rows, pendingReport, pendingRows.length, completedRows.length]);
 
     /* ---------- SCROLL TO TABLE ON SEARCH MATCH ---------- */
     // Ref attached to the "Guest Follow-up Records" table card below.
@@ -1138,7 +1299,8 @@ export default function CRRCallingProcessPage() {
     async function saveModal() {
         if (!canEditStage(3)) return; // permission gate — Stage 3
         if (!activeGuest) return closeModal();
-        if (!isAdminRole && isStageLocked(activeGuest, 3)) return;
+        const s3Lock = getStageFormLockState(activeGuest, 3);
+        if (!isAdminRole && s3Lock.isLocked) return;
         if (isStage3Complete) return; // completed stage is read-only
         if (!isModalFormComplete() || modalSaved) return;
 
@@ -1315,8 +1477,9 @@ export default function CRRCallingProcessPage() {
     async function saveWelcomeModal() {
         if (!canEditStage(1)) return; // permission gate — Stage 1
         if (!activeWelcomeGuest) return;
-        if (!isAdminRole && isStageLocked(activeWelcomeGuest, 1)) {
-            setWelcomeFormError("This stage is locked until its planned date.");
+        const s1Lock = getStageFormLockState(activeWelcomeGuest, 1);
+        if (!isAdminRole && s1Lock.isLocked) {
+            setWelcomeFormError(s1Lock.message || "This stage is locked.");
             return;
         }
         if (isStage1Complete) {
@@ -1392,8 +1555,9 @@ export default function CRRCallingProcessPage() {
     async function saveSafeReturnModal() {
         if (!canEditStage(6)) return; // permission gate — Stage 6
         if (!activeSafeReturnGuest) return;
-        if (!isAdminRole && isStageLocked(activeSafeReturnGuest, 6)) {
-            setSafeReturnFormError("This stage is locked until its planned date.");
+        const s6Lock = getStageFormLockState(activeSafeReturnGuest, 6);
+        if (!isAdminRole && s6Lock.isLocked) {
+            setSafeReturnFormError(s6Lock.message || "This stage is locked.");
             return;
         }
         if (isStage6Complete) {
@@ -1467,8 +1631,9 @@ export default function CRRCallingProcessPage() {
     async function saveResultProgressModal() {
         if (!canEditStage(7)) return; // permission gate — Stage 7
         if (!activeResultProgressGuest) return;
-        if (!isAdminRole && isStageLocked(activeResultProgressGuest, 7)) {
-            setResultFormError("This stage is locked until its planned date.");
+        const s7Lock = getStageFormLockState(activeResultProgressGuest, 7);
+        if (!isAdminRole && s7Lock.isLocked) {
+            setResultFormError(s7Lock.message || "This stage is locked.");
             return;
         }
         if (isStage7Complete) {
@@ -1533,8 +1698,9 @@ export default function CRRCallingProcessPage() {
     async function saveFeedbackModal() {
         if (!canEditStage(4)) return; // permission gate — Stage 4
         if (!activeFeedbackGuest) return;
-        if (!isAdminRole && isStageLocked(activeFeedbackGuest, 4)) {
-            setFeedbackFormError("This stage is locked until its planned date.");
+        const s4Lock = getStageFormLockState(activeFeedbackGuest, 4);
+        if (!isAdminRole && s4Lock.isLocked) {
+            setFeedbackFormError(s4Lock.message || "This stage is locked.");
             return;
         }
         if (isStage4Complete) {
@@ -1596,8 +1762,9 @@ export default function CRRCallingProcessPage() {
     async function saveReferralModal() {
         if (!canEditStage(8)) return; // permission gate — Stage 8
         if (!activeReferralGuest) return;
-        if (!isAdminRole && isStageLocked(activeReferralGuest, 8)) {
-            setReferralFormError("This stage is locked until its planned date.");
+        const s8Lock = getStageFormLockState(activeReferralGuest, 8);
+        if (!isAdminRole && s8Lock.isLocked) {
+            setReferralFormError(s8Lock.message || "This stage is locked.");
             return;
         }
         if (isStage8Complete) {
@@ -1675,8 +1842,9 @@ export default function CRRCallingProcessPage() {
     async function saveRatingModal() {
         if (!canEditStage(5)) return; // permission gate — Stage 5
         if (!activeRatingGuest) return;
-        if (!isAdminRole && isStageLocked(activeRatingGuest, 5)) {
-            setRatingFormError("This stage is locked until its planned date.");
+        const s5Lock = getStageFormLockState(activeRatingGuest, 5);
+        if (!isAdminRole && s5Lock.isLocked) {
+            setRatingFormError(s5Lock.message || "This stage is locked.");
             return;
         }
         if (isStage5Complete) {
@@ -1731,6 +1899,56 @@ export default function CRRCallingProcessPage() {
         setActiveDetailsAction("");
     }
 
+    function handleWorkOnStage(guestId: number, stageNo: number) {
+        if (!canEditStage(stageNo)) return;
+        const g = guests.find((x) => x.id === guestId);
+        if (!g) return;
+
+        switch (stageNo) {
+            case 1:
+                openWelcomeModal(guestId);
+                break;
+            case 2:
+                openCallModal(guestId);
+                break;
+            case 3:
+                openModal(guestId);
+                break;
+            case 4:
+                openFeedbackModal(guestId);
+                break;
+            case 5:
+                openRatingModal(guestId);
+                break;
+            case 6:
+                openSafeReturnModal(guestId);
+                break;
+            case 7:
+                openResultProgressModal(guestId);
+                break;
+            case 8: {
+                const isComplete = g.stageStatus[7] === "Complete";
+                if (isComplete) {
+                    openReferralModal(guestId);
+                } else {
+                    window.open(buildReferralFormUrl(g.bookingId), "_blank", "noopener,noreferrer");
+                }
+                break;
+            }
+            case 9:
+                openDriverArrivalModal(guestId);
+                break;
+            case 10:
+                openDriverDepartureModal(guestId);
+                break;
+            case 11:
+                openRequirementVerificationModal(guestId);
+                break;
+            default:
+                break;
+        }
+    }
+
     function isCallFormComplete() {
         // The QR leaflet is always displayed in the modal now (no show/hide
         // toggle), so viewing is implicit — saving is always allowed.
@@ -1740,8 +1958,9 @@ export default function CRRCallingProcessPage() {
     async function saveCallModal() {
         if (!canEditStage(2)) return; // permission gate — Stage 2
         if (!activeCallGuest) return;
-        if (!isAdminRole && isStageLocked(activeCallGuest, 2)) {
-            setCallFormError("This stage is locked until its planned date.");
+        const s2Lock = getStageFormLockState(activeCallGuest, 2);
+        if (!isAdminRole && s2Lock.isLocked) {
+            setCallFormError(s2Lock.message || "This stage is locked.");
             return;
         }
         if (isStage2Complete) {
@@ -1809,46 +2028,59 @@ export default function CRRCallingProcessPage() {
         ]
         : [];
 
-    /* ---------- RENDER A RECORDS TABLE (Pending or Completed) ---------- */
-    const renderRecordsTable = (tableType: "pending" | "completed") => {
+    /* ---------- RENDER A RECORDS TABLE (Pending, Completed, or Cancelled) ---------- */
+    const renderRecordsTable = (tableType: "pending" | "completed" | "cancelled") => {
         const isPendingTable = tableType === "pending";
-        const tableRows = isPendingTable ? pendingRows : completedRows;
-        const pagedList = isPendingTable ? pagedPendingRows : pagedCompletedRows;
-        const curPage = isPendingTable ? pendingPage : completedPage;
-        const setCurPage = isPendingTable ? setPendingPage : setCompletedPage;
-        const itemsPage = isPendingTable ? pendingItemsPerPage : completedItemsPerPage;
-        const setItemsPage = isPendingTable ? setPendingItemsPerPage : setCompletedItemsPerPage;
-        const totalP = isPendingTable ? pendingTotalPages : completedTotalPages;
-        const startIdx = isPendingTable ? pendingStartIndex : completedStartIndex;
-        const endIdx = isPendingTable ? pendingEndIndex : completedEndIndex;
-        const gotoP = isPendingTable ? pendingGotoPage : completedGotoPage;
-        const setGotoP = isPendingTable ? setPendingGotoPage : setCompletedGotoPage;
-        const onGoto = isPendingTable ? handlePendingGotoPage : handleCompletedGotoPage;
+        const isCompletedTable = tableType === "completed";
+        const isCancelledTable = tableType === "cancelled";
 
-        const title = isPendingTable ? "Pending Records" : "Completed Records";
+        const tableRows = isPendingTable ? pendingRows : isCompletedTable ? completedRows : cancelledRows;
+        const pagedList = isPendingTable ? pagedPendingRows : isCompletedTable ? pagedCompletedRows : pagedCancelledRows;
+        const curPage = isPendingTable ? pendingPage : isCompletedTable ? completedPage : cancelledPage;
+        const setCurPage = isPendingTable ? setPendingPage : isCompletedTable ? setCompletedPage : setCancelledPage;
+        const itemsPage = isPendingTable ? pendingItemsPerPage : isCompletedTable ? completedItemsPerPage : cancelledItemsPerPage;
+        const setItemsPage = isPendingTable ? setPendingItemsPerPage : isCompletedTable ? setCompletedItemsPerPage : setCancelledItemsPerPage;
+        const totalP = isPendingTable ? pendingTotalPages : isCompletedTable ? completedTotalPages : cancelledTotalPages;
+        const startIdx = isPendingTable ? pendingStartIndex : isCompletedTable ? completedStartIndex : cancelledStartIndex;
+        const endIdx = isPendingTable ? pendingEndIndex : isCompletedTable ? completedEndIndex : cancelledEndIndex;
+        const gotoP = isPendingTable ? pendingGotoPage : isCompletedTable ? completedGotoPage : cancelledGotoPage;
+        const setGotoP = isPendingTable ? setPendingGotoPage : isCompletedTable ? setCompletedGotoPage : setCancelledGotoPage;
+        const onGoto = isPendingTable ? handlePendingGotoPage : isCompletedTable ? handleCompletedGotoPage : handleCancelledGotoPage;
+
+        const title = isPendingTable ? "Pending Records" : isCompletedTable ? "Completed Records" : "Cancelled Records";
         const subtitle = isPendingTable
             ? (isAdminRole
                 ? "Records where one or more required workflow stages are still pending"
                 : `Records where one or more of your accessible stages (${userAccessibleStages.map(n => `Stage ${n}`).join(", ")}) are pending`)
-            : (isAdminRole
+            : isCompletedTable
+            ? (isAdminRole
                 ? "Records where all 11 required workflow stages are completed"
-                : `Records where all stages accessible to you (${userAccessibleStages.map(n => `Stage ${n}`).join(", ")}) are completed`);
+                : `Records where all stages accessible to you (${userAccessibleStages.map(n => `Stage ${n}`).join(", ")}) are completed`)
+            : "Cancelled bookings with auto-closed guest journeys (no pending tasks required)";
 
         const badgeClass = isPendingTable
             ? "bg-amber-100 text-amber-800 border-amber-300"
-            : "bg-emerald-100 text-emerald-800 border-emerald-300";
+            : isCompletedTable
+            ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+            : "bg-rose-100 text-rose-800 border-rose-300";
 
         const iconHeaderBg = isPendingTable
             ? "bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 border-amber-600/30"
-            : "bg-gradient-to-br from-emerald-500 via-teal-500 to-emerald-600 border-emerald-600/30";
+            : isCompletedTable
+            ? "bg-gradient-to-br from-emerald-500 via-teal-500 to-emerald-600 border-emerald-600/30"
+            : "bg-gradient-to-br from-rose-500 via-red-500 to-rose-600 border-rose-600/30";
 
         const headerGradient = isPendingTable
             ? "bg-gradient-to-r from-amber-50 via-white to-orange-50 border-b border-amber-200"
-            : "bg-gradient-to-r from-emerald-50 via-white to-teal-50 border-b border-emerald-200";
+            : isCompletedTable
+            ? "bg-gradient-to-r from-emerald-50 via-white to-teal-50 border-b border-emerald-200"
+            : "bg-gradient-to-r from-rose-50 via-white to-red-50 border-b border-rose-200";
 
         const cardBorder = isPendingTable
             ? "border-amber-200/90"
-            : "border-emerald-200/90";
+            : isCompletedTable
+            ? "border-emerald-200/90"
+            : "border-rose-200/90";
 
         return (
             <div className={`rounded-xl border ${cardBorder} bg-white shadow-md overflow-hidden`}>
@@ -1858,8 +2090,10 @@ export default function CRRCallingProcessPage() {
                         <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center shadow-md border ${iconHeaderBg}`}>
                             {isPendingTable ? (
                                 <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-                            ) : (
+                            ) : isCompletedTable ? (
                                 <CheckCircle2 className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+                            ) : (
+                                <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                             )}
                         </div>
                         <div>
@@ -1970,12 +2204,17 @@ export default function CRRCallingProcessPage() {
                                         <td colSpan={19} className="text-center py-10 text-slate-400 font-semibold text-sm">
                                             {isPendingTable
                                                 ? "No pending records match the current filters."
-                                                : "No completed records match the current filters."}
+                                                : isCompletedTable
+                                                ? "No completed records match the current filters."
+                                                : "No cancelled records match the current filters."}
                                         </td>
                                     </tr>
                                 )}
                                 {pagedList.map((g) => {
-                                    const stageObj = STAGES[Math.min(g.currentStage, STAGES.length) - 1];
+                                    const activeStageNum = stageFilter !== "all" ? Number(stageFilter) : Math.min(g.currentStage, STAGES.length);
+                                    const stageObj = STAGES[activeStageNum - 1] || STAGES[0];
+                                    const isCurrentStageComplete = g.allComplete || (g.stageStatus && g.stageStatus[activeStageNum - 1] === "Complete");
+                                    const isPendingStage = !isCurrentStageComplete && !isBookingCancelled(g);
                                     return (
                                         <tr key={g.id} className="group border-b border-slate-200 hover:bg-slate-50/80 transition-colors">
                                             {/* Timestamp */}
@@ -2069,17 +2308,27 @@ export default function CRRCallingProcessPage() {
                                             </td>
 
                                             {/* Current Stage */}
-                                            <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                                                {g.allComplete ? (
-                                                    <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-md shadow-2xs">
-                                                        <span className="w-1.5 h-1.5 bg-emerald-600 rounded-full" />
-                                                        All Complete
-                                                    </span>
+                                            <td className="px-4 py-3 text-center whitespace-nowrap">
+                                                {isCurrentStageComplete ? (
+                                                    <div className="inline-flex flex-col items-center">
+                                                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-md shadow-2xs">
+                                                            <span className="w-2 h-2 bg-emerald-500 rounded-full shrink-0" />
+                                                            {g.allComplete ? "All Stages Complete" : `Stage ${stageObj.no}: ${stageObj.name}`}
+                                                        </span>
+                                                        <span className="text-[10px] font-semibold text-emerald-600 mt-0.5">
+                                                            Completed
+                                                        </span>
+                                                    </div>
                                                 ) : (
-                                                    <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-md shadow-2xs">
-                                                        <span className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
-                                                        {stageObj.no}: {stageObj.name}
-                                                    </span>
+                                                    <div className="inline-flex flex-col items-center">
+                                                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-md shadow-2xs">
+                                                            <span className="w-2 h-2 bg-amber-500 rounded-full shrink-0" />
+                                                            Stage {stageObj.no}: {stageObj.name}
+                                                        </span>
+                                                        <span className="text-[10px] font-semibold text-amber-600 mt-0.5">
+                                                            Pending • Your Action
+                                                        </span>
+                                                    </div>
                                                 )}
                                                 <div className="flex gap-0.5 mt-1.5 justify-center">
                                                     {STAGES.map((s, idx) => {
@@ -2099,218 +2348,329 @@ export default function CRRCallingProcessPage() {
                                             </td>
                                             {/* Action */}
                                             <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                                                <div className="flex items-center justify-center gap-1.5">
+                                                <div className="flex items-center justify-center gap-2">
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
-                                                        onClick={() => openViewModal(g.id, 1)}
+                                                        onClick={() => openViewModal(g.id, activeStageNum)}
                                                         title="View All Stages & Filled Data"
-                                                        className="h-8 px-2.5 text-xs font-semibold text-blue-600 bg-blue-50/80 border-blue-200 hover:bg-blue-100 hover:text-blue-700 hover:border-blue-300 rounded-lg flex items-center gap-1 shadow-2xs"
+                                                        className="h-8 px-2.5 text-xs font-semibold text-slate-700 bg-white border-slate-300 hover:bg-slate-50 hover:text-slate-900 rounded-lg flex items-center gap-1.5 shadow-2xs"
                                                     >
-                                                        <Eye className="h-3.5 w-3.5 text-blue-600" />
-                                                        <span>View</span>
+                                                        <Eye className="h-3.5 w-3.5 text-slate-500" />
+                                                        <span>View Details</span>
                                                     </Button>
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                className="h-8 w-8 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg"
-                                                            >
-                                                                <MoreVertical className="h-4 w-4" />
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end" className="w-60">
-                                                            {isBookingCancelled(g) && !isAdminRole ? (
-                                                                <DropdownMenuItem disabled className="gap-2.5 text-red-500 opacity-70">
-                                                                    <AlertTriangle className="h-4 w-4" />
-                                                                    Booking cancelled — stages closed
-                                                                </DropdownMenuItem>
-                                                            ) : (
-                                                                <>
-                                                                    {isBookingCancelled(g) && (
-                                                                        <div className="px-2.5 py-1.5 mx-1 my-1 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-md flex items-center gap-1.5">
-                                                                            <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-                                                                            <span>Cancelled Booking (Admin Access)</span>
-                                                                        </div>
-                                                                    )}
-                                                                    {/* Stage 1 */}
-                                                                    {canEditStage(1) && (
+
+                                                    {isBookingCancelled(g) && !isAdminRole ? (
+                                                        <span className="inline-flex items-center text-xs font-medium text-slate-400 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg">
+                                                            Cancelled
+                                                        </span>
+                                                    ) : (
+                                                        <DropdownMenu>
+                                                            <DropdownMenuTrigger asChild>
+                                                                {isBookingCancelled(g) ? (
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        className="h-8 px-2.5 text-xs font-semibold text-red-700 bg-red-50 border-red-200 hover:bg-red-100 rounded-lg flex items-center gap-1 shadow-2xs"
+                                                                    >
+                                                                        <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
+                                                                        <span>Cancelled</span>
+                                                                        <ChevronDown className="h-3 w-3 text-red-500/70" />
+                                                                    </Button>
+                                                                ) : !isPendingStage ? (
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        className="h-8 px-2.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100 rounded-lg flex items-center gap-1 shadow-2xs"
+                                                                        title="All stages completed. Click to view stage list."
+                                                                    >
+                                                                        <Check className="h-3.5 w-3.5 text-emerald-600" />
+                                                                        <span>Completed</span>
+                                                                        <ChevronDown className="h-3 w-3 text-emerald-600/70" />
+                                                                    </Button>
+                                                                ) : (
+                                                                    <Button
+                                                                        size="sm"
+                                                                        className="h-8 px-3 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 border border-blue-600 rounded-lg flex items-center gap-1.5 shadow-xs"
+                                                                        title="Choose stage to work on"
+                                                                    >
+                                                                        <ClipboardEdit className="h-3.5 w-3.5 text-white" />
+                                                                        <span>Work on Stage</span>
+                                                                        <ChevronDown className="h-3.5 w-3.5 text-white/80" />
+                                                                    </Button>
+                                                                )}
+                                                            </DropdownMenuTrigger>
+                                                            <DropdownMenuContent align="end" className="w-64 max-h-96 overflow-y-auto">
+                                                                {isBookingCancelled(g) && (
+                                                                    <div className="px-2.5 py-1.5 mx-1 my-1 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-md flex items-center gap-1.5">
+                                                                        <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                                                                        <span>Cancelled Booking (Admin Access)</span>
+                                                                    </div>
+                                                                )}
+                                                                {/* Stage 1 */}
+                                                                {canEditStage(1) && (() => {
+                                                                    const isComplete = g.stageStatus[0] === "Complete";
+                                                                    const isDisabled = isComplete;
+                                                                    return (
                                                                         <DropdownMenuItem
-                                                                            disabled={!isAdminRole && isStageLocked(g, 1) && g.stageStatus[0] !== "Complete"}
+                                                                            disabled={isDisabled}
                                                                             onSelect={(e) => {
                                                                                 e.preventDefault();
+                                                                                if (isComplete) return;
                                                                                 setTimeout(() => openWelcomeModal(g.id), 0);
                                                                             }}
-                                                                            className="gap-2.5 text-sky-600 focus:text-sky-700 cursor-pointer disabled:opacity-40"
+                                                                            className="flex items-center justify-between gap-2.5 text-sky-600 focus:text-sky-700 cursor-pointer disabled:opacity-40"
                                                                         >
-                                                                            <Home className="h-4 w-4" />
-                                                                            Arrival Welcome on Pickup
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <Home className="h-4 w-4 shrink-0" />
+                                                                                <span className="truncate">Arrival Welcome on Pickup</span>
+                                                                            </div>
+                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
                                                                         </DropdownMenuItem>
-                                                                    )}
-                                                                    {/* Stage 2 */}
-                                                                    {canEditStage(2) && (
+                                                                    );
+                                                                })()}
+                                                                {/* Stage 2 */}
+                                                                {canEditStage(2) && (() => {
+                                                                    const isComplete = g.stageStatus[1] === "Complete";
+                                                                    const isDisabled = isComplete;
+                                                                    return (
                                                                         <DropdownMenuItem
-                                                                            disabled={!isAdminRole && isStageLocked(g, 2) && g.stageStatus[1] !== "Complete"}
+                                                                            disabled={isDisabled}
                                                                             onSelect={(e) => {
                                                                                 e.preventDefault();
+                                                                                if (isComplete) return;
                                                                                 setTimeout(() => openCallModal(g.id), 0);
                                                                             }}
-                                                                            className="gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
+                                                                            className="flex items-center justify-between gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
                                                                         >
-                                                                            <PhoneCall className="h-4 w-4" />
-                                                                            Guest Request &amp; Complaint Management
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <PhoneCall className="h-4 w-4 shrink-0" />
+                                                                                <span className="truncate">Guest Request &amp; Complaint Management</span>
+                                                                            </div>
+                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
                                                                         </DropdownMenuItem>
-                                                                    )}
+                                                                    );
+                                                                })()}
 
-                                                                    {(canEditStage(1) || canEditStage(2)) && (canEditStage(3) || canEditStage(4) || canEditStage(5)) && <DropdownMenuSeparator />}
+                                                                {(canEditStage(1) || canEditStage(2)) && (canEditStage(3) || canEditStage(4) || canEditStage(5)) && <DropdownMenuSeparator />}
 
-                                                                    {/* Stage 3 */}
-                                                                    {canEditStage(3) && (
+                                                                {/* Stage 3 */}
+                                                                {canEditStage(3) && (() => {
+                                                                    const isComplete = g.stageStatus[2] === "Complete";
+                                                                    const isDisabled = isComplete;
+                                                                    return (
                                                                         <DropdownMenuItem
-                                                                            disabled={!isAdminRole && isStageLocked(g, 3) && g.stageStatus[2] !== "Complete"}
+                                                                            disabled={isDisabled}
                                                                             onSelect={(e) => {
                                                                                 e.preventDefault();
+                                                                                if (isComplete) return;
                                                                                 setTimeout(() => openModal(g.id), 0);
                                                                             }}
-                                                                            className="gap-2.5 text-blue-600 focus:text-blue-700 cursor-pointer disabled:opacity-40"
+                                                                            className="flex items-center justify-between gap-2.5 text-blue-600 focus:text-blue-700 cursor-pointer disabled:opacity-40"
                                                                         >
-                                                                            <Calendar className="h-4 w-4" />
-                                                                            Next Visit Planning &amp; Confirmation
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <Calendar className="h-4 w-4 shrink-0" />
+                                                                                <span className="truncate">Next Visit Planning &amp; Confirmation</span>
+                                                                            </div>
+                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
                                                                         </DropdownMenuItem>
-                                                                    )}
-                                                                    {/* Stage 4 */}
-                                                                    {canEditStage(4) && (
+                                                                    );
+                                                                })()}
+                                                                {/* Stage 4 */}
+                                                                {canEditStage(4) && (() => {
+                                                                    const isComplete = g.stageStatus[3] === "Complete";
+                                                                    const isDisabled = isComplete;
+                                                                    return (
                                                                         <DropdownMenuItem
-                                                                            disabled={!isAdminRole && isStageLocked(g, 4) && g.stageStatus[3] !== "Complete"}
+                                                                            disabled={isDisabled}
                                                                             onSelect={(e) => {
                                                                                 e.preventDefault();
+                                                                                if (isComplete) return;
                                                                                 setTimeout(() => openFeedbackModal(g.id), 0);
                                                                             }}
-                                                                            className="gap-2.5 text-amber-600 focus:text-amber-700 cursor-pointer disabled:opacity-40"
+                                                                            className="flex items-center justify-between gap-2.5 text-amber-600 focus:text-amber-700 cursor-pointer disabled:opacity-40"
                                                                         >
-                                                                            <Star className="h-4 w-4" />
-                                                                            Guest Feedback &amp; Outcome Confirmation
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <Star className="h-4 w-4 shrink-0" />
+                                                                                <span className="truncate">Guest Feedback &amp; Outcome Confirmation</span>
+                                                                            </div>
+                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
                                                                         </DropdownMenuItem>
-                                                                    )}
-                                                                    {/* Stage 5 */}
-                                                                    {canEditStage(5) && (
+                                                                    );
+                                                                })()}
+                                                                {/* Stage 5 */}
+                                                                {canEditStage(5) && (() => {
+                                                                    const isComplete = g.stageStatus[4] === "Complete";
+                                                                    const isDisabled = isComplete;
+                                                                    return (
                                                                         <DropdownMenuItem
-                                                                            disabled={!isAdminRole && isStageLocked(g, 5) && g.stageStatus[4] !== "Complete"}
+                                                                            disabled={isDisabled}
                                                                             onSelect={(e) => {
                                                                                 e.preventDefault();
+                                                                                if (isComplete) return;
                                                                                 setTimeout(() => openRatingModal(g.id), 0);
                                                                             }}
-                                                                            className="gap-2.5 text-orange-600 focus:text-orange-700 cursor-pointer disabled:opacity-40"
+                                                                            className="flex items-center justify-between gap-2.5 text-orange-600 focus:text-orange-700 cursor-pointer disabled:opacity-40"
                                                                         >
-                                                                            <Send className="h-4 w-4" />
-                                                                            Online Rating &amp; Review Request
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <Send className="h-4 w-4 shrink-0" />
+                                                                                <span className="truncate">Online Rating &amp; Review Request</span>
+                                                                            </div>
+                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
                                                                         </DropdownMenuItem>
-                                                                    )}
+                                                                    );
+                                                                })()}
 
-                                                                    {(canEditStage(1) || canEditStage(2) || canEditStage(3) || canEditStage(4) || canEditStage(5)) && (canEditStage(6) || canEditStage(7) || canEditStage(8)) && <DropdownMenuSeparator />}
+                                                                {(canEditStage(1) || canEditStage(2) || canEditStage(3) || canEditStage(4) || canEditStage(5)) && (canEditStage(6) || canEditStage(7) || canEditStage(8)) && <DropdownMenuSeparator />}
 
-                                                                    {/* Stage 6 */}
-                                                                    {canEditStage(6) && (
+                                                                {/* Stage 6 */}
+                                                                {canEditStage(6) && (() => {
+                                                                    const isComplete = g.stageStatus[5] === "Complete";
+                                                                    const isDisabled = isComplete;
+                                                                    return (
                                                                         <DropdownMenuItem
-                                                                            disabled={!isAdminRole && isStageLocked(g, 6) && g.stageStatus[5] !== "Complete"}
+                                                                            disabled={isDisabled}
                                                                             onSelect={(e) => {
                                                                                 e.preventDefault();
+                                                                                if (isComplete) return;
                                                                                 setTimeout(() => openSafeReturnModal(g.id), 0);
                                                                             }}
-                                                                            className="gap-2.5 text-emerald-600 focus:text-emerald-700 cursor-pointer disabled:opacity-40"
+                                                                            className="flex items-center justify-between gap-2.5 text-emerald-600 focus:text-emerald-700 cursor-pointer disabled:opacity-40"
                                                                         >
-                                                                            <RotateCcw className="h-4 w-4" />
-                                                                            Safe Return Confirmation
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <RotateCcw className="h-4 w-4 shrink-0" />
+                                                                                <span className="truncate">Safe Return Confirmation</span>
+                                                                            </div>
+                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
                                                                         </DropdownMenuItem>
-                                                                    )}
-                                                                    {/* Stage 7 */}
-                                                                    {canEditStage(7) && (
+                                                                    );
+                                                                })()}
+                                                                {/* Stage 7 */}
+                                                                {canEditStage(7) && (() => {
+                                                                    const isComplete = g.stageStatus[6] === "Complete";
+                                                                    const isDisabled = isComplete;
+                                                                    return (
                                                                         <DropdownMenuItem
-                                                                            disabled={!isAdminRole && isStageLocked(g, 7) && g.stageStatus[6] !== "Complete"}
+                                                                            disabled={isDisabled}
                                                                             onSelect={(e) => {
                                                                                 e.preventDefault();
+                                                                                if (isComplete) return;
                                                                                 setTimeout(() => openResultProgressModal(g.id), 0);
                                                                             }}
-                                                                            className="gap-2.5 text-purple-600 focus:text-purple-700 cursor-pointer disabled:opacity-40"
+                                                                            className="flex items-center justify-between gap-2.5 text-teal-600 focus:text-teal-700 cursor-pointer disabled:opacity-40"
                                                                         >
-                                                                            <TrendingUp className="h-4 w-4" />
-                                                                            Result Tracking &amp; Health Progress Check
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <FileText className="h-4 w-4 shrink-0" />
+                                                                                <span className="truncate">Result Tracking &amp; Health Progress Check</span>
+                                                                            </div>
+                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
                                                                         </DropdownMenuItem>
-                                                                    )}
-                                                                    {/* Stage 8 */}
-                                                                    {canEditStage(8) && (
+                                                                    );
+                                                                })()}
+                                                                {/* Stage 8 */}
+                                                                {canEditStage(8) && (() => {
+                                                                    const isComplete = g.stageStatus[7] === "Complete";
+                                                                    const isDisabled = isComplete;
+                                                                    return (
                                                                         <DropdownMenuItem
-                                                                            disabled={!isAdminRole && isStageLocked(g, 8) && g.stageStatus[7] !== "Complete"}
+                                                                            disabled={isDisabled}
                                                                             onSelect={(e) => {
                                                                                 e.preventDefault();
-                                                                                if (g.stageStatus[7] === "Complete") {
+                                                                                if (isComplete) return;
+                                                                                if (isComplete) {
                                                                                     setTimeout(() => openReferralModal(g.id), 0);
                                                                                 } else {
                                                                                     window.open(buildReferralFormUrl(g.bookingId), "_blank", "noopener,noreferrer");
                                                                                 }
                                                                             }}
-                                                                            className="gap-2.5 text-green-600 focus:text-green-700 cursor-pointer disabled:opacity-40"
+                                                                            className="flex items-center justify-between gap-2.5 text-green-600 focus:text-green-700 cursor-pointer disabled:opacity-40"
                                                                         >
-                                                                            <Users className="h-4 w-4" />
-                                                                            Referral Collection &amp; Lead Generation
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <Users className="h-4 w-4 shrink-0" />
+                                                                                <span className="truncate">Referral Collection &amp; Lead Generation</span>
+                                                                            </div>
+                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
                                                                         </DropdownMenuItem>
-                                                                    )}
+                                                                    );
+                                                                })()}
 
-                                                                    {(canEditStage(1) || canEditStage(2) || canEditStage(3) || canEditStage(4) || canEditStage(5) || canEditStage(6) || canEditStage(7) || canEditStage(8)) && (canEditStage(9) || canEditStage(10) || canEditStage(11)) && <DropdownMenuSeparator />}
+                                                                {(canEditStage(1) || canEditStage(2) || canEditStage(3) || canEditStage(4) || canEditStage(5) || canEditStage(6) || canEditStage(7) || canEditStage(8)) && (canEditStage(9) || canEditStage(10) || canEditStage(11)) && <DropdownMenuSeparator />}
 
-                                                                    {/* Stage 9 */}
-                                                                    {canEditStage(9) && (
+                                                                {/* Stage 9 */}
+                                                                {canEditStage(9) && (() => {
+                                                                    const isComplete = g.stageStatus[8] === "Complete";
+                                                                    const isDisabled = isComplete;
+                                                                    return (
                                                                         <DropdownMenuItem
-                                                                            disabled={!isAdminRole && isStageLocked(g, 9) && g.stageStatus[8] !== "Complete"}
+                                                                            disabled={isDisabled}
                                                                             onSelect={(e) => {
                                                                                 e.preventDefault();
+                                                                                if (isComplete) return;
                                                                                 setTimeout(() => openDriverArrivalModal(g.id), 0);
                                                                             }}
-                                                                            className="gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
+                                                                            className="flex items-center justify-between gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
                                                                         >
-                                                                            <Briefcase className="h-4 w-4" />
-                                                                            Driver Assignment – Arrival Pickup
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <Briefcase className="h-4 w-4 shrink-0" />
+                                                                                <span className="truncate">Driver Assignment – Arrival Pickup</span>
+                                                                            </div>
+                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
                                                                         </DropdownMenuItem>
-                                                                    )}
-                                                                    {/* Stage 10 */}
-                                                                    {canEditStage(10) && (
+                                                                    );
+                                                                })()}
+                                                                {/* Stage 10 */}
+                                                                {canEditStage(10) && (() => {
+                                                                    const isComplete = g.stageStatus[9] === "Complete";
+                                                                    const isDisabled = isComplete;
+                                                                    return (
                                                                         <DropdownMenuItem
-                                                                            disabled={!isAdminRole && isStageLocked(g, 10) && g.stageStatus[9] !== "Complete"}
+                                                                            disabled={isDisabled}
                                                                             onSelect={(e) => {
                                                                                 e.preventDefault();
+                                                                                if (isComplete) return;
                                                                                 setTimeout(() => openDriverDepartureModal(g.id), 0);
                                                                             }}
-                                                                            className="gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
+                                                                            className="flex items-center justify-between gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
                                                                         >
-                                                                            <Briefcase className="h-4 w-4" />
-                                                                            Driver Assignment – Departure Drop
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <Briefcase className="h-4 w-4 shrink-0" />
+                                                                                <span className="truncate">Driver Assignment – Departure Drop</span>
+                                                                            </div>
+                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
                                                                         </DropdownMenuItem>
-                                                                    )}
-                                                                    {/* Stage 11 */}
-                                                                    {canEditStage(11) && (
+                                                                    );
+                                                                })()}
+                                                                {/* Stage 11 */}
+                                                                {canEditStage(11) && (() => {
+                                                                    const isComplete = g.stageStatus[10] === "Complete";
+                                                                    const isDisabled = isComplete;
+                                                                    return (
                                                                         <DropdownMenuItem
-                                                                            disabled={!isAdminRole && isStageLocked(g, 11) && g.stageStatus[10] !== "Complete"}
+                                                                            disabled={isDisabled}
                                                                             onSelect={(e) => {
                                                                                 e.preventDefault();
+                                                                                if (isComplete) return;
                                                                                 setTimeout(() => openRequirementVerificationModal(g.id), 0);
                                                                             }}
-                                                                            className="gap-2.5 text-teal-600 focus:text-teal-700 cursor-pointer disabled:opacity-40"
+                                                                            className="flex items-center justify-between gap-2.5 text-teal-600 focus:text-teal-700 cursor-pointer disabled:opacity-40"
                                                                         >
-                                                                            <CheckCircle2 className="h-4 w-4" />
-                                                                            Guest Requirement Verification
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                                                                <span className="truncate">Guest Requirement Verification</span>
+                                                                            </div>
+                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
                                                                         </DropdownMenuItem>
-                                                                    )}
+                                                                    );
+                                                                })()}
 
-                                                                    {![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].some((n) => canEditStage(n)) && (
-                                                                        <DropdownMenuItem disabled className="gap-2.5 text-slate-400 opacity-70">
-                                                                            No stage permissions assigned
-                                                                        </DropdownMenuItem>
-                                                                    )}
-                                                                </>
-                                                            )}
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
+                                                                {![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].some((n) => canEditStage(n)) && (
+                                                                    <DropdownMenuItem disabled className="gap-2.5 text-slate-400 opacity-70">
+                                                                        No stage permissions assigned
+                                                                    </DropdownMenuItem>
+                                                                )}
+                                                            </DropdownMenuContent>
+                                                        </DropdownMenu>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -2407,7 +2767,7 @@ export default function CRRCallingProcessPage() {
                                     }}
                                     className="h-8 rounded-md border border-slate-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                                 >
-                                    {[5, 10, 15, 25, 50, 100].map((size) => (
+                                    {[5, 10, 15, 20, 25, 50, 100].map((size) => (
                                         <option key={size} value={size}>{size}</option>
                                     ))}
                                 </select>
@@ -2427,7 +2787,7 @@ export default function CRRCallingProcessPage() {
                                 />
                                 <Button
                                     size="sm"
-                                    className={`h-8 text-xs px-3 text-white ${isPendingTable ? "bg-amber-600 hover:bg-amber-700" : "bg-emerald-600 hover:bg-emerald-700"}`}
+                                    className={`h-8 text-xs px-3 text-white ${isPendingTable ? "bg-amber-600 hover:bg-amber-700" : isCompletedTable ? "bg-emerald-600 hover:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700"}`}
                                     onClick={onGoto}
                                 >Go</Button>
                             </div>
@@ -2848,7 +3208,7 @@ export default function CRRCallingProcessPage() {
                                 <div>
                                     <h3 className="text-sm sm:text-base font-semibold text-slate-900 leading-tight">Guest Follow-up Records</h3>
                                     <p className="text-xs text-slate-500 mt-0.5">
-                                        Showing guest follow-up records separated into Pending and Completed
+                                        Showing guest follow-up records separated into Pending, Completed, and Cancelled
                                     </p>
                                 </div>
                             </div>
@@ -2857,13 +3217,13 @@ export default function CRRCallingProcessPage() {
                                 <div className="flex items-center p-1 bg-white/90 border border-slate-300 rounded-lg shadow-2xs">
                                     <button
                                         type="button"
-                                        onClick={() => setRecordsViewTab("both")}
-                                        className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${recordsViewTab === "both"
+                                        onClick={() => setRecordsViewTab("all")}
+                                        className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${recordsViewTab === "all"
                                                 ? "bg-slate-800 text-white shadow-xs font-bold"
                                                 : "text-slate-600 hover:text-slate-900"
                                             }`}
                                     >
-                                        Both Tables ({rows.length})
+                                        All Tables ({rows.length})
                                     </button>
                                     <button
                                         type="button"
@@ -2887,31 +3247,48 @@ export default function CRRCallingProcessPage() {
                                         <CheckCircle2 className="w-3.5 h-3.5" />
                                         Completed ({completedRows.length})
                                     </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setRecordsViewTab("cancelled")}
+                                        className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${recordsViewTab === "cancelled"
+                                                ? "bg-rose-600 text-white shadow-xs font-bold"
+                                                : "text-slate-600 hover:text-rose-700"
+                                            }`}
+                                    >
+                                        <AlertTriangle className="w-3.5 h-3.5" />
+                                        Cancelled ({cancelledRows.length})
+                                    </button>
                                 </div>
 
                                 {/* Table vs Chart View Toggle */}
-                                <div className="flex items-center gap-1.5">
-                                    <Button
-                                        variant={viewMode === "table" ? "secondary" : "outline"}
-                                        size="sm"
-                                        onClick={() => setViewMode("table")}
-                                        className={`font-semibold shadow-2xs ${viewMode === "table" ? "" : "border-slate-300 text-slate-700 hover:bg-slate-50"
-                                            }`}
-                                    >
-                                        <Users className="h-3.5 w-3.5 mr-1.5" />
-                                        Table View
-                                    </Button>
-                                    <Button
-                                        variant={viewMode === "chart" ? "secondary" : "outline"}
-                                        size="sm"
-                                        onClick={() => setViewMode("chart")}
-                                        className={`font-semibold shadow-2xs ${viewMode === "chart" ? "" : "border-slate-300 text-slate-700 hover:bg-slate-50"
-                                            }`}
-                                    >
-                                        <BarChart3 className="h-3.5 w-3.5 mr-1.5" />
-                                        Chart View
-                                    </Button>
-                                </div>
+                                <div className="flex items-center gap-1.5 bg-slate-100/90 p-1 rounded-lg border border-slate-200">
+                                     <Button
+                                         variant="ghost"
+                                         size="sm"
+                                         onClick={() => setViewMode("table")}
+                                         className={`font-bold text-xs h-8 px-3 rounded-md transition-all ${
+                                             viewMode === "table"
+                                                 ? "bg-blue-600 text-white hover:bg-blue-700 hover:text-white shadow-xs"
+                                                 : "text-slate-600 hover:text-slate-900 hover:bg-white/70"
+                                         }`}
+                                     >
+                                         <Users className={`h-3.5 w-3.5 mr-1.5 ${viewMode === "table" ? "text-white" : "text-slate-500"}`} />
+                                         Table View
+                                     </Button>
+                                     <Button
+                                         variant="ghost"
+                                         size="sm"
+                                         onClick={() => setViewMode("chart")}
+                                         className={`font-bold text-xs h-8 px-3 rounded-md transition-all ${
+                                             viewMode === "chart"
+                                                 ? "bg-blue-600 text-white hover:bg-blue-700 hover:text-white shadow-xs"
+                                                 : "text-slate-600 hover:text-slate-900 hover:bg-white/70"
+                                         }`}
+                                     >
+                                         <BarChart3 className={`h-3.5 w-3.5 mr-1.5 ${viewMode === "chart" ? "text-white" : "text-slate-500"}`} />
+                                         Chart View
+                                     </Button>
+                                 </div>
                             </div>
                         </div>
 
@@ -2930,8 +3307,9 @@ export default function CRRCallingProcessPage() {
 
                         {viewMode === "table" ? (
                             <div className="space-y-6">
-                                {(recordsViewTab === "both" || recordsViewTab === "pending") && renderRecordsTable("pending")}
-                                {(recordsViewTab === "both" || recordsViewTab === "completed") && renderRecordsTable("completed")}
+                                {(recordsViewTab === "all" || recordsViewTab === "pending") && renderRecordsTable("pending")}
+                                {(recordsViewTab === "all" || recordsViewTab === "completed") && renderRecordsTable("completed")}
+                                {(recordsViewTab === "all" || recordsViewTab === "cancelled") && renderRecordsTable("cancelled")}
                             </div>
                         ) : (
                             <div className="rounded-xl border border-slate-200 bg-white shadow-md overflow-hidden">
@@ -2992,8 +3370,9 @@ export default function CRRCallingProcessPage() {
                                                                 { key: "GM", label: "General Manager (GM)", icon: ClipboardCheck, from: "from-amber-500", to: "to-amber-600" },
                                                             ] as const
                                                         ).map((r) => {
-                                                            const value = chartData.respCounts[r.key] ?? 0;
-                                                            const pct = chartData.totalActive > 0 ? (value / chartData.totalActive) * 100 : 0;
+                                                            const stats = chartData.roleStats[r.key] ?? { tasks: 0, guests: 0 };
+                                                            const totalWorkload = chartData.totalRoleWorkload || 1;
+                                                            const pct = (stats.tasks / totalWorkload) * 100;
                                                             const Icon = r.icon;
                                                             return (
                                                                 <div key={r.key} className="flex items-center gap-4">
@@ -3004,13 +3383,16 @@ export default function CRRCallingProcessPage() {
                                                                         <div className="flex items-center justify-between mb-1.5 gap-2">
                                                                             <span className="text-xs font-bold uppercase tracking-wide text-slate-500 truncate">{r.label}</span>
                                                                             <span className="text-sm font-extrabold text-slate-900 shrink-0">
-                                                                                {value} <span className="text-xs font-medium text-slate-400">({pct.toFixed(0)}%)</span>
+                                                                                {stats.guests.toLocaleString()} <span className="text-xs font-semibold text-slate-500">guests</span>
+                                                                                <span className="text-xs font-medium text-slate-400 ml-1.5">
+                                                                                    ({stats.tasks.toLocaleString()} tasks • {pct < 1 && pct > 0 ? pct.toFixed(1) : pct.toFixed(0)}%)
+                                                                                </span>
                                                                             </span>
                                                                         </div>
                                                                         <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                                                                             <div
                                                                                 className={`h-full rounded-full bg-gradient-to-r ${r.from} ${r.to} transition-all`}
-                                                                                style={{ width: `${value === 0 ? 0 : Math.max(pct, 4)}%` }}
+                                                                                style={{ width: `${stats.tasks === 0 ? 0 : Math.max(pct, 2)}%` }}
                                                                             />
                                                                         </div>
                                                                     </div>
@@ -3029,7 +3411,7 @@ export default function CRRCallingProcessPage() {
                                                     </div>
                                                     <div>
                                                         <h4 className="text-sm font-semibold text-slate-900 leading-tight">Pending Actions by Stage</h4>
-                                                        <p className="text-xs text-slate-500 mt-0.5">Unlocked and awaiting action, across all 8 stages</p>
+                                                        <p className="text-xs text-slate-500 mt-0.5">Unlocked and awaiting action, across all {STAGES.length} stages</p>
                                                     </div>
                                                 </div>
                                                 <div className="p-3 sm:p-4">
@@ -3044,8 +3426,23 @@ export default function CRRCallingProcessPage() {
                                                                 <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-slate-800 text-white text-[10px] sm:text-[11px] font-bold flex items-center justify-center shrink-0">
                                                                     {s.no}
                                                                 </div>
-                                                                <div className="w-32 sm:w-72 shrink-0 text-xs font-semibold text-slate-700 truncate" title={s.name}>
-                                                                    {s.name}
+                                                                <div className="w-48 sm:w-84 md:w-96 shrink-0 flex items-center gap-2 min-w-0" title={`${s.name} (${s.resp})`}>
+                                                                    <span className="text-xs font-semibold text-slate-800 truncate">
+                                                                        {s.name}
+                                                                    </span>
+                                                                    <span
+                                                                        className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wider uppercase border shadow-2xs ${
+                                                                            s.resp === "Doctor"
+                                                                                ? "bg-teal-50 text-teal-700 border-teal-200/80"
+                                                                                : s.resp === "FO"
+                                                                                ? "bg-purple-50 text-purple-700 border-purple-200/80"
+                                                                                : s.resp === "GM"
+                                                                                ? "bg-amber-50 text-amber-800 border-amber-200/80"
+                                                                                : "bg-sky-50 text-sky-700 border-sky-200/80"
+                                                                        }`}
+                                                                    >
+                                                                        {s.resp}
+                                                                    </span>
                                                                 </div>
                                                                 <div className="flex-1 h-2.5 rounded-full bg-slate-100 overflow-hidden">
                                                                     <div
@@ -3129,13 +3526,17 @@ export default function CRRCallingProcessPage() {
                 {activeGuest && activeStage && (
                     <DialogContent style={{ width: "min(98vw, 1400px)", maxWidth: "min(98vw, 1400px)" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl">
                         <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white">
-                            <DialogTitle className="text-lg font-bold text-white leading-tight">
-                                {activeGuest.allComplete ? `All Stages Complete — ${activeGuest.name}` : `Stage ${activeStage.no}: ${activeStage.name}`}
-                            </DialogTitle>
-                            <DialogDescription className="text-xs text-white/90 mt-1.5 font-medium">
-                                {activeStage.no === 3
-                                    ? "The doctor consults with the guest, confirms the recommended next visit date and treatment plan, and updates the next visit details in the CRM."
-                                    : <>Responsible: {activeStage.resp} &nbsp;·&nbsp; Trigger: {activeStage.trigger}</>}
+                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                                <DialogTitle className="text-lg font-bold text-white leading-tight">
+                                    {activeGuest.allComplete ? `All Stages Complete — ${activeGuest.name}` : `Stage ${activeStage.no}: ${activeStage.name}`}
+                                </DialogTitle>
+                                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold bg-amber-500/20 text-amber-200 border border-amber-400/40 px-2.5 py-0.5 rounded-full shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                    Action Required
+                                </span>
+                            </div>
+                            <DialogDescription className="text-xs text-white/90 mt-1 font-medium">
+                                Complete the required details below and submit this stage.
                             </DialogDescription>
                         </DialogHeader>
 
@@ -3198,10 +3599,10 @@ export default function CRRCallingProcessPage() {
                                         {isStage3Complete || activeGuest.allComplete ? "Read Only" : "Fill in below"}
                                     </span>
                                 </div>
-                                {activeGuest && !isAdminRole && isStageLocked(activeGuest, 3) && !isStage3Complete && (
+                                {activeGuest && !isAdminRole && s3Lock.isLocked && !isStage3Complete && (
                                     <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                                         <Clock className="h-4 w-4 shrink-0" />
-                                        This stage unlocks on {formatISTDate(getStagePlannedDate(activeGuest, 3))}. Fields are read-only until then.
+                                        {s3Lock.message}
                                     </div>
                                 )}
                                 {isStage3Complete && (
@@ -3219,7 +3620,7 @@ export default function CRRCallingProcessPage() {
                                         <Input
                                             type="date"
                                             value={modalDate}
-                                            disabled={(!isAdminRole && isStageLocked(activeGuest, 3)) || isStage3Complete || activeGuest.allComplete}
+                                            disabled={isGuestDisabled}
                                             onChange={(e) => { setModalDate(e.target.value); setModalSaved(false); }}
                                             className="h-10 border-blue-200 focus:border-blue-500 bg-white w-full"
                                         />
@@ -3231,7 +3632,7 @@ export default function CRRCallingProcessPage() {
                                         </Label>
                                         <Textarea
                                             value={modalRemark}
-                                            disabled={(!isAdminRole && isStageLocked(activeGuest, 3)) || isStage3Complete || activeGuest.allComplete}
+                                            disabled={isGuestDisabled}
                                             onChange={(e) => { setModalRemark(e.target.value); setModalSaved(false); }}
                                             placeholder="Add remarks for this stage..."
                                             className="min-h-[80px] border-blue-200 focus:border-blue-500 bg-white"
@@ -3249,7 +3650,7 @@ export default function CRRCallingProcessPage() {
                                 <Button
                                     size="sm"
                                     onClick={saveModal}
-                                    disabled={(!isAdminRole && isStageLocked(activeGuest, 3)) || isStage3Complete || activeGuest.allComplete || !isModalFormComplete() || modalSaved}
+                                    disabled={isGuestDisabled || !isModalFormComplete() || modalSaved}
                                     className="min-w-[112px] bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                                 >
                                     {modalSaved ? (
@@ -3272,11 +3673,17 @@ export default function CRRCallingProcessPage() {
                 {activeSafeReturnGuest && (
                     <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col">
                         <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white shrink-0">
-                            <DialogTitle className="text-lg font-bold text-white leading-tight">
-                                Safe Return Confirmation
-                            </DialogTitle>
-                            <DialogDescription className="text-xs text-white/90 mt-1.5 font-medium">
-                                GRE contacts the guest after departure to ensure they had a safe and comfortable journey back home and address any immediate concerns.
+                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                                <DialogTitle className="text-lg font-bold text-white leading-tight">
+                                    Safe Return Confirmation
+                                </DialogTitle>
+                                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold bg-amber-500/20 text-amber-200 border border-amber-400/40 px-2.5 py-0.5 rounded-full shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                    Action Required
+                                </span>
+                            </div>
+                            <DialogDescription className="text-xs text-white/90 mt-1 font-medium">
+                                Complete the required details below and submit this stage.
                             </DialogDescription>
                         </DialogHeader>
 
@@ -3330,10 +3737,10 @@ export default function CRRCallingProcessPage() {
                                         {isStage6Complete ? "Read Only" : isStage6Processing ? "Processing" : "Fill in below"}
                                     </span>
                                 </div>
-                                {activeSafeReturnGuest && !isAdminRole && isStageLocked(activeSafeReturnGuest, 6) && !isStage6Complete && !isStage6Processing && (
+                                {activeSafeReturnGuest && !isAdminRole && s6Lock.isLocked && !isStage6Complete && !isStage6Processing && (
                                     <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                                         <Clock className="h-4 w-4 shrink-0" />
-                                        This stage unlocks on {formatISTDate(getStagePlannedDate(activeSafeReturnGuest, 6))}. Fields are read-only until then.
+                                        {s6Lock.message}
                                     </div>
                                 )}
                                 {isStage6Processing && (
@@ -3494,11 +3901,17 @@ export default function CRRCallingProcessPage() {
                 {activeRatingGuest && (
                     <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col">
                         <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white shrink-0">
-                            <DialogTitle className="text-lg font-bold text-white leading-tight">
-                                Online Rating &amp; Review Request
-                            </DialogTitle>
-                            <DialogDescription className="text-xs text-white/90 mt-1.5 font-medium">
-                                Assist guests in submitting ratings and reviews on TripAdvisor, Google, and Booking.com using the reception hotspot.
+                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                                <DialogTitle className="text-lg font-bold text-white leading-tight">
+                                    Online Rating &amp; Review Request
+                                </DialogTitle>
+                                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold bg-amber-500/20 text-amber-200 border border-amber-400/40 px-2.5 py-0.5 rounded-full shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                    Action Required
+                                </span>
+                            </div>
+                            <DialogDescription className="text-xs text-white/90 mt-1 font-medium">
+                                Complete the required details below and submit this stage.
                             </DialogDescription>
                         </DialogHeader>
 
@@ -3552,10 +3965,10 @@ export default function CRRCallingProcessPage() {
                                         {isStage5Complete ? "Read Only" : isStage5Processing ? "Processing" : "Fill in below"}
                                     </span>
                                 </div>
-                                {activeRatingGuest && !isAdminRole && isStageLocked(activeRatingGuest, 5) && !isStage5Complete && !isStage5Processing && (
+                                {activeRatingGuest && !isAdminRole && s5Lock.isLocked && !isStage5Complete && !isStage5Processing && (
                                     <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                                         <Clock className="h-4 w-4 shrink-0" />
-                                        This stage unlocks on {formatISTDate(getStagePlannedDate(activeRatingGuest, 5))}. Fields are read-only until then.
+                                        {s5Lock.message}
                                     </div>
                                 )}
                                 {isStage5Processing && (
@@ -3764,11 +4177,17 @@ export default function CRRCallingProcessPage() {
                 {activeFeedbackGuest && (
                     <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col">
                         <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white shrink-0">
-                            <DialogTitle className="text-lg font-bold text-white leading-tight">
-                                Guest Feedback &amp; Outcome Confirmation
-                            </DialogTitle>
-                            <DialogDescription className="text-xs text-white/90 mt-1.5 font-medium">
-                                GRE collects video, audio, and text feedback from every guest, uploads it in the HTML form, collects feedback and suggestions, and confirms whether the desired treatment outcome was achieved.
+                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                                <DialogTitle className="text-lg font-bold text-white leading-tight">
+                                    Guest Feedback &amp; Outcome Confirmation
+                                </DialogTitle>
+                                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold bg-amber-500/20 text-amber-200 border border-amber-400/40 px-2.5 py-0.5 rounded-full shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                    Action Required
+                                </span>
+                            </div>
+                            <DialogDescription className="text-xs text-white/90 mt-1 font-medium">
+                                Complete the required details below and submit this stage.
                             </DialogDescription>
                         </DialogHeader>
 
@@ -3822,6 +4241,12 @@ export default function CRRCallingProcessPage() {
                                                 {hasData ? "Read Only" : "Fill in below"}
                                             </span>
                                         </div>
+                                        {activeFeedbackGuest && !isAdminRole && s4Lock.isLocked && !isStage4Complete && (
+                                            <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                                                <Clock className="h-4 w-4 shrink-0" />
+                                                {s4Lock.message}
+                                            </div>
+                                        )}
                                         <div className="grid grid-cols-1 gap-4">
                                             {/* Row 1: Feedback Taking URL — only shown when pending / no data */}
                                             {!hasData && (
@@ -3858,7 +4283,7 @@ export default function CRRCallingProcessPage() {
                                                 ) : (
                                                     <Textarea
                                                         value={feedbackDoerRemarks}
-                                                        disabled={!activeFeedbackGuest || (!isAdminRole && isStageLocked(activeFeedbackGuest, 4)) || isStage4Complete}
+                                                        disabled={isFeedbackDisabled}
                                                         onChange={(e) => { setFeedbackDoerRemarks(e.target.value); setFeedbackSaved(false); }}
                                                         placeholder="Remarks from the doer regarding the feedback / outcome..."
                                                         className="min-h-[90px] border-amber-200 focus:border-amber-500 bg-white"
@@ -3885,7 +4310,7 @@ export default function CRRCallingProcessPage() {
                                 <Button
                                     size="sm"
                                     onClick={saveFeedbackModal}
-                                    disabled={!activeFeedbackGuest || (!isAdminRole && (isStageLocked(activeFeedbackGuest, 4) || isStage4Complete)) || !isFeedbackFormComplete() || feedbackSaved}
+                                    disabled={isFeedbackDisabled || !isFeedbackFormComplete() || feedbackSaved}
                                     className="min-w-[112px] bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                                 >
                                     {feedbackSaved ? (
@@ -3908,11 +4333,17 @@ export default function CRRCallingProcessPage() {
                 {activeReferralGuest && (
                     <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col">
                         <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white shrink-0">
-                            <DialogTitle className="text-lg font-bold text-white leading-tight">
-                                Referral Collection &amp; Lead Generation
-                            </DialogTitle>
-                            <DialogDescription className="text-xs text-white/90 mt-1.5 font-medium">
-                                GRE contacts the guest and requests referral details, collects the referred person's information, and uploads the details into the CRM for future follow-up and lead generation.
+                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                                <DialogTitle className="text-lg font-bold text-white leading-tight">
+                                    Referral Collection &amp; Lead Generation
+                                </DialogTitle>
+                                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold bg-amber-500/20 text-amber-200 border border-amber-400/40 px-2.5 py-0.5 rounded-full shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                    Action Required
+                                </span>
+                            </div>
+                            <DialogDescription className="text-xs text-white/90 mt-1 font-medium">
+                                Complete the required details below and submit this stage.
                             </DialogDescription>
                         </DialogHeader>
 
@@ -3966,6 +4397,12 @@ export default function CRRCallingProcessPage() {
                                                 {hasData ? "Read Only" : "Fill in below"}
                                             </span>
                                         </div>
+                                        {activeReferralGuest && !isAdminRole && s8Lock.isLocked && !isStage8Complete && (
+                                            <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                                                <Clock className="h-4 w-4 shrink-0" />
+                                                {s8Lock.message}
+                                            </div>
+                                        )}
                                         <div className="grid grid-cols-1 gap-4">
                                             {/* Row 1: Referral Taking URL — hidden once data exists */}
                                             {!hasData && (
@@ -4002,7 +4439,7 @@ export default function CRRCallingProcessPage() {
                                                 ) : (
                                                     <Input
                                                         value={referralTakenStatus}
-                                                        disabled={!activeReferralGuest || (!isAdminRole && isStageLocked(activeReferralGuest, 8)) || isStage8Complete}
+                                                        disabled={isReferralDisabled}
                                                         onChange={(e) => { setReferralTakenStatus(e.target.value); setReferralSaved(false); }}
                                                         placeholder="e.g. Referral given, Follow-up needed, Declined..."
                                                         className="h-10 border-green-200 focus:border-green-500 bg-white"
@@ -4022,7 +4459,7 @@ export default function CRRCallingProcessPage() {
                                                 ) : (
                                                     <Textarea
                                                         value={referralDoerRemarks}
-                                                        disabled={!activeReferralGuest || (!isAdminRole && isStageLocked(activeReferralGuest, 8)) || isStage8Complete}
+                                                        disabled={isReferralDisabled}
                                                         onChange={(e) => { setReferralDoerRemarks(e.target.value); setReferralSaved(false); }}
                                                         placeholder="Remarks from the doer regarding the referral collection..."
                                                         className="min-h-[90px] border-green-200 focus:border-green-500 bg-white"
@@ -4049,7 +4486,7 @@ export default function CRRCallingProcessPage() {
                                 <Button
                                     size="sm"
                                     onClick={saveReferralModal}
-                                    disabled={!activeReferralGuest || (!isAdminRole && (isStageLocked(activeReferralGuest, 8) || isStage8Complete)) || !isReferralFormComplete() || referralSaved}
+                                    disabled={isReferralDisabled || !isReferralFormComplete() || referralSaved}
                                     className="min-w-[112px] bg-green-600 hover:bg-green-700 text-white font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                                 >
                                     {referralSaved ? (
@@ -4069,16 +4506,20 @@ export default function CRRCallingProcessPage() {
 
             <Dialog open={activeWelcomeGuestId !== null} onOpenChange={(open) => !open && closeWelcomeModal()}>
                 {activeWelcomeGuest && (() => {
-                    // (isStage1Complete / isStage1Processing are the top-level to_show-driven flags).
-                    const isWelcomeDisabled = !activeWelcomeGuest || (!isAdminRole && isStageLocked(activeWelcomeGuest, 1)) || isStage1Complete || isStage1Processing;
                     return (
                         <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col">
                             <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white shrink-0">
-                                <DialogTitle className="text-lg font-bold text-white leading-tight">
-                                    Arrival Welcome on Pickup
-                                </DialogTitle>
-                                <DialogDescription className="text-xs text-white/90 mt-1.5 font-medium">
-                                    GRE coordinates with the driver and connects with the guest via video or audio call during pickup to confirm a smooth pickup experience, check on the journey, and provide a personalized welcome.
+                                <div className="flex items-center justify-between gap-3 flex-wrap">
+                                    <DialogTitle className="text-lg font-bold text-white leading-tight">
+                                        Arrival Welcome on Pickup
+                                    </DialogTitle>
+                                    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold bg-amber-500/20 text-amber-200 border border-amber-400/40 px-2.5 py-0.5 rounded-full shrink-0">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                        Action Required
+                                    </span>
+                                </div>
+                                <DialogDescription className="text-xs text-white/90 mt-1 font-medium">
+                                    Complete the required details below and submit this stage.
                                 </DialogDescription>
                             </DialogHeader>
 
@@ -4129,10 +4570,10 @@ export default function CRRCallingProcessPage() {
                                             {isWelcomeDisabled ? "Read Only" : "Fill in below"}
                                         </span>
                                     </div>
-                                    {activeWelcomeGuest && !isAdminRole && isStageLocked(activeWelcomeGuest, 1) && !isStage1Complete && !isStage1Processing && (
+                                    {activeWelcomeGuest && !isAdminRole && s1Lock.isLocked && !isStage1Complete && !isStage1Processing && (
                                         <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                                             <Clock className="h-4 w-4 shrink-0" />
-                                            This stage unlocks on {formatISTDate(getStagePlannedDate(activeWelcomeGuest, 1))}. Fields are read-only until then.
+                                            {s1Lock.message}
                                         </div>
                                     )}
                                     {isStage1Processing && (
@@ -4279,11 +4720,17 @@ export default function CRRCallingProcessPage() {
                 {activeResultProgressGuest && (
                     <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col">
                         <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white shrink-0">
-                            <DialogTitle className="text-lg font-bold text-white leading-tight">
-                                Result Tracking &amp; Health Progress Check
-                            </DialogTitle>
-                            <DialogDescription className="text-xs text-white/90 mt-1.5 font-medium">
-                                The doctor contacts the guest to review their health condition, treatment progress, and overall well-being after returning home and records the outcome and recommendations in the CRM.
+                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                                <DialogTitle className="text-lg font-bold text-white leading-tight">
+                                    Result Tracking &amp; Health Progress Check
+                                </DialogTitle>
+                                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold bg-amber-500/20 text-amber-200 border border-amber-400/40 px-2.5 py-0.5 rounded-full shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                    Action Required
+                                </span>
+                            </div>
+                            <DialogDescription className="text-xs text-white/90 mt-1 font-medium">
+                                Complete the required details below and submit this stage.
                             </DialogDescription>
                         </DialogHeader>
 
@@ -4336,10 +4783,10 @@ export default function CRRCallingProcessPage() {
                                         {isStage7Complete ? "Read Only" : isStage7Processing ? "Processing" : "Fill in below"}
                                     </span>
                                 </div>
-                                {activeResultProgressGuest && !isAdminRole && isStageLocked(activeResultProgressGuest, 7) && !isStage7Complete && !isStage7Processing && (
+                                {activeResultProgressGuest && !isAdminRole && s7Lock.isLocked && !isStage7Complete && !isStage7Processing && (
                                     <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                                         <Clock className="h-4 w-4 shrink-0" />
-                                        This stage unlocks on {formatISTDate(getStagePlannedDate(activeResultProgressGuest, 7))}. Fields are read-only until then.
+                                        {s7Lock.message}
                                     </div>
                                 )}
                                 {isStage7Processing && (
@@ -4485,11 +4932,17 @@ export default function CRRCallingProcessPage() {
                 {activeCallGuest && (
                     <DialogContent style={{ width: "min(98vw, 1400px)", maxWidth: "min(98vw, 1400px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col">
                         <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white shrink-0">
-                            <DialogTitle className="text-lg font-bold text-white leading-tight">
-                                Guest Request &amp; Complaint Management (QR Scan)
-                            </DialogTitle>
-                            <DialogDescription className="text-xs text-white/90 mt-1.5 font-medium">
-                                GRE requests the guest to scan the QR code to submit requests or complaints. If the guest is unable to do so, GRE can upload the request or complaint on the guest's behalf.
+                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                                <DialogTitle className="text-lg font-bold text-white leading-tight">
+                                    Guest Request &amp; Complaint Management (QR Scan)
+                                </DialogTitle>
+                                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold bg-amber-500/20 text-amber-200 border border-amber-400/40 px-2.5 py-0.5 rounded-full shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                    Action Required
+                                </span>
+                            </div>
+                            <DialogDescription className="text-xs text-white/90 mt-1 font-medium">
+                                Complete the required details below and submit this stage.
                             </DialogDescription>
                         </DialogHeader>
 
@@ -4582,6 +5035,12 @@ export default function CRRCallingProcessPage() {
                                             <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-600">QR Code</h4>
                                         </div>
                                     </div>
+                                    {activeCallGuest && !isAdminRole && s2Lock.isLocked && !isStage2Complete && (
+                                        <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mt-3">
+                                            <Clock className="h-4 w-4 shrink-0" />
+                                            {s2Lock.message}
+                                        </div>
+                                    )}
 
                                     {/* KTAHV QR leaflet — visible when pending */}
                                     <div className="mt-3 pt-3 border-t border-indigo-200 rounded-lg bg-white p-3 space-y-3">
@@ -4617,7 +5076,7 @@ export default function CRRCallingProcessPage() {
                                 <Button
                                     size="sm"
                                     onClick={saveCallModal}
-                                    disabled={!activeCallGuest || (!isAdminRole && (isStageLocked(activeCallGuest, 2) || isStage2Complete)) || !isCallFormComplete() || callSaved}
+                                    disabled={!activeCallGuest || isCallDisabled || !isCallFormComplete() || callSaved}
                                     className="min-w-[112px] bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                                 >
                                     {callSaved ? (

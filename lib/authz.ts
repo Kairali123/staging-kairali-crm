@@ -337,6 +337,7 @@ export const SALES_CALL_AUDIT_VIEW = 'sales_call_audit.view'
 export const SALES_CALL_AUDIT_VIEW_SELF = 'sales_call_audit.viewSelf'
 export const SALES_CALL_AUDIT_VIEW_ALL = 'sales_call_audit.viewAll'
 export const SALES_CALL_AUDIT_WRITE = 'sales_call_audit.write'
+export const SALES_CALL_AUDIT_SEND = 'sales_call_audit.send'
 
 // Pre-split spelling. It meant "see the dashboard data", so it maps to viewAll
 // rather than being dropped, and no session that works today stops working.
@@ -349,7 +350,7 @@ const SALES_CALL_AUDIT_LEGACY_READ = 'sales_call_audit.read'
 // folds case and separators — and accepts the unseparated `superadmin` — because
 // `lib/db-auth.ts:178` copies `role` out of the database verbatim, so the stored
 // spelling is not guaranteed. `super_admin` is the canonical value.
-export function isSalesCallAuditSuperAdmin(user: unknown): boolean {
+function isSalesCallAuditSuperAdmin(user: unknown): boolean {
   const role = isRecord(user) ? user.role : undefined
   if (typeof role !== 'string') return false
   const folded = role.trim().toLowerCase().replace(/[\s\-_]+/g, '')
@@ -392,6 +393,14 @@ export function hasSalesCallAuditWriteAccess(user: unknown): boolean {
   return hasPermission(user, SALES_CALL_AUDIT_WRITE)
 }
 
+// May this session dispatch email reports?
+// Strictly requires the dedicated `sales_call_audit.send` permission (or super_admin with wildcard 'all').
+// Neither `sales_call_audit.write` nor `sales_call_audit.viewAll` grants sending authority.
+export function hasSalesCallAuditSendAccess(user: unknown): boolean {
+  if (isSalesCallAuditSuperAdmin(user)) return true
+  return hasPermission(user, SALES_CALL_AUDIT_SEND)
+}
+
 // The identities a 'self'-scoped session may act as. `employeeId` is the join key
 // against `daily_sales_reports_log_fms.emp_id` (`lib/db-auth.ts:218`); `name` is
 // the fallback for rows that carry no employee id.
@@ -419,20 +428,6 @@ export function isRowInSalesCallAuditScope(
   if (employeeId && rowEmpId) return rowEmpId.toLowerCase() === employeeId.toLowerCase()
   if (name && rowName) return rowName.toLowerCase() === name.toLowerCase()
   return false
-}
-
-export function hasDialShreeSummaryAccess(user: unknown): boolean {
-  return (
-    hasAnyPermission(user, ['dialshree_summary.view', 'dialshree_menu.view', 'dialshree_sent.view', 'ai_voice_sent.view']) ||
-    hasAdminRole(user, 'lower')
-  )
-}
-
-export function hasDialShreeSentAccess(user: unknown): boolean {
-  return (
-    hasAnyPermission(user, ['dialshree_sent.view', 'dialshree_menu.view', 'ai_voice_sent.view']) ||
-    hasAdminRole(user, 'lower')
-  )
 }
 
 const SERVER_ACTION_PERMISSIONS: Record<string, Record<string, readonly string[]>> = {

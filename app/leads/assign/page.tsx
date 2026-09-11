@@ -2911,7 +2911,7 @@ Cancelled Amt:
     })
 
     return map
-  }, [dbPaymentData, selectedCompany, startDate, endDate])
+  }, [dbPaymentData, selectedCompany])
 
 
 

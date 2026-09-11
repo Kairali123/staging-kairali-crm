@@ -1,0 +1,31 @@
+[
+  {
+    "date": "2026-09-01",
+    "sentAt": "2026-09-07T08:50:00.000Z",
+    "recipient": "ho.hr@kairali.com",
+    "messageId": "manual-dispatch-01-sep-2026"
+  },
+  {
+    "date": "2026-09-06",
+    "sentAt": "2026-09-07T10:35:17.484Z",
+    "recipient": "manual-override (ho.hr@kairali.com)",
+    "messageId": "manual-override-1788777317484"
+  },
+  {
+    "date": "2026-09-07",
+    "sentAt": "2026-09-08T05:18:42.508Z",
+    "recipient": "ho.hr@kairali.com",
+    "messageId": "<3e125dcc-31a3-e5e0-d46b-a5856ddea8d0@kairali.com>"
+  },
+  {
+    "date": "2026-09-08",
+    "sentAt": "2026-09-08T06:16:21.460Z",
+    "recipient": "ho.hr@kairali.com",
+    "messageId": "<msg-id-sales-audit@kairali.com>"
+  },
+  {
+    "date": "2026-09-02",
+    "sentAt": "2026-09-08T06:16:23.787Z",
+    "recipient": "ho.hr@kairali.com"
+  }
+]

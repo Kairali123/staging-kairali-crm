@@ -44,6 +44,7 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
+      newPassword: newPassword.trim(),
       message: 'Password updated successfully. The user will be notified in real-time and asked to log in again.',
     })
   } catch (error: any) {

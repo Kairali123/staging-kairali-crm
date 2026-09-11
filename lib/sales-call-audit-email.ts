@@ -1,270 +1,287 @@
 import nodemailer from "nodemailer"
+import { AgentAuditMetric } from "@/app/api/sales-call-audit/email-data/route"
+import { SalesCallAuditReportMetrics } from "@/lib/sales-call-audit-report"
 
-import type { AgentAuditMetric, SalesCallAuditEmailData } from "@/lib/sales-call-audit-report"
-
-// Rendering and dispatch for the agent-wise call audit report.
-//
-// Lifted out of `app/api/sales-call-audit/send-email/route.ts` verbatim — the
-// markup below is unchanged, down to its indentation — so the 09:00 IST cron and
-// the super_admin's manual button send the same message rather than two templates
-// that drift apart.
-
-// Where the report goes when `AUDIT_REPORT_TO` is unset. Kept so an unconfigured
-// deployment behaves exactly as it did before recipients became configurable.
-export const DEFAULT_AUDIT_REPORT_RECIPIENT = "sysadmin@kairali.com"
-
-export interface AuditReportRecipients {
-  to: string[]
-  cc: string[]
+export interface RenderEmailParams {
+  date: string
+  displayDate: string
+  metrics: SalesCallAuditReportMetrics
+  employees: AgentAuditMetric[]
 }
 
-// One address per entry, separated by commas or semicolons.
-//
-// Anything that is not shaped like an address is dropped with a warning rather
-// than passed to nodemailer, because one typo in an env var would otherwise fail
-// the entire send — including the valid recipients alongside it.
-function parseRecipients(raw: string | undefined): string[] {
-  if (!raw) return []
-  const out: string[] = []
-  for (const entry of raw.split(/[,;]/)) {
-    const address = entry.trim()
-    if (!address) continue
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
-      console.warn(`[sales-call-audit-email] Ignoring malformed recipient in env: ${JSON.stringify(address)}`)
-      continue
-    }
-    if (!out.some(existing => existing.toLowerCase() === address.toLowerCase())) out.push(address)
-  }
-  return out
-}
-
-// The report's To and Cc lists, from the environment.
-//
-//   AUDIT_REPORT_TO=sysadmin@kairali.com
-//   AUDIT_REPORT_CC=owner@kairali.com,ea@kairali.com
-//
-// Env rather than a constant in this file on purpose: `AI-HUMAN.md` requires that
-// recipients stay outside Git, and both senders — the 09:00 IST cron and the
-// super_admin's manual button — read this one function, so the two lists cannot
-// drift apart. `.env*` is gitignored, so nothing here reaches the repository.
-//
-// A Cc address that is already in To is dropped, so nobody is mailed twice.
-export function getAuditReportRecipients(): AuditReportRecipients {
-  const to = parseRecipients(process.env.AUDIT_REPORT_TO)
-  const cc = parseRecipients(process.env.AUDIT_REPORT_CC)
-  const resolvedTo = to.length > 0 ? to : [DEFAULT_AUDIT_REPORT_RECIPIENT]
-  const lowerTo = new Set(resolvedTo.map(address => address.toLowerCase()))
-  return { to: resolvedTo, cc: cc.filter(address => !lowerTo.has(address.toLowerCase())) }
-}
-
-export interface AuditReportEmailInput {
-  date?: string
-  displayDate?: string
-  metrics?: Partial<SalesCallAuditEmailData["metrics"]>
-  employees?: AgentAuditMetric[]
-}
-
-export interface AuditReportDispatchResult {
-  smtpConfigured: boolean
-  smtpDispatched: boolean
-  smtpError: string | null
-  to: string[]
-  cc: string[]
-}
-
-export function renderAuditReportEmail(
-  input: AuditReportEmailInput
-): { subject: string; html: string } {
-  const { date, displayDate = "Today", metrics, employees = [] } = input
-
-  const subject = `[Daily HR Quality Audit Report] - Agent-wise Call Audit (${displayDate || date})`
-
-    // Generate clean, inline-styled HTML table report for email clients
-    const employeeRowsHtml = employees
-      .map(
-        (emp: any) => `
-        <tr style="border-bottom: 1px solid #e2e8f0;">
-          <td style="padding: 12px 14px; font-weight: bold; color: #1e293b; font-size: 13px;">
-            ${emp.name}
-            <div style="font-size: 10px; color: #64748b; font-family: monospace; font-weight: normal;">${emp.id}</div>
-          </td>
-          <td style="padding: 12px 14px; text-align: center; font-weight: bold; color: #334155; font-size: 13px;">
-            ${emp.calls}
-          </td>
-          <td style="padding: 12px 14px; text-align: center; font-size: 12px;">
-            <span style="color: #059669; font-weight: bold;">${emp.good}</span>
-            <span style="color: #94a3b8; margin: 0 4px;">/</span>
-            <span style="color: #e11d48; font-weight: bold;">${emp.bad}</span>
-          </td>
-          <td style="padding: 12px 14px; text-align: center; font-weight: bold; color: #4338ca; font-size: 13px;">
-            ${Number(emp.score).toFixed(2)}
-          </td>
-          <td style="padding: 12px 14px; text-align: center;">
-            <span style="display: inline-block; padding: 3px 10px; border-radius: 9999px; font-size: 10px; font-weight: bold; text-transform: uppercase; ${
-              emp.result === "PASS"
-                ? "background-color: #ecfdf5; color: #047857; border: 1px solid #a7f3d0;"
-                : "background-color: #fff1f2; color: #be123c; border: 1px solid #fecdd3;"
-            }">
-              ${emp.result}
-            </span>
-          </td>
-        </tr>
-      `
-      )
-      .join("")
-
-    const emailHtml = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>${subject}</title>
-      </head>
-      <body style="margin: 0; padding: 20px; background-color: #f1f5f9; font-family: Arial, sans-serif;">
-        <div style="max-width: 680px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e2e8f0;">
-          
-          <!-- Header Banner -->
-          <div style="background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); padding: 24px; color: #ffffff;">
-            <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.85; font-weight: bold;">
-              Head Office • Daily Quality Audit
-            </div>
-            <h1 style="margin: 6px 0 2px; font-size: 22px; font-weight: bold; color: #ffffff;">
-              Agent-wise Call Audit Report
-            </h1>
-            <div style="font-size: 12px; opacity: 0.9;">
-              Audit date: <strong>${displayDate}</strong>
-            </div>
-          </div>
-
-          <div style="padding: 24px;">
-            <p style="margin-top: 0; font-size: 13px; color: #334155; line-height: 1.5;">
-              Hi HR Team,
-            </p>
-            <p style="font-size: 13px; color: #334155; line-height: 1.5;">
-              Please find below the daily call audit outcome. Employees marked <strong style="color: #be123c;">FAIL</strong> require a half-day attendance adjustment for the audit date (<strong>${displayDate}</strong>), subject to final HR verification.
-            </p>
-
-            <!-- Metrics Grid -->
-            <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-              <tr>
-                <td style="width: 25%; padding: 12px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px 0 0 8px; text-align: center;">
-                  <div style="font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: bold;">Audited Leads</div>
-                  <div style="font-size: 22px; font-weight: bold; color: #0f172a; margin-top: 4px;">${metrics?.auditedLeads || 0}</div>
-                </td>
-                <td style="width: 25%; padding: 12px; background-color: #f0fdf4; border: 1px solid #bbf7d0; text-align: center;">
-                  <div style="font-size: 10px; text-transform: uppercase; color: #15803d; font-weight: bold;">Verified Good</div>
-                  <div style="font-size: 22px; font-weight: bold; color: #166534; margin-top: 4px;">${metrics?.verified || 0}</div>
-                </td>
-                <td style="width: 25%; padding: 12px; background-color: #fff1f2; border: 1px solid #fecdd3; text-align: center;">
-                  <div style="font-size: 10px; text-transform: uppercase; color: #be123c; font-weight: bold;">Mismatch Bad</div>
-                  <div style="font-size: 22px; font-weight: bold; color: #9f1239; margin-top: 4px;">${metrics?.mismatch || 0}</div>
-                </td>
-                <td style="width: 25%; padding: 12px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0 8px 8px 0; text-align: center;">
-                  <div style="font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: bold;">Wrong Outcomes</div>
-                  <div style="font-size: 22px; font-weight: bold; color: #be123c; margin-top: 4px;">${metrics?.wrongOutcomesPercentage || 0}%</div>
-                </td>
-              </tr>
-            </table>
-
-            <!-- Secondary Metrics Bar -->
-            <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px;">
-              <tr>
-                <td style="padding: 10px 14px; background-color: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 6px; width: 50%;">
-                  <span style="color: #6d28d9; font-weight: bold;">Team Average:</span> <strong>${metrics?.teamAverageScore || 0} / 5</strong>
-                </td>
-                <td style="padding: 10px 14px; background-color: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; width: 50%; text-align: right;">
-                  <span style="color: #047857; font-weight: bold;">Team Performance:</span> <strong>${metrics?.teamPerformancePercentage || 0}%</strong>
-                </td>
-              </tr>
-            </table>
-
-            <!-- HR Alert Callout Box -->
-            <div style="background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 14px; margin-bottom: 24px; font-size: 12px; color: #92400e; line-height: 1.5;">
-              <strong>HR Action:</strong> ${metrics?.failedEmployeesCount || 0} employee(s) failed. Verify each employee and mark half-day for <strong>${displayDate}</strong> where applicable. Confirm the Pagarbook update from the audit dashboard.
-            </div>
-
-            <!-- Agent Wise Audit Table -->
-            <table style="width: 100%; border-collapse: collapse; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 24px;">
-              <thead>
-                <tr style="background-color: #f8fafc; border-bottom: 2px solid #cbd5e1;">
-                  <th style="padding: 10px 14px; text-align: left; font-size: 11px; font-weight: bold; color: #475569; text-transform: uppercase;">Employee</th>
-                  <th style="padding: 10px 14px; text-align: center; font-size: 11px; font-weight: bold; color: #475569; text-transform: uppercase;">Calls</th>
-                  <th style="padding: 10px 14px; text-align: center; font-size: 11px; font-weight: bold; color: #475569; text-transform: uppercase;">Good / Bad</th>
-                  <th style="padding: 10px 14px; text-align: center; font-size: 11px; font-weight: bold; color: #475569; text-transform: uppercase;">Score</th>
-                  <th style="padding: 10px 14px; text-align: center; font-size: 11px; font-weight: bold; color: #475569; text-transform: uppercase;">Result</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${employeeRowsHtml}
-              </tbody>
-            </table>
-
-            <p style="font-size: 11px; color: #64748b; margin-bottom: 4px;">
-              For any questions or corrections, please contact IT before updating attendance.
-            </p>
-            <p style="font-size: 12px; color: #334155; margin-top: 0; font-weight: bold;">
-              Regards,<br>
-              IT Audit Team • Kairali CRM
-            </p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `
-
-  return { subject, html: emailHtml }
-}
-
-// Sends the report if SMTP is configured. Never throws: the caller decides what a
-// failure means, and both callers report it rather than swallowing it.
-//
-// Recipients are not a parameter. They come from `getAuditReportRecipients()` so
-// that neither caller — nor a request body — can redirect the team's scorecard to
-// an arbitrary address; changing who receives it is an env change, not a code or
-// API change.
-export async function dispatchAuditReportEmail(args: {
+export interface RenderEmailResult {
   subject: string
   html: string
-}): Promise<AuditReportDispatchResult> {
-  const { to, cc } = getAuditReportRecipients()
-  const audience = cc.length > 0 ? `${to.join(", ")} (cc: ${cc.join(", ")})` : to.join(", ")
+}
 
-  // `.env` names this SMTP_PASSWORD; some deployments set SMTP_PASS. Accept both,
-  // otherwise the credential silently reads as absent and no mail is dispatched.
-  const smtpPass = process.env.SMTP_PASSWORD || process.env.SMTP_PASS
-  const smtpConfigured = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && smtpPass)
+export interface DispatchAuditReportParams {
+  subject: string
+  html: string
+  to?: string[]
+  cc?: string[]
+}
 
-  if (!smtpConfigured) {
-    console.log(`[sales-call-audit-email] [SMTP not configured] Ready for ${audience}: ${args.subject}`)
-    return { smtpConfigured: false, smtpDispatched: false, smtpError: null, to, cc }
+export interface DispatchAuditReportResult {
+  smtpConfigured: boolean
+  smtpDispatched: boolean
+  smtpError?: string
+  to: string[]
+  cc: string[]
+  messageId?: string
+}
+
+export function renderAuditReportEmail({
+  date,
+  displayDate,
+  metrics,
+  employees,
+}: RenderEmailParams): RenderEmailResult {
+  const effectiveDate = displayDate || date
+  const subject = `[Daily HR Quality Audit Report] - Agent-wise Call Audit (${effectiveDate})`
+
+  const employeeRowsHtml = employees
+    .map(
+      (emp) => `
+      <tr style="border-top: 1px solid #f1f5f9;">
+        <td style="padding: 12px 14px;">
+          <div style="font-weight: 600; color: #1e293b; font-size: 13px;">${emp.name}</div>
+          ${emp.id ? `<div style="font-size: 10px; color: #94a3b8; font-family: monospace;">${emp.id}</div>` : ""}
+        </td>
+        <td style="padding: 12px 14px; text-align: center; font-weight: 500; color: #334155; font-size: 13px;">
+          ${emp.calls}
+        </td>
+        <td style="padding: 12px 14px; text-align: center; font-size: 12px;">
+          <span style="color: #047857; font-weight: 600;">${emp.good}</span>
+          <span style="color: #94a3b8; margin: 0 4px;">/</span>
+          <span style="color: #be123c; font-weight: 600;">${emp.bad}</span>
+        </td>
+        <td style="padding: 12px 14px; text-align: center; font-weight: 600; color: #1e293b; font-size: 13px;">
+          ${typeof emp.score === "number" ? emp.score.toFixed(2) : emp.score}
+        </td>
+        <td style="padding: 12px 14px; text-align: center;">
+          <span style="display: inline-block; padding: 2px 10px; border-radius: 9999px; font-size: 10px; font-weight: 700; text-transform: uppercase; ${
+            emp.result === "FAIL"
+              ? "background-color: #fef2f2; color: #b91c1c; border: 1px solid #fecaca;"
+              : "background-color: #ecfdf5; color: #047857; border: 1px solid #a7f3d0;"
+          }">
+            ${emp.result}
+          </span>
+        </td>
+      </tr>
+    `
+    )
+    .join("")
+
+  const teamScore = typeof metrics.teamAverageScore === "number"
+    ? metrics.teamAverageScore.toFixed(2)
+    : String(metrics.teamAverageScore)
+
+  const wrongOutcomes = typeof metrics.wrongOutcomesPercentage === "number"
+    ? metrics.wrongOutcomesPercentage.toFixed(2)
+    : String(metrics.wrongOutcomesPercentage)
+
+  const teamPerf = typeof metrics.teamPerformancePercentage === "number"
+    ? metrics.teamPerformancePercentage.toFixed(1)
+    : String(metrics.teamPerformancePercentage)
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>${subject}</title>
+    </head>
+    <body style="margin: 0; padding: 24px; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #334155;">
+      <div style="max-width: 680px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01); border: 1px solid #e2e8f0;">
+        
+        <!-- Header Banner matching UI -->
+        <div style="background: linear-gradient(135deg, #193a6a 0%, #12284c 100%); padding: 24px 28px; color: #ffffff;">
+          <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.15em; color: #bfdbfe; font-weight: 700;">
+            Head Office • Daily Quality Audit
+          </div>
+          <h1 style="margin: 6px 0 4px; font-size: 24px; font-weight: 700; color: #ffffff; letter-spacing: -0.02em;">
+            Agent-wise Call Audit Report
+          </h1>
+          <div style="font-size: 12px; color: #dbeafe; font-weight: 500;">
+            Audit date: <span style="font-weight: 700; text-decoration: underline;">${effectiveDate}</span>
+          </div>
+        </div>
+
+        <!-- Body Content -->
+        <div style="padding: 24px 28px;">
+          
+          <!-- Intro Greeting -->
+          <p style="margin: 0 0 20px; font-size: 14px; line-height: 1.6; color: #334155;">
+            Hi HR Team,<br>
+            Please find below the daily call audit outcome. Employees marked <span style="color: #dc2626; font-weight: 700;">FAIL</span> require a half-day attendance adjustment for the audit date (<strong>${effectiveDate}</strong>), subject to final HR verification.
+          </p>
+
+          <!-- 4 KPI Cards Grid -->
+          <table style="width: 100%; border-collapse: separate; border-spacing: 10px; margin: 0 -10px 16px -10px;">
+            <tr>
+              <!-- Audited Leads -->
+              <td style="width: 25%; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 10px; text-align: center;">
+                <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;">
+                  Audited Leads
+                </div>
+                <div style="font-size: 26px; font-weight: 800; color: #0f172a; margin-top: 4px;">
+                  ${metrics.auditedLeads}
+                </div>
+              </td>
+
+              <!-- Verified Good -->
+              <td style="width: 25%; background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 14px 10px; text-align: center;">
+                <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #15803d;">
+                  Verified Good
+                </div>
+                <div style="font-size: 26px; font-weight: 800; color: #166534; margin-top: 4px;">
+                  ${metrics.verified}
+                </div>
+              </td>
+
+              <!-- Mismatch Bad -->
+              <td style="width: 25%; background-color: #fff1f2; border: 1px solid #fecdd3; border-radius: 12px; padding: 14px 10px; text-align: center;">
+                <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #be123c;">
+                  Mismatch Bad
+                </div>
+                <div style="font-size: 26px; font-weight: 800; color: #9f1239; margin-top: 4px;">
+                  ${metrics.mismatch}
+                </div>
+              </td>
+
+              <!-- Wrong Outcomes -->
+              <td style="width: 25%; background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 14px 10px; text-align: center;">
+                <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #b45309;">
+                  Wrong Outcomes
+                </div>
+                <div style="font-size: 26px; font-weight: 800; color: #78350f; margin-top: 4px;">
+                  ${wrongOutcomes}%
+                </div>
+              </td>
+            </tr>
+          </table>
+
+          <!-- Secondary KPI Pill -->
+          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 16px; margin-bottom: 20px; font-size: 12px; font-weight: 600;">
+            <span style="color: #64748b;">Team average:</span>
+            <span style="color: #0f172a; font-weight: 700; margin-left: 4px;">${teamScore} / 5</span>
+            <span style="color: #cbd5e1; margin: 0 10px;">|</span>
+            <span style="color: #64748b;">Team performance:</span>
+            <span style="color: #047857; font-weight: 700; margin-left: 4px;">${teamPerf}%</span>
+          </div>
+
+          <!-- HR Action Banner -->
+          <div style="background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 14px 16px; margin-bottom: 24px; color: #451a03; font-size: 12px; line-height: 1.5;">
+            <strong>HR action:</strong> ${metrics.failedEmployeesCount} employee(s) failed. Verify each employee and mark half-day for <strong>${effectiveDate}</strong> where applicable. Confirm the Pagarbook update from the audit dashboard.
+          </div>
+
+          <!-- Employee Table -->
+          <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 12px; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden;">
+            <thead>
+              <tr style="background-color: #f1f5f9; border-bottom: 1px solid #e2e8f0;">
+                <th style="padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #475569; font-weight: 700;">Employee</th>
+                <th style="padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #475569; font-weight: 700; text-align: center;">Calls</th>
+                <th style="padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #475569; font-weight: 700; text-align: center;">Good / Bad</th>
+                <th style="padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #475569; font-weight: 700; text-align: center;">Score</th>
+                <th style="padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #475569; font-weight: 700; text-align: center;">Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${employeeRowsHtml}
+            </tbody>
+          </table>
+
+          <!-- Sign-off Note -->
+          <div style="border-top: 1px solid #e2e8f0; margin-top: 24px; padding-top: 18px; font-size: 12px; color: #64748b; line-height: 1.6;">
+            For any questions or corrections, please contact IT before updating attendance.<br>
+            <div style="margin-top: 10px; color: #1e293b;">
+              Regards,<br>
+              <strong>IT Audit Team</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="background-color: #f8fafc; padding: 14px 24px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center;">
+          This is an automated report generated by Kairali Group CRM • Head Office Quality Assurance System
+        </div>
+      </div>
+    </body>
+    </html>
+  `
+
+  return { subject, html }
+}
+
+export async function dispatchAuditReportEmail({
+  subject,
+  html,
+  to: explicitTo,
+  cc: explicitCc,
+}: DispatchAuditReportParams): Promise<DispatchAuditReportResult> {
+  const defaultTo = process.env.AUDIT_REPORT_TO || process.env.HR_AUDIT_EMAIL || "ho.hr@kairali.com"
+  const defaultCc = process.env.AUDIT_REPORT_CC || ""
+
+  const toList = explicitTo && explicitTo.length > 0
+    ? explicitTo
+    : defaultTo.split(",").map((e) => e.trim()).filter(Boolean)
+
+  const ccList = explicitCc && explicitCc.length > 0
+    ? explicitCc
+    : defaultCc.split(",").map((e) => e.trim()).filter(Boolean)
+
+  const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com"
+  const smtpPort = parseInt(process.env.SMTP_PORT || "587")
+  const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER
+  const smtpPass = process.env.SMTP_PASS || process.env.SMTP_PASSWORD || process.env.EMAIL_PASS
+
+  if (!smtpUser || !smtpPass) {
+    console.warn("[sales-call-audit-email] SMTP credentials missing, failing closed")
+    return {
+      smtpConfigured: false,
+      smtpDispatched: false,
+      smtpError: "SMTP credentials not configured on server",
+      to: toList,
+      cc: ccList,
+    }
   }
 
   try {
     const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT || "587", 10),
-      secure: process.env.SMTP_SECURE === "true" || process.env.SMTP_PORT === "465",
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465,
       auth: {
-        user: process.env.SMTP_USER,
+        user: smtpUser,
         pass: smtpPass,
       },
     })
 
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM || `"Kairali Sales Call Audit" <${process.env.SMTP_USER}>`,
-      to: to.join(", "),
-      // Omitted entirely when empty — nodemailer renders an empty `cc` as a
-      // visible, malformed header on some servers rather than skipping it.
-      ...(cc.length > 0 ? { cc: cc.join(", ") } : {}),
-      subject: args.subject,
-      html: args.html,
+    const info = await transporter.sendMail({
+      from: `"Kairali CRM QA Audit" <${smtpUser}>`,
+      to: toList.join(", "),
+      cc: ccList.length > 0 ? ccList.join(", ") : undefined,
+      subject,
+      html,
     })
 
-    console.log(`[sales-call-audit-email] Dispatched report via SMTP to ${audience}`)
-    return { smtpConfigured: true, smtpDispatched: true, smtpError: null, to, cc }
-  } catch (mailErr: any) {
-    const smtpError = mailErr?.message || "SMTP error"
-    console.warn("[sales-call-audit-email] SMTP dispatch warning:", smtpError)
-    return { smtpConfigured: true, smtpDispatched: false, smtpError, to, cc }
+    console.log("[sales-call-audit-email] Dispatched report via SMTP:", info.messageId)
+
+    return {
+      smtpConfigured: true,
+      smtpDispatched: true,
+      to: toList,
+      cc: ccList,
+      messageId: info.messageId,
+    }
+  } catch (error: any) {
+    console.error("[sales-call-audit-email] SMTP dispatch error:", error?.message)
+    return {
+      smtpConfigured: true,
+      smtpDispatched: false,
+      smtpError: error?.message || "Unknown SMTP error",
+      to: toList,
+      cc: ccList,
+    }
   }
 }

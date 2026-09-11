@@ -19,7 +19,8 @@ declare module 'bcryptjs' {
 declare module 'nodemailer' {
   export interface SendMailOptions {
     from?: string;
-    to?: string;
+    to?: string | string[];
+    cc?: string | string[];
     subject?: string;
     text?: string;
     html?: string;

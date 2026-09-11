@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
 import { verifySessionCookieValue } from '@/lib/session'
-import { syncUserRolePermissions, findUserloginRecord } from '@/lib/db-user-admin'
+import { syncUserRolePermissions, findUserloginRecord, PERMISSION_MODULE_COLUMNS } from '@/lib/db-user-admin'
 
 export const dynamic = 'force-dynamic'
 
@@ -59,7 +59,25 @@ export async function PATCH(
       ? String(existingUser.permission).split(',').map((p) => p.trim()).filter(Boolean)
       : []
 
-    const permString = updatedRole === 'super_admin' ? 'all' : permsArr.join(',')
+    const cleanPermsArr = updatedRole === 'super_admin'
+      ? ['all']
+      : permsArr.filter((p) => {
+          if (p.toLowerCase() === 'all') return false
+          if (!p.includes('.')) {
+            const pNorm = p.replace(/_/g, '-').toLowerCase()
+            const hasAction = permsArr.some((other) => {
+              if (!other.includes('.')) return false
+              const otherBaseNorm = other.split('.')[0].replace(/_/g, '-').toLowerCase()
+              return otherBaseNorm === pNorm
+            })
+            if (!hasAction && PERMISSION_MODULE_COLUMNS.some((col) => col.replace(/_/g, '-').toLowerCase() === pNorm)) {
+              return false
+            }
+          }
+          return true
+        })
+
+    const permString = cleanPermsArr.join(',')
 
     // 2. Update userlogin record and increment token_version
     await pool.query(
@@ -98,7 +116,7 @@ export async function PATCH(
       await syncUserRolePermissions(
         updatedEmail,
         updatedRole,
-        updatedRole === 'super_admin' ? ['all'] : permsArr
+        cleanPermsArr
       )
     }
 
@@ -115,7 +133,7 @@ export async function PATCH(
         employeeId: updatedEmpId,
         phone: updatedPhone,
         isActive: updatedActive === 'Active' || updatedActive === '1',
-        permissions: updatedRole === 'super_admin' ? ['all'] : permsArr,
+        permissions: cleanPermsArr,
       },
     })
   } catch (error: any) {

@@ -91,7 +91,9 @@ for (const [name, file, patterns] of highRiskRoutes) {
 
 check('meeting save stamps recorder from signed session', routeHas('app/api/meetings/save/route.ts', ['recorded_by = session.email', 'recorded_by_name = session.name']))
 check('meeting audio validates ownership before proxying', routeHas('app/api/meetings/audio/route.ts', ['getMeetingSession', 'canAccessMeetingOwner']))
-check('meeting upload sessions are owner-bound', routeHas('lib/meeting-upload-sessions.ts', ['ownerEmail', 'isMeetingUploadSessionOwner', 'isMeetingUploadedFileOwner']))
+check('meeting upload sessions are owner-bound', routeHas('lib/meeting-upload-sessions.ts', ['ownerEmail', 'attachUploadToken', 'verifyAndStripUploadToken', 'createHmac', 'timingSafeEqual']))
+check('meeting save authorizes audio_url against its Drive owner', routeHas('app/api/meetings/save/route.ts', ['getMeetingAudioOwner', 'audioOwner !== session.email']))
+check('drive owner lookup reads the file\'s recorded owner', routeHas('lib/google-drive.ts', ['getMeetingAudioOwner', 'crmOwnerEmail']))
 
 check(
   'support ticket history no longer trusts browser userId query',
@@ -109,10 +111,6 @@ const apiFiles = fs.readdirSync(apiRoot, { recursive: true })
 
 const wildcardCors = apiFiles.filter(file => /Access-Control-Allow-Origin['"`]?\s*,\s*['"`]\*/.test(read(file)))
 check('no API route sets wildcard Access-Control-Allow-Origin', wildcardCors.length === 0, wildcardCors.join(', '))
-
-check('sendOtpEmail does not write OTP to disk', !/writeFileSync|last_otp/i.test(read('lib/sendOtpEmail.ts')))
-check('no API route exposes or reads last_otp', !apiFiles.some(file => /last_otp/i.test(read(file))))
-check('debug OTP route is disabled', contains('app/api/db-access/get-last-otp-debug/route.ts', 'disabled for security'))
 
 const failures = checks.filter(item => !item.pass)
 

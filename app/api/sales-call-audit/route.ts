@@ -8,6 +8,7 @@ import {
   hasSalesCallAuditWriteAccess,
   isRowInSalesCallAuditScope,
 } from "@/lib/authz"
+import { getSentReportDates } from "@/lib/sales-call-audit-tracker"
 
 export const dynamic = "force-dynamic"
 
@@ -51,28 +52,22 @@ export type SalesCallAuditRecord = {
 export async function GET(req: NextRequest) {
   try {
     const user = getSessionUser(req)
-    const isDev = process.env.NODE_ENV === "development"
 
-    if (!user && !isDev) {
+    if (!user) {
       return NextResponse.json(
         { success: false, error: "Unauthorized: Please log in to view sales call audit data." },
         { status: 401, headers: noStoreHeaders }
       )
     }
 
-    if (user && !hasSalesCallAuditPageAccess(user)) {
+    if (!hasSalesCallAuditPageAccess(user)) {
       return NextResponse.json(
         { success: false, error: "Forbidden: sales_call_audit.view permission required." },
         { status: 403, headers: noStoreHeaders }
       )
     }
 
-    // Scope is the data axis, separate from page access. A session holding only
-    // `view` reaches the page and reads no rows, so answer 200 with an empty set
-    // rather than 403 — the page is allowed to render, there is just nothing in
-    // it. `scope` is echoed so the UI can say why the table is empty.
-    // Dev sessions with no cookie keep the pre-existing unauthenticated path.
-    const scope = user ? getSalesCallAuditScope(user) : "all"
+    const scope = getSalesCallAuditScope(user)
     if (scope === "none") {
       return NextResponse.json(
         { success: true, data: [], count: 0, scope },
@@ -171,7 +166,7 @@ export async function GET(req: NextRequest) {
       hr_verify_status: row.hr_verify_status || null,
       hr_action_for_calling_fail_pass: row.hr_action_for_calling_fail_pass || null,
       other_remarks: row.other_remarks || null,
-      hr_level_whatsapp_update_status_to_sales: null,
+      hr_level_whatsapp_update_status_to_sales: row.hr_level_whatsapp_update_status_to_sales || null,
       update_master_attendance_tracker: row.update_master_attendance_tracker || row.updated_in_master_attendance_tracker || null,
       update_status_of_account_fms: row.update_status_of_account_fms || row.updated_in_pagarbook || null,
       created_at: row.created_at ? new Date(row.created_at).toISOString() : null,
@@ -183,6 +178,7 @@ export async function GET(req: NextRequest) {
       data: records,
       count: records.length,
       scope,
+      sentDates: getSentReportDates(),
     }, { headers: noStoreHeaders })
   } catch (error: any) {
     console.error("[sales-call-audit-api] Error fetching data:", error)
@@ -202,16 +198,15 @@ const GAS_SALES_CALL_AUDIT_URL =
 export async function POST(req: NextRequest) {
   try {
     const user = getSessionUser(req)
-    const isDev = process.env.NODE_ENV === "development"
 
-    if (!user && !isDev) {
+    if (!user) {
       return NextResponse.json(
         { success: false, error: "Unauthorized: Please log in to record HR actions." },
         { status: 401, headers: noStoreHeaders }
       )
     }
 
-    if (user && !hasSalesCallAuditWriteAccess(user)) {
+    if (!hasSalesCallAuditWriteAccess(user)) {
       return NextResponse.json(
         { success: false, error: "Forbidden: sales_call_audit.write permission required." },
         { status: 403, headers: noStoreHeaders }

@@ -28,17 +28,14 @@ export async function GET(
 
     let currentPassword: string | null = null
     if (sessionUser.role === 'super_admin') {
-      try {
-        const pool = await getPool()
-        const [userRows]: any = await pool.query(
-          `SELECT password FROM userlogin WHERE id = ? OR unique_key = ? OR user_id = ? OR email_id = ? LIMIT 1`,
-          [id, id, id, id]
-        )
-        if (Array.isArray(userRows) && userRows.length > 0 && userRows[0].password) {
-          currentPassword = String(userRows[0].password)
-        }
-      } catch (err) {
-        console.warn('[admin/sessions] Could not fetch current password:', err)
+      const pool = await getPool()
+      const clean = String(id).trim()
+      const [rows]: any = await pool.query(
+        `SELECT password FROM userlogin WHERE id = ? OR unique_key = ? OR user_id = ? OR LOWER(TRIM(email_id)) = ? LIMIT 1`,
+        [clean, clean, clean, clean.toLowerCase()]
+      )
+      if (Array.isArray(rows) && rows.length > 0) {
+        currentPassword = rows[0].password || ''
       }
     }
 

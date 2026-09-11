@@ -36,6 +36,7 @@ export interface StageInfo {
     toShow?: boolean;                // KTAHV_CRR_Calling_FMS.to_show; only populated for stages 1,5,6,7
     submitted?: boolean;             // true if stage has saved/submitted data in MySQL
     savedData?: Record<string, string | number | null> | null; // saved form values for prefill
+    stageKey?: string | null;        // KTAHV_CRR_Calling_FMS.stage_key (e.g. ${uid}_Stage1)
 }
 
 export interface Guest {
@@ -72,6 +73,19 @@ export interface Guest {
         notDoneRemarks: string;
         followupDate: string;
         outcomeAchieved: YesNo | "";
+        stageKey?: string;
+    };
+    nextVisitPlanning?: {
+        nextVisitDate?: string;
+        remarks?: string;
+        status?: string;
+        actualDate?: string;
+        timeDelay?: string;
+        shouldWeRequestRatings?: string;
+        proofOfRating?: string;
+        link?: string;
+        stageKey?: string;
+        doer?: string;
     };
     safeReturn?: {
         stayFeedback: string;
@@ -80,6 +94,7 @@ export interface Guest {
         notDoneRemarks: string;
         followupDate: string;
         outcomeAchieved: YesNo | "";
+        stageKey?: string;
     };
     guestFeedback?: {
         doerRemarks: string;
@@ -97,6 +112,7 @@ export interface Guest {
         notDoneRemarks: string;
         followupDate: string;
         outcomeAchieved: YesNo | "";
+        stageKey?: string;
     };
     resultProgress?: {
         outcomeRemarks: string;
@@ -104,6 +120,7 @@ export interface Guest {
         notDoneRemarks: string;
         followupDate: string;
         outcomeAchieved: YesNo | "";
+        stageKey?: string;
     };
     driverAssignmentArrival?: {
         pickupRequired: string;

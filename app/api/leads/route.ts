@@ -92,7 +92,7 @@ function calculateTAT(candidates: any | any[], dateTime: any): number | null {
     const dt = parseToDate(dateTime)
     if (!dt) return null
     if (dt.getFullYear() < 2024) return null
-
+    
     const list = Array.isArray(candidates) ? candidates : [candidates]
     for (const val of list) {
         const t2 = parseToDate(val)
@@ -396,7 +396,7 @@ export async function GET(req: NextRequest) {
                     notes: safeStr(row.Notes),
 
                     websiteName: safeStr(row.WebSite_Name),
-                    campaignName: safeStr(row.UTM_Campaign_Name),
+                    campaignName:safeStr(row.UTM_Campaign_Name),
                     remarks: [],
 
                     assignedTo: safeStr(row.Assign_To_MR_Main) || 'unassigned',

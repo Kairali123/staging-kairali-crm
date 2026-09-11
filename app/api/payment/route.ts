@@ -16,18 +16,23 @@ export async function GET(req: NextRequest) {
 
     if (from) {
       conditions.push('payment_received_date >= ?')
-      params.push(from.includes(' ') ? from : `${from} 00:00:00`)
+      params.push(from)
     }
 
     if (to) {
       conditions.push('payment_received_date <= ?')
-      params.push(to.includes(' ') ? to : `${to} 23:59:59`)
+      params.push(to)
     }
+
+    // if (company && company !== 'ALL') {
+    //   conditions.push('company = ?')
+    //   params.push(company)
+    // }
 
     const whereClause =
       conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
 
-    // ✅ SQL handles date formatting + accurate rows fetch
+    // ✅ 🔥 SQL handles date formatting + grouping (no JS parsing needed)
     const [rows]: any = await pool.execute(
       `
       SELECT 
@@ -36,25 +41,26 @@ export async function GET(req: NextRequest) {
         mobile_no,
         payment_mode,
         invoice_amount,
-        received_amount,
         payment_collected_by,
         received_status,
         company,
-        DATE_FORMAT(payment_received_date, '%d-%m-%Y') as payment_date
+        DATE_FORMAT(payment_received_date, '%d-%m-%Y') as payment_date,
+        SUM(received_amount) as total_amount
       FROM spalabsdomain_Kairali_CRM_Db.payment_collection
       ${whereClause}
+      GROUP BY company, payment_received_date
       ORDER BY company, payment_received_date ASC
       `,
       params
     )
 
-    // ✅ Structure: { COMPANY: { "DD-MM-YYYY": { total_amount, rows: [] } } }
+    // ✅ Structure: { COMPANY: { "DD-MM-YYYY": totalAmount } }
     const paymentMap: Record<string, any> = {}
 
     rows.forEach((row: any) => {
       const companyName = row.company || 'Unknown'
       const dateKey = row.payment_date
-      const amount = Number(row.received_amount) || 0
+      const amount = Number(row.total_amount) || 0
 
       if (!paymentMap[companyName]) {
         paymentMap[companyName] = {}

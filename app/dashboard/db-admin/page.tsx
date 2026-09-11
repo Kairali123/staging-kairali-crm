@@ -21,6 +21,9 @@ export default function DbAdminPage() {
   const [actionType, setActionType] = useState<DbAction>('Create Table');
   const [verifiedPayload, setVerifiedPayload] = useState<OtpRequestPayload | null>(null);
 
+  // Developer Helper State
+  const [debugOtp, setDebugOtp] = useState<string | null>(null);
+
   // Redirect if not loaded/authenticated
   useEffect(() => {
     if (!isLoading && !user) router.push('/');
@@ -159,6 +162,16 @@ export default function DbAdminPage() {
     }
   };
 
+  const fetchDebugOtp = async () => {
+    try {
+      const res = await fetch('/api/db-access/get-last-otp-debug');
+      const data = await res.json();
+      setDebugOtp(data.otp);
+    } catch (e) {
+      setDebugOtp('Failed to fetch OTP');
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 max-w-6xl">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
@@ -166,6 +179,22 @@ export default function DbAdminPage() {
           <h1 className="text-2xl font-bold text-gray-900">Database Administration</h1>
           <p className="text-sm text-gray-500">Secure SQL execution console with OTP protection</p>
         </div>
+        
+        {/* Developer Helper Card (Only in Development) */}
+        {process.env.NODE_ENV !== 'production' && (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 flex items-center gap-3 shadow-sm">
+            <div>
+              <p className="text-xs font-bold text-indigo-800 uppercase tracking-wider">Local Dev Helper</p>
+              <p className="text-xs text-indigo-600">Last Generated OTP: <span className="font-mono font-bold bg-white px-2 py-0.5 rounded border border-indigo-300">{debugOtp || 'Click Fetch'}</span></p>
+            </div>
+            <button 
+              onClick={fetchDebugOtp} 
+              className="text-xs bg-indigo-600 text-white font-semibold px-2.5 py-1.5 rounded hover:bg-indigo-700 transition"
+            >
+              Fetch OTP
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-6">

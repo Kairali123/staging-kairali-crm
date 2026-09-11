@@ -206,8 +206,6 @@ const protectedRoutes = [
   '/sales-calling',
   '/sales-call-audit',
   '/new-order-fms',
-  '/dialShree',
-  '/dialshree',
   // Six page prefixes the list had never caught up with, so these pages ran with
   // no server-side identity check at all (matrix M10, rollout step 7). Identity
   // only — this file still reads no role and no permission, and `/MR-FMS` and
@@ -226,7 +224,7 @@ const protectedRoutes = [
 
 const SECURITY_HEADERS: readonly [string, string][] = [
   ['X-Content-Type-Options', 'nosniff'],
-  ['X-Frame-Options', 'SAMEORIGIN'],
+  ['X-Frame-Options', 'DENY'],
   ['Referrer-Policy', 'strict-origin-when-cross-origin'],
   [
     'Permissions-Policy',
@@ -234,7 +232,7 @@ const SECURITY_HEADERS: readonly [string, string][] = [
   ],
   [
     'Content-Security-Policy-Report-Only',
-    "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self' https://vercel.live; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:",
+    "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:",
   ],
 ]
 
@@ -283,6 +281,8 @@ const exemptApiPaths = new Set([
   // OWNER-DEFERRED: anonymous mobile access, preserved as-is for now.
   '/api/calendar/mobile',
   '/api/sales-call-audit',
+  // Scheduled Vercel cron job — handler enforces Bearer $CRON_SECRET
+  '/api/cron/sales-call-audit-daily-email',
 ])
 
 // No active API prefix exemptions. `/api/meetings/*` stays behind the signed

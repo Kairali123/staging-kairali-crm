@@ -91,7 +91,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [portalHubExpanded, setPortalHubExpanded] = useState(false)
   const [voiceCallExpanded, setVoiceCallExpanded] = useState(false)
   const [dialShreeExpanded, setDialShreeExpanded] = useState(false)
-  const [newOrderFmsExpanded, setNewOrderFmsExpanded] = useState(false)
+  const [kapplNewOrderExpanded, setKapplNewOrderExpanded] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isClearingCache, setIsClearingCache] = useState(false)
   const [meetingsExpanded, setMeetingsExpanded] = useState(false)
@@ -133,8 +133,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (pathname.startsWith("/sales")) setSalesExpanded(true)
     if (pathname.startsWith("/voicecall")) setVoiceCallExpanded(true)
     if (pathname.startsWith("/dialShree") || pathname.startsWith("/dialshree")) setDialShreeExpanded(true)
-    if (pathname.startsWith("/new-order-fms")) setNewOrderFmsExpanded(true)
     if (pathname.startsWith("/meetings")) setMeetingsExpanded(true)
+    if (pathname.startsWith("/new-order-fms")) setKapplNewOrderExpanded(true)
   }, [pathname])
 
   const handleLogout = async () => { await authLogout(); router.push("/") }
@@ -197,6 +197,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "Cold Enquiry Reverification", href: "/fms/enquiry-reverification", icon: FileText, permission: "cold_enquiry_reverification.view" },
   ]
 
+  const kapplNewOrderSubMenu = [
+    { name: "New Order FMS", href: "/new-order-fms", icon: FileText, permission: "new-order-fms.view" },
+    { name: "Primary Order Form", href: "/new-order-fms/primary-order-form", icon: FileText, permission: "new-order-fms.view" },
+  ]
+
   const marketingSubMenu = [
     { name: "Marketing Funnel", href: "/marketing-funnel", icon: Search, description: "Marketing Funnel", permission: "marketing_funnel.view" },
     { name: "Google PPC Reports", href: "/marketing/google-ppc", icon: Search, description: "Google PPC ads reports", permission: "marketing_google_report.view" },
@@ -237,11 +242,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     // { name: "🤝 Add New Partner Contact", description: "Partner contact onboarding", url: "https://script.google.com/a/macros/kairali.com/s/AKfycbydtBk2cLDEHoYAA3IOWys3svtc-QWzQbHdRSG5WnTYi8wVRVk36mW2LHxkhveBK0HReQ/exec", permission: "partner_onboard_form.view" },
     { name: "🤝 Add New Partner Contact", description: "Partner contact onboarding", url: "https://script.google.com/macros/s/AKfycbzZx7Qb7mO4FhIkIMcILVsYk1DNsLM7ncmtpzqxBokcpX0_sbd6WeL8CFy82SlqDtdQAw/exec", permission: "partner_onboard_form.view" },
     { name: "📥 Media Download Centre", description: "Kairali media assets", url: "https://www.kairali.com/media-assets.html", permission: "portal_hub.view" },
-  ]
-
-  const kapplNewOrderFmsSubMenu = [
-    { name: "New Order FMS", href: "/new-order-fms", icon: FileText, permission: "new-order-fms.view" },
-    { name: "Primary Order Form", href: "/new-order-fms/primary-order-form", icon: FileText, permission: "new-order-fms.view" },
+    { name: "📋 Kairali Audit Platform", description: "Audit & compliance platform", url: "https://kaudit-platform.vercel.app/", permission: "portal_hub.view" },
   ]
   // const meetingsSubMenu = [
   //   { name: "View Meetings", href: "/meetings", icon: StickyNote, description: "View all meetings" },
@@ -258,10 +259,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const searchableItems: any[] = []
   filteredNavigation.forEach((item) => { if (item.href) searchableItems.push({ name: item.name, href: item.href, description: item.name, icon: item.icon }) })
   if (hasPermission("fms.view")) fmsSubMenu.filter((s) => !("permission" in s) || hasPermission(s.permission)).forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
+  if (hasPermission("new-order-fms.view")) kapplNewOrderSubMenu.filter((s) => !("permission" in s) || hasPermission(s.permission)).forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.name, icon: item.icon }))
   if (hasPermission("marketing.view")) marketingSubMenu.filter((s) => !("permission" in s) || hasPermission(s.permission)).forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
   if (hasPermission("employee.tools")) employeeSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
   if (hasPermission("doctor.consultation.view")) doctorConsultationSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
-  if (hasPermission("new-order-fms.view") || hasPermission("all")) kapplNewOrderFmsSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.name, icon: item.icon }))
   // Sales submenu entries currently point to pages that are not implemented.
   // Keep them out of the active search surface until real routes exist.
   // if (hasPermission("meetings.view")) meetingsSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
@@ -432,9 +433,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
     if (item.name === "DialShree Lead Qual.") {
       const dialShreeSubMenu = [
+        { name: "Summary", href: "/dialShree/summary", icon: BarChart3, permission: "dialshree_menu.view" },
         { name: "Received", href: "/dialShree/received", icon: Phone, permission: "dialshree_received.view" },
         { name: "Sent", href: "/dialShree/sent", icon: Phone, permission: "dialshree_sent.view" },
-        { name: "Summary Report", href: "/dialShree/summary", icon: FileText, permission: "dialshree_summary.view" },
       ]
       const isActive = pathname.startsWith("/dialShree") || pathname.startsWith("/dialshree")
       return (
@@ -477,48 +478,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       )
     }
 
-    if (item.name === "KAPPL New Order") {
-      const isActive = pathname.startsWith("/new-order-fms")
-      return (
-        <div key={item.name}>
-          <button
-            onClick={() => setNewOrderFmsExpanded(!newOrderFmsExpanded)}
-            className={`group flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${isActive
-              ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md"
-              : "text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"
-              }`}
-          >
-            <item.icon className={`mr-3 h-5 w-5 ${isActive ? "text-white" : "text-emerald-600"}`} />
-            {item.name}
-            {newOrderFmsExpanded
-              ? <ChevronDown className={`ml-auto h-4 w-4 ${isActive ? "text-white" : "text-gray-500"}`} />
-              : <ChevronRight className={`ml-auto h-4 w-4 ${isActive ? "text-white" : "text-gray-500"}`} />
-            }
-          </button>
-          {newOrderFmsExpanded && (
-            <div className="ml-6 mt-2 space-y-1">
-              {kapplNewOrderFmsSubMenu
-                .filter((s) => hasPermission(s.permission) || hasPermission("all"))
-                .map((subItem) => (
-                  <Link
-                    key={subItem.name}
-                    href={subItem.href}
-                    className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${pathname === subItem.href
-                      ? "bg-gradient-to-r from-emerald-50 to-teal-100 text-emerald-800 border-l-4 border-emerald-600 shadow-sm"
-                      : "text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"
-                      }`}
-                    onClick={() => isMobile && setSidebarOpen(false)}
-                  >
-                    <subItem.icon className={`mr-3 h-4 w-4 ${pathname === subItem.href ? "text-emerald-700" : "text-gray-500"}`} />
-                    {subItem.name}
-                  </Link>
-                ))}
-            </div>
-          )}
-        </div>
-      )
-    }
-
     if (item.name === "Unified Portal Hub") {
       return (
         <div key={item.name}>
@@ -544,6 +503,51 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       )
     }
 
+
+    if (item.name === "KAPPL New Order") {
+      const isActive = pathname.startsWith("/new-order-fms")
+      return (
+        <div key={item.name}>
+          <button
+            onClick={() => setKapplNewOrderExpanded(!kapplNewOrderExpanded)}
+            className={`group flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${
+              isActive
+                ? "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-md"
+                : "text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"
+            }`}
+          >
+            <item.icon className={`mr-3 h-5 w-5 ${isActive ? "text-white" : "text-emerald-600"}`} />
+            {item.name}
+            {kapplNewOrderExpanded ? (
+              <ChevronDown className={`ml-auto h-4 w-4 ${isActive ? "text-white" : "text-gray-500"}`} />
+            ) : (
+              <ChevronRight className={`ml-auto h-4 w-4 ${isActive ? "text-white" : "text-gray-500"}`} />
+            )}
+          </button>
+          {kapplNewOrderExpanded && (
+            <div className="ml-6 mt-2 space-y-1">
+              {kapplNewOrderSubMenu
+                .filter((s) => hasPermission(s.permission) || hasPermission("all"))
+                .map((subItem) => (
+                  <Link
+                    key={subItem.name}
+                    href={subItem.href}
+                    className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                      pathname === subItem.href
+                        ? "bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-700 border-l-4 border-emerald-500 shadow-sm font-semibold"
+                        : "text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"
+                    }`}
+                    onClick={() => isMobile && setSidebarOpen(false)}
+                  >
+                    <subItem.icon className={`mr-3 h-4 w-4 ${pathname === subItem.href ? "text-emerald-600" : "text-gray-400"}`} />
+                    {subItem.name}
+                  </Link>
+                ))}
+            </div>
+          )}
+        </div>
+      )
+    }
 
     return (
       <Link key={item.name} href={item.href} {...(item.target ? { target: item.target } : {})} className={`group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${pathname === item.href ? "bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-md" : "text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"}`} onClick={() => isMobile && setSidebarOpen(false)}>

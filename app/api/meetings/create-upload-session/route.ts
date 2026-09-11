@@ -13,7 +13,7 @@ import {
   parsePositiveInteger,
   sanitizeMeetingFileName,
 } from '@/lib/meetings-auth'
-import { registerMeetingUploadSession } from '@/lib/meeting-upload-sessions'
+import { attachUploadToken } from '@/lib/meeting-upload-sessions'
 import { checkApiRateLimit, rateLimitResponse } from '@/lib/api-rate-limit'
 
 function getServiceAccountAuth() {
@@ -141,9 +141,14 @@ export async function POST(req: NextRequest) {
     const uploadUrl = initRes.headers.get('location')
     if (!uploadUrl) throw new Error('No upload URL returned from Drive')
 
-    registerMeetingUploadSession(uploadUrl, session.email)
+    // Carries ownership inside the URL the client already round-trips, so the
+    // binding no longer depends on this instance also handling the chunks.
+    const signedUploadUrl = attachUploadToken(uploadUrl, session.email)
+    if (!signedUploadUrl) {
+      return NextResponse.json({ error: 'Failed to create upload session' }, { status: 500 })
+    }
 
-    return NextResponse.json({ uploadUrl })
+    return NextResponse.json({ uploadUrl: signedUploadUrl })
 
   } catch (err: any) {
     console.error('[create-upload-session]', err)

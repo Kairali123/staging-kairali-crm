@@ -7,48 +7,6 @@ import { orderFormActionRateLimit, type OrderFormAction } from '@/lib/order-form
 
 type AuditOutcome = 'success' | 'failure' | 'denied'
 
-let schemaPromise: Promise<void> | null = null
-
-async function ensureSecuritySchema(): Promise<void> {
-  if (!schemaPromise) {
-    schemaPromise = (async () => {
-      const pool = await getPool()
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS order_form_rate_limits (
-          rate_key VARCHAR(64) PRIMARY KEY,
-          window_started_at DATETIME(3) NOT NULL,
-          request_count INT NOT NULL DEFAULT 0,
-          expires_at DATETIME(3) NOT NULL,
-          INDEX idx_order_form_rate_expiry (expires_at)
-        ) ENGINE=InnoDB
-      `)
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS order_form_audit_log (
-          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-          event_id CHAR(36) NOT NULL UNIQUE,
-          created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-          actor VARCHAR(190) NOT NULL,
-          role_name VARCHAR(80) NOT NULL,
-          action_name VARCHAR(40) NOT NULL,
-          outcome ENUM('success','failure','denied') NOT NULL,
-          source_ip VARCHAR(80) NOT NULL,
-          correlation_id VARCHAR(80) NOT NULL,
-          target_id VARCHAR(190) NULL,
-          duration_ms INT UNSIGNED NULL,
-          error_code VARCHAR(80) NULL,
-          INDEX idx_order_form_audit_created (created_at),
-          INDEX idx_order_form_audit_actor (actor, created_at),
-          INDEX idx_order_form_audit_action (action_name, created_at)
-        ) ENGINE=InnoDB
-      `)
-    })().catch((error) => {
-      schemaPromise = null
-      throw error
-    })
-  }
-  await schemaPromise
-}
-
 function safeString(value: unknown, max = 190): string {
   return typeof value === 'string' ? value.trim().slice(0, max) : ''
 }
@@ -87,7 +45,6 @@ export async function consumeOrderFormRateLimit(
   user: unknown,
   action: OrderFormAction
 ): Promise<{ allowed: boolean; retryAfterSeconds: number }> {
-  await ensureSecuritySchema()
   const windowSeconds = 60
   const now = Date.now()
   const windowStart = Math.floor(now / (windowSeconds * 1000)) * windowSeconds * 1000
@@ -99,23 +56,19 @@ export async function consumeOrderFormRateLimit(
   const expiryDate = new Date(windowStart + windowSeconds * 2 * 1000)
   const pool = await getPool()
 
-  await pool.query(
-    `INSERT INTO order_form_rate_limits (rate_key, window_started_at, request_count, expires_at)
+  const insertSql = `INSERT INTO order_form_rate_limits (rate_key, window_started_at, request_count, expires_at)
      VALUES (?, ?, 1, ?)
-     ON DUPLICATE KEY UPDATE request_count = request_count + 1`,
-    [rateKey, windowDate, expiryDate]
-  )
+     ON DUPLICATE KEY UPDATE request_count = request_count + 1`
+
+  // Pure DML on hot request path; fail-closed without any runtime DDL fallback.
+  await pool.query(insertSql, [rateKey, windowDate, expiryDate])
+
   const [rows] = await pool.query(
     'SELECT request_count FROM order_form_rate_limits WHERE rate_key = ? LIMIT 1',
     [rateKey]
   )
   const count = Number(Array.isArray(rows) ? (rows as Array<{ request_count?: number }>)[0]?.request_count : 0)
   const retryAfterSeconds = Math.max(1, Math.ceil((windowStart + windowSeconds * 1000 - now) / 1000))
-
-  // Low-cost opportunistic cleanup; correctness does not depend on it.
-  if (Math.random() < 0.01) {
-    void pool.query('DELETE FROM order_form_rate_limits WHERE expires_at < NOW(3)').catch(() => undefined)
-  }
 
   return { allowed: count <= orderFormActionRateLimit(action), retryAfterSeconds }
 }
@@ -150,26 +103,26 @@ export async function auditOrderFormAction(input: {
     },
   })
 
-  try {
-    await ensureSecuritySchema()
-    const pool = await getPool()
-    await pool.query(
-      `INSERT INTO order_form_audit_log
+  const auditSql = `INSERT INTO order_form_audit_log
        (event_id, actor, role_name, action_name, outcome, source_ip, correlation_id, target_id, duration_ms, error_code)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        eventId,
-        actor,
-        role || 'unknown',
-        input.action,
-        input.outcome,
-        sourceIp,
-        input.correlationId,
-        targetId || null,
-        Math.max(0, Math.round(input.durationMs || 0)),
-        safeString(input.errorCode, 80) || null,
-      ]
-    )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  const auditParams = [
+    eventId,
+    actor,
+    role || 'unknown',
+    input.action,
+    input.outcome,
+    sourceIp,
+    input.correlationId,
+    targetId || null,
+    Math.max(0, Math.round(input.durationMs || 0)),
+    safeString(input.errorCode, 80) || null,
+  ]
+
+  try {
+    const pool = await getPool()
+    // Pure DML; fail-closed without any runtime DDL fallback.
+    await pool.query(auditSql, auditParams)
   } catch {
     // Structured runtime/security logs still retain the event if DB audit storage is unavailable.
     console.warn(`[order-form-audit] durable audit insert failed event=${eventId}`)

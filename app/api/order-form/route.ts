@@ -54,6 +54,20 @@ function publicUpstreamError(action: OrderFormAction, upstream: unknown): ApiErr
   return generic
 }
 
+function resolveAppsScriptConfig(): { url: string; secret: string } | null {
+  const rawUrl = process.env.ORDER_FORM_APPS_SCRIPT_URL?.trim()
+  const secret = process.env.ORDER_FORM_APPS_SCRIPT_SECRET?.trim()
+  if (!rawUrl || !secret || secret.length < 32) return null
+
+  try {
+    const url = new URL(rawUrl)
+    if (url.protocol !== 'https:' || url.hostname !== 'script.google.com') return null
+    return { url: url.toString(), secret }
+  } catch {
+    return null
+  }
+}
+
 export async function POST(req: NextRequest) {
   const startedAt = Date.now()
   const correlationId = orderFormCorrelationId(req)
@@ -99,24 +113,17 @@ export async function POST(req: NextRequest) {
     return error(503, 'SECURITY_SERVICE_UNAVAILABLE', 'Order security service is temporarily unavailable.', correlationId)
   }
 
-  const upstreamUrl = process.env.ORDER_FORM_APPS_SCRIPT_URL?.trim() || 'https://kappl-primary-order-form.vercel.app/api/order-form'
-  const serverSecret = process.env.ORDER_FORM_APPS_SCRIPT_SECRET?.trim()
-
-  const isDirectAppsScript = upstreamUrl.includes('script.google.com')
-  if (isDirectAppsScript && !serverSecret) {
+  const appsScript = resolveAppsScriptConfig()
+  if (!appsScript) {
     await auditOrderFormAction({ req, user, action, outcome: 'failure', correlationId, targetId: targetId(body), errorCode: 'NOT_CONFIGURED' })
     return error(503, 'NOT_CONFIGURED', 'Order service is not configured.', correlationId)
   }
 
   try {
-    const payloadBody = isDirectAppsScript
-      ? JSON.stringify({ ...body, _serverSecret: serverSecret })
-      : JSON.stringify(body)
-
-    const upstreamResponse = await fetch(upstreamUrl, {
+    const upstreamResponse = await fetch(appsScript.url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json;charset=utf-8' },
-      body: payloadBody,
+      body: JSON.stringify({ ...body, _serverSecret: appsScript.secret }),
       redirect: 'follow',
       cache: 'no-store',
       signal: AbortSignal.timeout(28_000),
@@ -133,6 +140,23 @@ export async function POST(req: NextRequest) {
       const safe = publicUpstreamError(action, upstream)
       await auditOrderFormAction({ req, user, action, outcome: 'failure', correlationId, targetId: targetId(body), durationMs: Date.now() - startedAt, errorCode: safe.code })
       return error(upstreamResponse.ok ? 422 : 502, safe.code, safe.message, correlationId)
+    }
+
+    if (action === 'findBuyer' && upstream.data && typeof upstream.data === 'object') {
+      const data = upstream.data as Record<string, unknown>
+      if (data.found && data.buyer && typeof data.buyer === 'object') {
+        const buyer = data.buyer as Record<string, unknown>
+        // Validate pincode if present (strict 6-digit PIN code, no heuristic string derivation)
+        if (buyer.pinCode !== undefined && buyer.pinCode !== null) {
+          const pin = String(buyer.pinCode).trim()
+          buyer.pinCode = /^[1-9][0-9]{5}$/.test(pin) ? pin : ''
+        }
+        // Validate PAN if present (strict 10-character format, no heuristic substring derivation)
+        if (buyer.pan !== undefined && buyer.pan !== null) {
+          const pan = String(buyer.pan).trim().toUpperCase()
+          buyer.pan = /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan) ? pan : ''
+        }
+      }
     }
 
     await auditOrderFormAction({ req, user, action, outcome: 'success', correlationId, targetId: targetId(body), durationMs: Date.now() - startedAt })

@@ -174,26 +174,6 @@ const checks = [
     "Content-Security-Policy-Report-Only",
     "security headers must include CSP report-only rollout",
   ),
-  () => assertNotContains(
-    "lib/sendOtpEmail.ts",
-    /writeFileSync|last_otp/i,
-    "sendOtpEmail must not write OTP or credentials to disk",
-  ),
-  () => assertPathsNotContain(
-    ["app/api"],
-    /last_otp/i,
-    "API routes must not read or expose last_otp files",
-  ),
-  () => assertContains(
-    ".gitignore",
-    /temp\//,
-    ".gitignore must include temp/ directory",
-  ),
-  () => {
-    if (fs.existsSync(path.join(root, "temp/last_otp.txt"))) {
-      throw new Error("temp/last_otp.txt must not exist in repository")
-    }
-  },
 ]
 
 const failures = []

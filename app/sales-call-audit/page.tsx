@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react"
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import {
   Area,
@@ -29,6 +29,7 @@ import {
   Clock,
   Database,
   Download,
+  ExternalLink,
   Filter,
   Headphones,
   Info,
@@ -49,6 +50,8 @@ import {
   ThumbsDown,
   ThumbsUp,
   TrendingUp,
+  Trophy,
+  Medal,
   UserCheck,
   Volume2,
   X,
@@ -82,29 +85,6 @@ import {
 } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
-
-// The HR action modal's two picklists. These strings are written verbatim to
-// `daily_sales_reports_log_fms.hr_verify_status` and
-// `.hr_action_for_calling_fail_pass`, and they drive a half-day attendance
-// deduction downstream — so HR picks from a fixed vocabulary rather than typing,
-// which is what let spelling variants into the column before.
-//
-// One option each, by owner instruction. Adding a value here is all that is
-// needed to widen either list; see `withCurrentValue` for how a value already
-// saved on a row is kept selectable even when it is not in these lists.
-const HR_VERIFY_STATUS_OPTIONS = ["Half Day \u2013 Call Audit FAIL"] as const
-const HR_CALLING_ACTION_OPTIONS = ["Half day leave Updated on Pagarbook"] as const
-
-// A `Select` renders an empty trigger for a value that is not among its items,
-// which on a read-only row would silently blank a figure HR already recorded.
-// So whatever the row currently holds is always offered, appended to the list.
-// That covers rows saved before these lists existed and the "No action required"
-// default `openAction` still applies to a PASS row.
-function withCurrentValue(options: readonly string[], current: string): string[] {
-  const trimmed = (current || "").trim()
-  if (!trimmed || options.includes(trimmed)) return [...options]
-  return [...options, trimmed]
-}
 
 type AuditResult = "Pass" | "Fail"
 type EmailStatus = "Sent" | "Not Sent"
@@ -176,9 +156,18 @@ export type AuditDay = {
   date: string
   label: string
   agents: AgentAudit[]
+  isMailSent: boolean
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+const HR_VERIFY_STATUS_OPTIONS = [
+  "Half Day – Call Audit FAIL",
+]
+
+const HR_ACTION_OPTIONS = [
+  "Half day leave Updated on Pagarbook",
+]
 
 function getInitials(name: string): string {
   if (!name) return "AG"
@@ -211,12 +200,12 @@ function formatDateKey(isoDate: string | null): { dateKey: string; label: string
 
 function ResultBadge({ result }: { result: AuditResult }) {
   return result === "Pass" ? (
-    <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50 font-bold">
+    <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50 font-semibold text-[11px] py-0 px-2 shadow-none">
       <CheckCircle2 className="mr-1 h-3 w-3 text-emerald-600" />
       PASS
     </Badge>
   ) : (
-    <Badge className="border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-50 font-bold">
+    <Badge className="border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-50 font-semibold text-[11px] py-0 px-2 shadow-none">
       <XCircle className="mr-1 h-3 w-3 text-rose-600" />
       FAIL
     </Badge>
@@ -225,14 +214,14 @@ function ResultBadge({ result }: { result: AuditResult }) {
 
 function EmailBadge({ status }: { status: EmailStatus }) {
   return status === "Sent" ? (
-    <Badge className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-50 font-medium">
-      <Mail className="mr-1 h-3 w-3 text-blue-600" />
-      Sent
+    <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50 font-semibold px-2 py-0 text-[11px] inline-flex items-center gap-1 shadow-none">
+      <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+      Mail Sent
     </Badge>
   ) : (
-    <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-500">
-      <CircleAlert className="mr-1 h-3 w-3 text-slate-400" />
-      Not sent
+    <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-500 text-[11px] inline-flex items-center gap-1 font-normal py-0 px-2 shadow-none">
+      <CircleAlert className="h-3 w-3 text-slate-400" />
+      Not Sent
     </Badge>
   )
 }
@@ -253,6 +242,7 @@ export default function SalesCallAuditPage() {
   // the whole team out of the network tab (#48).
   const [scope, setScope] = useState<"all" | "self" | "none">("none")
   const [accessError, setAccessError] = useState<string>("")
+  const [sentDates, setSentDates] = useState<string[]>([])
 
   // Saving HR actions is its own permission. `sales_call_audit.view` used to
   // imply it; now only `.write` grants it, and `super_admin` keeps blanket
@@ -283,6 +273,38 @@ export default function SalesCallAuditPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(5)
 
+  // Manual mail status toggle state
+  const [togglingDate, setTogglingDate] = useState<string | null>(null)
+
+  const handleToggleMailStatus = async (dateStr: string, currentIsSent: boolean) => {
+    try {
+      setTogglingDate(dateStr)
+      const nextStatus = currentIsSent ? "Pending" : "Sent"
+      const res = await fetch("/api/sales-call-audit/toggle-mail-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: dateStr, status: nextStatus }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        if (Array.isArray(json.sentDates)) {
+          setSentDates(json.sentDates)
+        }
+        toast.success(
+          nextStatus === "Sent"
+            ? `Marked report for ${dateStr} as Mail Sent!`
+            : `Marked report for ${dateStr} as Pending.`
+        )
+      } else {
+        toast.error(json.error || "Failed to update mail status")
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update mail status")
+    } finally {
+      setTogglingDate(null)
+    }
+  }
+
   // Good / Bad Call Detail Modal
   const [callDetailModal, setCallDetailModal] = useState<{
     open: boolean
@@ -292,14 +314,41 @@ export default function SalesCallAuditPage() {
   } | null>(null)
   const [modalCalls, setModalCalls] = useState<any[]>([])
   const [modalCallsLoading, setModalCallsLoading] = useState(false)
+  const [modalAgentMeta, setModalAgentMeta] = useState<any>(null)
   const [modalCallTab, setModalCallTab] = useState<"all" | "good" | "bad">("all")
   const [modalCallSearch, setModalCallSearch] = useState("")
   const [expandedCallId, setExpandedCallId] = useState<string | null>(null)
+
+  // Dynamic counts calculated directly from actual audited calls from kairali_sales_metric_bot_for_ho
+  const modalGoodCallsCount = useMemo(() => {
+    return modalCalls.filter(c => c.qualityType === "good").length
+  }, [modalCalls])
+
+  const modalBadCallsCount = useMemo(() => {
+    return modalCalls.filter(c => c.qualityType === "bad").length
+  }, [modalCalls])
+
+  const modalTotalCallsCount = useMemo(() => {
+    return modalCalls.length
+  }, [modalCalls])
+
+  const displayGoodCalls = modalCallsLoading
+    ? (callDetailModal?.agent.good ?? 0)
+    : (modalAgentMeta?.goodCalls ?? modalGoodCallsCount)
+
+  const displayBadCalls = modalCallsLoading
+    ? (callDetailModal?.agent.bad ?? 0)
+    : (modalAgentMeta?.badCalls ?? modalBadCallsCount)
+
+  const displayTotalCalls = modalCallsLoading
+    ? (callDetailModal?.agent.calls ?? (displayGoodCalls + displayBadCalls))
+    : (modalAgentMeta?.totalCalls ?? modalTotalCallsCount)
 
   // Fetch granular audited call details when modal is opened
   useEffect(() => {
     if (!callDetailModal?.open || !callDetailModal.agent) {
       setModalCalls([])
+      setModalAgentMeta(null)
       return
     }
     setModalCallTab(callDetailModal.type)
@@ -321,6 +370,12 @@ export default function SalesCallAuditPage() {
           const json = await res.json()
           if (json.success && Array.isArray(json.data)) {
             setModalCalls(json.data)
+            if (json.agent) {
+              setModalAgentMeta(json.agent)
+            }
+            if (json.data.length > 0 && json.data[0].callId) {
+              setExpandedCallId(json.data[0].callId)
+            }
           }
         }
       } catch (e) {
@@ -369,6 +424,9 @@ export default function SalesCallAuditPage() {
       if (json.success && Array.isArray(json.data)) {
         setDbRecords(json.data)
         setScope(json.scope === "all" || json.scope === "self" ? json.scope : "none")
+        if (Array.isArray(json.sentDates)) {
+          setSentDates(json.sentDates)
+        }
         const now = new Date()
         setLastUpdated(
           now.toLocaleDateString("en-GB", {
@@ -418,7 +476,10 @@ export default function SalesCallAuditPage() {
         score: Number(row.avg_score || 0),
         result: isPass ? "Pass" : "Fail",
         disposition: isPass ? "Follow-up / Converted" : "Callback / Not Interested",
-        emailStatus: row.hr_level_whatsapp_update_status_to_sales === "Sent" ? "Sent" : "Not Sent",
+        emailStatus: (() => {
+          const s = String(row.hr_level_whatsapp_update_status_to_sales || "").trim().toLowerCase()
+          return s === "sent" || s === "success" || s === "delivered" ? "Sent" : "Not Sent"
+        })(),
         productKnowledge: row.product_knowledge !== null ? Number(row.product_knowledge) : null,
         customerUnderstanding: row.customer_understanding !== null ? Number(row.customer_understanding) : null,
         communicationSkills: row.communication_skills !== null ? Number(row.communication_skills) : null,
@@ -439,21 +500,43 @@ export default function SalesCallAuditPage() {
       groups[dateKey].agents.push(agent)
     })
 
-    const result = Object.keys(groups).map(dateKey => ({
-      date: dateKey,
-      label: groups[dateKey].label,
-      agents: groups[dateKey].agents,
-    }))
+    const result: AuditDay[] = Object.keys(groups).map(dateKey => {
+      const dayAgents = groups[dateKey].agents
+      const firstRawDate = dayAgents[0]?.rawDate ? dayAgents[0].rawDate.slice(0, 10) : ""
+      const isDateInSentList = sentDates.some(sd => {
+        if (!sd) return false
+        const sdNorm = sd.trim().toLowerCase()
+        const parts = dateKey.split("-")
+        const ymdFromKey = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : ""
+        return sdNorm === dateKey.toLowerCase() || sdNorm === ymdFromKey || (firstRawDate && sdNorm === firstRawDate)
+      })
+      const isMailSent = isDateInSentList || (dayAgents.length > 0 && dayAgents.some(a => a.emailStatus === "Sent"))
+
+      if (isMailSent) {
+        dayAgents.forEach(a => {
+          a.emailStatus = "Sent"
+        })
+      }
+
+      return {
+        date: dateKey,
+        label: groups[dateKey].label,
+        agents: dayAgents,
+        isMailSent,
+      }
+    })
 
     return result
-  }, [dbRecords])
+  }, [dbRecords, sentDates])
 
-  // Automatically expand only the first (latest) date on initial load (Accordion behavior)
+  // Automatically expand only the first (latest) date on initial load
+  const hasInitializedDateRef = useRef(false)
   useEffect(() => {
-    if (auditDays.length > 0 && expandedDates.size === 0) {
+    if (!hasInitializedDateRef.current && auditDays.length > 0) {
       setExpandedDates(new Set([auditDays[0].date]))
+      hasInitializedDateRef.current = true
     }
-  }, [auditDays, expandedDates.size])
+  }, [auditDays])
 
   // Unique list of sales agents for the filter dropdown
   const uniqueAgents = useMemo(() => {
@@ -500,17 +583,6 @@ export default function SalesCallAuditPage() {
     return filteredDays.slice(start, start + pageSize)
   }, [filteredDays, currentPage, pageSize])
 
-  // Auto-expand paginated dates on page change
-  useEffect(() => {
-    if (paginatedDays.length > 0) {
-      setExpandedDates(prev => {
-        const next = new Set(prev)
-        paginatedDays.forEach(d => next.add(d.date))
-        return next
-      })
-    }
-  }, [paginatedDays])
-
   // Aggregate KPIs calculated from live DB data
   const allFilteredAgents = filteredDays.flatMap(day => day.agents)
   const totalAuditedCalls = allFilteredAgents.reduce((sum, agent) => sum + agent.calls, 0)
@@ -527,6 +599,83 @@ export default function SalesCallAuditPage() {
   ).length
   const pendingHrActions = Math.max(0, failCount - hrActionsCompleted)
   const attendanceSyncCount = allFilteredAgents.filter(agent => agent.attendanceTrackerUpdated || agent.accountFmsUpdated).length
+
+  // Sales Agents Ranking Leaderboard based on average score & pass/fail outcome
+  const agentLeaderboard = useMemo(() => {
+    const map = new Map<string, {
+      id: string
+      name: string
+      designation: string
+      initials: string
+      totalRecords: number
+      totalScore: number
+      totalCalls: number
+      goodCalls: number
+      badCalls: number
+      passCount: number
+      failCount: number
+    }>()
+
+    allFilteredAgents.forEach(agent => {
+      const key = agent.id || agent.name
+      const existing = map.get(key)
+      if (!existing) {
+        map.set(key, {
+          id: agent.id,
+          name: agent.name,
+          designation: agent.designation,
+          initials: agent.initials,
+          totalRecords: 1,
+          totalScore: agent.score,
+          totalCalls: agent.calls,
+          goodCalls: agent.good,
+          badCalls: agent.bad,
+          passCount: agent.result === "Pass" ? 1 : 0,
+          failCount: agent.result === "Fail" ? 1 : 0,
+        })
+      } else {
+        existing.totalRecords += 1
+        existing.totalScore += agent.score
+        existing.totalCalls += agent.calls
+        existing.goodCalls += agent.good
+        existing.badCalls += agent.bad
+        if (agent.result === "Pass") existing.passCount += 1
+        if (agent.result === "Fail") existing.failCount += 1
+      }
+    })
+
+    const list = Array.from(map.values()).map(item => {
+      const avgScore = item.totalRecords > 0 ? Number((item.totalScore / item.totalRecords).toFixed(2)) : 0
+      const outcome: "Pass" | "Fail" = avgScore >= 3.0 ? "Pass" : "Fail"
+
+      return {
+        id: item.id,
+        name: item.name,
+        designation: item.designation,
+        initials: item.initials,
+        avgScore,
+        outcome,
+        totalCalls: item.totalCalls,
+        goodCalls: item.goodCalls,
+        badCalls: item.badCalls,
+        passCount: item.passCount,
+        failCount: item.failCount,
+        totalRecords: item.totalRecords,
+      }
+    })
+
+    // Sort by avgScore descending (highest score first); if tied, sort by Pass outcome then calls
+    list.sort((a, b) => {
+      if (b.avgScore !== a.avgScore) return b.avgScore - a.avgScore
+      if (a.outcome !== b.outcome) return a.outcome === "Pass" ? -1 : 1
+      return b.totalCalls - a.totalCalls
+    })
+
+    return list.map((agent, index) => ({
+      rank: index + 1,
+      ...agent,
+    }))
+  }, [allFilteredAgents])
 
   // Trend Data computed from live DB dates
   const trendData = useMemo(() => {
@@ -572,13 +721,16 @@ export default function SalesCallAuditPage() {
     })
   }, [dbRecords, selectedYear])
 
-  // Single-Accordion toggle behavior: Only ONE date row can be open at a time
+  // Manual accordion toggle: expand or collapse dates on user click
   const toggleDate = (date: string) => {
     setExpandedDates(previous => {
-      if (previous.has(date)) {
-        return new Set() // Collapse if already open
+      const next = new Set(previous)
+      if (next.has(date)) {
+        next.delete(date)
+      } else {
+        next.add(date)
       }
-      return new Set([date]) // Expand ONLY this date, automatically closing all others
+      return next
     })
   }
 
@@ -1112,6 +1264,159 @@ export default function SalesCallAuditPage() {
             </div>
           </div>
 
+          {/* Row 3: Sales Agents Quality Audit Ranking & Performance Leaderboard */}
+          <div className="bg-gradient-to-br from-slate-50 via-white to-indigo-50/40 border border-slate-200 rounded-xl p-4 sm:p-5 space-y-3.5 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200/80 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 via-amber-600 to-yellow-600 flex items-center justify-center text-white shadow-xs flex-shrink-0">
+                  <Trophy className="h-4 w-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    Sales Agents Quality Ranking Leaderboard
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Ranked by average call audit score & Pass/Fail status (Target: Benchmark ≥ 3.0 / 5.0)
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-semibold text-slate-700 bg-white border border-slate-200 px-2.5 py-1 rounded-full shadow-2xs">
+                  {agentLeaderboard.length} Sales Agents
+                </span>
+              </div>
+            </div>
+
+            {agentLeaderboard.length === 0 ? (
+              <div className="py-8 text-center bg-white rounded-lg border border-slate-200 text-xs text-slate-500">
+                No sales agents found for the selected filters.
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-2xs max-h-96 overflow-y-auto">
+                <Table className="min-w-[640px]">
+                  <TableHeader className="bg-slate-100/90 sticky top-0 z-10">
+                    <TableRow className="hover:bg-slate-100/90 border-b border-slate-200 text-[11px]">
+                      <TableHead className="w-16 font-bold text-slate-700 text-center py-2.5">Rank</TableHead>
+                      <TableHead className="font-bold text-slate-700 py-2.5">Sales Agent</TableHead>
+                      <TableHead className="w-28 font-bold text-slate-700 text-center py-2.5">Outcome</TableHead>
+                      <TableHead className="w-36 font-bold text-slate-700 text-center py-2.5">Avg Score</TableHead>
+                      <TableHead className="w-40 font-bold text-slate-700 text-center py-2.5">Audited Calls</TableHead>
+                      <TableHead className="w-32 font-bold text-slate-700 text-center py-2.5">Audited Days</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {agentLeaderboard.map(agent => {
+                      const isPass = agent.outcome === "Pass"
+                      const isTop1 = agent.rank === 1
+                      const isTop2 = agent.rank === 2
+                      const isTop3 = agent.rank === 3
+
+                      return (
+                        <TableRow
+                          key={agent.id}
+                          className="hover:bg-blue-50/40 transition-colors border-b border-slate-100 text-xs"
+                        >
+                          {/* Rank */}
+                          <TableCell className="text-center font-bold py-2.5">
+                            {isTop1 ? (
+                              <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-extrabold text-[11px] shadow-2xs">
+                                🥇 #1
+                              </span>
+                            ) : isTop2 ? (
+                              <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-slate-200 text-slate-800 border border-slate-300 font-extrabold text-[11px] shadow-2xs">
+                                🥈 #2
+                              </span>
+                            ) : isTop3 ? (
+                              <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 font-extrabold text-[11px] shadow-2xs">
+                                🥉 #3
+                              </span>
+                            ) : (
+                              <span className="text-slate-500 font-mono text-xs">
+                                #{agent.rank}
+                              </span>
+                            )}
+                          </TableCell>
+
+                          {/* Agent Name */}
+                          <TableCell className="py-2.5">
+                            <div className="flex items-center gap-2.5">
+                              <span className="h-7 w-7 rounded-full bg-blue-100 text-blue-800 font-bold flex items-center justify-center text-[10px] flex-shrink-0 border border-blue-200">
+                                {agent.initials}
+                              </span>
+                              <div className="min-w-0">
+                                <div className="font-semibold text-slate-900 text-xs truncate">{agent.name}</div>
+                                <div className="text-[10px] text-slate-500 font-mono flex items-center gap-1.5 mt-0.5">
+                                  <span>{agent.id}</span>
+                                  {agent.designation && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="truncate max-w-[140px] text-slate-600 font-sans">{agent.designation}</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </TableCell>
+
+                          {/* Outcome */}
+                          <TableCell className="text-center py-2.5">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold shadow-2xs ${
+                                isPass
+                                  ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                  : "bg-rose-100 text-rose-800 border border-rose-300"
+                              }`}
+                            >
+                              {isPass ? <CheckCircle2 className="h-3 w-3 text-emerald-600" /> : <XCircle className="h-3 w-3 text-rose-600" />}
+                              {agent.outcome.toUpperCase()}
+                            </span>
+                          </TableCell>
+
+                          {/* Avg Score */}
+                          <TableCell className="text-center py-2.5">
+                            <div className="flex flex-col items-center justify-center">
+                              <span
+                                className={`text-xs font-extrabold ${
+                                  isPass ? "text-emerald-700" : "text-rose-600"
+                                }`}
+                              >
+                                {agent.avgScore.toFixed(2)} <span className="text-[10px] font-normal text-slate-400">/ 5.0</span>
+                              </span>
+                              <div className="w-20 bg-slate-200 rounded-full h-1.5 mt-1 overflow-hidden">
+                                <div
+                                  className={`h-1.5 rounded-full ${isPass ? "bg-emerald-500" : "bg-rose-500"}`}
+                                  style={{ width: `${Math.min(100, Math.max(0, (agent.avgScore / 5) * 100))}%` }}
+                                />
+                              </div>
+                            </div>
+                          </TableCell>
+
+                          {/* Audited Calls */}
+                          <TableCell className="text-center py-2.5">
+                            <span className="font-semibold text-slate-800 text-xs">{agent.totalCalls}</span>
+                            <div className="text-[10px] font-medium text-slate-500 mt-0.5">
+                              <span className="text-emerald-700 font-semibold">{agent.goodCalls} Good</span>
+                              <span className="mx-1 text-slate-300">/</span>
+                              <span className="text-rose-700 font-semibold">{agent.badCalls} Bad</span>
+                            </div>
+                          </TableCell>
+
+                          {/* Records */}
+                          <TableCell className="text-center py-2.5 text-slate-600 text-xs">
+                            <span className="font-medium">{agent.totalRecords} {agent.totalRecords === 1 ? "Day" : "Days"}</span>
+                            <div className="text-[10px] text-slate-400">
+                              {agent.passCount}P • {agent.failCount}F
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+
           {/* Analytics View Charts */}
           {viewMode === "analytics" && (
             <div className="grid gap-4 lg:grid-cols-2 pt-2">
@@ -1204,15 +1509,16 @@ export default function SalesCallAuditPage() {
           <div className="overflow-x-auto">
             <Table className="min-w-[1000px]">
               <TableHeader className="bg-[#1e3a5f]">
-                <TableRow className="hover:bg-[#1e3a5f]">
-                  <TableHead className="text-white font-semibold">Audit Date</TableHead>
-                  <TableHead className="text-center text-white font-semibold">Total Calls</TableHead>
-                  <TableHead className="text-center text-white font-semibold">Avg Score</TableHead>
-                  <TableHead className="text-center text-white font-semibold">Pass</TableHead>
-                  <TableHead className="text-center text-white font-semibold">Fail</TableHead>
-                  <TableHead className="text-center text-white font-semibold">Fail Rate</TableHead>
-                  <TableHead className="text-center text-white font-semibold">Good / Bad</TableHead>
-                  <TableHead className="text-center text-white font-semibold">HR Actions</TableHead>
+                <TableRow className="hover:bg-[#1e3a5f] border-b-0">
+                  <TableHead className="text-white font-semibold pl-6 pr-3 text-left">Sales Person</TableHead>
+                  <TableHead className="text-white font-semibold px-3 text-left">Designation</TableHead>
+                  <TableHead className="text-white font-semibold px-3 text-right">Calls</TableHead>
+                  <TableHead className="text-white font-semibold px-3 text-center">Good/Bad</TableHead>
+                  <TableHead className="text-white font-semibold px-3 text-right">Avg Score</TableHead>
+                  <TableHead className="text-white font-semibold px-3 text-center">Outcome</TableHead>
+                  <TableHead className="text-white font-semibold px-3 text-left">HR Action Status</TableHead>
+                  <TableHead className="text-white font-semibold px-3 text-left">Delay (HR)</TableHead>
+                  {canWrite && <TableHead className="text-white font-semibold pr-4 pl-3 text-right">Action</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1229,217 +1535,317 @@ export default function SalesCallAuditPage() {
                   const actionDone = day.agents.filter(
                     agent => agent.hrVerifyStatus || agent.hrActionForCalling
                   ).length
+                  const totalCols = canWrite ? 9 : 8
 
-                  return [
-                    <TableRow
-                      key={day.date}
-                      onClick={() => toggleDate(day.date)}
-                      className="cursor-pointer border-b border-blue-100 bg-blue-50/50 hover:bg-blue-100/60 transition-colors"
-                    >
-                      <TableCell className="py-3">
-                        <div className="flex items-center gap-3">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-7 w-7 border-blue-200 bg-white text-blue-600 hover:bg-blue-50"
-                          >
-                            {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                          </Button>
-                          <div>
-                            <div className="font-bold text-slate-900">{day.label}</div>
-                            <div className="text-[11px] text-slate-500 font-medium">{day.agents.length} Audit Records</div>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center font-bold text-slate-800">{calls}</TableCell>
-                      <TableCell className="text-center font-bold text-indigo-700">{score.toFixed(2)} / 5</TableCell>
-                      <TableCell className="text-center font-bold text-emerald-700">{pass}</TableCell>
-                      <TableCell className="text-center font-bold text-rose-700">{fail}</TableCell>
-                      <TableCell className="text-center font-medium">
-                        <span className={fail > 0 ? "text-rose-600 font-bold" : "text-slate-600"}>
-                          {day.agents.length ? ((fail / day.agents.length) * 100).toFixed(1) : "0.0"}%
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-center font-semibold">
-                        <span className="text-emerald-700">{goodTotal}</span>
-                        <span className="text-slate-400 mx-1">/</span>
-                        <span className="text-rose-700">{badTotal}</span>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge
-                          variant="outline"
-                          className={
-                            actionDone === fail && fail > 0
-                              ? "border-emerald-300 bg-emerald-50 text-emerald-700 font-bold"
-                              : "border-slate-300 bg-white text-slate-700 font-medium"
-                          }
-                        >
-                          {actionDone} / {day.agents.length}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>,
-                    isOpen && (
-                      <TableRow key={`${day.date}-agents`} className="hover:bg-transparent">
-                        <TableCell colSpan={8} className="bg-slate-50/50 p-3 sm:p-4">
-                          <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-                            <Table className="min-w-[1100px]">
-                              <TableHeader className="bg-slate-800">
-                                <TableRow className="hover:bg-slate-800">
-                                  <TableHead className="text-white font-semibold">Sales Person</TableHead>
-                                  <TableHead className="text-white font-semibold">Designation</TableHead>
-                                  <TableHead className="text-center text-white font-semibold">Calls</TableHead>
-                                  <TableHead className="text-center text-white font-semibold">Good / Bad</TableHead>
-                                  <TableHead className="text-center text-white font-semibold">Avg Score</TableHead>
-                                  <TableHead className="text-center text-white font-semibold">Outcome</TableHead>
-                                  <TableHead className="text-white font-semibold">HR Action Status</TableHead>
-                                  <TableHead className="text-white font-semibold">Delay (HR)</TableHead>
-                                  {canWrite && <TableHead className="text-right text-white font-semibold">Action</TableHead>}
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {day.agents.map(agent => {
-                                  const hasAction = Boolean(agent.hrVerifyStatus || agent.hrActionForCalling)
-                                  const isSelected =
-                                    selectedAgent?.date === day.date && selectedAgent.agent.recordId === agent.recordId
-
-                                  return (
-                                    <TableRow
-                                      key={agent.recordId}
-                                      onClick={() => setSelectedAgent({ date: day.date, agent })}
-                                      className={`cursor-pointer transition-colors ${isSelected ? "bg-blue-50/80 border-l-4 border-l-blue-600" : "hover:bg-slate-50"
-                                        }`}
-                                    >
-                                      <TableCell>
-                                        <div className="flex items-center gap-3">
-                                          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">
-                                            {agent.initials}
-                                          </span>
-                                          <div>
-                                            <div className="font-bold text-slate-900">{agent.name}</div>
-                                            <div className="text-[11px] text-slate-500 font-mono flex items-center gap-1.5">
-                                              <span>{agent.id}</span>
-                                              <span className="text-slate-300">•</span>
-                                              <span className="text-[10px] text-slate-400">{agent.mid}</span>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </TableCell>
-                                      <TableCell>
-                                        <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-700 text-[11px]">
-                                          {agent.designation}
-                                        </Badge>
-                                      </TableCell>
-                                      <TableCell className="text-center font-semibold text-slate-800">
-                                        <button
-                                          type="button"
-                                          onClick={event => {
-                                            event.stopPropagation()
-                                            setCallDetailModal({ open: true, type: "all", agent, date: day.date })
-                                          }}
-                                          className="hover:underline hover:text-blue-700 transition cursor-pointer"
-                                          title="Click to view full call audit details"
-                                        >
-                                          {agent.calls}
-                                        </button>
-                                      </TableCell>
-                                      <TableCell className="text-center">
-                                        <button
-                                          type="button"
-                                          onClick={event => {
-                                            event.stopPropagation()
-                                            setCallDetailModal({ open: true, type: "good", agent, date: day.date })
-                                          }}
-                                          className="inline-flex items-center text-emerald-700 font-bold hover:bg-emerald-100 hover:text-emerald-900 px-1.5 py-0.5 rounded cursor-pointer transition-colors shadow-xs"
-                                          title="Click to view Good Calls details"
-                                        >
-                                          {agent.good}
-                                        </button>
-                                        <span className="text-slate-400 mx-1">/</span>
-                                        <button
-                                          type="button"
-                                          onClick={event => {
-                                            event.stopPropagation()
-                                            setCallDetailModal({ open: true, type: "bad", agent, date: day.date })
-                                          }}
-                                          className="inline-flex items-center text-rose-700 font-bold hover:bg-rose-100 hover:text-rose-900 px-1.5 py-0.5 rounded cursor-pointer transition-colors shadow-xs"
-                                          title="Click to view Bad Calls details"
-                                        >
-                                          {agent.bad}
-                                        </button>
-                                      </TableCell>
-                                      <TableCell className="text-center font-bold text-indigo-700">
-                                        {agent.score.toFixed(2)} / 5
-                                      </TableCell>
-                                      <TableCell className="text-center">
-                                        <ResultBadge result={agent.result} />
-                                      </TableCell>
-                                      <TableCell>
-                                        {hasAction ? (
-                                          <div>
-                                            <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
-                                              <CheckCircle2 className="mr-1 h-3 w-3" />
-                                              {agent.hrVerifyStatus || "Verified"}
-                                            </Badge>
-                                            <div className="mt-0.5 text-[11px] text-slate-600 font-medium truncate max-w-[200px]">
-                                              {agent.hrActionForCalling}
-                                            </div>
-                                            {agent.accountFmsUpdated && (
-                                              <div className="text-[10px] font-bold text-emerald-700">
-                                                ✓ Pagarbook / FMS Synced
-                                              </div>
-                                            )}
-                                          </div>
-                                        ) : agent.result === "Fail" ? (
-                                          <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800 font-bold">
-                                            Action Pending
-                                          </Badge>
-                                        ) : (
-                                          <span className="text-xs text-slate-400">No action needed</span>
-                                        )}
-                                      </TableCell>
-                                      <TableCell className="text-xs font-mono text-slate-600">
-                                        {agent.timeDelayHr ? (
-                                          <span className="inline-flex items-center gap-1 text-slate-700">
-                                            <Clock className="h-3 w-3 text-slate-400" />
-                                            {agent.timeDelayHr}
-                                          </span>
-                                        ) : (
-                                          "—"
-                                        )}
-                                      </TableCell>
-                                      {canWrite && (
-                                        <TableCell className="text-right">
-                                          <Button
-                                            size="sm"
-                                            onClick={event => {
-                                              event.stopPropagation()
-                                              openAction(day.date, agent)
-                                            }}
-                                            className={
-                                              hasAction
-                                                ? "bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 text-xs h-8 cursor-pointer shadow-sm font-semibold"
-                                                : "bg-blue-600 hover:bg-blue-700 text-white text-xs h-8 cursor-pointer shadow-sm font-bold"
-                                            }
-                                          >
-                                            {hasAction ? (
-                                              <CheckCircle2 className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
-                                            ) : (
-                                              <ClipboardCheck className="mr-1.5 h-3.5 w-3.5" />
-                                            )}
-                                            {hasAction ? "View Details" : "Take Action"}
-                                          </Button>
-                                        </TableCell>
-                                      )}
-                                    </TableRow>
-                                  )
-                                })}
-                              </TableBody>
-                            </Table>
+                  return (
+                    <Fragment key={day.date}>
+                      {/* Date Row (Parent) - Styled matching /leads/assign Data Source Breakdown */}
+                      <TableRow
+                        onClick={() => toggleDate(day.date)}
+                        className="cursor-pointer font-semibold border-b-2 border-slate-300 hover:opacity-95 transition-all select-none"
+                        style={{ backgroundColor: isOpen ? "#BFDBFF" : "#f1f5f9" }}
+                      >
+                        {/* Column 1: Sales Person -> Date, Records Count, Mail Status */}
+                        <TableCell className="py-2.5 pl-4 pr-3 whitespace-nowrap">
+                          <div className="flex items-center gap-2 min-w-max">
+                            {isOpen ? (
+                              <ChevronDown className="w-4 h-4 text-blue-600 shrink-0" />
+                            ) : (
+                              <ChevronRight className="w-4 h-4 text-blue-600 shrink-0" />
+                            )}
+                            <Calendar className="w-4 h-4 text-slate-600 shrink-0" />
+                            <span className="font-bold text-slate-800 text-xs sm:text-sm">{day.label}</span>
+                            <span className="text-xs text-slate-600">({day.agents.length} Records)</span>
+                            {day.isMailSent ? (
+                              <Badge className="border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-100 font-semibold px-2 py-0 text-[11px] inline-flex items-center gap-1 shadow-none ml-1">
+                                <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                                Mail Sent
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="border-amber-300 bg-amber-100/70 text-amber-800 font-medium text-[11px] px-2 py-0 inline-flex items-center gap-1 shadow-none ml-1">
+                                <CircleAlert className="h-3 w-3 text-amber-600" />
+                                Mail Pending
+                              </Badge>
+                            )}
                           </div>
                         </TableCell>
+
+                        {/* Column 2: Designation */}
+                        <TableCell className="py-2.5 px-3 text-left">
+                          <span className="text-xs text-slate-400 font-normal">—</span>
+                        </TableCell>
+
+                        {/* Column 3: Calls (numeric right-aligned) */}
+                        <TableCell className="py-2.5 px-3 text-right">
+                          <span className="text-sm font-bold text-slate-900 tabular-nums">
+                            {calls}
+                          </span>
+                        </TableCell>
+
+                        {/* Column 4: Good/Bad (centered) */}
+                        <TableCell className="py-2.5 px-3 text-center">
+                          <span className="inline-flex items-center text-xs tabular-nums font-bold">
+                            <span className="text-emerald-700">{goodTotal}</span>
+                            <span className="text-slate-400 mx-1">/</span>
+                            <span className="text-rose-700">{badTotal}</span>
+                          </span>
+                        </TableCell>
+
+                        {/* Column 5: Avg Score (numeric right-aligned) */}
+                        <TableCell className="py-2.5 px-3 text-right">
+                          <span className="text-sm font-bold text-slate-900 tabular-nums">
+                            {score.toFixed(2)}
+                          </span>
+                          <span className="text-slate-500 text-[11px] font-normal ml-1">/ 5</span>
+                        </TableCell>
+
+                        {/* Column 6: Outcome (centered pass / fail counts) */}
+                        <TableCell className="py-2.5 px-3 text-center">
+                          <span className="inline-flex items-center text-xs tabular-nums font-bold">
+                            <span className="text-emerald-700">{pass}P</span>
+                            <span className="text-slate-400 mx-1">•</span>
+                            <span className={fail > 0 ? "text-rose-700" : "text-slate-600"}>{fail}F</span>
+                          </span>
+                        </TableCell>
+
+                        {/* Column 7: HR Action Status */}
+                        <TableCell className="py-2.5 px-3 text-left">
+                          <span className="text-xs font-bold text-slate-900 tabular-nums">
+                            {actionDone} / {day.agents.length}
+                          </span>
+                          <span className="text-[11px] text-slate-500 ml-1 font-normal">Processed</span>
+                        </TableCell>
+
+                        {/* Column 8: Delay (HR) */}
+                        <TableCell className="py-2.5 px-3 text-left">
+                          <span className="text-xs text-slate-400 font-normal">—</span>
+                        </TableCell>
+
+                        {/* Column 9: Action (Date Actions: Mark as Pending/Sent & View / Send Email) */}
+                        {canWrite && (
+                          <TableCell className="py-2.5 pr-4 pl-3 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-2" onClick={e => e.stopPropagation()}>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  const dStr = day.agents[0]?.rawDate ? day.agents[0].rawDate.slice(0, 10) : day.date
+                                  handleToggleMailStatus(dStr, day.isMailSent)
+                                }}
+                                disabled={togglingDate !== null}
+                                className={
+                                  day.isMailSent
+                                    ? "h-7 px-2.5 text-xs border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900 font-medium shadow-none cursor-pointer"
+                                    : "h-7 px-2.5 text-xs border-emerald-400 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-semibold shadow-none cursor-pointer"
+                                }
+                                title={day.isMailSent ? "Click to revert to pending" : "Click if you already sent the email report manually"}
+                              >
+                                {togglingDate === (day.agents[0]?.rawDate ? day.agents[0].rawDate.slice(0, 10) : day.date) ? (
+                                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                ) : day.isMailSent ? (
+                                  <RotateCcw className="mr-1 h-3 w-3 text-slate-500" />
+                                ) : (
+                                  <CheckCircle2 className="mr-1 h-3 w-3 text-emerald-600" />
+                                )}
+                                {day.isMailSent ? "Mark as Pending" : "Mark as Sent"}
+                              </Button>
+
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                asChild
+                                className="h-7 px-2.5 text-xs gap-1 border-blue-300 bg-white text-blue-700 hover:bg-blue-50 font-medium shadow-none cursor-pointer"
+                              >
+                                <Link href={`/sales-call-audit/email-template?date=${encodeURIComponent(day.agents[0]?.rawDate ? day.agents[0].rawDate.slice(0, 10) : day.date)}`}>
+                                  <Mail className="h-3 w-3 text-blue-600" />
+                                  View / Send Email
+                                </Link>
+                              </Button>
+                            </div>
+                          </TableCell>
+                        )}
                       </TableRow>
-                    ),
-                  ]
+
+                      {/* Employee Rows under this Date */}
+                      {isOpen &&
+                        (day.agents.length === 0 ? (
+                          <TableRow key={`${day.date}-empty`}>
+                            <TableCell colSpan={totalCols} className="text-center text-slate-400 py-4 text-xs italic bg-white border-b border-slate-100">
+                              No sales agent records found for this date matching current filters.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          day.agents.map(agent => {
+                            const hasAction = Boolean(agent.hrVerifyStatus || agent.hrActionForCalling)
+                            const isSelected =
+                              selectedAgent?.date === day.date && selectedAgent.agent.recordId === agent.recordId
+
+                            return (
+                              <TableRow
+                                key={`${day.date}-${agent.recordId}`}
+                                onClick={() => setSelectedAgent({ date: day.date, agent })}
+                                className={`cursor-pointer transition-colors border-b border-slate-100 last:border-b-slate-200 ${
+                                  isSelected ? "bg-blue-50/70 border-l-2 border-l-blue-600" : "bg-white hover:bg-slate-50"
+                                }`}
+                              >
+                                {/* Sales Person (indented pl-10 to match nested child hierarchy in /leads/assign) */}
+                                <TableCell className="py-2.5 pl-10 pr-3">
+                                  <div className="flex items-center gap-2.5">
+                                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600 shrink-0 border border-slate-200/60">
+                                      {agent.initials}
+                                    </span>
+                                    <div>
+                                      <div className="font-semibold text-slate-900 text-xs sm:text-sm leading-tight">{agent.name}</div>
+                                      <div className="text-[11px] text-slate-400 font-mono flex items-center gap-1.5 mt-0.5">
+                                        <span>{agent.id}</span>
+                                        <span className="text-slate-300">•</span>
+                                        <span>{agent.mid}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </TableCell>
+
+                                {/* Designation */}
+                                <TableCell className="py-2.5 px-3">
+                                  <span className="inline-block text-[11px] text-slate-600 bg-slate-100/80 border border-slate-200/60 rounded px-2 py-0.5 font-normal">
+                                    {agent.designation}
+                                  </span>
+                                </TableCell>
+
+                                {/* Calls (numeric right-aligned) */}
+                                <TableCell className="py-2.5 px-3 text-right">
+                                  <button
+                                    type="button"
+                                    onClick={event => {
+                                      event.stopPropagation()
+                                      setCallDetailModal({ open: true, type: "all", agent, date: day.date })
+                                    }}
+                                    className="text-xs font-semibold text-slate-800 hover:text-blue-600 tabular-nums cursor-pointer transition-colors"
+                                    title="Click to view full call audit details"
+                                  >
+                                    {agent.calls}
+                                  </button>
+                                </TableCell>
+
+                                {/* Good / Bad (tabular-nums centered) */}
+                                <TableCell className="py-2.5 px-3 text-center">
+                                  <span className="inline-flex items-center text-xs tabular-nums font-medium">
+                                    <button
+                                      type="button"
+                                      onClick={event => {
+                                        event.stopPropagation()
+                                        setCallDetailModal({ open: true, type: "good", agent, date: day.date })
+                                      }}
+                                      className="text-emerald-700 font-semibold hover:underline cursor-pointer"
+                                      title="Click to view Good Calls details"
+                                    >
+                                      {agent.good}
+                                    </button>
+                                    <span className="text-slate-300 mx-1">/</span>
+                                    <button
+                                      type="button"
+                                      onClick={event => {
+                                        event.stopPropagation()
+                                        setCallDetailModal({ open: true, type: "bad", agent, date: day.date })
+                                      }}
+                                      className="text-rose-600 font-semibold hover:underline cursor-pointer"
+                                      title="Click to view Bad Calls details"
+                                    >
+                                      {agent.bad}
+                                    </button>
+                                  </span>
+                                </TableCell>
+
+                                {/* Avg Score (numeric right-aligned) */}
+                                <TableCell className="py-2.5 px-3 text-right">
+                                  <span className="text-xs font-semibold text-slate-900 tabular-nums">
+                                    {agent.score.toFixed(2)}
+                                  </span>
+                                  <span className="text-slate-400 text-[11px] font-normal ml-1">/ 5</span>
+                                </TableCell>
+
+                                {/* Outcome */}
+                                <TableCell className="py-2.5 px-3 text-center">
+                                  <ResultBadge result={agent.result} />
+                                </TableCell>
+
+                                {/* HR Action Status */}
+                                <TableCell className="py-2.5 px-3 text-left">
+                                  {hasAction ? (
+                                    <div className="flex flex-col gap-0.5">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50 text-[11px] font-semibold py-0 px-1.5 shadow-none">
+                                          <CheckCircle2 className="mr-1 h-3 w-3" />
+                                          {agent.hrVerifyStatus || "Verified"}
+                                        </Badge>
+                                        {agent.accountFmsUpdated && (
+                                          <span className="text-[10px] font-medium text-emerald-700">✓ FMS Synced</span>
+                                        )}
+                                      </div>
+                                      {agent.hrActionForCalling && (
+                                        <div className="text-[11px] text-slate-500 truncate max-w-[200px]" title={agent.hrActionForCalling}>
+                                          {agent.hrActionForCalling}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : agent.result === "Fail" ? (
+                                    <Badge variant="outline" className="border-amber-200 bg-amber-50/80 text-amber-800 font-medium text-[11px] py-0 px-1.5 shadow-none">
+                                      Action Pending
+                                    </Badge>
+                                  ) : (
+                                    <span className="text-xs text-slate-400">—</span>
+                                  )}
+                                </TableCell>
+
+                                {/* Delay (HR) */}
+                                <TableCell className="py-2.5 px-3 text-left text-xs font-mono text-slate-600">
+                                  {agent.timeDelayHr ? (
+                                    <span className="inline-flex items-center gap-1 text-slate-600">
+                                      <Clock className="h-3 w-3 text-slate-400" />
+                                      {agent.timeDelayHr}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400">—</span>
+                                  )}
+                                </TableCell>
+
+                                {/* Action */}
+                                {canWrite && (
+                                  <TableCell className="py-2.5 pr-4 pl-3 text-right">
+                                    {agent.result === "Pass" && !hasAction ? (
+                                      <span className="text-xs text-slate-400 pr-2">—</span>
+                                    ) : (
+                                      <Button
+                                        size="sm"
+                                        variant={hasAction ? "outline" : "default"}
+                                        onClick={event => {
+                                          event.stopPropagation()
+                                          openAction(day.date, agent)
+                                        }}
+                                        className={
+                                          hasAction
+                                            ? "h-7 text-xs border-slate-200 text-slate-700 hover:bg-slate-50 font-medium shadow-none cursor-pointer"
+                                            : "h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-none cursor-pointer"
+                                        }
+                                      >
+                                        {hasAction ? (
+                                          <CheckCircle2 className="mr-1 h-3 w-3 text-emerald-600" />
+                                        ) : (
+                                          <ClipboardCheck className="mr-1 h-3 w-3" />
+                                        )}
+                                        {hasAction ? "View" : "Take Action"}
+                                      </Button>
+                                    )}
+                                  </TableCell>
+                                )}
+                              </TableRow>
+                            )
+                          })
+                        ))}
+                    </Fragment>
+                  )
                 })}
               </TableBody>
             </Table>
@@ -1575,7 +1981,7 @@ export default function SalesCallAuditPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {canWrite && (
+              {canWrite && (selectedAgent.agent.result !== "Pass" || selectedAgent.agent.hrVerifyStatus || selectedAgent.agent.hrActionForCalling) && (
                 <Button
                   size="sm"
                   onClick={() => openAction(selectedAgent.date, selectedAgent.agent)}
@@ -1613,7 +2019,7 @@ export default function SalesCallAuditPage() {
           <div className="p-5 space-y-4">
             <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
               <Zap className="h-3.5 w-3.5 text-blue-600" />
-              6 Core Evaluation Metrics (Database Scores)
+              6 Core Evaluation Metrics
             </h4>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -1621,54 +2027,96 @@ export default function SalesCallAuditPage() {
               <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 shadow-sm">
                 <p className="text-[10px] font-semibold uppercase text-slate-500">Product Knowledge</p>
                 <p className="text-xl font-bold text-slate-900 mt-1">
-                  {selectedAgent.agent.productKnowledge !== null ? selectedAgent.agent.productKnowledge.toFixed(2) : "—"}
+                  {selectedAgent.agent.productKnowledge !== null ? (
+                    <>
+                      {selectedAgent.agent.productKnowledge.toFixed(2)}
+                      <span className="text-xs font-normal text-slate-400 ml-1">/ 5.0</span>
+                    </>
+                  ) : (
+                    "—"
+                  )}
                 </p>
-                <div className="mt-1 text-[10px] text-slate-400 font-mono">Column: product_knowledge</div>
+                <div className="mt-1 text-[10px] text-slate-400 font-medium">Target: ≥ 2.5 / 5.0</div>
               </div>
 
               {/* Parameter 2: Customer Understanding */}
               <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 shadow-sm">
                 <p className="text-[10px] font-semibold uppercase text-slate-500">Customer Understanding</p>
                 <p className="text-xl font-bold text-slate-900 mt-1">
-                  {selectedAgent.agent.customerUnderstanding !== null ? selectedAgent.agent.customerUnderstanding.toFixed(2) : "—"}
+                  {selectedAgent.agent.customerUnderstanding !== null ? (
+                    <>
+                      {selectedAgent.agent.customerUnderstanding.toFixed(2)}
+                      <span className="text-xs font-normal text-slate-400 ml-1">/ 5.0</span>
+                    </>
+                  ) : (
+                    "—"
+                  )}
                 </p>
-                <div className="mt-1 text-[10px] text-slate-400 font-mono">Column: customer_understanding</div>
+                <div className="mt-1 text-[10px] text-slate-400 font-medium">Target: ≥ 2.5 / 5.0</div>
               </div>
 
               {/* Parameter 3: Communication Skills */}
               <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 shadow-sm">
                 <p className="text-[10px] font-semibold uppercase text-slate-500">Communication Skills</p>
                 <p className="text-xl font-bold text-slate-900 mt-1">
-                  {selectedAgent.agent.communicationSkills !== null ? selectedAgent.agent.communicationSkills.toFixed(2) : "—"}
+                  {selectedAgent.agent.communicationSkills !== null ? (
+                    <>
+                      {selectedAgent.agent.communicationSkills.toFixed(2)}
+                      <span className="text-xs font-normal text-slate-400 ml-1">/ 5.0</span>
+                    </>
+                  ) : (
+                    "—"
+                  )}
                 </p>
-                <div className="mt-1 text-[10px] text-slate-400 font-mono">Column: communication_skills</div>
+                <div className="mt-1 text-[10px] text-slate-400 font-medium">Target: ≥ 2.5 / 5.0</div>
               </div>
 
               {/* Parameter 4: Objection Handling */}
               <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 shadow-sm">
                 <p className="text-[10px] font-semibold uppercase text-slate-500">Objection Handling</p>
                 <p className="text-xl font-bold text-slate-900 mt-1">
-                  {selectedAgent.agent.objectionHandling !== null ? selectedAgent.agent.objectionHandling.toFixed(2) : "—"}
+                  {selectedAgent.agent.objectionHandling !== null ? (
+                    <>
+                      {selectedAgent.agent.objectionHandling.toFixed(2)}
+                      <span className="text-xs font-normal text-slate-400 ml-1">/ 5.0</span>
+                    </>
+                  ) : (
+                    "—"
+                  )}
                 </p>
-                <div className="mt-1 text-[10px] text-slate-400 font-mono">Column: objection_handling</div>
+                <div className="mt-1 text-[10px] text-slate-400 font-medium">Target: ≥ 2.5 / 5.0</div>
               </div>
 
               {/* Parameter 5: Closing Skills */}
               <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 shadow-sm">
                 <p className="text-[10px] font-semibold uppercase text-slate-500">Closing Skills</p>
                 <p className="text-xl font-bold text-slate-900 mt-1">
-                  {selectedAgent.agent.closingSkills !== null ? selectedAgent.agent.closingSkills.toFixed(2) : "—"}
+                  {selectedAgent.agent.closingSkills !== null ? (
+                    <>
+                      {selectedAgent.agent.closingSkills.toFixed(2)}
+                      <span className="text-xs font-normal text-slate-400 ml-1">/ 5.0</span>
+                    </>
+                  ) : (
+                    "—"
+                  )}
                 </p>
-                <div className="mt-1 text-[10px] text-slate-400 font-mono">Column: closing_skills</div>
+                <div className="mt-1 text-[10px] text-slate-400 font-medium">Target: ≥ 2.5 / 5.0</div>
               </div>
 
               {/* Parameter 6: Tone & Volume */}
               <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 shadow-sm">
                 <p className="text-[10px] font-semibold uppercase text-slate-500">Tone & Volume</p>
                 <p className="text-xl font-bold text-slate-900 mt-1">
-                  {selectedAgent.agent.toneVolume !== null ? selectedAgent.agent.toneVolume.toFixed(2) : "—"}
+                  {selectedAgent.agent.toneVolume !== null ? (
+                    <>
+                      {selectedAgent.agent.toneVolume.toFixed(2)}
+                      <span className="text-xs font-normal text-slate-400 ml-1">/ 5.0</span>
+                    </>
+                  ) : (
+                    "—"
+                  )}
                 </p>
-                <div className="mt-1 text-[10px] text-slate-400 font-mono">Column: tone_volume</div>
+                <div className="mt-1 text-[10px] text-slate-400 font-medium">Target: ≥ 2.5 / 5.0</div>
               </div>
             </div>
 
@@ -1832,25 +2280,27 @@ export default function SalesCallAuditPage() {
                     <span className="text-[10px] text-rose-500 font-normal">Required</span>
                   )}
                 </Label>
-                <Select
-                  value={verifyStatus}
-                  disabled={isReadOnly}
-                  onValueChange={setVerifyStatus}
-                >
-                  <SelectTrigger className={`h-10 text-xs ${isReadOnly
-                    ? "bg-slate-100/90 text-slate-900 font-semibold border-slate-200 cursor-not-allowed opacity-90"
-                    : "border-slate-300 bg-white"
-                    }`}>
-                    <SelectValue placeholder="Select HR verify status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {withCurrentValue(HR_VERIFY_STATUS_OPTIONS, verifyStatus).map(option => (
-                      <SelectItem key={option} value={option} className="text-xs">
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {isReadOnly ? (
+                  <Input
+                    value={verifyStatus}
+                    disabled
+                    readOnly
+                    className="h-10 text-xs bg-slate-100/90 text-slate-900 font-semibold border-slate-200 cursor-not-allowed opacity-90"
+                  />
+                ) : (
+                  <Select value={verifyStatus} onValueChange={setVerifyStatus}>
+                    <SelectTrigger className="h-10 text-xs border-slate-300 bg-white w-full">
+                      <SelectValue placeholder="Select HR Verify Status..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from(new Set([verifyStatus, ...HR_VERIFY_STATUS_OPTIONS].filter(Boolean))).map((opt) => (
+                        <SelectItem key={opt} value={opt} className="text-xs">
+                          {opt}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               {/* Field 2: HR Action for Calling Fail/Pass */}
@@ -1863,25 +2313,27 @@ export default function SalesCallAuditPage() {
                     <span className="text-[10px] text-rose-500 font-normal">Required</span>
                   )}
                 </Label>
-                <Select
-                  value={callingAction}
-                  disabled={isReadOnly}
-                  onValueChange={setCallingAction}
-                >
-                  <SelectTrigger className={`h-10 text-xs ${isReadOnly
-                    ? "bg-slate-100/90 text-slate-900 font-semibold border-slate-200 cursor-not-allowed opacity-90"
-                    : "border-slate-300 bg-white"
-                    }`}>
-                    <SelectValue placeholder="Select HR action" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {withCurrentValue(HR_CALLING_ACTION_OPTIONS, callingAction).map(option => (
-                      <SelectItem key={option} value={option} className="text-xs">
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {isReadOnly ? (
+                  <Input
+                    value={callingAction}
+                    disabled
+                    readOnly
+                    className="h-10 text-xs bg-slate-100/90 text-slate-900 font-semibold border-slate-200 cursor-not-allowed opacity-90"
+                  />
+                ) : (
+                  <Select value={callingAction} onValueChange={setCallingAction}>
+                    <SelectTrigger className="h-10 text-xs border-slate-300 bg-white w-full">
+                      <SelectValue placeholder="Select HR Action for Calling..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from(new Set([callingAction, ...HR_ACTION_OPTIONS].filter(Boolean))).map((opt) => (
+                        <SelectItem key={opt} value={opt} className="text-xs">
+                          {opt}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
             </div>
 
@@ -2081,10 +2533,10 @@ export default function SalesCallAuditPage() {
                           }
                         >
                           {callDetailModal.type === "good"
-                            ? `${callDetailModal.agent.good} Good Calls`
+                            ? `${displayGoodCalls} Good Calls`
                             : callDetailModal.type === "bad"
-                              ? `${callDetailModal.agent.bad} Bad Calls`
-                              : `${callDetailModal.agent.calls} Total Calls`}
+                              ? `${displayBadCalls} Bad Calls`
+                              : `${displayTotalCalls} Total Calls`}
                         </Badge>
                       </div>
                       <DialogDescription className="text-xs text-white/80 mt-0.5">
@@ -2108,17 +2560,59 @@ export default function SalesCallAuditPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="bg-white/15 px-2 py-0.5 rounded text-[11px] text-white">
-                      Avg Score: <strong>{callDetailModal.agent.score.toFixed(2)} / 5</strong>
+                      Avg Score: <strong>{(modalAgentMeta?.avgScore ?? callDetailModal.agent.score).toFixed(2)} / 5</strong>
                     </span>
                     <span
                       className={
-                        callDetailModal.agent.result === "Pass"
+                        (modalAgentMeta?.outcome || callDetailModal.agent.result).toUpperCase() === "PASS"
                           ? "bg-emerald-500 text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-xs"
                           : "bg-rose-500 text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-xs"
                       }
                     >
-                      {callDetailModal.agent.result.toUpperCase()}
+                      {(modalAgentMeta?.outcome || callDetailModal.agent.result).toUpperCase()}
                     </span>
+                  </div>
+                </div>
+
+                {/* Employee Daily Overall 6 Metrics (Aggregated Daily Audit) */}
+                <div className="mt-3.5 pt-3 border-t border-white/20">
+                  <div className="flex flex-wrap items-center justify-between text-xs text-white/95 mb-2 gap-1">
+                    <span className="font-semibold flex items-center gap-1.5">
+                      <ListChecks className="h-3.5 w-3.5" />
+                      Employee Daily Overall 6 Metrics{" "}
+                      <span className="text-[11px] text-white/75 font-normal">
+                        (Aggregated Daily Audit)
+                      </span>
+                    </span>
+                    <span className="text-[10px] text-white/90 bg-white/15 px-2 py-0.5 rounded font-mono">
+                      Target: Benchmark ≥ 2.5 / 5.0
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                    {[
+                      { label: "PRODUCT KNOWLEDGE", val: callDetailModal.agent.productKnowledge },
+                      { label: "CUSTOMER UNDERSTAND...", val: callDetailModal.agent.customerUnderstanding },
+                      { label: "COMMUNICATION SKILLS", val: callDetailModal.agent.communicationSkills },
+                      { label: "OBJECTION HANDLING", val: callDetailModal.agent.objectionHandling },
+                      { label: "CLOSING SKILLS", val: callDetailModal.agent.closingSkills },
+                      { label: "TONE & VOLUME", val: callDetailModal.agent.toneVolume },
+                    ].map((m, idx) => {
+                      const val = m.val !== null && m.val !== undefined ? Number(m.val) : null
+                      return (
+                        <div key={idx} className="bg-white rounded-lg p-2.5 shadow-xs text-slate-800">
+                          <div className="text-[9px] font-bold text-slate-500 uppercase tracking-tight truncate">
+                            {m.label}
+                          </div>
+                          <div
+                            className={`text-sm font-extrabold mt-0.5 ${
+                              val !== null && val < 2.5 ? "text-rose-600" : "text-emerald-700"
+                            }`}
+                          >
+                            {val !== null ? `${val.toFixed(1)} / 5.0` : "— / 5.0"}
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               </div>
@@ -2134,7 +2628,7 @@ export default function SalesCallAuditPage() {
                       : "text-slate-600 hover:bg-slate-100"
                       }`}
                   >
-                    All Calls ({modalCalls.length})
+                    All Calls ({displayTotalCalls})
                   </button>
                   <button
                     type="button"
@@ -2145,7 +2639,7 @@ export default function SalesCallAuditPage() {
                       }`}
                   >
                     <ThumbsUp className="h-3.5 w-3.5" />
-                    Good Calls ({callDetailModal.agent.good})
+                    Good Calls ({displayGoodCalls})
                   </button>
                   <button
                     type="button"
@@ -2156,7 +2650,7 @@ export default function SalesCallAuditPage() {
                       }`}
                   >
                     <ThumbsDown className="h-3.5 w-3.5" />
-                    Bad Calls ({callDetailModal.agent.bad})
+                    Bad Calls ({displayBadCalls})
                   </button>
                 </div>
 
@@ -2197,6 +2691,14 @@ export default function SalesCallAuditPage() {
                 ) : (
                   (() => {
                     const filtered = modalCalls.filter(call => {
+                      // Rule 1: if call type = voicemail, exclude it
+                      const ct = String(call.callType || "").toLowerCase()
+                      if (ct.includes("voicemail") || ct.includes("voice mail") || ct === "left_voicemail") return false
+                      // Rule 2: IsAudible must be true for showing data
+                      if (call.isAudible !== undefined && call.isAudible === false) return false
+                      // Rule 3: avg score must be greater than 0
+                      if (call.avgScore !== null && call.avgScore !== undefined && call.avgScore <= 0) return false
+
                       if (modalCallTab === "good" && call.qualityType !== "good") return false
                       if (modalCallTab === "bad" && call.qualityType !== "bad") return false
                       if (modalCallSearch.trim()) {
@@ -2261,8 +2763,12 @@ export default function SalesCallAuditPage() {
                               </div>
                               <div>
                                 <div className="flex items-center gap-2">
-                                  <span className="font-bold text-slate-900 text-xs">{call.clientName}</span>
-                                  <span className="text-[11px] text-slate-400 font-mono">({call.clientPhone})</span>
+                                  <span className="font-bold text-slate-900 text-xs">
+                                    {call.clientName ? `Client: ${call.clientName}` : (callDetailModal?.agent?.name ? `Agent: ${callDetailModal.agent.name}` : "Call Audit Evaluation")}
+                                  </span>
+                                  {call.clientPhone && (
+                                    <span className="text-[11px] text-slate-400 font-mono">({call.clientPhone})</span>
+                                  )}
                                   <Badge
                                     className={`text-[10px] font-bold px-1.5 py-0.2 ${isGood
                                       ? "bg-emerald-100 text-emerald-800 border-emerald-300"
@@ -2273,13 +2779,17 @@ export default function SalesCallAuditPage() {
                                   </Badge>
                                 </div>
                                 <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono mt-0.5">
-                                  <span className="font-semibold text-slate-700">{call.callId}</span>
-                                  <span>•</span>
-                                  <span>{call.leadId}</span>
-                                  <span>•</span>
+                                  {call.leadId && (
+                                    <span className="font-semibold text-slate-700">{call.leadId}</span>
+                                  )}
+                                  {call.leadId && call.callType && <span>•</span>}
+                                  {call.callType && (
+                                    <span className="text-slate-600 font-sans font-medium">{call.callType}</span>
+                                  )}
+                                  {(call.leadId || call.callType) && <span>•</span>}
                                   <span className="inline-flex items-center gap-1 text-slate-600">
                                     <Clock className="h-3 w-3 text-slate-400" />
-                                    {call.callTime} ({call.callDuration})
+                                    {call.callTime} {call.callDuration ? `(${call.callDuration})` : ""}
                                   </span>
                                 </div>
                               </div>
@@ -2312,18 +2822,94 @@ export default function SalesCallAuditPage() {
                           </div>
 
                           {/* Call Card Body */}
-                          <div className="p-3.5 space-y-2.5">
+                          <div className="p-3.5 space-y-3">
+                            {/* Audio Recording Player */}
+                            {call.recordingUrl && (
+                              <div className="bg-slate-50/90 p-2.5 rounded-lg border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                                  <Volume2 className="h-4 w-4 text-indigo-600 flex-shrink-0" />
+                                  <span className="uppercase text-[11px] tracking-wider text-slate-700 font-bold">CALL RECORDING:</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <audio
+                                    controls
+                                    src={call.recordingUrl}
+                                    className="h-8 max-w-full sm:max-w-[280px] rounded"
+                                    preload="none"
+                                  />
+                                  <a
+                                    href={call.recordingUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline px-2.5 py-1 bg-white rounded-md border border-blue-200 shadow-2xs"
+                                  >
+                                    <ExternalLink className="h-3 w-3" />
+                                    Open Audio
+                                  </a>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* 6 Call-Specific Metrics Evaluation (Specific to this call) */}
+                            {isExpanded && (
+                              <div className="bg-slate-50/80 border border-slate-200/90 rounded-xl p-3 space-y-2 animate-in fade-in duration-200">
+                                <div className="flex flex-wrap items-center justify-between text-xs gap-1">
+                                  <span className="font-semibold text-slate-700 flex items-center gap-1.5">
+                                    <ListChecks className="h-3.5 w-3.5 text-blue-600" />
+                                    6 Call-Specific Metrics Evaluation{" "}
+                                    {call.leadId && (
+                                      <span className="text-[10px] text-slate-500 font-mono font-normal">
+                                        (Lead: {call.leadId})
+                                      </span>
+                                    )}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 font-mono">Scores out of 5.0</span>
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-0.5">
+                                  {[
+                                    { label: "Product Knowledge", val: call.productKnowledge },
+                                    { label: "Customer Understand...", val: call.customerUnderstanding },
+                                    { label: "Communication Skills", val: call.communicationSkills },
+                                    { label: "Objection Handling", val: call.objectionHandling },
+                                    { label: "Closing Skills", val: call.closingSkills },
+                                    { label: "Tone & Volume", val: call.toneVolume },
+                                  ].map((metric, mIdx) => {
+                                    const score = metric.val !== null && metric.val !== undefined ? Number(metric.val) : null
+                                    return (
+                                      <div key={mIdx} className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs">
+                                        <span className="text-[9px] font-bold text-slate-500 uppercase block truncate">
+                                          {metric.label}
+                                        </span>
+                                        <span
+                                          className={`font-bold text-xs block mt-0.5 ${
+                                            score !== null && score >= 2.5 ? "text-emerald-700" : "text-rose-700"
+                                          }`}
+                                        >
+                                          {score !== null ? `${score.toFixed(1)} / 5.0` : "— / 5.0"}
+                                        </span>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
                             {/* Stated vs Verified Outcomes */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50/70 p-3 rounded-lg border border-slate-200">
                               <div>
-                                <span className="text-[10px] font-bold uppercase text-slate-400">Agent Stated Outcome:</span>
+                                <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                                  AGENT STATED OUTCOME:
+                                </span>
                                 <p className="font-semibold text-slate-800 mt-0.5">{call.statedOutcome || "—"}</p>
                               </div>
                               <div>
-                                <span className="text-[10px] font-bold uppercase text-slate-400">Auditor Evaluation:</span>
+                                <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                                  AUDITOR EVALUATION:
+                                </span>
                                 <p
-                                  className={`font-semibold mt-0.5 ${isGood ? "text-emerald-700" : "text-rose-700 font-bold"
-                                    }`}
+                                  className={`font-semibold mt-0.5 ${
+                                    isGood ? "text-emerald-700" : "text-rose-700 font-bold"
+                                  }`}
                                 >
                                   {call.verifiedOutcome || "—"}
                                 </p>
@@ -2332,8 +2918,8 @@ export default function SalesCallAuditPage() {
 
                             {/* Auditor Observation */}
                             {call.auditorObservation && (
-                              <div className="text-xs text-slate-700 bg-white p-2.5 rounded-lg border border-slate-100">
-                                <span className="font-bold text-slate-900 block mb-0.5">Auditor Quality Finding:</span>
+                              <div className="text-xs text-slate-700 bg-white p-3 rounded-lg border border-slate-200/80 shadow-2xs">
+                                <span className="font-bold text-slate-900 block mb-1">Auditor Quality Finding:</span>
                                 <p className="text-slate-600 leading-relaxed">{call.auditorObservation}</p>
                               </div>
                             )}
@@ -2344,9 +2930,9 @@ export default function SalesCallAuditPage() {
                                 call.strengths.map((str: string, sIdx: number) => (
                                   <span
                                     key={sIdx}
-                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs"
                                   >
-                                    <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                                    <CheckCircle2 className="h-3 w-3 text-emerald-600 flex-shrink-0" />
                                     {str}
                                   </span>
                                 ))}
@@ -2354,51 +2940,13 @@ export default function SalesCallAuditPage() {
                                 call.deficiencies.map((def: string, dIdx: number) => (
                                   <span
                                     key={dIdx}
-                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200"
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs"
                                   >
-                                    <AlertCircle className="h-3 w-3 text-rose-600" />
+                                    <AlertCircle className="h-3 w-3 text-rose-600 flex-shrink-0" />
                                     {def}
                                   </span>
                                 ))}
                             </div>
-
-                            {/* Collapsible 6 Parameters for This Specific Call */}
-                            {isExpanded && (
-                              <div className="mt-3 pt-3 border-t border-slate-200 bg-slate-50/70 p-3 rounded-lg space-y-2 animate-in fade-in duration-200">
-                                <div className="flex items-center justify-between text-[11px] font-bold text-slate-800">
-                                  <span className="flex items-center gap-1">
-                                    <ListChecks className="h-3.5 w-3.5 text-blue-600" />
-                                    Specific Call Parameter Breakdown
-                                  </span>
-                                  <span className="text-[10px] text-slate-400 font-mono">Scores out of 5.0</span>
-                                </div>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
-                                  {[
-                                    { label: "Product Knowledge", val: call.productKnowledge },
-                                    { label: "Customer Understanding", val: call.customerUnderstanding },
-                                    { label: "Communication Skills", val: call.communicationSkills },
-                                    { label: "Objection Handling", val: call.objectionHandling },
-                                    { label: "Closing Skills", val: call.closingSkills },
-                                    { label: "Tone & Volume", val: call.toneVolume },
-                                  ].map((p, pIdx) => {
-                                    const num = Number(p.val || 0)
-                                    return (
-                                      <div key={pIdx} className="bg-white p-2 rounded border border-slate-200 shadow-2xs">
-                                        <span className="text-[9px] font-semibold text-slate-500 uppercase block truncate">
-                                          {p.label}
-                                        </span>
-                                        <span
-                                          className={`font-bold text-xs ${num >= 3.5 ? "text-emerald-700" : num >= 2.5 ? "text-amber-700" : "text-rose-700"
-                                            }`}
-                                        >
-                                          {num.toFixed(1)} / 5.0
-                                        </span>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              </div>
-                            )}
                           </div>
                         </div>
                       )

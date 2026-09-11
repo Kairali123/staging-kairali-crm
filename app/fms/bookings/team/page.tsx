@@ -3868,12 +3868,12 @@ export default function SalesAccountsTeamPage() {
     zIndex = 30
   ): React.CSSProperties => {
     const widths = isScrolled
-      ? { bookingDate: 100, bookingId: 120, guestName: 120 }
-      : { bookingDate: 140, bookingId: 180, guestName: 300 };
+      ? { bookingDate: 100, bookingId: 130, guestName: 240 }
+      : { bookingDate: 120, bookingId: 150, guestName: 260 };
 
     const lefts = isScrolled
-      ? { bookingDate: 0, bookingId: 100, guestName: 220 }
-      : { bookingDate: 0, bookingId: 140, guestName: 320 };
+      ? { bookingDate: 0, bookingId: 100, guestName: 230 }
+      : { bookingDate: 0, bookingId: 120, guestName: 270 };
 
     const width = widths[colType];
     const left = lefts[colType];
@@ -3885,14 +3885,15 @@ export default function SalesAccountsTeamPage() {
       zIndex,
       minWidth: width,
       width,
+      maxWidth: width,
       boxSizing: "border-box",
       overflow: "hidden",
       background: "#1F3A5F",
       backgroundClip: "padding-box",
       isolation: "isolate",
       borderRight: isLastSticky ? "2px solid rgba(255,255,255,0.2)" : "1px solid rgba(255,255,255,0.15)",
-      paddingLeft: isScrolled ? "6px" : "12px",
-      paddingRight: isScrolled ? "6px" : "12px",
+      paddingLeft: isScrolled ? "8px" : "12px",
+      paddingRight: isScrolled ? "8px" : "12px",
       transition: "width 200ms ease-in-out, left 200ms ease-in-out, padding 200ms ease-in-out",
     };
   }
@@ -3905,12 +3906,12 @@ export default function SalesAccountsTeamPage() {
     zIndex = 20
   ): React.CSSProperties => {
     const widths = isScrolled
-      ? { bookingDate: 100, bookingId: 120, guestName: 120 }
-      : { bookingDate: 140, bookingId: 180, guestName: 300 };
+      ? { bookingDate: 100, bookingId: 130, guestName: 240 }
+      : { bookingDate: 120, bookingId: 150, guestName: 260 };
 
     const lefts = isScrolled
-      ? { bookingDate: 0, bookingId: 100, guestName: 220 }
-      : { bookingDate: 0, bookingId: 140, guestName: 320 };
+      ? { bookingDate: 0, bookingId: 100, guestName: 230 }
+      : { bookingDate: 0, bookingId: 120, guestName: 270 };
 
     const width = widths[colType];
     const left = lefts[colType];
@@ -3921,13 +3922,14 @@ export default function SalesAccountsTeamPage() {
       zIndex,
       minWidth: width,
       width,
+      maxWidth: width,
       boxSizing: "border-box",
       overflow: "hidden",
       background,
       backgroundClip: "padding-box",
       borderRight: isLastSticky ? "2px solid #e2e8f0" : "1px solid #e5e7eb",
-      paddingLeft: isScrolled ? "6px" : "12px",
-      paddingRight: isScrolled ? "6px" : "12px",
+      paddingLeft: isScrolled ? "8px" : "12px",
+      paddingRight: isScrolled ? "8px" : "12px",
       transition: "width 200ms ease-in-out, left 200ms ease-in-out, padding 200ms ease-in-out, background-color 200ms ease-in-out",
     };
   }
@@ -3945,6 +3947,65 @@ export default function SalesAccountsTeamPage() {
     return calculateGuestLtvMetrics(bookings || []);
   }, [bookings]);
 
+  // Split long guest names (25+ characters) across lines cleanly at word/delimiter boundaries
+  const splitGuestName = (name: string, maxLen = 25): string[] => {
+    if (!name) return [];
+    const trimmed = name.trim();
+    if (trimmed.length <= maxLen) {
+      return [trimmed];
+    }
+
+    const wrapWords = (text: string, limit = 25): string[] => {
+      const words = text.trim().split(/\s+/);
+      const res: string[] = [];
+      let cur = "";
+
+      for (const w of words) {
+        if (w.length > limit) {
+          if (cur) {
+            res.push(cur);
+            cur = "";
+          }
+          for (let i = 0; i < w.length; i += limit) {
+            res.push(w.slice(i, i + limit));
+          }
+          continue;
+        }
+
+        if (!cur) {
+          cur = w;
+        } else if ((cur + " " + w).length <= limit) {
+          cur += " " + w;
+        } else {
+          res.push(cur);
+          cur = w;
+        }
+      }
+      if (cur) res.push(cur);
+      return res;
+    };
+
+    const hasDelimiter = /[,&/+]|\band\b/i.test(trimmed);
+    if (hasDelimiter) {
+      const parts = trimmed.split(/(?<=[,&/+])\s+|(?<=\band\b)\s+/i);
+      const result: string[] = [];
+
+      for (const part of parts) {
+        const p = part.trim();
+        if (!p) continue;
+        if (p.length <= 28) {
+          result.push(p);
+        } else {
+          result.push(...wrapWords(p, maxLen));
+        }
+      }
+
+      if (result.length > 0) return result;
+    }
+
+    return wrapWords(trimmed, maxLen);
+  };
+
   const formatGuestName = (name: string, isScrolled: boolean, booking?: any) => {
     if (!name) return "—";
     const guestSummary = booking ? guestLtvMetrics.getGuestSummary(booking) : null;
@@ -3953,59 +4014,50 @@ export default function SalesAccountsTeamPage() {
     const ltvAmount = guestSummary ? guestSummary.totalLtv : (isCancelled ? 0 : (Number(booking?.amount || booking?.originalAmount || 0) || 0));
     const tier = guestSummary?.tier || "Standard";
 
-    const words = name.trim().split(/\s+/);
+    const lines = splitGuestName(name, 25);
+
     return (
-      <div className="relative w-full min-h-[48px] flex flex-col justify-center py-1">
-        {/* Single-line version */}
-        <div
-          className={`text-left w-full transition-all duration-200 ${isScrolled ? "opacity-0 invisible pointer-events-none scale-95 h-0 overflow-hidden" : "opacity-100 visible scale-100"
-            }`}
-        >
-          <div className="font-semibold text-slate-900 truncate text-[13px] tracking-tight" title={name}>
-            {name}
-          </div>
-          {guestSummary && (
-            <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-              {isRepeat ? (
-                <span
-                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold rounded shadow-sm ${tier === "VIP"
-                      ? "bg-amber-50 text-amber-900 border border-amber-300"
-                      : "bg-purple-50 text-purple-800 border border-purple-200"
-                    }`}
-                  title={`Lifetime Value: ₹${ltvAmount.toLocaleString()} (${guestSummary.totalStays} total stays)`}
-                >
-                  <Sparkles className="w-2.5 h-2.5 text-purple-600" />
-                  <span className="font-bold">LTV {formatCompactINR(ltvAmount)}</span>
-                  <span className="opacity-75 text-[9px]">({guestSummary.totalStays} stays)</span>
-                </span>
-              ) : guestSummary.totalStays > 0 ? (
-                <span
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/70 rounded"
-                  title="First time guest booking"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  New Guest
-                </span>
-              ) : null}
-            </div>
-          )}
-        </div>
-        {/* Stacked multi-line version */}
-        <div
-          className={`flex flex-col items-center justify-center text-center leading-tight py-1 w-full transition-all duration-200 ${isScrolled ? "opacity-100 visible scale-100" : "opacity-0 invisible pointer-events-none scale-95 absolute"
-            }`}
-        >
-          {words.map((word, idx) => (
-            <span key={idx} className="block uppercase text-[10px] sm:text-[11px] font-semibold tracking-normal truncate max-w-full">
-              {word}
+      <div
+        className="w-full min-h-[44px] flex flex-col justify-center py-1.5"
+        title={name}
+      >
+        <div className="flex flex-col space-y-0.5 text-left">
+          {lines.map((line, idx) => (
+            <span
+              key={idx}
+              className="font-semibold text-slate-900 text-[12px] sm:text-[13px] tracking-tight leading-snug break-words"
+            >
+              {line}
             </span>
           ))}
-          {guestSummary && isRepeat && (
-            <span className="mt-0.5 px-1 py-0.2 text-[9px] font-bold bg-purple-100 text-purple-900 rounded">
-              LTV {formatCompactINR(ltvAmount)}
-            </span>
-          )}
         </div>
+
+        {guestSummary && (
+          <div className="flex items-center gap-1 mt-1 flex-wrap">
+            {isRepeat ? (
+              <span
+                className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold rounded shadow-sm ${
+                  tier === "VIP"
+                    ? "bg-amber-50 text-amber-900 border border-amber-300"
+                    : "bg-purple-50 text-purple-800 border border-purple-200"
+                }`}
+                title={`Lifetime Value: ₹${ltvAmount.toLocaleString()} (${guestSummary.totalStays} total stays)`}
+              >
+                <Sparkles className="w-2.5 h-2.5 text-purple-600" />
+                <span className="font-bold">LTV {formatCompactINR(ltvAmount)}</span>
+                <span className="opacity-75 text-[9px]">({guestSummary.totalStays} stays)</span>
+              </span>
+            ) : guestSummary.totalStays > 0 ? (
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/70 rounded"
+                title="First time guest booking"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                New Guest
+              </span>
+            ) : null}
+          </div>
+        )}
       </div>
     );
   };
@@ -7269,7 +7321,14 @@ export default function SalesAccountsTeamPage() {
                         <TableCell>{booking.programmeName}</TableCell>
                         <TableCell>{booking.checkIn}</TableCell>
                         <TableCell>{booking.checkOut}</TableCell>
-                        <TableCell className="font-medium">{getCurrencySymbol(String(booking.currency).slice(0, 3))} {booking?.originalAmount?.toLocaleString()}</TableCell>
+                        <TableCell className="font-medium">
+                          <div>{getCurrencySymbol(String(booking.currency).slice(0, 3))} {booking?.originalAmount?.toLocaleString()}</div>
+                          {booking.currency && String(booking.currency).toUpperCase() !== "INR" && booking.amount ? (
+                            <div className="text-xs font-normal text-slate-500">
+                              (₹{Number(booking.amount).toLocaleString()})
+                            </div>
+                          ) : null}
+                        </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center text-sm font-medium">
@@ -7300,7 +7359,7 @@ export default function SalesAccountsTeamPage() {
                               <span className="text-sm font-semibold text-slate-700">
                                 {computeReceivedPercentage(
                                   booking.receivedAmount,
-                                  booking.amount
+                                  booking.originalAmount
                                 )}%
                               </span>
                             </div>
@@ -8116,7 +8175,14 @@ export default function SalesAccountsTeamPage() {
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="font-bold text-slate-900">{getCurrencySymbol(String(booking.currency).slice(0, 3))}{booking?.originalAmount?.toLocaleString()}</TableCell>
+                        <TableCell className="font-bold text-slate-900">
+                          <div>{getCurrencySymbol(String(booking.currency).slice(0, 3))}{booking?.originalAmount?.toLocaleString()}</div>
+                          {booking.currency && String(booking.currency).toUpperCase() !== "INR" && booking.amount ? (
+                            <div className="text-xs font-normal text-slate-500">
+                              (₹{Number(booking.amount).toLocaleString()})
+                            </div>
+                          ) : null}
+                        </TableCell>
                         {/* NEW — Discount % */}
                         <TableCell className="font-semibold text-blue-700">
                           {booking.discountPercent !== null && booking.discountPercent !== undefined
@@ -8999,7 +9065,14 @@ export default function SalesAccountsTeamPage() {
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="font-bold text-slate-900">{getCurrencySymbol(String(booking.currency).slice(0, 3))}{booking.originalAmount?.toLocaleString()}</TableCell>
+                        <TableCell className="font-bold text-slate-900">
+                          <div>{getCurrencySymbol(String(booking.currency).slice(0, 3))}{booking.originalAmount?.toLocaleString()}</div>
+                          {booking.currency && String(booking.currency).toUpperCase() !== "INR" && booking.amount ? (
+                            <div className="text-xs font-normal text-slate-500">
+                              (₹{Number(booking.amount).toLocaleString()})
+                            </div>
+                          ) : null}
+                        </TableCell>
                         {/* NEW — Discount % */}
                         <TableCell className="font-semibold text-blue-700">
                           {booking.discountPercent !== null && booking.discountPercent !== undefined
@@ -9650,7 +9723,12 @@ export default function SalesAccountsTeamPage() {
 
                         {/* Amount */}
                         <TableCell className="font-medium">
-                          ₹{booking.amount?.toLocaleString()}
+                          <div>{getCurrencySymbol(String(booking.currency).slice(0, 3))}{booking?.originalAmount?.toLocaleString()}</div>
+                          {booking.currency && String(booking.currency).toUpperCase() !== "INR" && booking.amount ? (
+                            <div className="text-xs font-normal text-slate-500">
+                              (₹{Number(booking.amount).toLocaleString()})
+                            </div>
+                          ) : null}
                         </TableCell>
 
                         {/* Payment Progress */}
@@ -10159,7 +10237,14 @@ export default function SalesAccountsTeamPage() {
                       <TableCell>{booking.programmeName}</TableCell>
 
                       {/* Amount */}
-                      <TableCell className="font-medium">{getCurrencySymbol(String(booking.currency).slice(0, 3))}{booking.originalAmount?.toLocaleString()}</TableCell>
+                      <TableCell className="font-medium">
+                        <div>{getCurrencySymbol(String(booking.currency).slice(0, 3))}{booking.originalAmount?.toLocaleString()}</div>
+                        {booking.currency && String(booking.currency).toUpperCase() !== "INR" && booking.amount ? (
+                          <div className="text-xs font-normal text-slate-500">
+                            (₹{Number(booking.amount).toLocaleString()})
+                          </div>
+                        ) : null}
+                      </TableCell>
 
                       <TableCell>
                         <div className="space-y-2">

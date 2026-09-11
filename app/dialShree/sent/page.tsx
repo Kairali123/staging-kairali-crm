@@ -1,25 +1,69 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef, Suspense } from "react";
-import { useDialShreeSentLeads, type DialShreeSentLead, type PillColor, type DotColor } from "@/hooks/useDialShreeSentLeads";
+import { useRouter } from "next/navigation";
+
+import { useDialShreeSentLeads, type DialShreeSentLead } from "@/hooks/useDialShreeSentLeads";
 import { useAuth } from "@/hooks/use-auth";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Eye, Phone, Mail, MapPin, Clock, Calendar, CheckCircle2, AlertCircle, X, ExternalLink, Play, Pause } from "lucide-react";
-import Image from "next/image";
+import { Search, Loader2 } from "lucide-react";
 
-// ─── Table Primitives & Styles ────────────────────────────────────────────────
+// ─── Color Types ─────────────────────────────────────────────────────────────
+
+type PillColor = "green" | "blue" | "purple" | "orange" | "red" | "yellow" | "gray" | "teal" | "indigo" | "pink";
+type DotColor = "g" | "o" | "r" | "b" | "x";
+
+// ─── Format Date/Time ─────────────────────────────────────────────────────────
+
+export function formatDisplayDateTime(val: any): string {
+    if (!val || val === "—" || val === "null" || val === "undefined") return "—";
+    const s = String(val).trim();
+    if (!s) return "—";
+    if (/^\d{2}\/\d{2}\/\d{4}/.test(s)) return s;
+
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+    if (m) {
+        const year = m[1];
+        const month = m[2];
+        const day = m[3];
+        const hours = m[4];
+        const mins = m[5];
+        if (hours !== undefined && mins !== undefined && (hours !== "00" || mins !== "00")) {
+            return `${day}/${month}/${year} ${hours}:${mins}`;
+        }
+        return `${day}/${month}/${year}`;
+    }
+
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) {
+        const p = (n: number) => String(n).padStart(2, "0");
+        const hours = p(d.getHours());
+        const mins = p(d.getMinutes());
+        if (hours !== "00" || mins !== "00") {
+            return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${hours}:${mins}`;
+        }
+        return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+    }
+    return s;
+}
+
+// ─── Table Primitives ─────────────────────────────────────────────────────────
 
 const PILL_STYLES: Record<PillColor, React.CSSProperties> = {
-    green: { background: "#d1fae5", color: "#065f46" }, blue: { background: "#dbeafe", color: "#1e40af" },
-    purple: { background: "#ede9fe", color: "#5b21b6" }, orange: { background: "#ffedd5", color: "#9a3412" },
-    red: { background: "#fee2e2", color: "#991b1b" }, yellow: { background: "#fef3c7", color: "#92400e" },
-    gray: { background: "#f1f5f9", color: "#475569" }, teal: { background: "#ccfbf1", color: "#0f766e" },
-    indigo: { background: "#e0e7ff", color: "#3730a3" }, pink: { background: "#fce7f3", color: "#9d174d" },
+    green: { background: "#d1fae5", color: "#065f46" },
+    blue: { background: "#dbeafe", color: "#1e40af" },
+    purple: { background: "#ede9fe", color: "#5b21b6" },
+    orange: { background: "#ffedd5", color: "#9a3412" },
+    red: { background: "#fee2e2", color: "#991b1b" },
+    yellow: { background: "#fef3c7", color: "#92400e" },
+    gray: { background: "#f1f5f9", color: "#475569" },
+    teal: { background: "#ccfbf1", color: "#0f766e" },
+    indigo: { background: "#e0e7ff", color: "#3730a3" },
+    pink: { background: "#fce7f3", color: "#9d174d" },
 };
-
-const DOT: Record<DotColor, string> = { g: "#10b981", o: "#f59e0b", r: "#ef4444", b: "#3b82f6", x: "#94a3b8" };
+const DOT: { [k in DotColor]: string } = { g: "#10b981", o: "#f59e0b", r: "#ef4444", b: "#3b82f6", x: "#94a3b8" };
 
 function Pill({ label, color, dot }: { label: string; color: PillColor; dot?: DotColor }) {
     return (
@@ -30,45 +74,23 @@ function Pill({ label, color, dot }: { label: string; color: PillColor; dot?: Do
     );
 }
 
-function IdCell({ children, error }: { children: React.ReactNode; error?: boolean }) {
-    return (
-        <span style={{ fontFamily: "monospace", fontSize: 10.5, background: "#f8fafc", padding: "2px 6px", borderRadius: 4, color: error ? "#dc2626" : "#475569", border: "1px solid #e2e8f0", whiteSpace: "nowrap" }}>
-            {children}
-        </span>
-    );
-}
-
 function Td({ children, style, className }: { children: React.ReactNode; style?: React.CSSProperties; className?: string }) {
     return <td className={className} style={{ padding: "8px 11px", fontSize: 11.5, color: "#374151", borderRight: "1px solid #f1f5f9", whiteSpace: "nowrap", verticalAlign: "middle", ...style }}>{children}</td>;
 }
 
-function TruncTd({ children, maxWidth = 140 }: { children: React.ReactNode; maxWidth?: number }) {
-    return <td style={{ padding: "8px 11px", fontSize: 11.5, color: "#374151", borderRight: "1px solid #f1f5f9", maxWidth, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "middle" }}>{children}</td>;
+function Th({ children, style: extraStyle, className }: { children: React.ReactNode; style?: React.CSSProperties; className?: string }) {
+    return <th className={className} style={{ padding: "9px 11px", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,.78)", textTransform: "uppercase" as const, letterSpacing: ".6px", whiteSpace: "nowrap", textAlign: "left" as const, borderRight: "1px solid rgba(255,255,255,.06)", ...extraStyle }}>{children}</th>;
 }
 
-function Th({ children, style: extraStyle }: { children: React.ReactNode; style?: React.CSSProperties }) {
-    return <th style={{ padding: "9px 11px", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,.78)", textTransform: "uppercase" as const, letterSpacing: ".6px", whiteSpace: "nowrap", textAlign: "left" as const, borderRight: "1px solid rgba(255,255,255,.06)", ...extraStyle }}>{children}</th>;
-}
-
-function SortableTh({ children, colKey, sortKey, sortDir, onSort, style: extraStyle }: {
-    children: React.ReactNode; colKey: string; sortKey: string; sortDir: "asc" | "desc"; onSort: (k: string) => void; style?: React.CSSProperties;
+function SortableTh({ children, colKey, sortKey, sortDir, onSort, style: extraStyle, className }: {
+    children: React.ReactNode; colKey: string; sortKey: string; sortDir: "asc" | "desc"; onSort: (k: string) => void; style?: React.CSSProperties; className?: string;
 }) {
     const active = sortKey === colKey;
-    const ariaSort: React.AriaAttributes["aria-sort"] = active ? (sortDir === "asc" ? "ascending" : "descending") : "none";
     return (
-        <th
-            role="columnheader"
-            aria-sort={ariaSort}
-            tabIndex={0}
-            onClick={() => onSort(colKey)}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSort(colKey); } }}
-            style={{ padding: "9px 11px", fontSize: 10, fontWeight: 700, color: active ? "#fff" : "rgba(255,255,255,.78)", textTransform: "uppercase" as const, letterSpacing: ".6px", whiteSpace: "nowrap", textAlign: "left" as const, borderRight: "1px solid rgba(255,255,255,.06)", cursor: "pointer", userSelect: "none", background: active ? "rgba(255,255,255,.12)" : undefined, outline: "none", ...extraStyle }}
-            onFocus={e => { e.currentTarget.style.boxShadow = "inset 0 0 0 2px rgba(255,255,255,.5)"; }}
-            onBlur={e => { e.currentTarget.style.boxShadow = ""; }}
-        >
+        <th className={className} onClick={() => onSort(colKey)} style={{ padding: "9px 11px", fontSize: 10, fontWeight: 700, color: active ? "#fff" : "rgba(255,255,255,.78)", textTransform: "uppercase" as const, letterSpacing: ".6px", whiteSpace: "nowrap", textAlign: "left" as const, borderRight: "1px solid rgba(255,255,255,.06)", cursor: "pointer", userSelect: "none", background: active ? "rgba(255,255,255,.12)" : undefined, ...extraStyle }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                 {children}
-                <span aria-hidden="true" style={{ display: "inline-flex", flexDirection: "column", gap: 1, opacity: active ? 1 : 0.4 }}>
+                <span className="sort-arrows" style={{ display: "inline-flex", flexDirection: "column", gap: 1, opacity: active ? 1 : 0.4 }}>
                     <span style={{ fontSize: 7, lineHeight: 1, color: active && sortDir === "asc" ? "#fff" : "rgba(255,255,255,.5)" }}>▲</span>
                     <span style={{ fontSize: 7, lineHeight: 1, color: active && sortDir === "desc" ? "#fff" : "rgba(255,255,255,.5)" }}>▼</span>
                 </span>
@@ -77,16 +99,20 @@ function SortableTh({ children, colKey, sortKey, sortDir, onSort, style: extraSt
     );
 }
 
+function HLabel({ full, short }: { full: string; short: string }) {
+    return <>
+        <span className="lbl-full">{full}</span>
+        <span className="lbl-short">{short}</span>
+    </>;
+}
+
 function TooltipTd({ children, label, maxWidth = 140, mono = false }: { children: string; label: string; maxWidth?: number; mono?: boolean }) {
     const [show, setShow] = useState(false);
     const [pos, setPos] = useState({ x: 0, y: 0 });
-    const isEmpty = !children || children === "—" || children === "-";
+    const isEmpty = !children || children === "—";
     return (
-        <td
-            onMouseEnter={isEmpty ? undefined : e => { const r = e.currentTarget.getBoundingClientRect(); setPos({ x: r.left, y: r.bottom + 8 }); setShow(true); }}
-            onMouseLeave={() => setShow(false)}
-            style={{ padding: "8px 11px", fontSize: 11.5, color: "#374151", borderRight: "1px solid #f1f5f9", maxWidth, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "middle", fontFamily: mono ? "monospace" : undefined }}
-        >
+        <td onMouseEnter={isEmpty ? undefined : e => { const r = e.currentTarget.getBoundingClientRect(); setPos({ x: r.left, y: r.bottom + 8 }); setShow(true); }} onMouseLeave={() => setShow(false)}
+            style={{ padding: "8px 11px", fontSize: 11.5, color: "#374151", borderRight: "1px solid #f1f5f9", maxWidth, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "middle", fontFamily: mono ? "monospace" : undefined }}>
             {children}
             {show && !isEmpty && (
                 <div style={{ position: "fixed", left: Math.min(pos.x, window.innerWidth - 340), top: pos.y, zIndex: 9999, background: "#1e2a4a", color: "#f1f5f9", fontSize: 12, padding: "10px 14px", borderRadius: 9, maxWidth: 400, whiteSpace: "pre-wrap", wordBreak: "break-word", boxShadow: "0 8px 24px rgba(0,0,0,.28)", lineHeight: 1.6, pointerEvents: "none" }}>
@@ -99,333 +125,40 @@ function TooltipTd({ children, label, maxWidth = 140, mono = false }: { children
     );
 }
 
-function NotesTd({ children, label = "Notes" }: { children: string; label?: string }) {
-    const [show, setShow] = useState(false);
-    const [pos, setPos] = useState({ x: 0, y: 0 });
-    const isEmpty = !children || children === "—" || children === "-";
+function CopyTd({ value, style: extraStyle, className }: { value: string; style?: React.CSSProperties; className?: string }) {
+    const [copied, setCopied] = useState(false);
+    const handleCopy = () => { navigator.clipboard.writeText(value).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1800); }); };
+    const { background: extraBg, ...restExtra } = extraStyle || {};
+
     return (
-        <td
-            onMouseEnter={isEmpty ? undefined : e => { const r = e.currentTarget.getBoundingClientRect(); setPos({ x: r.left, y: r.bottom + 8 }); setShow(true); }}
-            onMouseLeave={() => setShow(false)}
-            style={{ padding: "8px 11px", fontSize: 11.5, color: "#64748b", borderRight: "1px solid #f1f5f9", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "middle" }}
-        >
-            {children}
-            {show && !isEmpty && (
-                <div style={{ position: "fixed", left: Math.min(pos.x, window.innerWidth - 340), top: pos.y, zIndex: 9999, background: "#1e2a4a", color: "#f1f5f9", fontSize: 12, padding: "10px 14px", borderRadius: 9, maxWidth: 340, whiteSpace: "pre-wrap", wordBreak: "break-word", boxShadow: "0 8px 24px rgba(0,0,0,.28)", lineHeight: 1.6, pointerEvents: "none" }}>
-                    <div style={{ position: "absolute", top: -6, left: 16, width: 0, height: 0, borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderBottom: "6px solid #1e2a4a" }} />
-                    <span style={{ fontWeight: 700, color: "#a5b4fc", fontSize: 10, textTransform: "uppercase" as const, letterSpacing: ".6px", display: "block", marginBottom: 5 }}>{label}</span>
-                    {children}
-                </div>
-            )}
+        <td className={`${className || ''} ${copied ? 'copied-active' : ''}`} onClick={handleCopy} title={value} style={{ padding: "8px 11px", fontSize: 11, borderRight: "1px solid #f1f5f9", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "middle", cursor: "pointer", fontFamily: "monospace", color: copied ? "#059669" : "#475569", background: copied ? "#f0fdf4" : (extraBg || undefined), transition: "background .2s, color .2s", userSelect: "all", ...restExtra }}>
+            {copied ? "✓ Copied!" : value}
         </td>
     );
 }
 
-// ─── Audio Helpers & Mini Player ──────────────────────────────────────────────
-
-function isAudioUrl(url: any): boolean {
-    if (!url) return false;
-    const u = String(url).toLowerCase().trim();
-    if (!u.startsWith("http")) return false;
-    return (
-        u.includes(".mp3") ||
-        u.includes(".wav") ||
-        u.includes("kstorage") ||
-        u.includes("squadiq") ||
-        u.includes("recording") ||
-        u.includes("knowlarity") ||
-        u.includes("dialer") ||
-        u.includes("/recordings/") ||
-        u.includes("s3.amazonaws.com")
-    );
+function colorText(value: string, type: "status" | "intent"): string {
+    const v = (value || "").toLowerCase().trim();
+    if (type === "intent") {
+        if (v.includes("high")) return "#059669";
+        if (v.includes("med")) return "#d97706";
+        if (v.includes("low")) return "#ea580c";
+        return "#64748b";
+    }
+    if (type === "status") {
+        if (v.includes("sent")) return "#059669";
+        if (v.includes("exception") || v.includes("error") || v.includes("failed")) return "#dc2626";
+        return "#ea580c";
+    }
+    return "#374151";
 }
 
-function MiniAudioButton({ url }: { url: string }) {
-    const [playing, setPlaying] = useState(false);
-    const audioRef = useRef<HTMLAudioElement | null>(null);
-
-    const togglePlay = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (!audioRef.current) {
-            audioRef.current = new Audio(url);
-            audioRef.current.onended = () => setPlaying(false);
-            audioRef.current.onerror = () => setPlaying(false);
-        }
-        if (playing) {
-            audioRef.current.pause();
-            setPlaying(false);
-        } else {
-            audioRef.current.play().catch(() => setPlaying(false));
-            setPlaying(true);
-        }
-    };
-
-    useEffect(() => {
-        return () => {
-            if (audioRef.current) {
-                audioRef.current.pause();
-                audioRef.current = null;
-            }
-        };
-    }, []);
-
+function ColorTd({ value, type, maxWidth }: { value: string; type: "status" | "intent"; maxWidth?: number }) {
+    if (!value || value === "—") return <Td>{value || "—"}</Td>;
     return (
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <button
-                type="button"
-                onClick={togglePlay}
-                style={{ background: playing ? "#ef4444" : "#4f46e5", color: "#fff", border: "none", borderRadius: 4, width: 22, height: 22, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "all .15s" }}
-                title={playing ? "Pause" : "Play Recording"}
-            >
-                {playing ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3 ml-0.5" />}
-            </button>
-            <a
-                href={url}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: "#4f46e5", textDecoration: "underline", fontSize: 11 }}
-            >
-                Link
-            </a>
-        </div>
-    );
-}
-
-// ─── Modal: View Full Lead Analysis ───────────────────────────────────────────
-
-function LeadDetailsModal({ row, onClose }: { row: DialShreeSentLead; onClose: () => void }) {
-    return (
-        <div style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(15,23,42,.65)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
-            <div style={{ background: "#fff", width: "100%", maxWidth: 860, maxHeight: "90vh", borderRadius: 16, boxShadow: "0 20px 50px rgba(0,0,0,.25)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                {/* Header */}
-                <div style={{ background: "linear-gradient(110deg,#1e2a4a 0%,#2d3a6d 100%)", padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", color: "#fff" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <div style={{ width: 38, height: 38, borderRadius: 10, background: "rgba(255,255,255,.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>📤</div>
-                        <div>
-                            <div style={{ fontSize: 16, fontWeight: 800 }}>{row.name_of_client || "Lead Details"}</div>
-                            <div style={{ fontSize: 11, color: "rgba(255,255,255,.7)", marginTop: 2 }}>
-                                Lead ID: <span style={{ fontFamily: "monospace", color: "#93c5fd" }}>{row.lead_id || `#${row.id}`}</span> · DialShree Sent Outreach Log
-                            </div>
-                        </div>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <Pill label={row.status.label} color={row.status.color} dot={row.status.dot} />
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            style={{ background: "rgba(255,255,255,.12)", border: "none", borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", cursor: "pointer" }}
-                        >
-                            <X className="w-4 h-4" />
-                        </button>
-                    </div>
-                </div>
-
-                {/* Body Content */}
-                <div style={{ padding: "20px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 18, background: "#f8fafc" }}>
-                    {/* Section 1: Contact Info */}
-                    <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "14px 16px" }}>
-                        <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".7px", color: "#4f46e5", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
-                            <Phone className="w-3.5 h-3.5" /> Client &amp; Contact Details
-                        </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Client Name</span><strong style={{ fontSize: 12.5, color: "#1e293b" }}>{row.name_of_client || "—"}</strong></div>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Primary Mobile</span><strong style={{ fontSize: 12.5, color: "#1e293b" }}>{row.mobile || "—"}</strong></div>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Alt Mobile</span><strong style={{ fontSize: 12.5, color: "#1e293b" }}>{row.alt_mobile || "—"}</strong></div>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Primary Email</span><strong style={{ fontSize: 12.5, color: "#1e293b" }}>{row.email_id || "—"}</strong></div>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Alt Email</span><strong style={{ fontSize: 12.5, color: "#1e293b" }}>{row.alt_email_id || "—"}</strong></div>
-                        </div>
-                    </div>
-
-                    {/* Section 2: Enquiry & Qualification */}
-                    <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "14px 16px" }}>
-                        <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".7px", color: "#0891b2", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
-                            <Calendar className="w-3.5 h-3.5" /> Enquiry &amp; Qualification Details
-                        </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Enquiry Date &amp; Time</span><strong style={{ fontSize: 12.5, color: "#1e293b" }}>{row.enquiry_date_time || "—"}</strong></div>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Lead Intent</span><strong style={{ fontSize: 12.5, color: "#1e293b" }}>{row.sqv_lead_intent || "—"}</strong></div>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Subject</span><div style={{ fontSize: 12, color: "#334155" }}>{row.subjects || "—"}</div></div>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Notes</span><div style={{ fontSize: 12, color: "#334155" }}>{row.notes || "—"}</div></div>
-                            <div style={{ gridColumn: "1 / -1" }}><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>SQV Remarks</span><div style={{ fontSize: 12, color: "#334155" }}>{row.sqv_remarks || "—"}</div></div>
-                            <div style={{ gridColumn: "1 / -1" }}><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Remarks History</span><div style={{ fontSize: 12, color: "#334155", background: "#f8fafc", padding: "8px 10px", borderRadius: 6, border: "1px solid #f1f5f9" }}>{row.remarks_history || "—"}</div></div>
-                        </div>
-                    </div>
-
-                    {/* Section 3: Campaign & Dispatch Config */}
-                    <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "14px 16px" }}>
-                        <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".7px", color: "#7c3aed", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
-                            <ExternalLink className="w-3.5 h-3.5" /> Campaign, Source &amp; Dispatch
-                        </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Website Name</span><strong style={{ fontSize: 12.5, color: "#1e293b" }}>{row.website_name || "—"}</strong></div>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Company</span><strong style={{ fontSize: 12.5, color: "#1e293b" }}>{row.company || "—"}</strong></div>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Data Source</span><Pill label={row.dataSourcePill.label} color={row.dataSourcePill.color} /></div>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Campaign Name</span><strong style={{ fontSize: 12.5, color: "#1e293b" }}>{row.campaign_name || "—"}</strong></div>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>List ID</span><span style={{ fontFamily: "monospace", fontSize: 12, color: "#334155" }}>{row.list_id || "—"}</span></div>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Assigned To</span><strong style={{ fontSize: 12.5, color: "#1e293b" }}>{row.assign_to || "—"}</strong></div>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>URL / Recording</span>
-                                {row.url && row.url !== "—" ? (
-                                    <a href={row.url} target="_blank" rel="noopener noreferrer" style={{ color: "#4f46e5", textDecoration: "underline", fontSize: 12, wordBreak: "break-all" }}>{row.url}</a>
-                                ) : "—"}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Section 4: DialShree Response & System Actions */}
-                    <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "14px 16px" }}>
-                        <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".7px", color: "#ea580c", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
-                            <CheckCircle2 className="w-3.5 h-3.5" /> DialShree Response &amp; Exception Handling
-                        </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Status Code</span><IdCell>{row.code || "—"}</IdCell></div>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Response Result</span><strong style={{ fontSize: 12.5, color: "#1e293b" }}>{row.response_result || "—"}</strong></div>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Timestamp Sent/Not Sent</span><strong style={{ fontSize: 12.5, color: "#1e293b" }}>{row.timestamp_sent_not_sent || "—"}</strong></div>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Action After Exception</span><div style={{ fontSize: 12, color: "#334155" }}>{row.action_after_getting_exception || "—"}</div></div>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Timestamp After Action</span><strong style={{ fontSize: 12.5, color: "#1e293b" }}>{row.timestamp_after_action || "—"}</strong></div>
-                        </div>
-                    </div>
-
-                    {/* Section 5: Geo, Timezone & Operating Hours */}
-                    <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "14px 16px" }}>
-                        <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".7px", color: "#059669", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
-                            <MapPin className="w-3.5 h-3.5" /> Geo, Timezone &amp; Schedule
-                        </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Location</span><strong style={{ fontSize: 12.5, color: "#1e293b" }}>{row.location || "—"}</strong></div>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Location 2</span><strong style={{ fontSize: 12.5, color: "#1e293b" }}>{row.location_2 || "—"}</strong></div>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Region</span><strong style={{ fontSize: 12.5, color: "#1e293b" }}>{row.region || "—"}</strong></div>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Geo</span><strong style={{ fontSize: 12.5, color: "#1e293b" }}>{row.geo || "—"}</strong></div>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Timezone / UTC</span><strong style={{ fontSize: 12.5, color: "#1e293b" }}>{row.timezone || "—"} ({row.utc_offset || "+00:00"})</strong></div>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Business Hours</span><strong style={{ fontSize: 12.5, color: "#1e293b" }}>{row.business_hours_start || "—"} - {row.business_hours_end || "—"}</strong></div>
-                            <div><span style={{ fontSize: 10.5, color: "#64748b", display: "block" }}>Weekdays Config</span><strong style={{ fontSize: 12.5, color: "#1e293b" }}>{row.weekdays_config || "—"}</strong></div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Footer */}
-                <div style={{ background: "#fff", borderTop: "1px solid #e2e8f0", padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ fontSize: 11, color: "#94a3b8" }}>
-                        Created: {row.created_at || "—"} · Updated: {row.updated_at || "—"}
-                    </div>
-                    <Button onClick={onClose} variant="outline" size="sm" className="bg-slate-800 text-white hover:bg-slate-700 hover:text-white border-none px-5">
-                        Close
-                    </Button>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-// ─── KPI Breakdown ────────────────────────────────────────────────────────────
-
-function buildSentCounts(rows: DialShreeSentLead[]) {
-    const res = {
-        total: rows.length,
-        ktahv: { total: 0, dom: 0, intl: 0 },
-        kappl: { total: 0, dom: 0, intl: 0 },
-        villaraag: { total: 0, dom: 0, intl: 0 },
-        kac: { total: 0, dom: 0, intl: 0 },
-        success: 0,
-        failed: 0,
-        pending: 0
-    };
-    rows.forEach(r => {
-        const c = String(r.company || "").toUpperCase();
-        const geoStr = String(r.geo || "").toLowerCase().trim();
-        const isDom = geoStr.includes("domestic");
-        const isIntl = !isDom;
-        const s = String(r.status.label || "").toLowerCase();
-
-        if (s.includes("success")) res.success++;
-        else if (s.includes("fail") || s.includes("error")) res.failed++;
-        else res.pending++;
-
-        if (c.includes("KTAHV")) {
-            res.ktahv.total++; if (isIntl) res.ktahv.intl++; else res.ktahv.dom++;
-        } else if (c.includes("KAPPL")) {
-            res.kappl.total++; if (isIntl) res.kappl.intl++; else res.kappl.dom++;
-        } else if (c.includes("VILLARAAG") || c.includes("VILLA RAAG")) {
-            res.villaraag.total++; if (isIntl) res.villaraag.intl++; else res.villaraag.dom++;
-        } else {
-            res.kac.total++; if (isIntl) res.kac.intl++; else res.kac.dom++;
-        }
-    });
-    return res;
-}
-
-function CallStatusBreakdown({ counts, total, loading }: { counts: ReturnType<typeof buildSentCounts>; total: number; loading: boolean }) {
-    const CompanyCard = ({ label, stats, icon, color }: { label: string; stats: { total: number; dom: number; intl: number }; icon: string; color: string }) => {
-        const getPctOfCompany = (val: number) => stats.total > 0 ? ((val / stats.total) * 100).toFixed(1) : "0.0";
-        const getPctOfGlobal = () => total > 0 ? ((stats.total / total) * 100).toFixed(1) : "0.0";
-        return (
-            <div style={{ background: color + "08", border: `1.5px solid ${color}33`, borderRadius: 14, padding: "16px 20px", display: "flex", flexDirection: "column", boxShadow: "0 2px 10px rgba(0,0,0,0.03)", transition: "all .2s" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                    <div style={{ fontSize: 10.5, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: ".8px" }}>{label}</div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: 11, fontWeight: 800, color, background: color + "18", padding: "1px 8px", borderRadius: 20 }}>{getPctOfGlobal()}%</span>
-                        <div style={{ fontSize: 16, opacity: 0.9 }}>{icon}</div>
-                    </div>
-                </div>
-                <div style={{ fontSize: 32, fontWeight: 800, color: "#111827", lineHeight: 1, marginBottom: 12 }}>{stats.total}</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 5, borderTop: "1px solid #f1f5f9", paddingTop: 10 }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <span style={{ fontSize: 11.5, fontWeight: 700, color: "#059669" }}>Domestic:</span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: "#059669" }}>{stats.dom} ({getPctOfCompany(stats.dom)}%)</span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <span style={{ fontSize: 11.5, fontWeight: 700, color: "#dc2626" }}>International:</span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: "#dc2626" }}>{stats.intl} ({getPctOfCompany(stats.intl)}%)</span>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
-    return (
-        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, overflow: "hidden", boxShadow: "0 1px 8px rgba(0,0,0,0.06)" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 20px", borderBottom: "1px solid #f1f5f9", background: "linear-gradient(90deg, #f8faff 0%, #ffffff 100%)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 34, height: 34, borderRadius: 9, background: "#e0e7ff", color: "#4f46e5", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "0 2px 7px #4f46e528" }}>
-                        <Phone className="w-4 h-4" />
-                    </div>
-                    <div>
-                        <div style={{ fontSize: 13.5, fontWeight: 700, color: "#1e293b", lineHeight: 1.2 }}>DialShree Outbound Outreach &amp; Dispatch Status</div>
-                        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>Sent Performance — Company &amp; Regional Breakdown</div>
-                    </div>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    {loading && <div style={{ width: 14, height: 14, border: "2px solid #e2e8f0", borderTopColor: "#4f46e5", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />}
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#e0e7ff", border: "1px solid #c7d2fe", borderRadius: 20, padding: "4px 12px", color: "#4f46e5", fontSize: 11.5, fontWeight: 600 }}>
-                        <span>Sent Leads</span>
-                        <span style={{ background: "#4f46e5", color: "#fff", borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 800, marginLeft: 2 }}>{loading ? "…" : total}</span>
-                    </div>
-                </div>
-            </div>
-            <div style={{ padding: "18px 20px" }}>
-                <div style={{ background: "#f8faff", border: "1px solid #e8edf8", borderRadius: 12, padding: "14px 16px 16px" }}>
-                    <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "1px", color: "#6366f1", textTransform: "uppercase" as const, marginBottom: 14 }}>Outreach Distribution by Entity</div>
-                    {loading ? (
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
-                            {[...Array(5)].map((_, i) => <div key={i} style={{ height: 86, borderRadius: 10, background: "#e9ecef", animation: "kpi-pulse 1.4s ease-in-out infinite" }} />)}
-                        </div>
-                    ) : (
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(225px, 1fr))", gap: 14 }}>
-                            {/* Total Sent Card */}
-                            <div style={{ background: "linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)", borderRadius: 14, padding: "20px", display: "flex", flexDirection: "column", justifyContent: "center", boxShadow: "0 4px 15px rgba(59, 130, 246, 0.25)", position: "relative" }}>
-                                <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.85)", textTransform: "uppercase", letterSpacing: "1px" }}>Total Leads Sent</div>
-                                <div style={{ fontSize: 40, fontWeight: 800, color: "#fff", lineHeight: 1, margin: "8px 0" }}>{counts.total}</div>
-                                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", fontWeight: 500 }}>DialShree Outbound Queue</div>
-                                <div style={{ position: "absolute", top: 18, right: 20, fontSize: 18, opacity: 0.6 }}>📊</div>
-                            </div>
-                            <CompanyCard label="KTAHV" stats={counts.ktahv} icon="🏨" color="#0369a1" />
-                            <CompanyCard label="KAPPL" stats={counts.kappl} icon="🌿" color="#059669" />
-                            <CompanyCard label="VILLARAAG" stats={counts.villaraag} icon="🏡" color="#7c3aed" />
-                            <CompanyCard label="KAC" stats={counts.kac} icon="🏢" color="#ea580c" />
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
+        <td style={{ padding: "8px 11px", fontSize: 11.5, borderRight: "1px solid #f1f5f9", whiteSpace: "nowrap", verticalAlign: "middle", maxWidth, overflow: maxWidth ? "hidden" : undefined, textOverflow: maxWidth ? "ellipsis" : undefined }}>
+            <span style={{ color: colorText(value, type), fontWeight: 700 }} title={value}>{value}</span>
+        </td>
     );
 }
 
@@ -447,7 +180,7 @@ function Pagination({ total, page, perPage, onPage, onPerPage }: { total: number
         return pages;
     };
     const btn = (label: React.ReactNode, onClick: () => void, disabled: boolean, active = false, key?: string): React.ReactNode => (
-        <button key={key} type="button" onClick={onClick} disabled={disabled} style={{ height: 30, minWidth: 30, padding: "0 8px", border: active ? "none" : "1px solid #e2e8f0", borderRadius: 6, fontSize: 12.5, fontWeight: active ? 700 : 500, cursor: disabled ? "not-allowed" : "pointer", background: active ? "#4f46e5" : disabled ? "#f8fafc" : "#fff", color: active ? "#fff" : disabled ? "#cbd5e1" : "#374151", fontFamily: "inherit", display: "inline-flex", alignItems: "center", justifyContent: "center", transition: "all .12s" }}>{label}</button>
+        <button key={key} onClick={onClick} disabled={disabled} style={{ height: 30, minWidth: 30, padding: "0 8px", border: active ? "none" : "1px solid #e2e8f0", borderRadius: 6, fontSize: 12.5, fontWeight: active ? 700 : 500, cursor: disabled ? "not-allowed" : "pointer", background: active ? "#4f46e5" : disabled ? "#f8fafc" : "#fff", color: active ? "#fff" : disabled ? "#cbd5e1" : "#374151", fontFamily: "inherit", display: "inline-flex", alignItems: "center", justifyContent: "center", transition: "all .12s" }}>{label}</button>
     );
     return (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, padding: "10px 14px", borderTop: "1px solid #f1f5f9", background: "#fafbfe" }}>
@@ -463,27 +196,257 @@ function Pagination({ total, page, perPage, onPage, onPerPage }: { total: number
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <span>Rows/page</span>
                     <select aria-label="Rows per page" value={perPage} onChange={e => { onPerPage(Number(e.target.value)); onPage(1); }} style={{ height: 30, padding: "0 6px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12.5, fontFamily: "inherit", background: "#fff", color: "#374151", cursor: "pointer" }}>
-                        {[10, 25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+                        {[10, 25, 50, 100, 500].map(n => <option key={n} value={n}>{n}</option>)}
                     </select>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <span>Go to</span>
                     <input aria-label="Go to page" type="number" min={1} max={totalPages} value={goInput} onChange={e => setGoInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleGo()} placeholder="Page" style={{ height: 30, width: 56, padding: "0 8px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12.5, fontFamily: "inherit", background: "#fff", color: "#374151", textAlign: "center", outline: "none" }} />
-                    <button type="button" onClick={handleGo} style={{ height: 30, padding: "0 14px", borderRadius: 6, border: "none", background: "#4f46e5", color: "#fff", fontSize: 12.5, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}>Go</button>
+                    <button onClick={handleGo} style={{ height: 30, padding: "0 14px", borderRadius: 6, border: "none", background: "#4f46e5", color: "#fff", fontSize: 12.5, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}>Go</button>
                 </div>
             </div>
         </div>
     );
 }
 
-// ─── Table Component ──────────────────────────────────────────────────────────
+// ─── SVG Icons ────────────────────────────────────────────────────────────────
+
+const SendSvg = ({ sz = 14 }: { sz?: number }) => (
+    <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="22" y1="2" x2="11" y2="13" />
+        <polygon points="22 2 15 22 11 13 2 9 22 2" />
+    </svg>
+);
+
+// ─── Sent View Modal ──────────────────────────────────────────────────────────
+
+function SentViewModal({ row, onClose }: { row: DialShreeSentLead; onClose: () => void }) {
+    const val = (v: any) => {
+        if (v === null || v === undefined) return "—";
+        const t = String(v).trim();
+        return t === "" || t === "0" || t === "—" ? "—" : t;
+    };
+
+    const Field = ({ label, value, color = "#4f46e5" }: { label: string; value: any; color?: string }) => (
+        <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: ".8px", textTransform: "uppercase", color, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</div>
+            <div style={{ fontSize: 12.5, color: "#1e293b", fontWeight: 500, lineHeight: 1.6, wordBreak: "break-word", overflowWrap: "anywhere" }}>{val(value)}</div>
+        </div>
+    );
+
+    const Section = ({ title, icon, color, children, style }: { title: string; icon: string; color: string; children: React.ReactNode; style?: React.CSSProperties }) => (
+        <div style={{ paddingBottom: 18, ...style }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 16 }}>
+                <span style={{ fontSize: 13 }}>{icon}</span>
+                <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "1px", textTransform: "uppercase", color }}>{title}</span>
+                <div style={{ flex: 1, height: 1, background: `${color}15`, marginLeft: 8 }} />
+            </div>
+            {children}
+        </div>
+    );
+
+    return (
+        <div style={{ position: "fixed", inset: 0, zIndex: 10000, background: "rgba(15,23,42,0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+            onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+            <div style={{ background: "#fff", borderRadius: 20, width: "100%", maxWidth: 1100, maxHeight: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)", overflow: "hidden", border: "1px solid #e2e8f0" }}>
+                {/* Header */}
+                <div style={{ background: "linear-gradient(135deg,#1e1b4b,#312e81,#4338ca)", padding: "20px 28px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+                    <div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>DialShree Outbound Lead Details</div>
+                        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", marginTop: 4, display: "flex", gap: 8, alignItems: "center" }}>
+                            <span style={{ background: "rgba(255,255,255,0.15)", padding: "2px 8px", borderRadius: 4 }}>{row.clientName}</span>
+                            <span style={{ opacity: 0.5 }}>•</span>
+                            <span>{row.mobile}</span>
+                            {row.leadId && <><span style={{ opacity: 0.5 }}>•</span><span style={{ fontFamily: "monospace", fontSize: 11 }}>ID: {row.leadId}</span></>}
+                            <span style={{ opacity: 0.5 }}>•</span>
+                            <Pill label={row.deliveryStatus.label} color={row.deliveryStatus.color as PillColor} dot={row.deliveryStatus.category === "sent" ? "g" : row.deliveryStatus.category === "exception" ? "r" : "o"} />
+                        </div>
+                    </div>
+                    <button onClick={onClose} style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "rgba(255,255,255,0.1)", color: "#fff", fontSize: 24, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.2)"} onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}>×</button>
+                </div>
+                {/* Content */}
+                <div style={{ overflowY: "auto", padding: "32px", display: "flex", flexDirection: "column", gap: 32 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "32px 48px" }}>
+                        <Section title="Client Information" icon="👤" color="#0891b2">
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "16px 20px" }}>
+                                <Field label="Client Name" value={row.clientName} color="#0891b2" />
+                                <Field label="Primary Mobile" value={row.mobile} color="#0891b2" />
+                                <Field label="Alternate Mobile" value={row.altMobile} color="#0891b2" />
+                                <Field label="Email ID" value={row.email} color="#0891b2" />
+                                <Field label="Alternate Email" value={row.altEmail} color="#0891b2" />
+                                <Field label="Lead ID" value={row.leadId} color="#0891b2" />
+                            </div>
+                        </Section>
+                        <Section title="Campaign & Outreach" icon="🎯" color="#4f46e5">
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "16px 20px" }}>
+                                <Field label="Campaign Name" value={row.campaignName} color="#4f46e5" />
+                                <Field label="List ID" value={row.listId} color="#4f46e5" />
+                                <Field label="Target Company" value={row.company} color="#4f46e5" />
+                                <Field label="Website / Source" value={row.websiteName} color="#4f46e5" />
+                                <Field label="Assign To" value={row.assignTo} color="#4f46e5" />
+                                <Field label="Data Source" value={row.dataSource} color="#4f46e5" />
+                            </div>
+                        </Section>
+                        <Section title="Lead Qualification & Intent" icon="📈" color="#7c3aed">
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "16px 20px" }}>
+                                <Field label="Lead Intent" value={row.sqvLeadIntent} color="#7c3aed" />
+                                <Field label="Delivery Status" value={row.deliveryStatus.label} color="#7c3aed" />
+                                <Field label="Subject" value={row.subjects} color="#7c3aed" />
+                                <Field label="Intent Remarks" value={row.sqvRemarks} color="#7c3aed" />
+                            </div>
+                        </Section>
+                        <Section title="Location & Business Hours" icon="🕒" color="#d946ef">
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "16px 20px" }}>
+                                <Field label="Location" value={[row.location, row.geo].filter(Boolean).join(", ")} color="#d946ef" />
+                                <Field label="Region / Code" value={[row.region, row.code].filter(Boolean).join(" · ")} color="#d946ef" />
+                                <Field label="Timezone" value={row.timezone} color="#d946ef" />
+                                <Field label="Business Hours" value={`${row.businessHoursStart || '—'} to ${row.businessHoursEnd || '—'}`} color="#d946ef" />
+                                <Field label="Weekdays Config" value={row.weekdaysConfig} color="#d946ef" />
+                                <Field label="Enquiry D/T" value={row.enquiryDateTime} color="#d946ef" />
+                            </div>
+                        </Section>
+                    </div>
+
+                    <Section title="Outreach Response & Action" icon="📤" color="#03412f" style={{ borderTop: "2px solid #f1f5f9", paddingTop: 28 }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                            <div style={{ background: "#f8fafc", borderRadius: 16, border: "1px solid #e2e8f0", padding: "18px 22px" }}>
+                                <div style={{ fontSize: 10, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Dialer Response Result</div>
+                                <div style={{ fontSize: 13.5, color: "#1e293b", lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "monospace" }}>{val(row.responseResult)}</div>
+                            </div>
+                            {row.actionAfterException && (
+                                <div style={{ background: "#fef2f2", borderRadius: 16, border: "1px solid #fecaca", padding: "18px 22px" }}>
+                                    <div style={{ fontSize: 10, fontWeight: 800, color: "#b91c1c", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Exception Action / Remediation</div>
+                                    <div style={{ fontSize: 13.5, color: "#991b1b", lineHeight: 1.6, wordBreak: "break-word" }}>{row.actionAfterException}</div>
+                                </div>
+                            )}
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
+                                <div style={{ background: "#f8fafc", borderRadius: 16, border: "1px solid #e2e8f0", padding: "18px 22px" }}>
+                                    <div style={{ fontSize: 10, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Remarks History</div>
+                                    <div style={{ fontSize: 13, color: "#1e293b", lineHeight: 1.6, wordBreak: "break-word" }}>{val(row.remarksHistory)}</div>
+                                </div>
+                                <div style={{ background: "#f8fafc", borderRadius: 16, border: "1px solid #e2e8f0", padding: "18px 22px" }}>
+                                    <div style={{ fontSize: 10, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Original Notes</div>
+                                    <div style={{ fontSize: 13, color: "#1e293b", lineHeight: 1.6, wordBreak: "break-word" }}>{val(row.notes)}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </Section>
+                </div>
+                {/* Footer */}
+                <div style={{ borderTop: "1px solid #e2e8f0", padding: "18px 32px", display: "flex", alignItems: "center", justifyContent: "flex-end", background: "#f8fafc", flexShrink: 0 }}>
+                    <button onClick={onClose} style={{ padding: "12px 36px", borderRadius: 12, border: "none", background: "#4338ca", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 12px rgba(67,56,202,0.25)" }}>Close Details</button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ─── Status Breakdown Config ──────────────────────────────────────────────────
+
+type SentStatusKey = "total_sent" | "dispatched" | "exception" | "pending";
+
+const SENT_STATUS_CFG: { key: SentStatusKey; label: string; color: string; bgColor: string; borderColor: string }[] = [
+    { key: "total_sent", label: "Total Outbound", color: "#1d4ed8", bgColor: "#eff6ff", borderColor: "#93c5fd" },
+    { key: "dispatched", label: "Sent / Dispatched", color: "#047857", bgColor: "#ecfdf5", borderColor: "#6ee7b7" },
+    { key: "exception", label: "Exceptions / Errors", color: "#b91c1c", bgColor: "#fef2f2", borderColor: "#fca5a5" },
+    { key: "pending", label: "Pending Outreach", color: "#7c3aed", bgColor: "#f5f3ff", borderColor: "#c4b5fd" },
+];
+
+function SentStatusBreakdown({ counts, total, loading }: {
+    counts: Record<SentStatusKey, { total: number; high: number; medium: number; low: number }>;
+    total: number;
+    loading: boolean;
+}) {
+    return (
+        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, overflow: "hidden", boxShadow: "0 1px 8px rgba(0,0,0,0.06)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 20px", borderBottom: "1px solid #f1f5f9", background: "linear-gradient(90deg, #f8faff 0%, #ffffff 100%)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 9, background: "#dbeafe", color: "#1d4ed8", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "0 2px 7px #1d4ed828" }}>
+                        <SendSvg sz={16} />
+                    </div>
+                    <div>
+                        <div style={{ fontSize: 13.5, fontWeight: 700, color: "#1e293b", lineHeight: 1.2 }}>DialShree Outbound Outreach Status</div>
+                        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>DialShree Dispatch Performance — Delivery & Exception Breakdown</div>
+                    </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    {loading && <div style={{ width: 14, height: 14, border: "2px solid #e2e8f0", borderTopColor: "#4f46e5", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 20, padding: "4px 12px", color: "#1d4ed8", fontSize: 11.5, fontWeight: 600 }}>
+                        <span>Outbound</span>
+                        <span style={{ background: "#1d4ed8", color: "#fff", borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 800, marginLeft: 2 }}>{loading ? "…" : total}</span>
+                    </div>
+                </div>
+            </div>
+            <div style={{ padding: "18px 20px" }}>
+                <div style={{ background: "#f8fafc", border: "1px solid #e8edf8", borderRadius: 12, padding: "14px 16px 16px" }}>
+                    <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "1px", color: "#6366f1", textTransform: "uppercase" as const, marginBottom: 14 }}>Outreach Dispatch Analysis</div>
+                    {loading ? (
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
+                            {[...Array(4)].map((_, i) => <div key={i} style={{ height: 86, borderRadius: 10, background: "#e9ecef", animation: "kpi-pulse 1.4s ease-in-out infinite" }} />)}
+                        </div>
+                    ) : (
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
+                            {SENT_STATUS_CFG.map(cfg => {
+                                const stats = counts[cfg.key] || { total: 0, high: 0, medium: 0, low: 0 };
+                                const count = stats.total;
+                                const calculatePercent = (value: number, totalAmount: number) =>
+                                    totalAmount > 0 ? ((value / totalAmount) * 100).toFixed(1) : "0.0";
+                                const pct = calculatePercent(count, total);
+                                const isEmpty = count === 0;
+                                return (
+                                    <div key={cfg.key} style={{ background: cfg.bgColor, border: `1.5px solid ${cfg.borderColor}`, borderRadius: 10, padding: "13px 15px 12px", display: "flex", flexDirection: "column", gap: 8, transition: "box-shadow .18s, transform .18s", cursor: "default" }}
+                                        onMouseEnter={e => { if (!isEmpty) { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 14px rgba(0,0,0,0.09)"; (e.currentTarget as HTMLDivElement).style.transform = "translateY(-1px)"; } }}
+                                        onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; (e.currentTarget as HTMLDivElement).style.transform = "none"; }}>
+                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                                <span style={{ width: 7, height: 7, borderRadius: "50%", background: cfg.color, flexShrink: 0, display: "inline-block" }} />
+                                                <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".5px", textTransform: "uppercase", color: cfg.color, lineHeight: 1 }}>{cfg.label}</span>
+                                            </div>
+                                            <div style={{ fontSize: 15, opacity: 0.85 }}>
+                                                {cfg.key === "dispatched" ? "✅" : cfg.key === "exception" ? "⚠️" : cfg.key === "pending" ? "🕒" : "📤"}
+                                            </div>
+                                        </div>
+                                        <div style={{ fontSize: 30, fontWeight: 800, color: "#0f172a", lineHeight: 1, letterSpacing: "-1.5px" }}>{count}</div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                            <div style={{ display: "inline-flex", alignItems: "center", background: cfg.color + "18", borderRadius: 20, padding: "2px 9px", width: "fit-content" }}>
+                                                <span style={{ fontSize: 11.5, fontWeight: 700, color: cfg.color }}>{pct}%</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Intent Breakdown */}
+                                        <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 4, borderTop: "1px dashed rgba(0,0,0,0.08)", paddingTop: 8 }}>
+                                            {[
+                                                { label: "High Intent", val: stats.high, color: "#f87171" },
+                                                { label: "Medium Intent", val: stats.medium, color: "#fbbf24" },
+                                                { label: "Low Intent", val: stats.low, color: "#34d399" }
+                                            ].map(i => (
+                                                <div key={i.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 10, fontWeight: 700 }}>
+                                                    <span style={{ color: "#64748b" }}>{i.label}:</span>
+                                                    <span style={{ color: i.color }}>
+                                                        {i.val} ({calculatePercent(i.val, count)}%)
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ─── Sent Table Inner Component ───────────────────────────────────────────────
 
 function DialShreeSentTableInner({ data }: { data: DialShreeSentLead[] }) {
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState(10);
-    const [sortKey, setSortKey] = useState("enquiry_date_time");
+    const [viewRow, setViewRow] = useState<DialShreeSentLead | null>(null);
+    const [sortKey, setSortKey] = useState("timestamp");
     const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-    const [selectedModalRow, setSelectedModalRow] = useState<DialShreeSentLead | null>(null);
 
     const handleSort = (k: string) => {
         if (sortKey === k) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -494,150 +457,179 @@ function DialShreeSentTableInner({ data }: { data: DialShreeSentLead[] }) {
     const sorted = useMemo(() => {
         return [...data].sort((a, b) => {
             let av: string | number = "", bv: string | number = "";
-            if (sortKey === "enquiry_date_time") {
-                av = a._dt_num || 0;
-                bv = b._dt_num || 0;
-            } else if (sortKey === "timestamp") {
-                av = a._ts_num || 0;
-                bv = b._ts_num || 0;
-            } else if (sortKey === "name_of_client") {
-                av = (a.name_of_client || "").toLowerCase();
-                bv = (b.name_of_client || "").toLowerCase();
-            } else if (sortKey === "website_name") {
-                av = (a.website_name || "").toLowerCase();
-                bv = (b.website_name || "").toLowerCase();
-            } else if (sortKey === "data_source") {
-                av = (a.data_source || "").toLowerCase();
-                bv = (b.data_source || "").toLowerCase();
-            } else if (sortKey === "campaign_name") {
-                av = (a.campaign_name || "").toLowerCase();
-                bv = (b.campaign_name || "").toLowerCase();
-            } else if (sortKey === "company") {
-                av = (a.company || "").toLowerCase();
-                bv = (b.company || "").toLowerCase();
-            } else if (sortKey === "assign_to") {
-                av = (a.assign_to || "").toLowerCase();
-                bv = (b.assign_to || "").toLowerCase();
-            } else if (sortKey === "status") {
-                av = (a.status.label || "").toLowerCase();
-                bv = (b.status.label || "").toLowerCase();
-            }
+            if (sortKey === "id") { av = a.id; bv = b.id; }
+            else if (sortKey === "timestamp") { av = a._ts_num ?? 0; bv = b._ts_num ?? 0; }
+            else if (sortKey === "enquiryDateTime") { av = a._enq_num ?? 0; bv = b._enq_num ?? 0; }
+            else if (sortKey === "clientName") { av = a.clientName.toLowerCase(); bv = b.clientName.toLowerCase(); }
+            else if (sortKey === "mobile") { av = String(a.mobile); bv = String(b.mobile); }
+            else if (sortKey === "campaignName") { av = a.campaignName.toLowerCase(); bv = b.campaignName.toLowerCase(); }
+            else if (sortKey === "company") { av = a.company.toLowerCase(); bv = b.company.toLowerCase(); }
+            else if (sortKey === "sqvLeadIntent") { av = a.sqvLeadIntent.toLowerCase(); bv = b.sqvLeadIntent.toLowerCase(); }
+            else if (sortKey === "deliveryStatus") { av = a.deliveryStatus.label.toLowerCase(); bv = b.deliveryStatus.label.toLowerCase(); }
+            else if (sortKey === "assignTo") { av = (a.assignTo || "").toLowerCase(); bv = (b.assignTo || "").toLowerCase(); }
+
             if (av < bv) return sortDir === "asc" ? -1 : 1;
             if (av > bv) return sortDir === "asc" ? 1 : -1;
             return 0;
         });
     }, [data, sortKey, sortDir]);
 
-    useEffect(() => { setPage(1); }, [data]);
+    useEffect(() => {
+        const totalPages = Math.max(1, Math.ceil(sorted.length / perPage));
+        if (page > totalPages) setPage(1);
+    }, [sorted.length, perPage, page]);
+
     const paged = sorted.slice((page - 1) * perPage, page * perPage);
     const sp = { sortKey, sortDir, onSort: handleSort };
 
     return (
         <>
-            <div style={{ overflowX: "auto" }}>
+            {viewRow && <SentViewModal row={viewRow} onClose={() => setViewRow(null)} />}
+
+            <style>{`
+                .sent-table-row {
+                    border-bottom: 1px solid #f1f5f9;
+                    transition: background .12s, box-shadow .12s;
+                }
+                .sent-table-row:hover {
+                    background: #e0e7ff !important;
+                    box-shadow: inset 3px 0 0 #4f46e5 !important;
+                }
+                .lbl-short { display: none; }
+                @media (min-width: 1024px) {
+                    .sticky-header-1 { position: sticky; left: 0; z-index: 20; background: #1e2a4a !important; min-width: 120px; }
+                    .sticky-header-2 { position: sticky; left: 120px; z-index: 20; background: #1e2a4a !important; min-width: 130px; }
+                    .sticky-header-3 { position: sticky; left: 250px; z-index: 20; background: #1e2a4a !important; min-width: 160px; }
+                    .sticky-header-4 { position: sticky; left: 410px; z-index: 20; background: #1e2a4a !important; min-width: 180px; box-shadow: 4px 0 8px -2px rgba(0,0,0,0.15); border-right: none !important; }
+                    
+                    .sticky-cell-1 { position: sticky; left: 0; z-index: 10; background: #fff; min-width: 120px; }
+                    .sticky-cell-2 { position: sticky; left: 120px; z-index: 10; background: #fff; min-width: 130px; }
+                    .sticky-cell-3 { position: sticky; left: 250px; z-index: 10; background: #fff; min-width: 160px; }
+                    .sticky-cell-4 { position: sticky; left: 410px; z-index: 10; background: #fff; min-width: 180px; box-shadow: 4px 0 8px -2px rgba(0,0,0,0.1); border-right: none !important; }
+                    
+                    .sent-table-row:hover .sticky-cell-1,
+                    .sent-table-row:hover .sticky-cell-2,
+                    .sent-table-row:hover .sticky-cell-3,
+                    .sent-table-row:hover .sticky-cell-4 {
+                        background: #e0e7ff !important;
+                    }
+                    .sticky-cell-3.copied-active { background: #f0fdf4 !important; color: #059669 !important; }
+                }
+                @media (max-width: 1023.98px) {
+                    .sticky-header-1, .sticky-cell-1 { left: 0; min-width: 64px; max-width: 64px; }
+                    .sticky-header-2, .sticky-cell-2 { left: 64px; min-width: 76px; max-width: 76px; }
+                    .sticky-header-3, .sticky-cell-3 { left: 140px; min-width: 58px; max-width: 58px; }
+                    .sticky-header-4, .sticky-cell-4 { left: 198px; min-width: 104px; max-width: 104px; }
+                    .sticky-header-1, .sticky-header-2, .sticky-header-3, .sticky-header-4 {
+                        position: sticky; z-index: 20; background: #1e2a4a !important; overflow: hidden;
+                    }
+                    .sticky-cell-1, .sticky-cell-2, .sticky-cell-3, .sticky-cell-4 {
+                        position: sticky; z-index: 10; background: #fff;
+                    }
+                    .sticky-header-4, .sticky-cell-4 {
+                        box-shadow: 4px 0 8px -2px rgba(0,0,0,0.15) !important; border-right: none !important;
+                    }
+                    .sticky-header-1, .sticky-header-2, .sticky-header-3, .sticky-header-4,
+                    .sticky-cell-1, .sticky-cell-2, .sticky-cell-3, .sticky-cell-4 {
+                        padding: 6px 5px !important; font-size: 9.5px !important;
+                    }
+                    .lbl-full { display: none; }
+                    .lbl-short { display: inline; }
+                    .sticky-header-1 .sort-arrows, .sticky-header-2 .sort-arrows { display: none; }
+                    .sticky-cell-2 { white-space: normal !important; overflow-wrap: break-word; line-height: 1.3; }
+                    .sticky-cell-4 > div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                    .sticky-cell-4 > div:first-child { font-size: 10px !important; }
+                    .sticky-cell-4 > div:not(:first-child) { font-size: 8.5px !important; }
+                    .sent-table-row:hover .sticky-cell-1,
+                    .sent-table-row:hover .sticky-cell-2,
+                    .sent-table-row:hover .sticky-cell-3,
+                    .sent-table-row:hover .sticky-cell-4 {
+                        background: #e0e7ff !important;
+                    }
+                    .sticky-cell-3.copied-active { background: #f0fdf4 !important; color: #059669 !important; }
+                }
+                @media (max-width: 639.98px) {
+                    .sticky-header-1, .sticky-cell-1,
+                    .sticky-header-2, .sticky-cell-2,
+                    .sticky-header-3, .sticky-cell-3 {
+                        position: static !important; left: auto !important; min-width: 90px; max-width: none; box-shadow: none !important;
+                    }
+                    .sticky-header-4, .sticky-cell-4 { left: 0 !important; min-width: 130px; max-width: 130px; }
+                }
+                .sent-table-scroll {
+                    overflow-x: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain;
+                }
+            `}</style>
+            <div className="sent-table-scroll">
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                     <thead>
                         <tr style={{ background: "#1e2a4a" }}>
-                            <Th>Gen. Timestamp</Th>
-                            <SortableTh colKey="enquiry_date_time" {...sp}>Enq. Date &amp; Time</SortableTh>
-                            <Th>Lead ID</Th>
-                            <SortableTh colKey="name_of_client" {...sp}>Client Details</SortableTh>
+                            <SortableTh colKey="timestamp" {...sp} className="sticky-header-1"><HLabel full="Sent Timestamp" short="Sent TS" /></SortableTh>
+                            <SortableTh colKey="enquiryDateTime" {...sp} className="sticky-header-2"><HLabel full="Enq Date & Time" short="Enq D&T" /></SortableTh>
+                            <Th className="sticky-header-3">Lead ID</Th>
+                            <SortableTh colKey="clientName" {...sp} className="sticky-header-4"><HLabel full="Client Details" short="Client" /></SortableTh>
                             <Th>Subject</Th>
-                            <Th>Notes</Th>
-                            <Th>SQV Remarks</Th>
-                            <Th>Recording / URL</Th>
-                            <SortableTh colKey="website_name" {...sp}>Website Name</SortableTh>
-                            <SortableTh colKey="data_source" {...sp}>Data Source</SortableTh>
-                            <SortableTh colKey="campaign_name" {...sp}>Campaign / List</SortableTh>
+                            <SortableTh colKey="campaignName" {...sp}>Campaign</SortableTh>
                             <SortableTh colKey="company" {...sp}>Company</SortableTh>
-                            <SortableTh colKey="assign_to" {...sp}>Assign To</SortableTh>
+                            <Th>Data Source</Th>
+                            <SortableTh colKey="deliveryStatus" {...sp}>Outreach Status</SortableTh>
                             <Th>Response / Result</Th>
-                            <SortableTh colKey="status" {...sp}>Status</SortableTh>
-                            <Th style={{ textAlign: "center" }}>Action</Th>
+                            <SortableTh colKey="sqvLeadIntent" {...sp}>Intent</SortableTh>
+                            <SortableTh colKey="assignTo" {...sp}>Assign To</SortableTh>
+                            <Th>Location / Geo</Th>
+                            <Th>Action</Th>
                         </tr>
                     </thead>
                     <tbody>
                         {paged.length === 0 ? (
-                            <tr>
-                                <td colSpan={16} style={{ padding: "40px", textAlign: "center", color: "#94a3b8", fontSize: 13 }}>
-                                    No DialShree sent outreach records found.
-                                </td>
-                            </tr>
-                        ) : (
-                            paged.map((row, i) => (
-                                <tr
-                                    key={row.lead_id + "-" + row.id + "-" + i}
-                                    style={{ borderBottom: i < paged.length - 1 ? "1px solid #f1f5f9" : "none", transition: "background .12s" }}
-                                    onMouseEnter={e => { (e.currentTarget as HTMLTableRowElement).style.background = "#e0e7ff"; (e.currentTarget as HTMLTableRowElement).style.boxShadow = "inset 3px 0 0 #4f46e5"; }}
-                                    onMouseLeave={e => { (e.currentTarget as HTMLTableRowElement).style.background = ""; (e.currentTarget as HTMLTableRowElement).style.boxShadow = ""; }}
-                                >
-                                    <Td>{row.timestamp}</Td>
-                                    <Td>{row.enquiry_date_time}</Td>
-                                    <Td><IdCell>{row.lead_id || `#${row.id}`}</IdCell></Td>
-                                    <Td>
-                                        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                                            <strong style={{ color: "#1e293b" }}>{row.name_of_client}</strong>
-                                            <span style={{ fontSize: 11, color: "#64748b" }}>{row.mobile}</span>
-                                            {row.email_id && row.email_id !== "—" && (
-                                                <span style={{ fontSize: 10.5, color: "#94a3b8" }}>{row.email_id}</span>
-                                            )}
-                                        </div>
+                            <tr><td colSpan={14} style={{ padding: 32, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>No records found</td></tr>
+                        ) : paged.map((row, i) => {
+                            return (
+                                <tr key={String(row.id) + i} className="sent-table-row">
+                                    <Td className="sticky-cell-1">{formatDisplayDateTime(row.timestamp)}</Td>
+                                    <Td className="sticky-cell-2">{formatDisplayDateTime(row.enquiryDateTime)}</Td>
+                                    <CopyTd value={row.leadId} className="sticky-cell-3" />
+                                    <Td className="sticky-cell-4">
+                                        <div title={row.clientName} style={{ fontWeight: 600, color: "#1e293b" }}>{row.clientName}</div>
+                                        {row.mobile && <div title={String(row.mobile)} style={{ fontSize: 11.5, color: "#1e293b", marginTop: 2 }}>{row.mobile}</div>}
+                                        {row.email && <div title={row.email} style={{ fontSize: 10.5, color: "#64748b", marginTop: 2 }}>{row.email}</div>}
                                     </Td>
-                                    <TooltipTd label="Subject">{row.subjects}</TooltipTd>
-                                    <NotesTd label="Notes">{row.notes}</NotesTd>
-                                    <NotesTd label="SQV Remarks">{row.sqv_remarks}</NotesTd>
-                                    <td style={{ padding: "8px 11px", fontSize: 11.5, borderRight: "1px solid #f1f5f9", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                        {row.url && row.url !== "—" ? (
-                                            isAudioUrl(row.url) ? (
-                                                <MiniAudioButton url={row.url} />
-                                            ) : (
-                                                <a href={row.url} target="_blank" rel="noopener noreferrer" style={{ color: "#4f46e5", cursor: "pointer", textDecoration: "underline" }}>
-                                                    Link
-                                                </a>
-                                            )
-                                        ) : (
-                                            <span style={{ color: "#94a3b8" }}>—</span>
-                                        )}
+                                    <TooltipTd label="Subject" maxWidth={120}>{row.subjects}</TooltipTd>
+                                    <TooltipTd label="Campaign" maxWidth={130}>{row.campaignName}</TooltipTd>
+                                    <Td>{row.company}</Td>
+                                    <TooltipTd label="Data Source" maxWidth={110}>{row.dataSource}</TooltipTd>
+                                    <td style={{ padding: "8px 11px", fontSize: 11.5, borderRight: "1px solid #f1f5f9", whiteSpace: "nowrap", verticalAlign: "middle" }}>
+                                        <Pill
+                                            label={row.deliveryStatus.label}
+                                            color={row.deliveryStatus.color as PillColor}
+                                            dot={row.deliveryStatus.category === "sent" ? "g" : row.deliveryStatus.category === "exception" ? "r" : "o"}
+                                        />
                                     </td>
-                                    <TruncTd>{row.website_name}</TruncTd>
-                                    <Td><Pill label={row.dataSourcePill.label} color={row.dataSourcePill.color} /></Td>
-                                    <Td>
-                                        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                                            <span>{row.campaign_name}</span>
-                                            {row.list_id && row.list_id !== "—" && (
-                                                <span style={{ fontFamily: "monospace", fontSize: 10, color: "#94a3b8" }}>ID: {row.list_id}</span>
-                                            )}
-                                        </div>
-                                    </Td>
-                                    <Td><strong style={{ color: "#334155" }}>{row.company}</strong></Td>
-                                    <Td>{row.assign_to}</Td>
-                                    <TooltipTd label="DialShree Response Result">{row.response_result || row.code || "—"}</TooltipTd>
-                                    <Td><Pill label={row.status.label} color={row.status.color} dot={row.status.dot} /></Td>
-                                    <td style={{ padding: "8px 11px", textAlign: "center", verticalAlign: "middle" }}>
-                                        <button
-                                            type="button"
-                                            onClick={() => setSelectedModalRow(row)}
-                                            style={{ background: "#4f46e5", color: "#fff", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
-                                        >
-                                            <Eye className="w-3 h-3" /> View
+                                    <TooltipTd label="Response Result" maxWidth={140} mono>{row.responseResult}</TooltipTd>
+                                    <ColorTd value={row.sqvLeadIntent} type="intent" maxWidth={90} />
+                                    <Td>{row.assignTo || "—"}</Td>
+                                    <Td>{[row.location, row.geo].filter(Boolean).join(", ") || "—"}</Td>
+                                    <td style={{ padding: "6px 10px", borderRight: "none", whiteSpace: "nowrap", verticalAlign: "middle" }}>
+                                        <button onClick={() => setViewRow(row)}
+                                            style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 11px", borderRadius: 6, border: "1.5px solid #4f46e5", background: "#eef2ff", color: "#4f46e5", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", transition: "all .15s" }}
+                                            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "#4f46e5"; (e.currentTarget as HTMLButtonElement).style.color = "#fff"; }}
+                                            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "#eef2ff"; (e.currentTarget as HTMLButtonElement).style.color = "#4f46e5"; }}>
+                                            <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+                                            View
                                         </button>
                                     </td>
                                 </tr>
-                            ))
-                        )}
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
             <Pagination total={data.length} page={page} perPage={perPage} onPage={setPage} onPerPage={setPerPage} />
-
-            {selectedModalRow && (
-                <LeadDetailsModal row={selectedModalRow} onClose={() => setSelectedModalRow(null)} />
-            )}
         </>
     );
 }
 
-// ─── Date Range Helpers ───────────────────────────────────────────────────────
+// ─── Date Helpers ─────────────────────────────────────────────────────────────
 
 function getDateRange(filter: string): { from: Date | null; to: Date | null } {
     const now = new Date();
@@ -655,30 +647,42 @@ function getDateRange(filter: string): { from: Date | null; to: Date | null } {
     }
 }
 
-function inRange(dateNum: number, from: Date | null, to: Date | null): boolean {
-    if (!from && !to) return true;
-    if (!dateNum) return true;
-    if (from && dateNum < from.getTime()) return false;
-    if (to && dateNum > to.getTime()) return false;
-    return true;
-}
-
-// ─── Main Inner Page Component ────────────────────────────────────────────────
+// ─── Main Page Inner Component ────────────────────────────────────────────────
 
 function DialShreeSentPageInner() {
-    const { data: sentApiData, loading: sentLoading, isRefreshing: hookRefreshing, error: sentError, refetch } = useDialShreeSentLeads();
-    const { hasPermission } = useAuth();
+    const { user, isLoading, hasPermission } = useAuth();
+    const router = useRouter();
+
+    const isSuperAdmin = Boolean(
+        user?.role === "super_admin" ||
+        String(user?.role || "").trim().toLowerCase() === "super_admin" ||
+        String(user?.role || "").trim().toLowerCase() === "super admin"
+    );
+
+    const isAuthorized = Boolean(
+        isSuperAdmin ||
+        user?.role === "admin" ||
+        String(user?.role || "").trim().toLowerCase() === "admin" ||
+        hasPermission("dialshree_sent.view") ||
+        hasPermission("dialshree.view") ||
+        hasPermission("all")
+    );
+
+    useEffect(() => {
+        if (!isLoading && user && !isAuthorized) {
+            router.replace("/access-denied");
+        }
+    }, [isLoading, user, isAuthorized, router]);
+
+    const { data: sentApiData, loading: sentLoading, isRefreshing: hookRefreshing, error: sentError, refetch: refetchSent } = useDialShreeSentLeads();
 
     const [isRefreshing, setIsRefreshing] = useState(false);
     const isRefreshingAny = isRefreshing || hookRefreshing;
-
     const handleRefresh = async () => {
         setIsRefreshing(true);
-        await refetch();
+        await refetchSent();
         setIsRefreshing(false);
     };
-
-    const hasSentPermission = hasPermission("dialshree_sent.view") || hasPermission("dialshree_menu.view") || hasPermission("all");
 
     const tableRef = useRef<HTMLDivElement>(null);
 
@@ -691,186 +695,173 @@ function DialShreeSentPageInner() {
 
     const [dateFilter, setDateFilter] = useState("all");
     const [company, setCompany] = useState("all");
-    const [dataSource, setDataSource] = useState("all");
+    const [campaign, setCampaign] = useState("all");
     const [status, setStatus] = useState("all");
+    const [intent, setIntent] = useState("all");
     const [customDate, setCustomDate] = useState({ start: "", end: "" });
 
     const clearFilters = () => {
-        setSearch(""); setDateFilter("all"); setCompany("all");
-        setDataSource("all"); setStatus("all");
+        setSearch("");
+        setDateFilter("all");
+        setCompany("all");
+        setCampaign("all");
+        setStatus("all");
+        setIntent("all");
         setCustomDate({ start: "", end: "" });
     };
 
-    const isFirstRender = useRef(true);
-    useEffect(() => {
-        if (isFirstRender.current) {
-            isFirstRender.current = false;
-            return;
-        }
-        if (tableRef.current) {
-            tableRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-    }, [dateFilter, company, dataSource, status]);
-
     const dateWindow = useMemo(() => {
         if (dateFilter === "custom") {
-            const parseLocalDate = (str: string, isEnd = false) => {
-                if (!str) return null;
-                const parts = str.split("-");
-                if (parts.length === 3) {
-                    const year = parseInt(parts[0], 10);
-                    const month = parseInt(parts[1], 10) - 1;
-                    const day = parseInt(parts[2], 10);
-                    return isEnd ? new Date(year, month, day, 23, 59, 59, 999) : new Date(year, month, day, 0, 0, 0, 0);
-                }
-                return new Date(str);
-            };
-            return { from: parseLocalDate(customDate.start), to: parseLocalDate(customDate.end, true) };
+            const from = customDate.start ? new Date(customDate.start) : null;
+            const to = customDate.end ? new Date(`${customDate.end}T23:59:59.999`) : null;
+            return { from, to };
         }
         return getDateRange(dateFilter);
     }, [dateFilter, customDate]);
 
-    // Distinct Filter Options
+    // ── Filter Options ────────────────────────────────────────────────────────
     const companyOptions = useMemo(() => Array.from(new Set(sentApiData.map(r => r.company))).filter(v => v && v !== "—").sort(), [sentApiData]);
-    const dataSourceOptions = useMemo(() => Array.from(new Set(sentApiData.map(r => r.dataSourcePill?.label || r.data_source))).filter(v => v && v !== "—").sort(), [sentApiData]);
-    const statusOptions = useMemo(() => Array.from(new Set(sentApiData.map(r => r.status?.label))).filter(v => v && v !== "—").sort(), [sentApiData]);
+    const campaignOptions = useMemo(() => Array.from(new Set(sentApiData.map(r => r.campaignName))).filter(v => v && v !== "—").sort(), [sentApiData]);
 
-    // Filtered Data
+    // ── Filtered Data ─────────────────────────────────────────────────────────
     const filteredSent = useMemo(() => {
         const q = debouncedSearch.trim().toLowerCase();
         return sentApiData.filter(r => {
-            if (q) {
-                const matchName = (r.name_of_client || "").toLowerCase().includes(q);
-                const matchMob = String(r.mobile || "").includes(q);
-                const matchAltMob = String(r.alt_mobile || "").includes(q);
-                const matchEmail = (r.email_id || "").toLowerCase().includes(q);
-                const matchId = String(r.lead_id || "").toLowerCase().includes(q) || String(r.id || "").includes(q);
-                const matchSub = (r.subjects || "").toLowerCase().includes(q);
-                const matchNotes = (r.notes || "").toLowerCase().includes(q);
-                const matchAssign = (r.assign_to || "").toLowerCase().includes(q);
-                const matchCamp = (r.campaign_name || "").toLowerCase().includes(q);
-                const matchComp = (r.company || "").toLowerCase().includes(q);
-                if (!matchName && !matchMob && !matchAltMob && !matchEmail && !matchId && !matchSub && !matchNotes && !matchAssign && !matchCamp && !matchComp) {
-                    return false;
-                }
-            }
-            if (!inRange(r._dt_num || r._ts_num, dateWindow.from, dateWindow.to)) return false;
-            if (company !== "all" && r.company !== company) return false;
-            if (dataSource !== "all" && (r.dataSourcePill?.label !== dataSource && r.data_source !== dataSource)) return false;
-            if (status !== "all" && r.status?.label !== status) return false;
-            return true;
-        }).sort((a, b) => (b._dt_num || b._ts_num || 0) - (a._dt_num || a._ts_num || 0));
-    }, [debouncedSearch, dateWindow, company, dataSource, status, sentApiData]);
+            if (q && !(
+                r.clientName.toLowerCase().includes(q) ||
+                String(r.mobile).includes(q) ||
+                r.email.toLowerCase().includes(q) ||
+                r.leadId.toLowerCase().includes(q) ||
+                r.subjects.toLowerCase().includes(q) ||
+                r.campaignName.toLowerCase().includes(q) ||
+                r.dataSource.toLowerCase().includes(q) ||
+                r.responseResult.toLowerCase().includes(q) ||
+                r.notes.toLowerCase().includes(q)
+            )) return false;
 
-    const sentCounts = useMemo(() => buildSentCounts(filteredSent), [filteredSent]);
+            if (dateWindow.from || dateWindow.to) {
+                const ts = r._ts_num || r._enq_num || 0;
+                if (!ts) return false;
+                if (dateWindow.from && ts < dateWindow.from.getTime()) return false;
+                if (dateWindow.to && ts > dateWindow.to.getTime()) return false;
+            }
+
+            if (company !== "all" && r.company !== company) return false;
+            if (campaign !== "all" && r.campaignName !== campaign) return false;
+
+            if (status !== "all") {
+                if (status === "sent" && r.deliveryStatus.category !== "sent") return false;
+                if (status === "exception" && r.deliveryStatus.category !== "exception") return false;
+                if (status === "pending" && r.deliveryStatus.category !== "pending") return false;
+            }
+
+            if (intent !== "all" && !r.sqvLeadIntent.toLowerCase().includes(intent.toLowerCase())) return false;
+
+            return true;
+        });
+    }, [debouncedSearch, dateWindow, company, campaign, status, intent, sentApiData]);
+
+    // ── Counts Breakdown ──────────────────────────────────────────────────────
+    const sentCounts = useMemo(() => {
+        const init = () => ({ total: 0, high: 0, medium: 0, low: 0 });
+        const counts: Record<SentStatusKey, { total: number; high: number; medium: number; low: number }> = {
+            total_sent: init(),
+            dispatched: init(),
+            exception: init(),
+            pending: init(),
+        };
+
+        filteredSent.forEach(r => {
+            const intRaw = (r.sqvLeadIntent || "").toLowerCase().trim();
+            const addIntent = (stats: { total: number; high: number; medium: number; low: number }) => {
+                stats.total++;
+                if (intRaw.includes("high")) stats.high++;
+                else if (intRaw.includes("med")) stats.medium++;
+                else stats.low++;
+            };
+
+            addIntent(counts.total_sent);
+            if (r.deliveryStatus.category === "sent") {
+                addIntent(counts.dispatched);
+            } else if (r.deliveryStatus.category === "exception") {
+                addIntent(counts.exception);
+            } else {
+                addIntent(counts.pending);
+            }
+        });
+
+        return counts;
+    }, [filteredSent]);
 
     if (sentLoading && sentApiData.length === 0) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
                 <div className="flex flex-col items-center justify-center min-h-[60vh]">
-                    <Image src="/grouploader.gif" alt="Loading" width={200} height={200} priority className="animate-pulse" />
-                    <p className="mt-4 text-base font-bold text-indigo-600 animate-pulse">Fetching latest DialShree Sent Outreach Data...</p>
+                    <div style={{ width: 44, height: 44, border: "3px solid #e0e7ff", borderTopColor: "#4f46e5", borderRadius: "50%", animation: "spin 0.7s linear infinite", marginBottom: 16 }} />
+                    <p className="text-base font-bold text-indigo-600 animate-pulse">Fetching latest DialShree Sent Outreach Leads...</p>
                 </div>
             </div>
         );
     }
 
-    if (!hasSentPermission) {
+    if (!isAuthorized) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50">
                 <div className="text-center">
                     <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
                     <div style={{ fontSize: 16, fontWeight: 700, color: "#1e293b" }}>Access Restricted</div>
-                    <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 6 }}>You don't have permission to view DialShree sent outreach leads.</div>
-                </div>
-            </div>
-        );
-    }
-
-    if (sentError && sentApiData.length === 0) {
-        return (
-            <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 flex items-center justify-center px-4">
-                <div style={{ maxWidth: 560, width: "100%", background: "#fff", border: "1px solid #fecaca", borderRadius: 16, padding: "22px 24px", boxShadow: "0 12px 30px rgba(220,38,38,.08)" }}>
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                        <div style={{ width: 40, height: 40, borderRadius: 12, background: "#fef2f2", color: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 20, fontWeight: 800 }}>!</div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 18, fontWeight: 800, color: "#991b1b" }}>Could not load DialShree sent leads</div>
-                            <div style={{ fontSize: 13, color: "#7f1d1d", marginTop: 6, lineHeight: 1.6 }}>{sentError}</div>
-                            <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
-                                <button type="button" onClick={handleRefresh} style={{ background: "#dc2626", color: "#fff", border: "none", borderRadius: 8, padding: "9px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                                    Retry now
-                                </button>
-                                <button type="button" onClick={() => window.location.reload()} style={{ background: "#fff", color: "#991b1b", border: "1px solid #fecaca", borderRadius: 8, padding: "9px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                                    Reload page
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                    <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 6 }}>You do not have permission to view DialShree sent outreach records.</div>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="font-sans bg-[#f0f2f8] min-h-full text-slate-800 pb-10">
+        <div className="font-sans bg-[#f0f2f8] min-h-full text-slate-800">
             <style>{`
                 @keyframes spin      { to { transform: rotate(360deg); } }
                 @keyframes kpi-pulse { 0%,100% { opacity:1; } 50% { opacity:0.38; } }
             `}</style>
 
-            {/* ── Banner ── */}
-            <div style={{ background: "linear-gradient(110deg,#3730a3 0%,#4f46e5 45%,#6366f1 100%)", padding: "14px 16px", display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12, position: "relative", overflow: "hidden" }}>
+            {/* Banner */}
+            <div style={{ background: "linear-gradient(110deg,#1e1b4b 0%,#312e81 45%,#4338ca 100%)", padding: "14px 16px", display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12, position: "relative", overflow: "hidden" }}>
                 <div style={{ position: "absolute", right: -60, top: -60, width: 220, height: 220, borderRadius: "50%", background: "rgba(255,255,255,.06)", pointerEvents: "none" }} />
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(255,255,255,.18)", display: "flex", alignItems: "center", justifyContent: "center", marginRight: 12, flexShrink: 0, color: "#fff" }}>
-                    <Phone className="w-5 h-5" />
+                    <SendSvg sz={20} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", letterSpacing: "-.3px", lineHeight: 1.2 }}>DialShree Sent Outreach Leads</div>
-                    <div style={{ fontSize: 11, color: "rgba(255,255,255,.75)", marginTop: 2 }}>DialShree Outbound · Sent Calls — Automated Lead Dispatch &amp; Outreach Log</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", letterSpacing: "-.3px", lineHeight: 1.2 }}>DialShree Sent Outreach Log</div>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,.65)", marginTop: 2 }}>DialShree Calling Portal · Sent Leads — Real-time DialShree Outbound Queue</div>
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                    {isRefreshingAny && (
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, color: "rgba(255,255,255,.7)", fontSize: 11, fontWeight: 500 }}>
-                            <div style={{ width: 10, height: 10, border: "2px solid rgba(255,255,255,.4)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-                            Syncing...
+                    {hookRefreshing && !isRefreshing && (
+                        <div className="hidden md:flex items-center gap-2 text-white/60 text-[11px] font-medium animate-pulse">
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            Background Syncing...
                         </div>
                     )}
-                    <button
-                        type="button"
-                        onClick={handleRefresh}
-                        disabled={isRefreshingAny}
-                        aria-label={isRefreshingAny ? "Refreshing data" : "Sync data"}
-                        style={{ background: "rgba(255,255,255,.15)", border: "1px solid rgba(255,255,255,.2)", borderRadius: 8, height: 38, padding: "0 14px", color: "#fff", fontSize: 12, fontWeight: 700, cursor: isRefreshingAny ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 7, transition: "all .2s" }}
+                    <button onClick={handleRefresh} disabled={isRefreshingAny}
+                        style={{ background: "rgba(255,255,255,.15)", border: "1px solid rgba(255,255,255,.2)", borderRadius: 8, height: 42, padding: "0 16px", color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: isRefreshingAny ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 8, transition: "all .2s" }}
                         onMouseEnter={e => !isRefreshingAny && (e.currentTarget.style.background = "rgba(255,255,255,.25)")}
-                        onMouseLeave={e => !isRefreshingAny && (e.currentTarget.style.background = "rgba(255,255,255,.15)")}
-                    >
-                        <div style={{ width: 13, height: 13, border: "2px solid rgba(255,255,255,0.4)", borderTopColor: "#fff", borderRadius: "50%", animation: isRefreshingAny ? "spin 0.8s linear infinite" : "none" }} />
+                        onMouseLeave={e => !isRefreshingAny && (e.currentTarget.style.background = "rgba(255,255,255,.15)")}>
+                        <div style={{ width: 14, height: 14, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", borderRadius: "50%", animation: isRefreshingAny ? "spin 0.8s linear infinite" : "none" }} />
                         {isRefreshingAny ? "Refreshing..." : "Sync Data"}
                     </button>
-                    <div style={{ textAlign: "right", background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.18)", borderRadius: 8, padding: "6px 14px", flexShrink: 0, zIndex: 1 }}>
-                        <div style={{ fontSize: 9.5, color: "rgba(255,255,255,.6)", textTransform: "uppercase", letterSpacing: ".8px", fontWeight: 600 }}>Total Records</div>
-                        <div style={{ fontSize: 28, fontWeight: 800, color: "#fff", lineHeight: 1.1, marginTop: 2 }}>{filteredSent.length}</div>
-                    </div>
                 </div>
             </div>
 
-            {sentError && sentApiData.length > 0 && (
-                <div className="mx-2 sm:mx-4 lg:mx-5 mt-4">
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 12, background: "#fff7ed", border: "1px solid #fdba74", borderRadius: 12, padding: "12px 14px", color: "#9a3412" }}>
-                        <div style={{ width: 28, height: 28, borderRadius: 8, background: "#ffedd5", color: "#c2410c", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontWeight: 900 }}>!</div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13, fontWeight: 800 }}>Background refresh warning</div>
-                            <div style={{ fontSize: 12.5, marginTop: 4, lineHeight: 1.6 }}>{sentError}</div>
-                        </div>
-                        <button type="button" onClick={handleRefresh} style={{ background: "#ea580c", color: "#fff", border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
-                            Retry
-                        </button>
+            {/* Error banner if any */}
+            {sentError && sentApiData.length === 0 && (
+                <div className="mt-3 mx-2 sm:mx-4 lg:mx-5">
+                    <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "14px 18px", color: "#991b1b", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>⚠️ {sentError}</div>
+                        <Button onClick={handleRefresh} size="sm" variant="outline" className="border-rose-300 text-rose-800 bg-white">Retry</Button>
                     </div>
                 </div>
             )}
 
-            {/* ── Filters & Search ── */}
+            {/* Filters */}
             <div className="mt-3 mx-2 sm:mx-4 lg:mx-5">
                 <div className="rounded-xl border border-slate-200 bg-white shadow-md">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-3 sm:px-5 py-3 sm:py-4 bg-gradient-to-r from-blue-100 via-white to-indigo-100 border-b border-slate-200 rounded-t-xl">
@@ -889,17 +880,7 @@ function DialShreeSentPageInner() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3">
                             <div className="flex flex-col gap-1.5 sm:col-span-2 xl:col-span-2">
                                 <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Search Leads</label>
-                                <Input
-                                    placeholder="Name, phone, alt phone, email, lead ID, notes, subject..."
-                                    value={search}
-                                    onChange={e => setSearch(e.target.value)}
-                                    onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-                                        if (e.key === "Enter") {
-                                            tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-                                        }
-                                    }}
-                                    className="h-10 w-full rounded-md border-gray-300"
-                                />
+                                <Input placeholder="Name, email, phone, ID, subject, remarks..." value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)} className="h-10 w-full rounded-md border-gray-300" />
                             </div>
                             <div className="flex flex-col gap-1.5">
                                 <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Date Range</label>
@@ -915,43 +896,57 @@ function DialShreeSentPageInner() {
                                 <Select value={company} onValueChange={setCompany}>
                                     <SelectTrigger className="h-10 w-full rounded-md border-gray-300"><SelectValue placeholder="All" /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="all">All Companies</SelectItem>
+                                        <SelectItem value="all">All</SelectItem>
                                         {companyOptions.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
                             <div className="flex flex-col gap-1.5">
-                                <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Data Source</label>
-                                <Select value={dataSource} onValueChange={setDataSource}>
-                                    <SelectTrigger className="h-10 w-full rounded-md border-gray-300"><SelectValue placeholder="All Sources" /></SelectTrigger>
+                                <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Campaign</label>
+                                <Select value={campaign} onValueChange={setCampaign}>
+                                    <SelectTrigger className="h-10 w-full rounded-md border-gray-300"><SelectValue placeholder="All Campaigns" /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="all">All Sources</SelectItem>
-                                        {dataSourceOptions.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                                        <SelectItem value="all">All Campaigns</SelectItem>
+                                        {campaignOptions.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
                             <div className="flex flex-col gap-1.5">
-                                <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Status</label>
+                                <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Outreach Status</label>
                                 <Select value={status} onValueChange={setStatus}>
                                     <SelectTrigger className="h-10 w-full rounded-md border-gray-300"><SelectValue placeholder="All Status" /></SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All Status</SelectItem>
-                                        {statusOptions.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                                        <SelectItem value="sent">Sent / Dispatched</SelectItem>
+                                        <SelectItem value="exception">Exceptions / Errors</SelectItem>
+                                        <SelectItem value="pending">Pending</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Lead Intent</label>
+                                <Select value={intent} onValueChange={setIntent}>
+                                    <SelectTrigger className="h-10 w-full rounded-md border-gray-300"><SelectValue placeholder="All Intent" /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Intent</SelectItem>
+                                        <SelectItem value="high">High</SelectItem>
+                                        <SelectItem value="medium">Medium</SelectItem>
+                                        <SelectItem value="low">Low</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
                         </div>
 
-                        {/* Custom date range inputs */}
+                        {/* Custom date range */}
                         {dateFilter === "custom" && (
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 pt-3 border-t border-slate-200">
                                 <div className="flex flex-col gap-1.5">
                                     <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Start Date</label>
-                                    <Input type="date" value={customDate.start} onChange={e => setCustomDate({ ...customDate, start: e.target.value })} className="h-10 w-full rounded-md border-gray-300" />
+                                    <Input type="date" value={customDate.start} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomDate({ ...customDate, start: e.target.value })} className="h-10 w-full rounded-md border-gray-300" />
                                 </div>
                                 <div className="flex flex-col gap-1.5">
                                     <label className="text-xs font-medium uppercase tracking-wide text-slate-500">End Date</label>
-                                    <Input type="date" value={customDate.end} onChange={e => setCustomDate({ ...customDate, end: e.target.value })} className="h-10 w-full rounded-md border-gray-300" />
+                                    <Input type="date" value={customDate.end} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomDate({ ...customDate, end: e.target.value })} className="h-10 w-full rounded-md border-gray-300" />
                                 </div>
                             </div>
                         )}
@@ -959,28 +954,24 @@ function DialShreeSentPageInner() {
                 </div>
             </div>
 
-            {/* ── KPI Status Breakdown ── */}
+            {/* KPI Breakdown */}
             <div className="mx-2 sm:mx-4 lg:mx-5 mt-4">
-                <CallStatusBreakdown counts={sentCounts} total={filteredSent.length} loading={sentLoading} />
+                <SentStatusBreakdown counts={sentCounts} total={filteredSent.length} loading={sentLoading} />
             </div>
 
-            {/* ── Table Container ── */}
+            {/* Table */}
             <div ref={tableRef} className="mx-2 sm:mx-4 lg:mx-5 mt-4 mb-6">
                 <div className="bg-white border border-slate-200 rounded-xl shadow-md overflow-hidden">
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 16px", borderBottom: "1px solid #e8edf5", background: "#fff" }}>
-                        <div style={{ width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: "#e0e7ff", color: "#4f46e5" }}>
-                            <Phone className="w-4 h-4" />
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "1px solid #e8edf5", background: "#fff" }}>
+                        <div style={{ width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: "#dbeafe", color: "#1d4ed8" }}>
+                            <SendSvg sz={14} />
                         </div>
-                        <span style={{ fontSize: 13.5, fontWeight: 700, color: "#1e2a4a" }}>DialShree Sent Outreach Leads — Automated Dispatch Log</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "#1e2a4a" }}>DialShree Sent Outreach — Outbound Log &amp; Queue</span>
                     </div>
-                    {sentLoading && filteredSent.length === 0 ? (
-                        <div style={{ padding: "40px", textAlign: "center", color: "#94a3b8", fontSize: 13 }}>
-                            <div style={{ display: "inline-block", width: 20, height: 20, border: "2px solid #e2e8f0", borderTopColor: "#4f46e5", borderRadius: "50%", animation: "spin 0.7s linear infinite", marginRight: 10, verticalAlign: "middle" }} />
-                            Loading DialShree sent data...
-                        </div>
-                    ) : (
-                        <DialShreeSentTableInner data={filteredSent} />
-                    )}
+                    {(sentLoading && filteredSent.length === 0)
+                        ? <div style={{ padding: "40px", textAlign: "center", color: "#94a3b8", fontSize: 13 }}><div style={{ display: "inline-block", width: 20, height: 20, border: "2px solid #e2e8f0", borderTopColor: "#4f46e5", borderRadius: "50%", animation: "spin 0.7s linear infinite", marginRight: 10, verticalAlign: "middle" }} />Loading DialShree sent outreach data...</div>
+                        : <DialShreeSentTableInner data={filteredSent} />
+                    }
                 </div>
             </div>
         </div>
@@ -989,7 +980,7 @@ function DialShreeSentPageInner() {
 
 export default function DialShreeSentPage() {
     return (
-        <Suspense fallback={<div className="flex items-center justify-center h-64 text-slate-500 text-sm">Loading DialShree Sent...</div>}>
+        <Suspense fallback={<div className="flex items-center justify-center h-64 text-slate-500 text-sm">Loading DialShree Sent Outreach...</div>}>
             <DialShreeSentPageInner />
         </Suspense>
     );

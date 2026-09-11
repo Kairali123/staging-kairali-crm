@@ -1,77 +1,174 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getSessionUser, isSalesCallAuditSuperAdmin } from "@/lib/authz"
+import { getSessionUser, hasSalesCallAuditSendAccess } from "@/lib/authz"
 import {
   dispatchAuditReportEmail,
   renderAuditReportEmail,
 } from "@/lib/sales-call-audit-email"
+import { buildSalesCallAuditReport } from "@/lib/sales-call-audit-report"
+import { recordSentReport } from "@/lib/sales-call-audit-tracker"
 
 export const dynamic = "force-dynamic"
+
+const noStoreHeaders = {
+  "Cache-Control": "private, no-store, no-cache, must-revalidate, max-age=0",
+}
+
+function normalizeToYmd(val: any): string | null {
+  if (!val) return null
+  if (typeof val === "string") {
+    const s = val.trim()
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+    const ddmmyyyy = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/)
+    if (ddmmyyyy) {
+      const day = ddmmyyyy[1].padStart(2, "0")
+      const month = ddmmyyyy[2].padStart(2, "0")
+      const year = ddmmyyyy[3]
+      return `${year}-${month}-${day}`
+    }
+    const ddmmmyyyy = s.match(/^(\d{1,2})[-/ ]([A-Za-z]{3,})[-/ ](\d{4})$/)
+    if (ddmmmyyyy) {
+      const day = ddmmmyyyy[1].padStart(2, "0")
+      const monthMap: Record<string, string> = {
+        jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06",
+        jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12",
+      }
+      const month = monthMap[ddmmmyyyy[2].toLowerCase().slice(0, 3)] || "01"
+      const year = ddmmmyyyy[3]
+      return `${year}-${month}-${day}`
+    }
+  }
+  try {
+    const d = val instanceof Date ? val : new Date(val)
+    if (isNaN(d.getTime())) return null
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    })
+    return formatter.format(d)
+  } catch {
+    return null
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
     const user = getSessionUser(req)
-    const isDev = process.env.NODE_ENV === "development"
 
-    if (!user && !isDev) {
+    if (!user) {
       return NextResponse.json(
         { success: false, error: "Unauthorized: Please log in to send audit reports." },
-        { status: 401 }
+        { status: 401, headers: noStoreHeaders }
       )
     }
 
-    // Dispatching this report is a super_admin-only action (owner ruling).
-    //
-    // It is not a read: the message tells HR to dock half a day's attendance for
-    // every FAIL, and it leaves the system to a fixed mailbox. `viewAll` — which
-    // HR managers hold in order to read the same figures on screen — deliberately
-    // does not carry it. The page hides the button for everyone else, and this is
-    // the check that actually enforces it.
-    if (user && !isSalesCallAuditSuperAdmin(user)) {
+    if (!hasSalesCallAuditSendAccess(user)) {
       return NextResponse.json(
-        { success: false, error: "Forbidden: only a super_admin may dispatch the team audit report." },
-        { status: 403 }
+        { success: false, error: "Forbidden: sales_call_audit.send permission required to dispatch email reports." },
+        { status: 403, headers: noStoreHeaders }
       )
     }
 
-    const body = await req.json()
-    const {
-      date,
-      displayDate = "Today",
-      metrics,
-      employees = [],
-    } = body
+    let body: any = {}
+    try {
+      body = await req.json()
+    } catch {
+      body = {}
+    }
 
-    // A `to` in the request body is deliberately ignored. Recipients come from
-    // AUDIT_REPORT_TO / AUDIT_REPORT_CC, so a caller cannot redirect the team's
-    // scorecard to an address of their choosing.
-    const { subject, html } = renderAuditReportEmail({ date, displayDate, metrics, employees })
+    const targetRecipient = process.env.HR_AUDIT_EMAIL || "ho.hr@kairali.com"
 
-    const { smtpConfigured, smtpDispatched, smtpError, to, cc } = await dispatchAuditReportEmail({
+    // Issue #60: Reject any client-supplied metrics, employee lists, or unauthorized custom recipients
+    const isCustomTo = body.to && body.to !== targetRecipient && body.to !== "ho.hr@kairali.com"
+    const isCustomRecipient = body.recipient && body.recipient !== targetRecipient && body.recipient !== "ho.hr@kairali.com"
+
+    if (body.metrics || body.employees || isCustomTo || isCustomRecipient || body.reportContent) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Client-supplied metrics, employee data, or custom recipient override is prohibited. All report data is server-computed.",
+        },
+        { status: 400, headers: noStoreHeaders }
+      )
+    }
+
+    const requestedDate = body.date || body.dateKey || ""
+    const targetYmd = normalizeToYmd(requestedDate) || normalizeToYmd(new Date()) || ""
+
+    const { source, data } = await buildSalesCallAuditReport(targetYmd)
+
+    if (data.employees.length === 0) {
+      return NextResponse.json(
+        { success: false, error: `No audit records found for the requested date: ${targetYmd}` },
+        { status: 404, headers: noStoreHeaders }
+      )
+    }
+
+    const { subject, html } = renderAuditReportEmail({
+      date: data.auditDate,
+      displayDate: data.displayDate,
+      metrics: data.metrics,
+      employees: data.employees,
+    })
+
+    const { smtpConfigured, smtpDispatched, smtpError, to, cc, messageId } = await dispatchAuditReportEmail({
       subject,
       html,
     })
 
-    const audience = cc.length > 0 ? `${to.join(", ")} (cc: ${cc.join(", ")})` : to.join(", ")
+    if (!smtpConfigured) {
+      console.warn("[sales-call-audit-email] SMTP credentials missing, failing closed")
+      return NextResponse.json(
+        {
+          success: false,
+          error: "SMTP credentials not configured on server",
+        },
+        { status: 500, headers: noStoreHeaders }
+      )
+    }
 
-    return NextResponse.json({
-      success: true,
-      message: smtpDispatched
-        ? `Daily HR Email Template report successfully dispatched via SMTP to ${audience}`
-        : `Email prepared for ${audience}, but SMTP did not dispatch it.`,
-      smtpConfigured,
-      smtpDispatched,
-      smtpError,
+    if (!smtpDispatched) {
+      console.error("[sales-call-audit-email] SMTP dispatch failed:", smtpError)
+      return NextResponse.json(
+        {
+          success: false,
+          error: `SMTP dispatch failed: ${smtpError || "Mailer error"}`,
+        },
+        { status: 502, headers: noStoreHeaders }
+      )
+    }
+
+    console.log(
+      "[sales-call-audit-email] Dispatched report via SMTP:",
+      messageId,
+      "to:",
+      to.join(", "),
+      cc.length > 0 ? `cc: ${cc.join(", ")}` : ""
+    )
+
+    // Persist sent status for this audit date
+    recordSentReport({
+      date: targetYmd,
+      sentAt: new Date().toISOString(),
       recipient: to.join(", "),
-      to,
-      cc,
-      subject,
-      employeeCount: employees.length,
+      messageId,
     })
-  } catch (error: any) {
-    console.error("[sales-call-audit-email] Error:", error)
+
     return NextResponse.json(
-      { success: false, error: error?.message || "Failed to dispatch email report" },
-      { status: 500 }
+      {
+        success: true,
+        message: `Report successfully dispatched to ${to.join(", ")}`,
+        messageId,
+        metrics: data.metrics,
+      },
+      { headers: noStoreHeaders }
+    )
+  } catch (error: any) {
+    console.error("[sales-call-audit-email] Fatal error:", error)
+    return NextResponse.json(
+      { success: false, error: error?.message || "Failed to process email report" },
+      { status: 500, headers: noStoreHeaders }
     )
   }
 }

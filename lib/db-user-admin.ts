@@ -42,6 +42,15 @@ export const PERMISSION_MODULE_COLUMNS = [
   'meetings',
   'accounts_tracker',
   'crr_fms',
+  'cold_enquiry_reverification',
+  'dialshree_menu_view',
+  'dialshree_received_view',
+  'dialshree_sent_view',
+  'sales_call_audit',
+  'deal_assistant',
+  'mr-fms',
+  'dialshree_menu',
+  'sales_calling',
 ] as const
 
 /**
@@ -72,10 +81,15 @@ export function mapPermissionsToColumns(permissions: string[]): Record<string, s
     }
 
     // Match permissions for this column
-    const normalizedCol = col.replace(/_/g, '-')
+    const normalizedCol = col.replace(/_/g, '-').toLowerCase()
     const matchingPerms = permissions.filter((p) => {
-      const pNorm = p.replace(/_/g, '-')
-      return pNorm === normalizedCol || pNorm.startsWith(`${normalizedCol}.`)
+      const pNorm = p.replace(/_/g, '-').toLowerCase()
+      if (pNorm === normalizedCol || pNorm.startsWith(`${normalizedCol}.`)) return true
+      if (col === 'dialshree_menu_view' && (pNorm.startsWith('dialshree-menu.view') || pNorm.startsWith('dialshree-menu.'))) return true
+      if (col === 'dialshree_received_view' && (pNorm.startsWith('dialshree-received.view') || pNorm.startsWith('dialshree-received.'))) return true
+      if (col === 'dialshree_sent_view' && (pNorm.startsWith('dialshree-sent.view') || pNorm.startsWith('dialshree-sent.'))) return true
+      if (col === 'dialshree_menu' && pNorm.startsWith('dialshree-menu')) return true
+      return false
     })
 
     if (matchingPerms.length === 0) {
@@ -97,12 +111,18 @@ export function mapPermissionsToColumns(permissions: string[]): Record<string, s
       continue
     }
 
-    const actions = matchingPerms.map((p) => {
-      const dotIndex = p.indexOf('.')
-      return dotIndex >= 0 ? p.substring(dotIndex + 1) : 'view'
-    })
+    const explicitActions = matchingPerms
+      .filter((p) => p.includes('.'))
+      .map((p) => p.substring(p.lastIndexOf('.') + 1).trim())
+      .filter(Boolean)
 
-    record[col] = Array.from(new Set(actions)).join(', ') || 'view'
+    if (explicitActions.length > 0) {
+      record[col] = Array.from(new Set(explicitActions)).join(', ')
+    } else if (matchingPerms.length > 0) {
+      record[col] = 'view'
+    } else {
+      record[col] = ''
+    }
   }
 
   return record

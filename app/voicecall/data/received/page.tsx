@@ -1768,16 +1768,11 @@ function ReceivedDataPageInner() {
         setCustomDate({ start: "", end: "" });
     };
 
-    const isFirstRender = useRef(true);
     useEffect(() => {
-        if (isFirstRender.current) {
-            isFirstRender.current = false;
-            return;
-        }
         if (tableRef.current) {
             tableRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
         }
-    }, [dateFilter, company, dataSource, status, intent, leadStatus, nonQualifiedOutcome]);
+    }, [search, dateFilter, company, dataSource, status, intent, leadStatus]);
 
     const dateWindow = useMemo(() => {
         if (dateFilter === "custom") return { from: customDate.start ? new Date(customDate.start) : null, to: customDate.end ? new Date(customDate.end + "T23:59:59") : null };
@@ -2010,17 +2005,7 @@ function ReceivedDataPageInner() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3">
                             <div className="flex flex-col gap-1.5 sm:col-span-2 xl:col-span-2">
                                 <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Search Leads</label>
-                                <Input
-                                    placeholder="Name, email, phone, ID, subject..."
-                                    value={search}
-                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-                                    onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-                                        if (e.key === "Enter") {
-                                            tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-                                        }
-                                    }}
-                                    className="h-10 w-full rounded-md border-gray-300"
-                                />
+                                <Input placeholder="Name, email, phone, ID, subject..." value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)} className="h-10 w-full rounded-md border-gray-300" />
                             </div>
                             <div className="flex flex-col gap-1.5">
                                 <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Date Range</label>
