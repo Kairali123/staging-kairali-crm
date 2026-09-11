@@ -785,13 +785,21 @@ export default function CRRCallingProcessPage() {
                         (u.name && u.name.toLowerCase() === respFilter.toLowerCase()) ||
                         (u.email && u.email.toLowerCase() === respFilter.toLowerCase())
                 );
-                if (selectedPerson && selectedPerson.stages.length > 0) {
-                    const isRelevant = selectedPerson.stages.some((sNo) => sNo >= 1 && sNo <= 11);
-                    if (!isRelevant) return false;
-                }
+                // Fail visibly: if the selected person cannot be resolved or has no
+                // assigned stages, exclude ALL guests rather than silently showing
+                // everyone (the previous bug: a valid selection acted as "all").
+                if (!selectedPerson || selectedPerson.stages.length === 0) return false;
+                // A guest is in scope for this person if they are assigned to at least
+                // one of the workflow stages that the guest participates in.
+                // g.stageStatus has length 11 (one slot per stage), so sNo >= 1 &&
+                // sNo <= g.stageStatus.length covers the full valid stage range.
+                const isInScope = selectedPerson.stages.some(
+                    (sNo) => sNo >= 1 && sNo <= g.stageStatus.length
+                );
+                if (!isInScope) return false;
             }
             if (dateRangeStart || dateRangeEnd) {
-                const gDate = parseDMY(g.timestamp);
+                const gDate = parseDMY(g.checkin);
                 if (isNaN(gDate.getTime())) return false; // no valid date → can't match an active range
                 if (dateRangeStart && gDate < dateRangeStart) return false;
                 if (dateRangeEnd && gDate > dateRangeEnd) return false;
