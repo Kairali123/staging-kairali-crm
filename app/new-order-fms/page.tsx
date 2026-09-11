@@ -40,7 +40,8 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { OrderStageWisePendingsReport } from "@/components/fms/order-stage-wise-pendings"
+import { OrderStageWisePendingsReport, normalizeDoerKey } from "@/components/fms/order-stage-wise-pendings"
+import { DoerPendingAnalysis } from "@/components/fms/doer-pending-analysis"
 
 /* ─────────────────────────────────────────────
    TYPES
@@ -1524,7 +1525,7 @@ export default function NewOrderFMS() {
     const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
     const [stageModal, setStageModal] = useState<StageModalState | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
-    const [rowsPerPage, setRowsPerPage] = useState(5);
+    const [rowsPerPage, setRowsPerPage] = useState(20);
     const [goPage, setGoPage] = useState('');
     const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>({ key: 'timestamp', direction: 'desc' });
     const [lastUpdated, setLastUpdated] = useState('');
@@ -1817,9 +1818,9 @@ export default function NewOrderFMS() {
             }
             if (reportSelectedDoer) {
                 const doer = activeIdx < 9 ? getOrderStageDoer(o, activeIdx) : (o.orderTakenBy || o.fmsUserName);
-                const orderDoerLower = (doer || '').trim().toLowerCase();
-                const selectedLower = reportSelectedDoer.trim().toLowerCase();
-                if (orderDoerLower !== selectedLower) {
+                const orderKey = normalizeDoerKey(doer || '');
+                const selectedKey = normalizeDoerKey(reportSelectedDoer);
+                if (orderKey !== selectedKey) {
                     return false;
                 }
             }
@@ -2434,6 +2435,16 @@ export default function NewOrderFMS() {
 
                         </div>
                     </div>
+
+                    {/* ── DOER PENDING ANALYSIS CHART ── */}
+                    <DoerPendingAnalysis
+                        orders={filtered}
+                        isStageCompletedFn={isStageCompleted}
+                        getOrderStageDoerFn={getOrderStageDoer}
+                        currentUser={user}
+                        selectedDoer={reportSelectedDoer}
+                        onSelectDoer={setReportSelectedDoer}
+                    />
 
                     {/* ── STAGE WISE PENDINGS REPORT ── */}
                     <OrderStageWisePendingsReport

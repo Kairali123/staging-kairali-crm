@@ -5,7 +5,7 @@ import { createPortal } from "react-dom"
 import { useRouter } from "next/navigation"
 import { useBookings, Booking as BaseBooking } from "@/hooks/use-fms-bookings"
 import { normalizeUserName } from "@/lib/utils"
-import { calculateGuestLtvMetrics, isBookingCancelled } from "@/lib/ltv"
+import { calculateGuestLtvMetrics, isBookingCancelled, getBookingCollectionAmount } from "@/lib/ltv"
 import { useAuth } from "@/hooks/use-auth"
 import { StageWisePendingsReport } from "@/components/fms/stage-wise-pendings"
 import {
@@ -4011,7 +4011,7 @@ export default function SalesAccountsTeamPage() {
     const guestSummary = booking ? guestLtvMetrics.getGuestSummary(booking) : null;
     const isCancelled = isBookingCancelled(booking);
     const isRepeat = guestSummary && (guestSummary.totalStays > 1 || (!isCancelled && booking?.repeat && String(booking.repeat).toLowerCase() !== "no"));
-    const ltvAmount = guestSummary ? guestSummary.totalLtv : (isCancelled ? 0 : (Number(booking?.amount || booking?.originalAmount || 0) || 0));
+    const ltvAmount = guestSummary ? guestSummary.totalLtv : (isCancelled ? 0 : getBookingCollectionAmount(booking));
     const tier = guestSummary?.tier || "Standard";
 
     const lines = splitGuestName(name, 25);
@@ -13905,7 +13905,7 @@ export default function SalesAccountsTeamPage() {
                       {(() => {
                         const guestSummary = guestLtvMetrics.getGuestSummary(viewBookingData);
                         const isCancelled = isBookingCancelled(viewBookingData);
-                        const ltvVal = guestSummary?.totalLtv ?? (isCancelled ? 0 : Number(viewBookingData?.amount || viewBookingData?.originalAmount || 0));
+                        const ltvVal = guestSummary?.totalLtv ?? (isCancelled ? 0 : getBookingCollectionAmount(viewBookingData));
                         const staysVal = guestSummary?.totalStays ?? (isCancelled ? 0 : 1);
                         const avgVal = staysVal > 0 ? Math.round(ltvVal / staysVal) : 0;
                         return (

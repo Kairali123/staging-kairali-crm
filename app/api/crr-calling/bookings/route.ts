@@ -465,9 +465,9 @@ export async function GET(req: NextRequest) {
                 status: c1.status || "",
                 notDoneRemarks: c1.remarks_why_not_done_or_close || "",
                 followupDate: c1.followup_date_for_the_welcome_call ? formatDMYDate(c1.followup_date_for_the_welcome_call) : "",
-                doer: c1.doer || bookingTakenBy,
+                doer: c1.doer || "",
                 stageKey: c1.stage_key || (uid ? `${uid}_Stage1` : null),
-            } : (bookingTakenBy ? { doer: bookingTakenBy, stageKey: uid ? `${uid}_Stage1` : null } : null);
+            } : null;
 
             // Stage 2: Guest Request & Complaint Mgmt (strictly from ktahv_checkinmasterfms stage3_*)
             const s2Planned = checkin?.stage3_planned || null;
@@ -554,9 +554,9 @@ export async function GET(req: NextRequest) {
                 status: c5.status || "",
                 notDoneRemarks: c5.remarks_why_not_done_or_close || "",
                 followupDate: c5.followup_date_for_the_rating ? formatDMYDate(c5.followup_date_for_the_rating) : "",
-                doer: c5.doer || bookingTakenBy,
+                doer: c5.doer || "",
                 stageKey: c5.stage_key || (uid ? `${uid}_Stage5` : null),
-            } : (bookingTakenBy ? { doer: bookingTakenBy, stageKey: uid ? `${uid}_Stage5` : null } : null);
+            } : null;
 
             // Stage 6: Safe Return Confirmation (CrrCalling / CrrProcess Col BA - stage_key: ${uid}_Stage6)
             const c6 = findCallingRowForStage(uid, 6, ["Call after landing", "Safe Return", "Time to Return"]);
@@ -570,9 +570,9 @@ export async function GET(req: NextRequest) {
                 outcomeRemarks: c6.outcome_remarks || "",
                 status: c6.status || "",
                 notDoneRemarks: c6.remarks_why_not_done_or_close || "",
-                doer: c6.doer || bookingTakenBy,
+                doer: c6.doer || "",
                 stageKey: c6.stage_key || (uid ? `${uid}_Stage6` : null),
-            } : (bookingTakenBy ? { doer: bookingTakenBy, stageKey: uid ? `${uid}_Stage6` : null } : null);
+            } : null;
 
             // Stage 7: Result Tracking & Health Progress Check (CrrCalling / CrrProcess Col BQ - stage_key: ${uid}_Stage7)
             const c7 = findCallingRowForStage(uid, 7, ["Result and Progress Since Return", "Result and Progress"]);
@@ -610,32 +610,34 @@ export async function GET(req: NextRequest) {
             // Stage 9: Driver Assignment – Arrival Pickup (Guest Tracker)
             const s9Planned = tracker?.arrival_planned || row.stage1_call_date_planned || null;
             const s9Actual = tracker?.arrival_actual || null;
-            const s9Saved = (tracker || bookingTakenBy) ? {
-                pickupRequired: tracker?.arrival_doer_name ? "Yes" : "",
-                driverName: tracker?.arrival_doer_name || "",
+            const s9DriverName = tracker?.arrival_doer_name && tracker.arrival_doer_name !== bookingTakenBy ? tracker.arrival_doer_name : "";
+            const s9Saved = tracker ? {
+                pickupRequired: tracker.arrival_planned || s9DriverName ? "Yes" : "",
+                driverName: s9DriverName,
                 driverContact: "",
                 pickupFrom: "",
-                pickupDate: tracker?.arrival_planned ? formatDMYDate(tracker.arrival_planned) : "",
+                pickupDate: tracker.arrival_planned ? formatDMYDate(tracker.arrival_planned) : "",
                 pickupTime: "",
-                remarks: tracker?.client_arrival_data_upload_remarks || "",
-                assignedBy: tracker?.arrival_doer_name || "",
-                doer: tracker?.arrival_doer_name || bookingTakenBy,
+                remarks: tracker.client_arrival_data_upload_remarks || "",
+                assignedBy: s9DriverName,
+                doer: "", // FO stage: doer is FO (Shoukath Ali Moosa / assigned FO), not salesperson or driver
                 stageKey: uid ? `${uid}_Stage9` : null,
             } : null;
 
             // Stage 10: Driver Assignment – Departure Drop (Guest Tracker)
             const s10Planned = tracker?.departure_planned || row.stage6_call_date_planned || null;
             const s10Actual = tracker?.departure_actual || null;
-            const s10Saved = (tracker || bookingTakenBy) ? {
-                dropRequired: tracker?.departure_doer_name ? "Yes" : "",
-                driverName: tracker?.departure_doer_name || "",
+            const s10DriverName = tracker?.departure_doer_name && tracker.departure_doer_name !== bookingTakenBy ? tracker.departure_doer_name : "";
+            const s10Saved = tracker ? {
+                dropRequired: tracker.departure_planned || s10DriverName ? "Yes" : "",
+                driverName: s10DriverName,
                 driverContact: "",
                 dropTo: "",
-                dropDate: tracker?.departure_planned ? formatDMYDate(tracker.departure_planned) : "",
+                dropDate: tracker.departure_planned ? formatDMYDate(tracker.departure_planned) : "",
                 dropTime: "",
-                remarks: tracker?.client_departure_data_upload_remarks || "",
-                assignedBy: tracker?.departure_doer_name || "",
-                doer: tracker?.departure_doer_name || bookingTakenBy,
+                remarks: tracker.client_departure_data_upload_remarks || "",
+                assignedBy: s10DriverName,
+                doer: "", // FO stage: doer is FO (Shoukath Ali Moosa / assigned FO), not salesperson or driver
                 stageKey: uid ? `${uid}_Stage10` : null,
             } : null;
 
@@ -644,14 +646,14 @@ export async function GET(req: NextRequest) {
             const s11Doctor = tracker?.doctor_assigned_to_the_client || tracker?.stage11_change_the_doctor_if_required || row.stage9_doer || "";
             const s11Completed = Boolean(s11Doctor);
             const s11Actual = s11Completed ? tracker?.updated_at || tracker?.created_at || null : null;
-            const s11Saved = (tracker || bookingTakenBy) ? {
+            const s11Saved = tracker ? {
                 doctorAssignedToClient: s11Doctor,
                 email: getDoctorEmail(s11Doctor),
                 timestamp: s11Doctor ? formatTimestamp(tracker?.updated_at) : "",
                 doctorAssignStatus: s11Doctor ? "Assigned" : "",
                 changedDoctor: tracker?.stage11_change_the_doctor_if_required || "",
                 remarks: tracker?.special_request_or_requirement_noted || "",
-                doer: s11Doctor || "Doctor",
+                doer: "", // GM stage: doer is GM, not the doctor assigned to the client
                 stageKey: uid ? `${uid}_Stage11` : null,
             } : null;
 

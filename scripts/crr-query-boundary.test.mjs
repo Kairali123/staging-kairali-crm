@@ -601,4 +601,166 @@ test('CRR Query Boundary & Security Contract Suite', async (t) => {
         const rowsAll = applyRespFilter(guests, 'all', responsiblePersonList);
         assert.equal(rowsAll.length, 2, '"all" must always return all guests');
     });
+
+    // -----------------------------------------------------------------------
+    // Stage doer resolution: assigned stage user vs bookingTakenBy
+    // -----------------------------------------------------------------------
+
+    await t.test('19. Stage doer resolution: strictly returns assigned stage user when no value is present, never bookingTakenBy (Pawan Kamra regression)', async () => {
+        const { getStageDoer, getAssignedStageUser, DEFAULT_STAGE_USERS } = await import('../hooks/use-crr-bookings.ts');
+
+        const mockGuest = {
+            id: 6107,
+            name: 'MR. VIRENDER KUMAR AND MRS. ASHA GUPTA',
+            bookingId: 'KTAHV-PMS-6107',
+            uid: 'KTAHV-PMS-6107',
+            takenBy: 'Pawan Kamra', // The booking taken person name
+            stages: [
+                { stage: 1, plannedDate: '2025-07-01', actualDate: '2025-07-01', completed: true, locked: true, savedData: {} },
+                { stage: 2, plannedDate: '2025-07-01', actualDate: '2025-07-01', completed: true, locked: true, savedData: {} },
+                { stage: 3, plannedDate: '2025-07-04', actualDate: '2025-07-04', completed: true, locked: true, savedData: {} },
+                { stage: 4, plannedDate: '2025-07-03', actualDate: '2025-07-03', completed: true, locked: true, savedData: {} },
+                { stage: 5, plannedDate: '2025-07-03', actualDate: null, completed: false, locked: false, savedData: {} }, // Stage 5: Pending, no data submitted yet
+                { stage: 6, plannedDate: '2025-07-06', actualDate: '2025-07-06', completed: true, locked: true, savedData: {} },
+            ],
+            stageStatus: Array(11).fill('Pending'),
+        };
+
+        // (a) When no value is present for Stage 5, it MUST return Jinsha Manoj MV (the default assigned GRE user)
+        // and NEVER Pawan Kamra (guest.takenBy)
+        const s5Doer = getStageDoer(mockGuest, 5);
+        assert.equal(s5Doer, 'Jinsha Manoj MV', 'Stage 5 must return assigned GRE user (Jinsha Manoj MV) when no value is present');
+        assert.notEqual(s5Doer, 'Pawan Kamra', 'Stage 5 must NEVER return booking taken person (Pawan Kamra)');
+
+        // (b) When custom stageUsers are passed (from permissions), it uses that assigned user
+        const customStageUsers = [
+            { name: 'Pooja Sharma', email: 'pooja@ktahv.com', role: 'gre', stages: [1, 2, 4, 5, 6, 8] },
+        ];
+        const s5CustomDoer = getStageDoer(mockGuest, 5, customStageUsers);
+        assert.equal(s5CustomDoer, 'Pooja Sharma', 'Stage 5 must return custom assigned stage user');
+        assert.notEqual(s5CustomDoer, 'Pawan Kamra');
+
+        // (c) Even if savedData.doer accidentally contains the bookingTakenBy name (bleed), it must reject it and return assigned user
+        const mockGuestWithBleed = {
+            ...mockGuest,
+            stages: [
+                { stage: 5, plannedDate: '2025-07-03', actualDate: null, completed: false, locked: false, savedData: { doer: 'Pawan Kamra' } },
+            ],
+        };
+        const s5BleedDoer = getStageDoer(mockGuestWithBleed, 5);
+        assert.equal(s5BleedDoer, 'Jinsha Manoj MV', 'Bleed of booking taken by name into savedData.doer must be rejected');
+
+        // (d) When savedData.doer has a real, distinct execution doer, that execution doer is returned
+        const mockGuestWithRealDoer = {
+            ...mockGuest,
+            stages: [
+                { stage: 5, plannedDate: '2025-07-03', actualDate: '2025-07-03', completed: true, locked: true, savedData: { doer: 'Sunaina Bali' } },
+            ],
+        };
+        const s5RealDoer = getStageDoer(mockGuestWithRealDoer, 5);
+        assert.equal(s5RealDoer, 'Sunaina Bali', 'Actual execution doer must be respected when valid');
+
+        // (e) Stage 11 is assigned to GM (Anoop Vijayaraj). It must NEVER return the assigned doctor (Dr. Rahul R)
+        const mockGuestWithDoctorAssigned = {
+            ...mockGuest,
+            guestRequirementVerification: {
+                doctorAssignedToClient: 'Dr. Rahul R',
+                doctorAssignStatus: 'Assigned',
+            },
+            stages: [
+                ...mockGuest.stages,
+                { stage: 11, plannedDate: '2025-07-01', actualDate: '2026-09-09', completed: true, locked: true, savedData: { doctorAssignedToClient: 'Dr. Rahul R', doer: 'Dr. Rahul R' } },
+            ],
+        };
+        const s11Doer = getStageDoer(mockGuestWithDoctorAssigned, 11);
+        assert.equal(s11Doer, 'Anoop Vijayaraj', 'Stage 11 must return assigned GM (Anoop Vijayaraj), NEVER the assigned doctor (Dr. Rahul R)');
+        assert.notEqual(s11Doer, 'Dr. Rahul R', 'Stage 11 doer must NOT be the assigned doctor');
+
+        // (f) Stage 9 & 10 are assigned to FO (Shoukath Ali Moosa). It must NEVER return driver or bookingTakenBy (Pawan Kamra)
+        const mockGuestWithDriver = {
+            ...mockGuest,
+            driverAssignmentArrival: {
+                driverName: 'Pawan Kamra', // legacy bleed in database
+                assignedBy: 'Pawan Kamra',
+            },
+            driverAssignmentDeparture: {
+                driverName: 'Pawan Kamra',
+                assignedBy: 'Pawan Kamra',
+            },
+            stages: [
+                ...mockGuest.stages,
+                { stage: 9, plannedDate: '2025-07-08', actualDate: '2025-07-08', completed: true, locked: true, savedData: { driverName: 'Pawan Kamra', doer: 'Pawan Kamra' } },
+                { stage: 10, plannedDate: '2025-07-15', actualDate: '2025-07-15', completed: true, locked: true, savedData: { driverName: 'Pawan Kamra', doer: 'Pawan Kamra' } },
+            ],
+        };
+        const s9Doer = getStageDoer(mockGuestWithDriver, 9);
+        assert.equal(s9Doer, 'Shoukath Ali Moosa', 'Stage 9 must return assigned FO user (Shoukath Ali Moosa), NEVER Pawan Kamra');
+        assert.notEqual(s9Doer, 'Pawan Kamra');
+
+        const s10Doer = getStageDoer(mockGuestWithDriver, 10);
+        assert.equal(s10Doer, 'Shoukath Ali Moosa', 'Stage 10 must return assigned FO user (Shoukath Ali Moosa), NEVER Pawan Kamra');
+        assert.notEqual(s10Doer, 'Pawan Kamra');
+
+        // (g) For every stage 1..11, getStageDoer must NEVER return booking taken person (Pawan Kamra)
+        for (let st = 1; st <= 11; st++) {
+            const doer = getStageDoer(mockGuest, st);
+            assert.notEqual(doer, 'Pawan Kamra', `Stage ${st} must NEVER return booking taken person (Pawan Kamra)`);
+            assert.ok(doer.length > 0, `Stage ${st} must resolve to an assigned user or role name`);
+        }
+    });
+
+    // -----------------------------------------------------------------------
+    // Planned-date gate: no-planned-date lock applies to ALL users incl. Super Admin
+    // -----------------------------------------------------------------------
+
+    await t.test('20. hasStageNoPlannedDate: stage with no planned date is locked for ALL users including Super Admin', async () => {
+        const { hasStageNoPlannedDate } = await import('../hooks/use-crr-bookings.ts');
+
+        const makeMockGuest = (stageNo, plannedDate) => ({
+            id: 9999,
+            name: 'Test Guest',
+            uid: 'KTAHV-TEST-9999',
+            takenBy: 'Pawan Kamra',
+            stages: [
+                { stage: stageNo, plannedDate, locked: false, completed: false, available: true, savedData: {} },
+            ],
+            stageStatus: Array(11).fill('Pending'),
+        });
+
+        // (a) No planned date at all → hasStageNoPlannedDate returns true (locked for everyone)
+        const guestNoDate = makeMockGuest(5, null);
+        assert.equal(hasStageNoPlannedDate(guestNoDate, 5), true, 'Stage with null plannedDate must return true (locked)');
+
+        // (b) Empty string planned date → locked
+        const guestEmptyDate = makeMockGuest(5, '');
+        assert.equal(hasStageNoPlannedDate(guestEmptyDate, 5), true, 'Stage with empty plannedDate must return true (locked)');
+
+        // (c) Dash placeholder planned date → locked
+        const guestDashDate = makeMockGuest(5, '-');
+        assert.equal(hasStageNoPlannedDate(guestDashDate, 5), true, 'Stage with dash plannedDate must return true (locked)');
+
+        // (d) Real planned date → NOT locked by this gate
+        const guestRealDate = makeMockGuest(5, '2025-07-10');
+        assert.equal(hasStageNoPlannedDate(guestRealDate, 5), false, 'Stage with real plannedDate must return false (not locked by missing-planned gate)');
+
+        // (e) Every stage 1..11 with no planned date must trigger the lock
+        for (let st = 1; st <= 11; st++) {
+            const g = makeMockGuest(st, null);
+            assert.equal(
+                hasStageNoPlannedDate(g, st),
+                true,
+                `Stage ${st} with no plannedDate must be locked for ALL users (Super Admin included)`
+            );
+        }
+
+        // (f) Every stage 1..11 with a real planned date must NOT trigger the missing-planned lock
+        for (let st = 1; st <= 11; st++) {
+            const g = makeMockGuest(st, '2025-07-01');
+            assert.equal(
+                hasStageNoPlannedDate(g, st),
+                false,
+                `Stage ${st} with a real plannedDate must NOT be locked by the missing-planned gate`
+            );
+        }
+    });
 });

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useAuth, type UserRole } from "@/hooks/use-auth";
-import { useCrrBookings, isStageLocked, getStagePlannedDate, getStageActualDate, getStageSavedData, getStageDoer, isBookingCancelled, saveStage } from "@/hooks/use-crr-bookings";
+import { useCrrBookings, isStageLocked, hasStageNoPlannedDate, getStagePlannedDate, getStageActualDate, getStageSavedData, getStageDoer, isBookingCancelled, saveStage, DEFAULT_STAGE_USERS } from "@/hooks/use-crr-bookings";
 import type {
     Role,
     Resp,
@@ -413,13 +413,6 @@ export default function CRRCallingProcessPage() {
         );
     }, [user]);
 
-    const DEFAULT_STAGE_USERS = useMemo(() => [
-        { name: "Jinsha Manoj MV", email: "grm@ktahv.com", role: "grm", stages: [1, 2, 4, 5, 6, 8] },
-        { name: "Dr. Rahul R", email: "doctor@ktahv.com", role: "doctor", stages: [3, 7] },
-        { name: "Shoukath Ali Moosa", email: "fom@ktahv.com", role: "fom", stages: [9, 10] },
-        { name: "Anoop Vijayaraj", email: "gm.hv@kairali.com", role: "gm", stages: [11] },
-    ], []);
-
     const responsiblePersonList = useMemo(() => {
         const list = (stageUsers || []).map((u) => ({ ...u, stages: [...(u.stages || [])] }));
         for (const def of DEFAULT_STAGE_USERS) {
@@ -439,7 +432,7 @@ export default function CRRCallingProcessPage() {
         }
         // Only include persons who have active assigned stages
         return list.filter((u) => u.stages && u.stages.length > 0);
-    }, [stageUsers, DEFAULT_STAGE_USERS]);
+    }, [stageUsers]);
 
     // Stages accessible to the logged-in user.
     // Admin / Super Admin: all STAGES [1..11]
@@ -671,8 +664,8 @@ export default function CRRCallingProcessPage() {
 
     // Helper: Form lock state inside stage modals.
     // If planned date is missing/empty, stage remains clickable in the menu, but form is locked with an explicit message.
-    // If planned date is in the future, form is locked until that planned date.
-    // Admin role bypasses form locks.
+    // This missing-planned lock applies to ALL users including Super Admin — no bypass allowed.
+    // If planned date is in the future, form is locked until that planned date (Admin can override this only).
     const getStageFormLockState = (guest: Guest | null, stageNo: number) => {
         if (!guest) return { isLocked: false, reason: null, message: "" };
         const stageInfo = guest.stages?.find((s) => s.stage === stageNo);
@@ -680,8 +673,9 @@ export default function CRRCallingProcessPage() {
         const hasPlanned = plannedDate && String(plannedDate).trim() !== "" && String(plannedDate).trim() !== "-";
 
         if (!hasPlanned) {
+            // No planned date → LOCKED for ALL users (Super Admin included — no bypass)
             return {
-                isLocked: !isAdminRole,
+                isLocked: true,
                 reason: "missing_planned",
                 message: "Form is locked: Planned date is not scheduled yet. Please wait until the planned date is set in the system before filling this stage.",
             };
@@ -721,19 +715,31 @@ export default function CRRCallingProcessPage() {
     const [activeDriverArrivalGuestId, setActiveDriverArrivalGuestId] = useState<number | null>(null);
     const activeDriverArrivalGuest = guests.find((g) => g.id === activeDriverArrivalGuestId) || null;
     const isStage9Complete = activeDriverArrivalGuest?.stageStatus?.[8] === "Complete";
-    const isDriverArrivalDisabled = !activeDriverArrivalGuest || (!isAdminRole && isStageLocked(activeDriverArrivalGuest, 9)) || isStage9Complete;
+    // Missing planned date → locked for ALL users (Super Admin included). Future planned date → locked only for non-admins.
+    const isDriverArrivalDisabled = !activeDriverArrivalGuest ||
+        (activeDriverArrivalGuest && hasStageNoPlannedDate(activeDriverArrivalGuest, 9)) ||
+        (!isAdminRole && isStageLocked(activeDriverArrivalGuest, 9)) ||
+        isStage9Complete;
 
     // "Driver Assignment - Departure Drop" modal (Stage 10)
     const [activeDriverDepartureGuestId, setActiveDriverDepartureGuestId] = useState<number | null>(null);
     const activeDriverDepartureGuest = guests.find((g) => g.id === activeDriverDepartureGuestId) || null;
     const isStage10Complete = activeDriverDepartureGuest?.stageStatus?.[9] === "Complete";
-    const isDriverDepartureDisabled = !activeDriverDepartureGuest || (!isAdminRole && isStageLocked(activeDriverDepartureGuest, 10)) || isStage10Complete;
+    // Missing planned date → locked for ALL users (Super Admin included). Future planned date → locked only for non-admins.
+    const isDriverDepartureDisabled = !activeDriverDepartureGuest ||
+        (activeDriverDepartureGuest && hasStageNoPlannedDate(activeDriverDepartureGuest, 10)) ||
+        (!isAdminRole && isStageLocked(activeDriverDepartureGuest, 10)) ||
+        isStage10Complete;
 
     // "Guest Requirement Verification" modal (Stage 11)
     const [activeRequirementVerificationGuestId, setActiveRequirementVerificationGuestId] = useState<number | null>(null);
     const activeRequirementVerificationGuest = guests.find((g) => g.id === activeRequirementVerificationGuestId) || null;
     const isStage11Complete = activeRequirementVerificationGuest?.stageStatus?.[10] === "Complete";
-    const isRequirementVerificationDisabled = !activeRequirementVerificationGuest || (!isAdminRole && isStageLocked(activeRequirementVerificationGuest, 11)) || isStage11Complete;
+    // Missing planned date → locked for ALL users (Super Admin included). Future planned date → locked only for non-admins.
+    const isRequirementVerificationDisabled = !activeRequirementVerificationGuest ||
+        (activeRequirementVerificationGuest && hasStageNoPlannedDate(activeRequirementVerificationGuest, 11)) ||
+        (!isAdminRole && isStageLocked(activeRequirementVerificationGuest, 11)) ||
+        isStage11Complete;
 
     // "Booking & Guest Details" shared popup — used by the 3 not-yet-built action buttons
     const [activeDetailsGuestId, setActiveDetailsGuestId] = useState<number | null>(null);
@@ -3532,8 +3538,8 @@ export default function CRRCallingProcessPage() {
             {/* ACTION DIALOG */}
             <Dialog open={activeGuest !== null && activeStage !== null} onOpenChange={(open) => !open && closeModal()}>
                 {activeGuest && activeStage && (
-                    <DialogContent style={{ width: "min(98vw, 1400px)", maxWidth: "min(98vw, 1400px)" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl">
-                        <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white">
+                    <DialogContent style={{ width: "min(98vw, 1400px)", maxWidth: "min(98vw, 1400px)" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl [&>[data-slot=dialog-close]]:text-white/80 [&>[data-slot=dialog-close]]:hover:text-white [&>[data-slot=dialog-close]]:hover:bg-white/10 [&>[data-slot=dialog-close]]:rounded-md">
+                        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 pl-6 pr-14 py-4 text-white">
                             <div className="flex items-center justify-between gap-3 flex-wrap">
                                 <DialogTitle className="text-lg font-bold text-white leading-tight">
                                     {activeGuest.allComplete ? `All Stages Complete — ${activeGuest.name}` : `Stage ${activeStage.no}: ${activeStage.name}`}
@@ -3546,7 +3552,7 @@ export default function CRRCallingProcessPage() {
                             <DialogDescription className="text-xs text-white/90 mt-1 font-medium">
                                 Complete the required details below and submit this stage.
                             </DialogDescription>
-                        </DialogHeader>
+                        </div>
 
                         <div className="p-6 space-y-4">
                             {/* Progress tracker inside modal */}
@@ -3607,7 +3613,7 @@ export default function CRRCallingProcessPage() {
                                         {isStage3Complete || activeGuest.allComplete ? "Read Only" : "Fill in below"}
                                     </span>
                                 </div>
-                                {activeGuest && !isAdminRole && s3Lock.isLocked && !isStage3Complete && (
+                                {activeGuest && s3Lock.isLocked && !isStage3Complete && (
                                     <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                                         <Clock className="h-4 w-4 shrink-0" />
                                         {s3Lock.message}
@@ -3679,8 +3685,8 @@ export default function CRRCallingProcessPage() {
             {/* CALL AFTER LANDING DIALOG */}
             <Dialog open={activeSafeReturnGuestId !== null} onOpenChange={(open) => !open && closeSafeReturnModal()}>
                 {activeSafeReturnGuest && (
-                    <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col">
-                        <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white shrink-0">
+                    <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col [&>[data-slot=dialog-close]]:text-white/80 [&>[data-slot=dialog-close]]:hover:text-white [&>[data-slot=dialog-close]]:hover:bg-white/10 [&>[data-slot=dialog-close]]:rounded-md">
+                        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 pl-6 pr-14 py-4 text-white shrink-0">
                             <div className="flex items-center justify-between gap-3 flex-wrap">
                                 <DialogTitle className="text-lg font-bold text-white leading-tight">
                                     Safe Return Confirmation
@@ -3693,7 +3699,7 @@ export default function CRRCallingProcessPage() {
                             <DialogDescription className="text-xs text-white/90 mt-1 font-medium">
                                 Complete the required details below and submit this stage.
                             </DialogDescription>
-                        </DialogHeader>
+                        </div>
 
                         <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
                             {/* Prefilled / read-only details — plain, muted, no emphasis */}
@@ -3745,7 +3751,7 @@ export default function CRRCallingProcessPage() {
                                         {isStage6Complete ? "Read Only" : isStage6Processing ? "Processing" : "Fill in below"}
                                     </span>
                                 </div>
-                                {activeSafeReturnGuest && !isAdminRole && s6Lock.isLocked && !isStage6Complete && !isStage6Processing && (
+                                {activeSafeReturnGuest && s6Lock.isLocked && !isStage6Complete && !isStage6Processing && (
                                     <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                                         <Clock className="h-4 w-4 shrink-0" />
                                         {s6Lock.message}
@@ -3792,81 +3798,87 @@ export default function CRRCallingProcessPage() {
                                         />
                                     </div>
 
-                                    {/* Row 3: Status | (conditional) Remarks Why Not Done or Close | (conditional) Follow-up Date */}
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                            Status <span className="text-red-500">*</span>
-                                        </Label>
-                                        <Select
-                                            disabled={isSafeReturnDisabled}
-                                            value={safeReturnStatus}
-                                            onValueChange={(val) => {
-                                                setSafeReturnStatus(val as CallStatus);
-                                                setSafeReturnSaved(false);
-                                            }}
-                                        >
-                                            <SelectTrigger className="h-10 border-emerald-200 focus:border-emerald-500 bg-white text-slate-800">
-                                                <SelectValue placeholder="Select Status" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="Done">Done</SelectItem>
-                                                <SelectItem value="Not Done - Close">Not Done - Close</SelectItem>
-                                                <SelectItem value="Close Follow-up">Close Follow-up</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
 
-                                    {safeReturnStatus === "Not Done - Close" && (
-                                        <div className="space-y-2 md:col-span-2">
-                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                                Remarks Why Not Done or Close <span className="text-red-500">*</span>
+                                    {/* Status, (conditional) Follow-up Date or Remarks, and Outcome Achieved */}
+                                    <div className="md:col-span-3 flex flex-wrap items-start gap-4 sm:gap-6">
+                                        {/* Status */}
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
+                                                Status <span className="text-red-500">*</span>
                                             </Label>
-                                            <Textarea
+                                            <Select
                                                 disabled={isSafeReturnDisabled}
-                                                value={safeReturnNotDoneRemarks}
-                                                onChange={(e) => { setSafeReturnNotDoneRemarks(e.target.value); setSafeReturnSaved(false); }}
-                                                placeholder="Reason the safe return call wasn't done / was closed..."
-                                                className="min-h-[42px] border-emerald-200 focus:border-emerald-500 bg-white"
-                                            />
+                                                value={safeReturnStatus}
+                                                onValueChange={(val) => {
+                                                    setSafeReturnStatus(val as CallStatus);
+                                                    setSafeReturnSaved(false);
+                                                }}
+                                            >
+                                                <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-emerald-200 focus:border-emerald-500 bg-white text-slate-800">
+                                                    <SelectValue placeholder="Select Status" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="Done">Done</SelectItem>
+                                                    <SelectItem value="Not Done - Close">Not Done - Close</SelectItem>
+                                                    <SelectItem value="Close Follow-up">Close Follow-up</SelectItem>
+                                                </SelectContent>
+                                            </Select>
                                         </div>
-                                    )}
 
-                                    {safeReturnStatus === "Close Follow-up" && (
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                                Followup Date for the Safe Return Call <span className="text-red-500">*</span>
+                                        {/* When Close Follow-up: Followup Date */}
+                                        {safeReturnStatus === "Close Follow-up" && (
+                                            <div className="space-y-1.5">
+                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
+                                                    Followup Date for the Safe Return Call <span className="text-red-500">*</span>
+                                                </Label>
+                                                <Input
+                                                    type="date"
+                                                    disabled={isSafeReturnDisabled}
+                                                    value={safeReturnFollowupDate}
+                                                    onChange={(e) => { setSafeReturnFollowupDate(e.target.value); setSafeReturnSaved(false); }}
+                                                    className="w-[210px] sm:w-[230px] h-10 border-emerald-200 focus:border-emerald-500 bg-white"
+                                                />
+                                            </div>
+                                        )}
+
+                                        {/* When Not Done - Close: Remarks */}
+                                        {safeReturnStatus === "Not Done - Close" && (
+                                            <div className="space-y-1.5 flex-1 min-w-[280px]">
+                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
+                                                    Remarks Why Not Done or Close <span className="text-red-500">*</span>
+                                                </Label>
+                                                <Textarea
+                                                    disabled={isSafeReturnDisabled}
+                                                    value={safeReturnNotDoneRemarks}
+                                                    onChange={(e) => { setSafeReturnNotDoneRemarks(e.target.value); setSafeReturnSaved(false); }}
+                                                    placeholder="Reason the safe return call wasn't done / was closed..."
+                                                    className="min-h-[42px] border-emerald-200 focus:border-emerald-500 bg-white w-full"
+                                                />
+                                            </div>
+                                        )}
+
+                                        {/* Did they achieve the outcomes planned for */}
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
+                                                Did they achieve the outcomes planned for? <span className="text-red-500">*</span>
                                             </Label>
-                                            <Input
-                                                type="date"
+                                            <Select
                                                 disabled={isSafeReturnDisabled}
-                                                value={safeReturnFollowupDate}
-                                                onChange={(e) => { setSafeReturnFollowupDate(e.target.value); setSafeReturnSaved(false); }}
-                                                className="h-10 border-emerald-200 focus:border-emerald-500 bg-white"
-                                            />
+                                                value={safeReturnOutcomeAchieved}
+                                                onValueChange={(val) => {
+                                                    setSafeReturnOutcomeAchieved(val as YesNo);
+                                                    setSafeReturnSaved(false);
+                                                }}
+                                            >
+                                                <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-emerald-200 focus:border-emerald-500 bg-white text-slate-800">
+                                                    <SelectValue placeholder="Yes / No" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="Yes">Yes</SelectItem>
+                                                    <SelectItem value="No">No</SelectItem>
+                                                </SelectContent>
+                                            </Select>
                                         </div>
-                                    )}
-
-                                    {/* Row 4: Did they achieve the outcomes planned for */}
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                            Did they achieve the outcomes planned for? <span className="text-red-500">*</span>
-                                        </Label>
-                                        <Select
-                                            disabled={isSafeReturnDisabled}
-                                            value={safeReturnOutcomeAchieved}
-                                            onValueChange={(val) => {
-                                                setSafeReturnOutcomeAchieved(val as YesNo);
-                                                setSafeReturnSaved(false);
-                                            }}
-                                        >
-                                            <SelectTrigger className="h-10 border-emerald-200 focus:border-emerald-500 bg-white text-slate-800">
-                                                <SelectValue placeholder="Yes / No" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="Yes">Yes</SelectItem>
-                                                <SelectItem value="No">No</SelectItem>
-                                            </SelectContent>
-                                        </Select>
                                     </div>
                                 </div>
                                 {safeReturnFormError && (
@@ -3907,8 +3919,8 @@ export default function CRRCallingProcessPage() {
             {/* ONLINE RATING & REVIEW REQUEST DIALOG (Stage 5) */}
             <Dialog open={activeRatingGuestId !== null} onOpenChange={(open) => !open && closeRatingModal()}>
                 {activeRatingGuest && (
-                    <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col">
-                        <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white shrink-0">
+                    <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col [&>[data-slot=dialog-close]]:text-white/80 [&>[data-slot=dialog-close]]:hover:text-white [&>[data-slot=dialog-close]]:hover:bg-white/10 [&>[data-slot=dialog-close]]:rounded-md">
+                        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 pl-6 pr-14 py-4 text-white shrink-0">
                             <div className="flex items-center justify-between gap-3 flex-wrap">
                                 <DialogTitle className="text-lg font-bold text-white leading-tight">
                                     Online Rating &amp; Review Request
@@ -3921,7 +3933,7 @@ export default function CRRCallingProcessPage() {
                             <DialogDescription className="text-xs text-white/90 mt-1 font-medium">
                                 Complete the required details below and submit this stage.
                             </DialogDescription>
-                        </DialogHeader>
+                        </div>
 
                         <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
                             {/* Prefilled / read-only details — plain, muted, no emphasis */}
@@ -3973,7 +3985,7 @@ export default function CRRCallingProcessPage() {
                                         {isStage5Complete ? "Read Only" : isStage5Processing ? "Processing" : "Fill in below"}
                                     </span>
                                 </div>
-                                {activeRatingGuest && !isAdminRole && s5Lock.isLocked && !isStage5Complete && !isStage5Processing && (
+                                {activeRatingGuest && s5Lock.isLocked && !isStage5Complete && !isStage5Processing && (
                                     <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                                         <Clock className="h-4 w-4 shrink-0" />
                                         {s5Lock.message}
@@ -4068,81 +4080,87 @@ export default function CRRCallingProcessPage() {
                                         />
                                     </div>
 
-                                    {/* Row 3: Status | (conditional) Remarks Why Not Done or Close | (conditional) Follow-up Date */}
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                            Status <span className="text-red-500">*</span>
-                                        </Label>
-                                        <Select
-                                            disabled={isRatingDisabled}
-                                            value={ratingCallStatus}
-                                            onValueChange={(val) => {
-                                                setRatingCallStatus(val as CallStatus);
-                                                setRatingSaved(false);
-                                            }}
-                                        >
-                                            <SelectTrigger className="h-10 border-orange-200 focus:border-orange-500 bg-white text-slate-800">
-                                                <SelectValue placeholder="Select Status" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="Done">Done</SelectItem>
-                                                <SelectItem value="Not Done - Close">Not Done - Close</SelectItem>
-                                                <SelectItem value="Close Follow-up">Close Follow-up</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
 
-                                    {ratingCallStatus === "Not Done - Close" && (
-                                        <div className="space-y-2 md:col-span-2">
-                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                                Remarks Why Not Done or Close <span className="text-red-500">*</span>
+                                    {/* Status, (conditional) Follow-up Date or Remarks, and Outcome Achieved */}
+                                    <div className="md:col-span-3 flex flex-wrap items-start gap-4 sm:gap-6">
+                                        {/* Status */}
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
+                                                Status <span className="text-red-500">*</span>
                                             </Label>
-                                            <Textarea
+                                            <Select
                                                 disabled={isRatingDisabled}
-                                                value={ratingNotDoneRemarks}
-                                                onChange={(e) => { setRatingNotDoneRemarks(e.target.value); setRatingSaved(false); }}
-                                                placeholder="Reason the rating request wasn't done / was closed..."
-                                                className="min-h-[42px] border-orange-200 focus:border-orange-500 bg-white"
-                                            />
+                                                value={ratingCallStatus}
+                                                onValueChange={(val) => {
+                                                    setRatingCallStatus(val as CallStatus);
+                                                    setRatingSaved(false);
+                                                }}
+                                            >
+                                                <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-orange-200 focus:border-orange-500 bg-white text-slate-800">
+                                                    <SelectValue placeholder="Select Status" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="Done">Done</SelectItem>
+                                                    <SelectItem value="Not Done - Close">Not Done - Close</SelectItem>
+                                                    <SelectItem value="Close Follow-up">Close Follow-up</SelectItem>
+                                                </SelectContent>
+                                            </Select>
                                         </div>
-                                    )}
 
-                                    {ratingCallStatus === "Close Follow-up" && (
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                                Followup Date for the Rating <span className="text-red-500">*</span>
+                                        {/* When Close Follow-up: Followup Date */}
+                                        {ratingCallStatus === "Close Follow-up" && (
+                                            <div className="space-y-1.5">
+                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
+                                                    Followup Date for the Rating <span className="text-red-500">*</span>
+                                                </Label>
+                                                <Input
+                                                    type="date"
+                                                    disabled={isRatingDisabled}
+                                                    value={ratingFollowupDate}
+                                                    onChange={(e) => { setRatingFollowupDate(e.target.value); setRatingSaved(false); }}
+                                                    className="w-[210px] sm:w-[230px] h-10 border-orange-200 focus:border-orange-500 bg-white"
+                                                />
+                                            </div>
+                                        )}
+
+                                        {/* When Not Done - Close: Remarks */}
+                                        {ratingCallStatus === "Not Done - Close" && (
+                                            <div className="space-y-1.5 flex-1 min-w-[280px]">
+                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
+                                                    Remarks Why Not Done or Close <span className="text-red-500">*</span>
+                                                </Label>
+                                                <Textarea
+                                                    disabled={isRatingDisabled}
+                                                    value={ratingNotDoneRemarks}
+                                                    onChange={(e) => { setRatingNotDoneRemarks(e.target.value); setRatingSaved(false); }}
+                                                    placeholder="Reason the rating request wasn't done / was closed..."
+                                                    className="min-h-[42px] border-orange-200 focus:border-orange-500 bg-white w-full"
+                                                />
+                                            </div>
+                                        )}
+
+                                        {/* Did they achieve the outcomes planned for */}
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
+                                                Did they achieve the outcomes planned for? <span className="text-red-500">*</span>
                                             </Label>
-                                            <Input
-                                                type="date"
+                                            <Select
                                                 disabled={isRatingDisabled}
-                                                value={ratingFollowupDate}
-                                                onChange={(e) => { setRatingFollowupDate(e.target.value); setRatingSaved(false); }}
-                                                className="h-10 border-orange-200 focus:border-orange-500 bg-white"
-                                            />
+                                                value={ratingOutcomeAchieved}
+                                                onValueChange={(val) => {
+                                                    setRatingOutcomeAchieved(val as YesNo);
+                                                    setRatingSaved(false);
+                                                }}
+                                            >
+                                                <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-orange-200 focus:border-orange-500 bg-white text-slate-800">
+                                                    <SelectValue placeholder="Yes / No" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="Yes">Yes</SelectItem>
+                                                    <SelectItem value="No">No</SelectItem>
+                                                </SelectContent>
+                                            </Select>
                                         </div>
-                                    )}
-
-                                    {/* Row 4: Did they achieve the outcomes planned for */}
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                            Did they achieve the outcomes planned for? <span className="text-red-500">*</span>
-                                        </Label>
-                                        <Select
-                                            disabled={isRatingDisabled}
-                                            value={ratingOutcomeAchieved}
-                                            onValueChange={(val) => {
-                                                setRatingOutcomeAchieved(val as YesNo);
-                                                setRatingSaved(false);
-                                            }}
-                                        >
-                                            <SelectTrigger className="h-10 border-orange-200 focus:border-orange-500 bg-white text-slate-800">
-                                                <SelectValue placeholder="Yes / No" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="Yes">Yes</SelectItem>
-                                                <SelectItem value="No">No</SelectItem>
-                                            </SelectContent>
-                                        </Select>
                                     </div>
                                 </div>
                                 {ratingFormError && (
@@ -4183,8 +4201,8 @@ export default function CRRCallingProcessPage() {
             {/* GUEST FEEDBACK & OUTCOME CONFIRMATION DIALOG (Stage 4) */}
             <Dialog open={activeFeedbackGuestId !== null} onOpenChange={(open) => !open && closeFeedbackModal()}>
                 {activeFeedbackGuest && (
-                    <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col">
-                        <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white shrink-0">
+                    <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col [&>[data-slot=dialog-close]]:text-white/80 [&>[data-slot=dialog-close]]:hover:text-white [&>[data-slot=dialog-close]]:hover:bg-white/10 [&>[data-slot=dialog-close]]:rounded-md">
+                        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 pl-6 pr-14 py-4 text-white shrink-0">
                             <div className="flex items-center justify-between gap-3 flex-wrap">
                                 <DialogTitle className="text-lg font-bold text-white leading-tight">
                                     Guest Feedback &amp; Outcome Confirmation
@@ -4197,7 +4215,7 @@ export default function CRRCallingProcessPage() {
                             <DialogDescription className="text-xs text-white/90 mt-1 font-medium">
                                 Complete the required details below and submit this stage.
                             </DialogDescription>
-                        </DialogHeader>
+                        </div>
 
                         <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
                             {/* Prefilled / read-only details — plain, muted, no emphasis */}
@@ -4239,7 +4257,11 @@ export default function CRRCallingProcessPage() {
 
                             {/* Feedback details card — non-edited if data exists, editable if pending */}
                             {(() => {
-                                const hasData = Boolean(isStage4Complete || (feedbackDoerRemarks && feedbackDoerRemarks.trim() !== ""));
+                                // hasData must reflect only server-persisted data — NOT the live typing state
+                                // (feedbackDoerRemarks). Using feedbackDoerRemarks here caused the Textarea to
+                                // vanish after the first keystroke: typing one char made hasData true, which
+                                // swapped the editable Textarea for the read-only div, losing focus each time.
+                                const hasData = Boolean(isStage4Complete || activeFeedbackGuest?.guestFeedback?.doerRemarks?.trim());
                                 return (
                                     <div className="rounded-xl border-2 border-amber-300 bg-amber-50/60 p-5 space-y-4 shadow-sm">
                                         <div className="flex items-center gap-2 pb-2 border-b border-amber-200">
@@ -4249,7 +4271,7 @@ export default function CRRCallingProcessPage() {
                                                 {hasData ? "Read Only" : "Fill in below"}
                                             </span>
                                         </div>
-                                        {activeFeedbackGuest && !isAdminRole && s4Lock.isLocked && !isStage4Complete && (
+                                        {activeFeedbackGuest && s4Lock.isLocked && !isStage4Complete && (
                                             <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                                                 <Clock className="h-4 w-4 shrink-0" />
                                                 {s4Lock.message}
@@ -4339,8 +4361,8 @@ export default function CRRCallingProcessPage() {
             {/* REFERRAL COLLECTION & LEAD GENERATION DIALOG (Stage 8) */}
             <Dialog open={activeReferralGuestId !== null} onOpenChange={(open) => !open && closeReferralModal()}>
                 {activeReferralGuest && (
-                    <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col">
-                        <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white shrink-0">
+                    <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col [&>[data-slot=dialog-close]]:text-white/80 [&>[data-slot=dialog-close]]:hover:text-white [&>[data-slot=dialog-close]]:hover:bg-white/10 [&>[data-slot=dialog-close]]:rounded-md">
+                        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 pl-6 pr-14 py-4 text-white shrink-0">
                             <div className="flex items-center justify-between gap-3 flex-wrap">
                                 <DialogTitle className="text-lg font-bold text-white leading-tight">
                                     Referral Collection &amp; Lead Generation
@@ -4353,7 +4375,7 @@ export default function CRRCallingProcessPage() {
                             <DialogDescription className="text-xs text-white/90 mt-1 font-medium">
                                 Complete the required details below and submit this stage.
                             </DialogDescription>
-                        </DialogHeader>
+                        </div>
 
                         <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
                             {/* Prefilled / read-only details — plain, muted, no emphasis */}
@@ -4405,7 +4427,7 @@ export default function CRRCallingProcessPage() {
                                                 {hasData ? "Read Only" : "Fill in below"}
                                             </span>
                                         </div>
-                                        {activeReferralGuest && !isAdminRole && s8Lock.isLocked && !isStage8Complete && (
+                                        {activeReferralGuest && s8Lock.isLocked && !isStage8Complete && (
                                             <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                                                 <Clock className="h-4 w-4 shrink-0" />
                                                 {s8Lock.message}
@@ -4515,8 +4537,8 @@ export default function CRRCallingProcessPage() {
             <Dialog open={activeWelcomeGuestId !== null} onOpenChange={(open) => !open && closeWelcomeModal()}>
                 {activeWelcomeGuest && (() => {
                     return (
-                        <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col">
-                            <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white shrink-0">
+                        <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col [&>[data-slot=dialog-close]]:text-white/80 [&>[data-slot=dialog-close]]:hover:text-white [&>[data-slot=dialog-close]]:hover:bg-white/10 [&>[data-slot=dialog-close]]:rounded-md">
+                            <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 pl-6 pr-14 py-4 text-white shrink-0">
                                 <div className="flex items-center justify-between gap-3 flex-wrap">
                                     <DialogTitle className="text-lg font-bold text-white leading-tight">
                                         Arrival Welcome on Pickup
@@ -4529,7 +4551,7 @@ export default function CRRCallingProcessPage() {
                                 <DialogDescription className="text-xs text-white/90 mt-1 font-medium">
                                     Complete the required details below and submit this stage.
                                 </DialogDescription>
-                            </DialogHeader>
+                            </div>
 
                             <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
                                 {/* Prefilled / read-only details — plain, muted, no emphasis */}
@@ -4578,7 +4600,7 @@ export default function CRRCallingProcessPage() {
                                             {isWelcomeDisabled ? "Read Only" : "Fill in below"}
                                         </span>
                                     </div>
-                                    {activeWelcomeGuest && !isAdminRole && s1Lock.isLocked && !isStage1Complete && !isStage1Processing && (
+                                    {activeWelcomeGuest && s1Lock.isLocked && !isStage1Complete && !isStage1Processing && (
                                         <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                                             <Clock className="h-4 w-4 shrink-0" />
                                             {s1Lock.message}
@@ -4611,9 +4633,12 @@ export default function CRRCallingProcessPage() {
                                             />
                                         </div>
 
-                                        {/* Row 2: Status | (conditional) Remarks Why Not Done or Close | (conditional) Follow-up Date */}
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+
+                                    {/* Status, (conditional) Follow-up Date or Remarks, and Outcome Achieved */}
+                                    <div className="md:col-span-3 flex flex-wrap items-start gap-4 sm:gap-6">
+                                        {/* Status */}
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
                                                 Status <span className="text-red-500">*</span>
                                             </Label>
                                             <Select
@@ -4624,7 +4649,7 @@ export default function CRRCallingProcessPage() {
                                                     setWelcomeSaved(false);
                                                 }}
                                             >
-                                                <SelectTrigger className="h-10 border-sky-200 focus:border-sky-500 bg-white text-slate-800">
+                                                <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-sky-200 focus:border-sky-500 bg-white text-slate-800">
                                                     <SelectValue placeholder="Select Status" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -4635,24 +4660,10 @@ export default function CRRCallingProcessPage() {
                                             </Select>
                                         </div>
 
-                                        {welcomeStatus === "Not Done - Close" && (
-                                            <div className="space-y-2 md:col-span-2">
-                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                                    Remarks Why Not Done or Close <span className="text-red-500">*</span>
-                                                </Label>
-                                                <Textarea
-                                                    disabled={!activeWelcomeGuest || isWelcomeDisabled}
-                                                    value={welcomeNotDoneRemarks}
-                                                    onChange={(e) => { setWelcomeNotDoneRemarks(e.target.value); setWelcomeSaved(false); }}
-                                                    placeholder="Reason the welcome call wasn't done / was closed..."
-                                                    className="min-h-[42px] border-sky-200 focus:border-sky-500 bg-white"
-                                                />
-                                            </div>
-                                        )}
-
+                                        {/* When Close Follow-up: Followup Date */}
                                         {welcomeStatus === "Close Follow-up" && (
-                                            <div className="space-y-2">
-                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                                            <div className="space-y-1.5">
+                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
                                                     Followup Date for the Welcome Call <span className="text-red-500">*</span>
                                                 </Label>
                                                 <Input
@@ -4660,14 +4671,30 @@ export default function CRRCallingProcessPage() {
                                                     disabled={!activeWelcomeGuest || isWelcomeDisabled}
                                                     value={welcomeFollowupDate}
                                                     onChange={(e) => { setWelcomeFollowupDate(e.target.value); setWelcomeSaved(false); }}
-                                                    className="h-10 border-sky-200 focus:border-sky-500 bg-white"
+                                                    className="w-[210px] sm:w-[230px] h-10 border-sky-200 focus:border-sky-500 bg-white"
                                                 />
                                             </div>
                                         )}
 
-                                        {/* Row 3: Did they achieve the outcomes planned for */}
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                                        {/* When Not Done - Close: Remarks */}
+                                        {welcomeStatus === "Not Done - Close" && (
+                                            <div className="space-y-1.5 flex-1 min-w-[280px]">
+                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
+                                                    Remarks Why Not Done or Close <span className="text-red-500">*</span>
+                                                </Label>
+                                                <Textarea
+                                                    disabled={!activeWelcomeGuest || isWelcomeDisabled}
+                                                    value={welcomeNotDoneRemarks}
+                                                    onChange={(e) => { setWelcomeNotDoneRemarks(e.target.value); setWelcomeSaved(false); }}
+                                                    placeholder="Reason the welcome call wasn't done / was closed..."
+                                                    className="min-h-[42px] border-sky-200 focus:border-sky-500 bg-white w-full"
+                                                />
+                                            </div>
+                                        )}
+
+                                        {/* Did they achieve the outcomes planned for */}
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
                                                 Did they achieve the outcomes planned for? <span className="text-red-500">*</span>
                                             </Label>
                                             <Select
@@ -4678,7 +4705,7 @@ export default function CRRCallingProcessPage() {
                                                     setWelcomeSaved(false);
                                                 }}
                                             >
-                                                <SelectTrigger className="h-10 border-sky-200 focus:border-sky-500 bg-white text-slate-800">
+                                                <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-sky-200 focus:border-sky-500 bg-white text-slate-800">
                                                     <SelectValue placeholder="Yes / No" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -4687,6 +4714,7 @@ export default function CRRCallingProcessPage() {
                                                 </SelectContent>
                                             </Select>
                                         </div>
+                                    </div>
                                     </div>
                                     {welcomeFormError && (
                                         <div className="flex items-center gap-2 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
@@ -4726,8 +4754,8 @@ export default function CRRCallingProcessPage() {
 
             <Dialog open={activeResultProgressGuestId !== null} onOpenChange={(open) => !open && closeResultProgressModal()}>
                 {activeResultProgressGuest && (
-                    <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col">
-                        <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white shrink-0">
+                    <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col [&>[data-slot=dialog-close]]:text-white/80 [&>[data-slot=dialog-close]]:hover:text-white [&>[data-slot=dialog-close]]:hover:bg-white/10 [&>[data-slot=dialog-close]]:rounded-md">
+                        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 pl-6 pr-14 py-4 text-white shrink-0">
                             <div className="flex items-center justify-between gap-3 flex-wrap">
                                 <DialogTitle className="text-lg font-bold text-white leading-tight">
                                     Result Tracking &amp; Health Progress Check
@@ -4740,7 +4768,7 @@ export default function CRRCallingProcessPage() {
                             <DialogDescription className="text-xs text-white/90 mt-1 font-medium">
                                 Complete the required details below and submit this stage.
                             </DialogDescription>
-                        </DialogHeader>
+                        </div>
 
                         <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
                             {/* Prefilled / read-only details — plain, muted, no emphasis */}
@@ -4791,7 +4819,7 @@ export default function CRRCallingProcessPage() {
                                         {isStage7Complete ? "Read Only" : isStage7Processing ? "Processing" : "Fill in below"}
                                     </span>
                                 </div>
-                                {activeResultProgressGuest && !isAdminRole && s7Lock.isLocked && !isStage7Complete && !isStage7Processing && (
+                                {activeResultProgressGuest && s7Lock.isLocked && !isStage7Complete && !isStage7Processing && (
                                     <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                                         <Clock className="h-4 w-4 shrink-0" />
                                         {s7Lock.message}
@@ -4824,81 +4852,87 @@ export default function CRRCallingProcessPage() {
                                         />
                                     </div>
 
-                                    {/* Row 2: Status | (conditional) Remarks Why Not Done or Close | (conditional) Follow-up Date */}
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                            Status <span className="text-red-500">*</span>
-                                        </Label>
-                                        <Select
-                                            disabled={isResultDisabled}
-                                            value={resultStatus}
-                                            onValueChange={(val) => {
-                                                setResultStatus(val as CallStatus);
-                                                setResultSaved(false);
-                                            }}
-                                        >
-                                            <SelectTrigger className="h-10 border-purple-200 focus:border-purple-500 bg-white text-slate-800">
-                                                <SelectValue placeholder="Select Status" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="Done">Done</SelectItem>
-                                                <SelectItem value="Not Done - Close">Not Done - Close</SelectItem>
-                                                <SelectItem value="Close Follow-up">Close Follow-up</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
 
-                                    {resultStatus === "Not Done - Close" && (
-                                        <div className="space-y-2 md:col-span-2">
-                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                                Remarks Why Not Done or Close <span className="text-red-500">*</span>
+                                    {/* Status, (conditional) Follow-up Date or Remarks, and Outcome Achieved */}
+                                    <div className="md:col-span-3 flex flex-wrap items-start gap-4 sm:gap-6">
+                                        {/* Status */}
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
+                                                Status <span className="text-red-500">*</span>
                                             </Label>
-                                            <Textarea
+                                            <Select
                                                 disabled={isResultDisabled}
-                                                value={resultNotDoneRemarks}
-                                                onChange={(e) => { setResultNotDoneRemarks(e.target.value); setResultSaved(false); }}
-                                                placeholder="Reason the result / progress check wasn't done / was closed..."
-                                                className="min-h-[42px] border-purple-200 focus:border-purple-500 bg-white"
-                                            />
+                                                value={resultStatus}
+                                                onValueChange={(val) => {
+                                                    setResultStatus(val as CallStatus);
+                                                    setResultSaved(false);
+                                                }}
+                                            >
+                                                <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-purple-200 focus:border-purple-500 bg-white text-slate-800">
+                                                    <SelectValue placeholder="Select Status" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="Done">Done</SelectItem>
+                                                    <SelectItem value="Not Done - Close">Not Done - Close</SelectItem>
+                                                    <SelectItem value="Close Follow-up">Close Follow-up</SelectItem>
+                                                </SelectContent>
+                                            </Select>
                                         </div>
-                                    )}
 
-                                    {resultStatus === "Close Follow-up" && (
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                                Followup Date for Result Tracking &amp; Health Progress <span className="text-red-500">*</span>
+                                        {/* When Close Follow-up: Followup Date */}
+                                        {resultStatus === "Close Follow-up" && (
+                                            <div className="space-y-1.5">
+                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
+                                                    Followup Date for Result Tracking &amp; Health Progress <span className="text-red-500">*</span>
+                                                </Label>
+                                                <Input
+                                                    type="date"
+                                                    disabled={isResultDisabled}
+                                                    value={resultFollowupDate}
+                                                    onChange={(e) => { setResultFollowupDate(e.target.value); setResultSaved(false); }}
+                                                    className="w-[210px] sm:w-[230px] h-10 border-purple-200 focus:border-purple-500 bg-white"
+                                                />
+                                            </div>
+                                        )}
+
+                                        {/* When Not Done - Close: Remarks */}
+                                        {resultStatus === "Not Done - Close" && (
+                                            <div className="space-y-1.5 flex-1 min-w-[280px]">
+                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
+                                                    Remarks Why Not Done or Close <span className="text-red-500">*</span>
+                                                </Label>
+                                                <Textarea
+                                                    disabled={isResultDisabled}
+                                                    value={resultNotDoneRemarks}
+                                                    onChange={(e) => { setResultNotDoneRemarks(e.target.value); setResultSaved(false); }}
+                                                    placeholder="Reason the result / progress check wasn't done / was closed..."
+                                                    className="min-h-[42px] border-purple-200 focus:border-purple-500 bg-white w-full"
+                                                />
+                                            </div>
+                                        )}
+
+                                        {/* Did they achieve the outcomes planned for */}
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
+                                                Did they achieve the outcomes planned for? <span className="text-red-500">*</span>
                                             </Label>
-                                            <Input
-                                                type="date"
+                                            <Select
                                                 disabled={isResultDisabled}
-                                                value={resultFollowupDate}
-                                                onChange={(e) => { setResultFollowupDate(e.target.value); setResultSaved(false); }}
-                                                className="h-10 border-purple-200 focus:border-purple-500 bg-white"
-                                            />
+                                                value={resultOutcomeAchieved}
+                                                onValueChange={(val) => {
+                                                    setResultOutcomeAchieved(val as YesNo);
+                                                    setResultSaved(false);
+                                                }}
+                                            >
+                                                <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-purple-200 focus:border-purple-500 bg-white text-slate-800">
+                                                    <SelectValue placeholder="Yes / No" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="Yes">Yes</SelectItem>
+                                                    <SelectItem value="No">No</SelectItem>
+                                                </SelectContent>
+                                            </Select>
                                         </div>
-                                    )}
-
-                                    {/* Row 3: Did they achieve the outcomes planned for */}
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                            Did they achieve the outcomes planned for? <span className="text-red-500">*</span>
-                                        </Label>
-                                        <Select
-                                            disabled={isResultDisabled}
-                                            value={resultOutcomeAchieved}
-                                            onValueChange={(val) => {
-                                                setResultOutcomeAchieved(val as YesNo);
-                                                setResultSaved(false);
-                                            }}
-                                        >
-                                            <SelectTrigger className="h-10 border-purple-200 focus:border-purple-500 bg-white text-slate-800">
-                                                <SelectValue placeholder="Yes / No" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="Yes">Yes</SelectItem>
-                                                <SelectItem value="No">No</SelectItem>
-                                            </SelectContent>
-                                        </Select>
                                     </div>
                                 </div>
                                 {resultFormError && (
@@ -4938,8 +4972,8 @@ export default function CRRCallingProcessPage() {
 
             <Dialog open={activeCallGuestId !== null} onOpenChange={(open) => !open && closeCallModal()}>
                 {activeCallGuest && (
-                    <DialogContent style={{ width: "min(98vw, 1400px)", maxWidth: "min(98vw, 1400px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col">
-                        <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white shrink-0">
+                    <DialogContent style={{ width: "min(98vw, 1400px)", maxWidth: "min(98vw, 1400px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col [&>[data-slot=dialog-close]]:text-white/80 [&>[data-slot=dialog-close]]:hover:text-white [&>[data-slot=dialog-close]]:hover:bg-white/10 [&>[data-slot=dialog-close]]:rounded-md">
+                        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 pl-6 pr-14 py-4 text-white shrink-0">
                             <div className="flex items-center justify-between gap-3 flex-wrap">
                                 <DialogTitle className="text-lg font-bold text-white leading-tight">
                                     Guest Request &amp; Complaint Management (QR Scan)
@@ -4952,7 +4986,7 @@ export default function CRRCallingProcessPage() {
                             <DialogDescription className="text-xs text-white/90 mt-1 font-medium">
                                 Complete the required details below and submit this stage.
                             </DialogDescription>
-                        </DialogHeader>
+                        </div>
 
                         <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
                             {/* Prefilled / read-only details — plain, muted, no emphasis */}
@@ -4997,7 +5031,7 @@ export default function CRRCallingProcessPage() {
                                 const saved = getStageSavedData(activeCallGuest, 2);
                                 const planned = getStagePlannedDate(activeCallGuest, 2);
                                 const actual = getStageActualDate(activeCallGuest, 2);
-                                const doer = getStageDoer(activeCallGuest, 2);
+                                const doer = getStageDoer(activeCallGuest, 2, responsiblePersonList);
                                 return (
                                     <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 shadow-sm">
                                         <div className="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -5043,7 +5077,7 @@ export default function CRRCallingProcessPage() {
                                             <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-600">QR Code</h4>
                                         </div>
                                     </div>
-                                    {activeCallGuest && !isAdminRole && s2Lock.isLocked && !isStage2Complete && (
+                                    {activeCallGuest && s2Lock.isLocked && !isStage2Complete && (
                                         <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mt-3">
                                             <Clock className="h-4 w-4 shrink-0" />
                                             {s2Lock.message}
@@ -5105,15 +5139,15 @@ export default function CRRCallingProcessPage() {
             {/* BOOKING & GUEST DETAILS DIALOG — shared by Welcome Call, Return Date & Referral, Result & Progress */}
             <Dialog open={activeDetailsGuestId !== null} onOpenChange={(open) => !open && closeDetailsModal()}>
                 {activeDetailsGuest && (
-                    <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col">
-                        <DialogHeader className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white shrink-0">
+                    <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col [&>[data-slot=dialog-close]]:text-white/80 [&>[data-slot=dialog-close]]:hover:text-white [&>[data-slot=dialog-close]]:hover:bg-white/10 [&>[data-slot=dialog-close]]:rounded-md">
+                        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 pl-6 pr-14 py-4 text-white shrink-0">
                             <DialogTitle className="text-lg font-bold text-white leading-tight">
                                 {activeDetailsAction} — {activeDetailsGuest.name}
                             </DialogTitle>
                             <DialogDescription className="text-xs text-white/90 mt-1.5 font-medium">
                                 Booking ID: {activeDetailsGuest.bookingId}
                             </DialogDescription>
-                        </DialogHeader>
+                        </div>
 
                         <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
                             {/* Read-only Booking & Guest Details */}
@@ -5197,6 +5231,7 @@ export default function CRRCallingProcessPage() {
                 guest={activeViewGuest}
                 initialStage={activeViewStage}
                 onClose={() => setActiveViewGuestId(null)}
+                stageUsers={responsiblePersonList}
             />
         </DashboardLayout>
     );

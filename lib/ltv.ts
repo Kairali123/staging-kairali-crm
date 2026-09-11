@@ -2,6 +2,8 @@
  * Guest Lifetime Value (LTV) Calculation and Utilities
  * 
  * Rules:
+ * - LTV = SUM(Collection Amount / Amount Received) across all valid stays/bookings of the same customer.
+ * - Invoice Amount, PI Amount, and Original Booking Amount are strictly NOT used for LTV calculation.
  * - Cancelled bookings are strictly excluded from count (totalStays) and amount (totalLtv).
  * - Active/valid bookings contribute to count and amount.
  * - Double subtraction prevention: LTV is derived deterministically from the current booking dataset.
@@ -65,9 +67,53 @@ export function getGuestKey(b: any): string {
         : `n_${(b.guestName || "").toString().trim().toLowerCase()}`));
 }
 
+export const CONVERSION_RATES: Record<string, number> = {
+  INR: 1,
+  USD: 85.74,
+  EUR: 89.26,
+  EURO: 89.26,
+};
+
+/**
+ * Extracts the actual collection / received amount for a booking.
+ * Strictly uses Collection Amount / Amount Received.
+ * Never falls back to Invoice Amount, PI Amount, or Original Booking Amount.
+ * Missing/null/empty collection amounts are treated as 0.
+ * Follows the application's existing currency conversion logic.
+ */
+export function getBookingCollectionAmount(b: any): number {
+  if (!b) return 0;
+
+  // Extract from existing actual collection / received amount fields
+  const rawVal =
+    b.paymentDetails?.amountRecieved ??
+    b.amountRecieved ??
+    b.receivedAmount ??
+    b.totalAmountReceived ??
+    b.paymentDetails?.totalAmountReceived ??
+    b.paymentDetails?.amountReceived ??
+    b.nb_pch_total_recv_amount ??
+    b.rawItem?.nb_pch_total_recv_amount ??
+    b.paymentDetails?.paymentReceived ??
+    b.paidAmount ??
+    0;
+
+  if (rawVal === undefined || rawVal === null || rawVal === "") return 0;
+  const num = typeof rawVal === "number" ? rawVal : Number(String(rawVal).replace(/[₹$,\s]/g, ""));
+  if (isNaN(num) || num <= 0) return 0;
+
+  // Currency conversion to INR following the application's existing conversion logic
+  const currency = (b.currency || b.paymentDetails?.currency || "INR").toString().trim().toUpperCase();
+  const rate = CONVERSION_RATES[currency] ?? 1;
+  const inrAmount = num * rate;
+
+  return Math.round(inrAmount);
+}
+
 /**
  * Computes guest LTV metrics across an array of bookings.
  * Cancelled bookings are excluded from count and amount.
+ * Amount is based strictly on Collection Amount / Amount Received.
  */
 export function calculateGuestLtvMetrics(bookings: any[]): GuestLtvMetricsResult {
   const guestMap = new Map<string, GuestLtvSummary>();
@@ -79,7 +125,7 @@ export function calculateGuestLtvMetrics(bookings: any[]): GuestLtvMetricsResult
     const guestKey = getGuestKey(b);
     if (!guestKey || guestKey === "n_") return;
 
-    const currentAmount = Number(b.amount || b.originalAmount || b.totalAmount || 0) || 0;
+    const currentAmount = getBookingCollectionAmount(b);
     const existing = guestMap.get(guestKey);
     if (existing) {
       existing.totalLtv += currentAmount;
@@ -129,7 +175,7 @@ export function calculateGuestLtvMetrics(bookings: any[]): GuestLtvMetricsResult
     // Fallback for bookings not present in the aggregated active map
     const isCancelled = isBookingCancelled(b);
     return {
-      totalLtv: isCancelled ? 0 : (Number(b.amount || b.originalAmount || b.totalAmount || 0) || 0),
+      totalLtv: isCancelled ? 0 : getBookingCollectionAmount(b),
       totalStays: isCancelled ? 0 : 1,
       guestName: b.guestName || "",
       tier: "Standard" as const,
