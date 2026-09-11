@@ -2879,7 +2879,7 @@ export default function CRRCallingProcessPage() {
                                             Total Guests
                                         </p>
                                         <p className="text-3xl sm:text-4xl font-bold text-white tabular-nums">
-                                            {guests.length}
+                                            {totalPipelineCount}
                                         </p>
                                     </div>
                                 </div>
