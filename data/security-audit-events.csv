@@ -137,3 +137,5 @@ eventId,timestamp,action,outcome,actor,target,sourceIp,correlationId,context
 "16ec3e1d-88ec-4e0f-badd-a744ebab06f2","2026-09-08T10:31:40.351Z","order_form.getProducts","success","developer3@kairali.com","","::1","c8ba5ef0-783d-4e2d-8893-1865d6c6e998","{""role"":""super_admin"",""durationMs"":1933,""errorCode"":null}"
 "fc7974f4-2d4f-446d-9184-458143047518","2026-09-08T10:34:31.658Z","order_form.getUsers","success","developer3@kairali.com","","::1","b7b787a1-8900-4619-9ea2-ffebb4847ece","{""role"":""super_admin"",""durationMs"":2023,""errorCode"":null}"
 "7997341e-df4c-4792-ad91-ff120334e0b5","2026-09-08T10:34:31.697Z","order_form.getProducts","success","developer3@kairali.com","","::1","ac99abda-f714-4eab-83ed-bb0907f21d05","{""role"":""super_admin"",""durationMs"":2072,""errorCode"":null}"
+"dfe81d72-6729-44ca-8d76-55c62b2d06f1","2026-09-11T09:10:34.886Z","auth.logout","success","grm@ktahv.com","","::1","7f008069-060e-4e22-8d5b-dcc37b3d6c6d","{""sessionRevoked"":true}"
+"5a860aac-958c-4045-90e7-62a607d7632e","2026-09-11T09:10:42.652Z","auth.login","success","developer3@kairali.com","","::1","177a2c89-8cb9-4cef-82a3-9bcc5c97f4ba","{}"

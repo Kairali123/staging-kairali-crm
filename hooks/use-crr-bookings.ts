@@ -259,26 +259,26 @@ function mapRow(row: GasBookingRow): Guest {
     const driverAssignmentArrival = hasAnyValue(s9)
         ? ({
             pickupRequired: s9!.pickupRequired,
-            driverName: s9!.driverName,
+            driverName: (s9!.driverName && s9!.driverName !== row.bookingTakenBy) ? s9!.driverName : "",
             driverContact: s9!.driverContact,
             pickupFrom: s9!.pickupFrom,
             pickupDate: s9!.pickupDate,
             pickupTime: s9!.pickupTime,
             remarks: s9!.remarks,
-            assignedBy: s9!.assignedBy,
+            assignedBy: (s9!.assignedBy && s9!.assignedBy !== row.bookingTakenBy) ? s9!.assignedBy : "",
         } as Guest["driverAssignmentArrival"])
         : undefined;
 
     const driverAssignmentDeparture = hasAnyValue(s10)
         ? ({
             dropRequired: s10!.dropRequired,
-            driverName: s10!.driverName,
+            driverName: (s10!.driverName && s10!.driverName !== row.bookingTakenBy) ? s10!.driverName : "",
             driverContact: s10!.driverContact,
             dropTo: s10!.dropTo,
             dropDate: s10!.dropDate,
             dropTime: s10!.dropTime,
             remarks: s10!.remarks,
-            assignedBy: s10!.assignedBy,
+            assignedBy: (s10!.assignedBy && s10!.assignedBy !== row.bookingTakenBy) ? s10!.assignedBy : "",
         } as Guest["driverAssignmentDeparture"])
         : undefined;
 
@@ -410,9 +410,18 @@ export function useCrrBookings(from?: string, to?: string) {
 export function isStageLocked(guest: Guest, stageNo: number): boolean {
     const info = guest.stages.find((s) => s.stage === stageNo);
     if (!info || !info.available) return false;
-    // If planned date is not set, stage is not locked
+    // If planned date is not set, stage is not locked (caller handles this separately)
     if (!info.plannedDate || String(info.plannedDate).trim() === "") return false;
     return info.locked;
+}
+
+// Returns true when the stage has NO planned date at all.
+// This lock applies unconditionally — Super Admin cannot bypass it.
+// If a stage has no Planned Date, no user (including Super Admin) may fill/submit the form.
+export function hasStageNoPlannedDate(guest: Guest, stageNo: number): boolean {
+    const info = guest.stages?.find((s) => s.stage === stageNo);
+    const pd = info?.plannedDate;
+    return !pd || String(pd).trim() === "" || String(pd).trim() === "-";
 }
 
 export function getStagePlannedDate(guest: Guest, stageNo: number): string | null {
@@ -426,9 +435,33 @@ export function getStageActualDate(guest: Guest, stageNo: number): string | null
     return info?.actualDate ?? null;
 }
 
-// The person responsible for executing a stage (GAS savedData.doer or assigned staff).
-// Falls back to doctor for medical stages, driver for transport stages, and bookingTakenBy for general stages.
-export function getStageDoer(guest: Guest, stageNo: number): string {
+export const DEFAULT_STAGE_USERS: StageUser[] = [
+    { name: "Jinsha Manoj MV", email: "grm@ktahv.com", role: "grm", stages: [1, 2, 4, 5, 6, 8] },
+    { name: "Dr. Rahul R", email: "doctor@ktahv.com", role: "doctor", stages: [3, 7] },
+    { name: "Shoukath Ali Moosa", email: "fom@ktahv.com", role: "fom", stages: [9, 10] },
+    { name: "Anoop Vijayaraj", email: "gm.hv@kairali.com", role: "gm", stages: [11] },
+];
+
+export function getAssignedStageUser(stageNo: number, stageUsers?: StageUser[]): string {
+    if (stageUsers && stageUsers.length > 0) {
+        const found = stageUsers.find((u) => u.stages?.includes(stageNo));
+        if (found?.name && found.name.trim() !== "") {
+            return found.name.trim();
+        }
+    }
+    const def = DEFAULT_STAGE_USERS.find((u) => u.stages?.includes(stageNo));
+    if (def?.name && def.name.trim() !== "") {
+        return def.name.trim();
+    }
+    return "";
+}
+
+// The person responsible for executing a stage (GAS savedData.doer or assigned stage user).
+// When no value is present, ALWAYS shows the assigned stage user name.
+// NEVER falls back to bookingTakenBy (salesperson / booking creator).
+export function getStageDoer(guest: Guest | null | undefined, stageNo: number, stageUsers?: StageUser[]): string {
+    if (!guest) return getAssignedStageUser(stageNo, stageUsers);
+
     const info = guest.stages?.find((s) => s.stage === stageNo);
     const doer = info?.savedData?.doer;
 
@@ -442,35 +475,46 @@ export function getStageDoer(guest: Guest, stageNo: number): string {
                     guest.stages?.find((s) => s.stage === 11)?.savedData?.doctorAssignedToClient ||
                     guest.stages?.find((s) => s.stage === 11)?.savedData?.changedDoctor;
         if (doc && String(doc).trim() !== "") return String(doc).trim();
-        return "Doctor";
+        const assignedDoc = getAssignedStageUser(stageNo, stageUsers);
+        return assignedDoc || "Doctor";
     }
 
-    // Stage 2, 4 & 8 strictly use database doer from checkinmasterfms
-    if (stageNo === 2 || stageNo === 4 || stageNo === 8) {
-        return "";
+    // Stage 11: GM stage (Guest Requirement Verification) -> strictly GM (Anoop Vijayaraj / assigned GM), NEVER the doctor being assigned
+    if (stageNo === 11) {
+        const assignedDoctor = guest.guestRequirementVerification?.doctorAssignedToClient ||
+                               guest.guestRequirementVerification?.changedDoctor ||
+                               info?.savedData?.doctorAssignedToClient ||
+                               info?.savedData?.changedDoctor;
+        // Accept saved doer only if it is genuinely the GM, not the assigned doctor, not a doctor title, and not bookingTakenBy
+        if (doer && String(doer).trim() !== "" && doer !== guest.takenBy && doer !== assignedDoctor && !/^dr\.?\s/i.test(String(doer)) && doer !== "Doctor") {
+            return String(doer).trim();
+        }
+        const assignedGm = getAssignedStageUser(11, stageUsers);
+        return assignedGm || "Anoop Vijayaraj";
     }
 
-    if (doer && String(doer).trim() !== "") {
+    // Stage 9 & 10: FO stages (Driver Assignment – Arrival Pickup & Departure Drop) -> strictly FO (Shoukath Ali Moosa / assigned FO), NEVER salesperson or driver
+    if (stageNo === 9 || stageNo === 10) {
+        const assignedDriver = (stageNo === 9 ? guest.driverAssignmentArrival?.driverName : guest.driverAssignmentDeparture?.driverName) ||
+                               info?.savedData?.driverName;
+        // Accept saved doer only if it is genuinely FO staff, not the assigned driver, and not bookingTakenBy
+        if (doer && String(doer).trim() !== "" && doer !== guest.takenBy && doer !== assignedDriver) {
+            return String(doer).trim();
+        }
+        const assignedFo = getAssignedStageUser(stageNo, stageUsers);
+        return assignedFo || "Shoukath Ali Moosa";
+    }
+
+    // If an actual execution doer value was saved and is not the booking salesperson:
+    if (doer && String(doer).trim() !== "" && doer !== guest.takenBy) {
         return String(doer).trim();
     }
 
-    // Stage 9: Arrival Driver / FO
-    if (stageNo === 9) {
-        const driver = guest.driverAssignmentArrival?.driverName ||
-                       guest.stages?.find((s) => s.stage === 9)?.savedData?.driverName;
-        if (driver && String(driver).trim() !== "") return String(driver).trim();
-    }
-
-    // Stage 10: Departure Driver / FO
-    if (stageNo === 10) {
-        const driver = guest.driverAssignmentDeparture?.driverName ||
-                       guest.stages?.find((s) => s.stage === 10)?.savedData?.driverName;
-        if (driver && String(driver).trim() !== "") return String(driver).trim();
-    }
-
-    // General / Calling / FO / GRE stages fallback: booking taken by / assigned employee
-    if (guest.takenBy && String(guest.takenBy).trim() !== "" && guest.takenBy !== "-") {
-        return String(guest.takenBy).trim();
+    // Always fallback to the assigned stage user name if no saved doer value is present.
+    // NEVER show bookingTakenBy (guest.takenBy).
+    const assignedUser = getAssignedStageUser(stageNo, stageUsers);
+    if (assignedUser) {
+        return assignedUser;
     }
 
     return "";

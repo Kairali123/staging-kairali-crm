@@ -29,13 +29,14 @@ import {
 } from "lucide-react";
 import type { Guest, Stage, StageStatus } from "@/types/crr";
 import { getDoctorEmail } from "@/components/Guestrequirementverificationmodal";
-import { getStageDoer } from "@/hooks/use-crr-bookings";
+import { getStageDoer, type StageUser } from "@/hooks/use-crr-bookings";
 
 interface CrrStageViewModalProps {
     open: boolean;
     onClose: () => void;
     guest: Guest | null;
     initialStage?: number;
+    stageUsers?: StageUser[];
 }
 
 const STAGES_CONFIG: {
@@ -294,6 +295,7 @@ export default function CrrStageViewModal({
     onClose,
     guest,
     initialStage = 1,
+    stageUsers,
 }: CrrStageViewModalProps) {
     const [activeStageNo, setActiveStageNo] = useState<number>(initialStage);
     const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
@@ -1055,7 +1057,7 @@ export default function CrrStageViewModal({
                                             </div>
                                         )}
                                         {(() => {
-                                            const doerVal = getStageDoer(guest, activeStageNo) || stageInfo?.savedData?.doer;
+                                            const doerVal = getStageDoer(guest, activeStageNo, stageUsers);
                                             if (!doerVal) return null;
                                             return (
                                                 <div

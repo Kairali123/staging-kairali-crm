@@ -10,7 +10,7 @@ export const NEW_ORDER_STAGES = [
     { no: 1, index: 0, name: 'Order Verify Status', short: 'Order Verify', defaultDoer: 'Order Verify Team' },
     { no: 2, index: 1, name: 'Inventory Verify Status', short: 'Inventory Verify', defaultDoer: 'Sakthivel S' },
     { no: 3, index: 2, name: 'Payment Verify Status', short: 'Payment Verify', defaultDoer: 'Manonmani' },
-    { no: 4, index: 3, name: 'Order Packing Status', short: 'Order Packing', defaultDoer: 'Shakti' },
+    { no: 4, index: 3, name: 'Order Packing Status', short: 'Order Packing', defaultDoer: 'Sakthivel S' },
     { no: 5, index: 4, name: 'QC Verify Status', short: 'QC Verify', defaultDoer: 'Sathish & Balavignesh S' },
     { no: 6, index: 5, name: 'Address ReVerify Status', short: 'Address ReVerify', defaultDoer: 'Address Verify Team' },
     { no: 7, index: 6, name: 'Dispatch Status', short: 'Dispatch', defaultDoer: 'Sakthivel & Dinesh Kumar' },
@@ -21,12 +21,37 @@ export const NEW_ORDER_STAGES = [
 export const DEFAULT_ORDER_STAGE_USERS = [
     'Sakthivel S',
     'Manonmani',
-    'Shakti',
     'Sathish & Balavignesh S',
     'Address Verify Team',
     'Sakthivel & Dinesh Kumar',
     'Thangarasu',
 ];
+
+/**
+ * Normalizes doer names so aliases for the same person map to a single canonical key.
+ * - Shakti and Sakthivel S -> sakthivel s
+ * - Sanjay and Sanjay Yadav -> sanjay yadav
+ */
+export function normalizeDoerKey(name: string): string {
+    const lower = (name || '').toLowerCase().trim();
+    if (lower === 'shakti' || lower === 'sakthivel s' || lower === 'sakthivel') {
+        return 'sakthivel s';
+    }
+    if (lower === 'sanjay' || lower === 'sanjay yadav') {
+        return 'sanjay yadav';
+    }
+    return lower;
+}
+
+/**
+ * Returns canonical display name for any given raw doer name.
+ */
+export function getCanonicalDoerName(name: string): string {
+    const key = normalizeDoerKey(name);
+    if (key === 'sakthivel s') return 'Sakthivel S';
+    if (key === 'sanjay yadav') return 'Sanjay Yadav';
+    return (name || '').trim().replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 export interface StagePendingRow {
     emp: string;
@@ -72,18 +97,11 @@ export function OrderStageWisePendingsReport({
         // Key is lowercase+trim for case-insensitive deduplication (arul === ARUL)
         const employeeDataMap = new Map<string, { displayName: string; counts: number[] }>();
 
-        // Helper: normalize a name to a lookup key
-        const normalizeKey = (name: string) => name.toLowerCase().trim();
-
-        // Helper: title-case a name for display
-        const toTitleCase = (name: string) =>
-            name.trim().replace(/\b\w/g, (c) => c.toUpperCase());
-
         // Ensure default stage assignees exist in the report
         DEFAULT_ORDER_STAGE_USERS.forEach((user) => {
-            const key = normalizeKey(user);
+            const key = normalizeDoerKey(user);
             if (!employeeDataMap.has(key)) {
-                employeeDataMap.set(key, { displayName: user, counts: new Array(NEW_ORDER_STAGES.length).fill(0) });
+                employeeDataMap.set(key, { displayName: getCanonicalDoerName(user), counts: new Array(NEW_ORDER_STAGES.length).fill(0) });
             }
         });
 
@@ -101,18 +119,16 @@ export function OrderStageWisePendingsReport({
             // If an uncompleted active stage is found
             if (activeIdx < 9) {
                 const rawDoer = (getOrderStageDoerFn(order, activeIdx) || 'Unassigned').trim();
-                const key = normalizeKey(rawDoer);
+                const key = normalizeDoerKey(rawDoer);
 
                 if (!employeeDataMap.has(key)) {
                     employeeDataMap.set(key, {
-                        displayName: toTitleCase(rawDoer),
+                        displayName: getCanonicalDoerName(rawDoer),
                         counts: new Array(NEW_ORDER_STAGES.length).fill(0),
                     });
                 }
 
                 const entry = employeeDataMap.get(key)!;
-
-
                 entry.counts[activeIdx]++;
                 stageTotals[activeIdx]++;
             }
@@ -230,7 +246,7 @@ export function OrderStageWisePendingsReport({
                             </tr>
                         ) : (
                             pendingReport.rows.map((row) => {
-                                const isSelected = selectedDoer === row.emp;
+                                const isSelected = Boolean(selectedDoer && normalizeDoerKey(selectedDoer) === normalizeDoerKey(row.emp));
                                 return (
                                     <tr
                                         key={row.emp}
