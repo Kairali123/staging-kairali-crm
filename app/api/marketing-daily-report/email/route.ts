@@ -26,7 +26,7 @@ export async function POST(req:NextRequest){
  const html=reportExportHTML(date,report,view)
  try{
   const transport=nodemailer.createTransport({host:config.host,port:config.port,secure:config.port===465,auth:{user:config.user!,pass:config.pass!},connectionTimeout:15000,socketTimeout:20000,disableFileAccess:true,disableUrlAccess:true})
-  const info=await transport.sendMail({from:{name:'Kairali Group · Marketing',address:config.user!},to,subject,html,text:`${subject}\nThe formatted report is included in this email.`,disableFileAccess:true,disableUrlAccess:true})
+  const info=await transport.sendMail({from:`Kairali Group Marketing <${config.user!}>`,to,subject,html,text:`${subject}\nThe formatted report is included in this email.`,disableFileAccess:true,disableUrlAccess:true})
   if(info.rejected?.length)return NextResponse.json({error:'Some recipients were rejected. Check delivery before retrying.'},{status:502,headers})
   return NextResponse.json({success:true},{headers})
  }catch{return NextResponse.json({error:'Delivery could not be confirmed. Check your mailbox before retrying.'},{status:502,headers})}
