@@ -172,6 +172,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const navigation = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, permission: "dashboard.view" },
+    { name: "Marketing Daily Report", href: "/marketing-daily-report", icon: TrendingUp, permission: "marketing.view" },
     { name: "User Management", href: "/users", icon: UserCog, superAdminOnly: true },
     { name: "Marketing Reports", icon: TrendingUp, permission: "marketing.view" },
     { name: "Riya Sharma", href: "/riya-sharma", icon: LayoutGrid, permission: "riya_sharma.view" },
@@ -203,7 +204,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   ]
 
   const marketingSubMenu = [
-    { name: "Marketing Daily Report", href: "/marketing-daily-report", icon: TrendingUp, description: "Daily company marketing, lead quality and sales report", permission: "marketing.view" },
     { name: "Marketing Funnel", href: "/marketing-funnel", icon: Search, description: "Marketing Funnel", permission: "marketing_funnel.view" },
     { name: "Google PPC Reports", href: "/marketing/google-ppc", icon: Search, description: "Google PPC ads reports", permission: "marketing_google_report.view" },
     { name: "Facebook PPC Reports", href: "/marketing/facebook-ppc", icon: Search, description: "Facebook PPC ads reports", permission: "marketing_facebook_report.view" },
