@@ -257,7 +257,8 @@ export async function GET(req: NextRequest) {
                     `SELECT booking_id, arrival_planned, arrival_actual, arrival_doer_name,
                             client_arrival_data_upload_remarks, departure_planned, departure_actual,
                             departure_doer_name, client_departure_data_upload_remarks,
-                            doctor_assigned_to_the_client, stage11_change_the_doctor_if_required, updated_at
+                            doctor_assigned_to_the_client, stage11_change_the_doctor_if_required,
+                            stage11_planned, stage11_actual, stage11_status, stage11_timestamp, updated_at
                      FROM ktahv_guest_tracker
                      WHERE booking_id IN (?)`,
                     [bookingIds]
@@ -642,15 +643,21 @@ export async function GET(req: NextRequest) {
             } : null;
 
             // Stage 11: Guest Requirement Verification (Guest Tracker)
-            const s11Planned = tracker?.arrival_planned || row.check_in_date || null;
+            // Planned/actual come from the tracker's own stage11_* columns. Completion is
+            // stage11_actual being set - NOT "a doctor is assigned", which marked rows
+            // complete with no actual date and left actual-dated rows sitting in Pending.
+            // No stage11_planned (i.e. no guest-tracker row) => stage 11 was never
+            // scheduled for this booking, so it is not a pending task. Hence no
+            // fallback to arrival_planned / check_in_date here.
+            const s11Planned = tracker?.stage11_planned || null;
             const s11Doctor = tracker?.doctor_assigned_to_the_client || tracker?.stage11_change_the_doctor_if_required || row.stage9_doer || "";
-            const s11Completed = Boolean(s11Doctor);
-            const s11Actual = s11Completed ? tracker?.updated_at || tracker?.created_at || null : null;
+            const s11Actual = tracker?.stage11_actual || null;
+            const s11Completed = Boolean(s11Actual) || !s11Planned;
             const s11Saved = tracker ? {
                 doctorAssignedToClient: s11Doctor,
                 email: getDoctorEmail(s11Doctor),
-                timestamp: s11Doctor ? formatTimestamp(tracker?.updated_at) : "",
-                doctorAssignStatus: s11Doctor ? "Assigned" : "",
+                timestamp: formatTimestamp(tracker?.stage11_timestamp || tracker?.updated_at),
+                doctorAssignStatus: tracker?.stage11_status || (s11Doctor ? "Assigned" : ""),
                 changedDoctor: tracker?.stage11_change_the_doctor_if_required || "",
                 remarks: tracker?.special_request_or_requirement_noted || "",
                 doer: "", // GM stage: doer is GM, not the doctor assigned to the client
@@ -682,7 +689,7 @@ export async function GET(req: NextRequest) {
                 // Stages 9,10,11 — excluded from to_show rule, single-phase as before
                 { stage: 9, available: true, locked: isLockedDate(s9Planned, todayStr), plannedDate: formatDMYDate(s9Planned), completed: Boolean(s9Actual), actualDate: formatDMYDate(s9Actual), savedData: s9Saved, stageKey: uid ? `${uid}_Stage9` : null },
                 { stage: 10, available: true, locked: isLockedDate(s10Planned, todayStr), plannedDate: formatDMYDate(s10Planned), completed: Boolean(s10Actual), actualDate: formatDMYDate(s10Actual), savedData: s10Saved, stageKey: uid ? `${uid}_Stage10` : null },
-                { stage: 11, available: true, locked: isLockedDate(s11Planned, todayStr), plannedDate: formatDMYDate(s11Planned), completed: Boolean(s11Actual), actualDate: formatDMYDate(s11Actual), savedData: s11Saved, stageKey: uid ? `${uid}_Stage11` : null },
+                { stage: 11, available: true, locked: isLockedDate(s11Planned, todayStr), plannedDate: formatDMYDate(s11Planned), completed: s11Completed, actualDate: formatDMYDate(s11Actual), savedData: s11Saved, stageKey: uid ? `${uid}_Stage11` : null },
             ];
 
             return {

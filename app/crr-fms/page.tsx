@@ -181,6 +181,16 @@ function parseDMY(dateStr: string): Date {
     return new Date(s);
 }
 
+// A pending booking that checks in after tomorrow isn't actionable yet: it is
+// blurred out and parked at the bottom of the Pending Records table.
+function isFutureCheckin(dateStr: string): boolean {
+    const d = parseDMY(dateStr);
+    if (isNaN(d.getTime())) return false;
+    const now = new Date();
+    const endOfTomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 23, 59, 59, 999);
+    return d > endOfTomorrow;
+}
+
 /* ---------- Resolve a Date Range preset (or custom start/end) into concrete bounds ---------- */
 function getDateRangeBounds(
     preset: DateRangePreset,
@@ -279,14 +289,18 @@ function frozenCellClass(baseClass: string, sticky: boolean, extraZ = "z-10") {
     return sticky ? `sticky ${extraZ} ${baseClass}` : baseClass;
 }
 function frozenCellStyle(left: number, width: number, sticky: boolean, withEdgeShadow = false): CSSProperties {
+    // overflow/ellipsis: long values (e.g. a raw Date string in Booking ID) used to
+    // spill past the frozen column and render on top of the Check-In cell.
     if (!sticky) {
-        return { width, minWidth: width, maxWidth: width };
+        return { width, minWidth: width, maxWidth: width, overflow: "hidden", textOverflow: "ellipsis" };
     }
     return {
         left,
         width,
         minWidth: width,
         maxWidth: width,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
         transform: "translateZ(0)",
         WebkitTransform: "translateZ(0)",
         isolation: "isolate",
@@ -928,8 +942,19 @@ export default function CRRCallingProcessPage() {
     // Record-level separation into Pending, Completed, and Cancelled:
     const pendingRows = useMemo(() => {
         if (statusFilter === "complete" || statusFilter === "cancelled") return [];
-        return rows.filter((g) => !isRecordCompleted(g) && !isBookingCancelled(g));
-    }, [rows, isRecordCompleted, statusFilter]);
+        const list = rows.filter((g) => !isRecordCompleted(g) && !isBookingCancelled(g));
+        // Not-yet-actionable bookings (check-in after tomorrow) sink to the bottom.
+        // The rest default to newest check-in first, unless the user picked a column sort.
+        const active = list.filter((g) => !isFutureCheckin(g.checkin));
+        const future = list.filter((g) => isFutureCheckin(g.checkin));
+        if (!sortColumn) {
+            const byCheckinDesc = (a: Guest, b: Guest) =>
+                (parseDMY(b.checkin).getTime() || 0) - (parseDMY(a.checkin).getTime() || 0);
+            active.sort(byCheckinDesc);
+            future.sort(byCheckinDesc);
+        }
+        return [...active, ...future];
+    }, [rows, isRecordCompleted, statusFilter, sortColumn]);
 
     const completedRows = useMemo(() => {
         if (statusFilter === "pending" || statusFilter === "cancelled") return [];
@@ -2229,8 +2254,13 @@ export default function CRRCallingProcessPage() {
                                     const stageObj = STAGES[activeStageNum - 1] || STAGES[0];
                                     const isCurrentStageComplete = g.allComplete || (g.stageStatus && g.stageStatus[activeStageNum - 1] === "Complete");
                                     const isPendingStage = !isCurrentStageComplete && !isBookingCancelled(g);
+                                    const isLocked = isPendingTable && isFutureCheckin(g.checkin);
                                     return (
-                                        <tr key={g.id} className="group border-b border-slate-200 hover:bg-slate-50/80 transition-colors">
+                                        <tr
+                                            key={g.id}
+                                            title={isLocked ? "Check-in is after tomorrow - not actionable yet" : undefined}
+                                            className={`group border-b border-slate-200 hover:bg-slate-50/80 transition-colors${isLocked ? " blur-[2px] opacity-50 pointer-events-none select-none" : ""}`}
+                                        >
                                             {/* Timestamp */}
                                             <td
                                                 className={frozenCellClass("bg-white group-hover:bg-slate-50 px-4 py-3.5 text-center text-slate-700 whitespace-nowrap transition-colors", frozenColsSticky)}
