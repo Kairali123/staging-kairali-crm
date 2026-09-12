@@ -646,10 +646,13 @@ export async function GET(req: NextRequest) {
             // Planned/actual come from the tracker's own stage11_* columns. Completion is
             // stage11_actual being set - NOT "a doctor is assigned", which marked rows
             // complete with no actual date and left actual-dated rows sitting in Pending.
-            const s11Planned = tracker?.stage11_planned || tracker?.arrival_planned || row.check_in_date || null;
+            // No stage11_planned (i.e. no guest-tracker row) => stage 11 was never
+            // scheduled for this booking, so it is not a pending task. Hence no
+            // fallback to arrival_planned / check_in_date here.
+            const s11Planned = tracker?.stage11_planned || null;
             const s11Doctor = tracker?.doctor_assigned_to_the_client || tracker?.stage11_change_the_doctor_if_required || row.stage9_doer || "";
             const s11Actual = tracker?.stage11_actual || null;
-            const s11Completed = Boolean(s11Actual);
+            const s11Completed = Boolean(s11Actual) || !s11Planned;
             const s11Saved = tracker ? {
                 doctorAssignedToClient: s11Doctor,
                 email: getDoctorEmail(s11Doctor),
@@ -686,7 +689,7 @@ export async function GET(req: NextRequest) {
                 // Stages 9,10,11 — excluded from to_show rule, single-phase as before
                 { stage: 9, available: true, locked: isLockedDate(s9Planned, todayStr), plannedDate: formatDMYDate(s9Planned), completed: Boolean(s9Actual), actualDate: formatDMYDate(s9Actual), savedData: s9Saved, stageKey: uid ? `${uid}_Stage9` : null },
                 { stage: 10, available: true, locked: isLockedDate(s10Planned, todayStr), plannedDate: formatDMYDate(s10Planned), completed: Boolean(s10Actual), actualDate: formatDMYDate(s10Actual), savedData: s10Saved, stageKey: uid ? `${uid}_Stage10` : null },
-                { stage: 11, available: true, locked: isLockedDate(s11Planned, todayStr), plannedDate: formatDMYDate(s11Planned), completed: Boolean(s11Actual), actualDate: formatDMYDate(s11Actual), savedData: s11Saved, stageKey: uid ? `${uid}_Stage11` : null },
+                { stage: 11, available: true, locked: isLockedDate(s11Planned, todayStr), plannedDate: formatDMYDate(s11Planned), completed: s11Completed, actualDate: formatDMYDate(s11Actual), savedData: s11Saved, stageKey: uid ? `${uid}_Stage11` : null },
             ];
 
             return {
