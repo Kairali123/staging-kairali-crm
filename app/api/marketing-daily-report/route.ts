@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSessionUser, hasAdminRole, hasPermission } from '@/lib/authz'
 import { getPool } from '@/lib/db'
 import { reportWindow, reportQueries, combineReport, type AggregateRow } from '@/lib/marketing-report-query'
+import { signReportSnapshot, marketingMailConfig } from '@/lib/marketing-report-email'
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 const headers = { 'Cache-Control': 'private, no-store, max-age=0' }
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest) {
     }
     await connection.rollback()
     const report=combineReport(date,results.traffic as AggregateRow[],results.spend as AggregateRow[],results.sales as AggregateRow[],Number((results.duplicates[0] as {duplicates:number}).duplicates),results.leads as AggregateRow[])
-    return NextResponse.json(report,{headers})
+    return NextResponse.json({...report, snapshot:signReportSnapshot(report,req.cookies.get('kairali_user')?.value||''), emailEnabled:marketingMailConfig().configured && (hasAdminRole(user,'lower') || hasPermission(user,'marketing.send'))},{headers})
   } catch {
     if(connection) { try {await connection.rollback()} catch {} }
     return NextResponse.json({error:'SQL report unavailable. No demo data has been substituted.'},{status:503,headers})

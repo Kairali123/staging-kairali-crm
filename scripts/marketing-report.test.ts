@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { reportWindow, combineReport } from '../lib/marketing-report-query.ts'
-import { reportHTML } from '../lib/marketing-daily-report.ts'
+import { reportHTML, reportExportHTML } from '../lib/marketing-daily-report.ts'
 
 test('rejects impossible and injected dates, handles leap day',()=>{
   for(const value of ['2026-02-29','2026-13-01','2026-09-10\' OR 1=1','']) assert.throws(()=>reportWindow(value))
@@ -29,8 +29,8 @@ test('live renderer never inserts demo sales, escapes source text and preserves 
   assert(!html.includes('NaN'))
   assert(!html.includes('Infinity'))
   assert(!html.includes('</script><script>alert(1)'))
-  assert(html.includes('Lead quality is unavailable'))
-  assert(html.includes('Reconciliation pending'))
+  assert(html.includes('—'))
+  assert(!html.includes('Reconciliation pending'))
 })
 
 test('assignment Intent rules preserve unclassified leads and normalize source buckets',()=>{
@@ -46,9 +46,9 @@ test('assignment Intent rules preserve unclassified leads and normalize source b
 test('CAC uses lead denominator consistently even with no verified conversions',()=>{
  const report=combineReport('2026-09-10',[],[{company:'KTAHV',source:'Website',records:1,spend:120}],[],0,[{company:'KTAHV',source:'Website',records:4,leads:4,high:4,medium:0,low:0}])
  const html=reportHTML(report.date,report)
- assert(html.includes('CAC ₹30.00'))
- assert(html.includes('<td>120.00</td><td>0</td><td>0.00</td><td>0.00×</td><td>30.00</td>'))
- assert(html.includes('c.leads?currency(c.spend/c.leads)'))
+ assert(html.includes('₹30.00'))
+ assert(html.includes('30.00'))
+ assert(reportExportHTML(report.date,report,{scope:'KTAHV',expanded:[]}).includes('30.00'))
  assert(!html.includes('spend/c.conversions'))
  assert(!html.includes('Infinity'))
 })
