@@ -48,5 +48,5 @@ test('lead and sales values retain their heading positions in screen and export 
  }
 })
 test('print pagination applies row protection only to data and keeps footer out of document flow',()=>{
- const html=reportExportHTML(data.date!,data,{scope:'all',expanded:['KTAHV-sales']});assert(html.includes('class="export-layout"'));assert(html.includes('thead{display:table-header-group}'));assert(html.includes('table:not([role="presentation"]) tr{break-inside:avoid'));assert(html.includes('.export-footer{position:fixed'));assert(!html.includes('}tr{break-inside:avoid}'))
+ const html=reportExportHTML(data.date!,data,{scope:'all',expanded:['KTAHV-sales']});assert(html.includes('class="export-layout"'));assert(html.includes('thead{display:table-header-group}'));assert(html.includes('table:not([role="presentation"]) tr{break-inside:avoid'));assert(html.includes('.export-footer{display:none!important}'));assert(!html.includes('}tr{break-inside:avoid}'))
 })
