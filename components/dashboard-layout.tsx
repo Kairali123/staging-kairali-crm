@@ -172,6 +172,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const navigation = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, permission: "dashboard.view" },
+    { name: "Good Lead Leakage Dashboard", href: "/good-lead-leakage", icon: BarChart3, adminReportOnly: true },
     { name: "Marketing Daily Report", href: "/marketing-daily-report", icon: TrendingUp, permission: "marketing.view" },
     { name: "User Management", href: "/users", icon: UserCog, superAdminOnly: true },
     { name: "Marketing Reports", icon: TrendingUp, permission: "marketing.view" },
@@ -251,6 +252,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   //   { name: "Tasks", href: "/meetings/tasks", icon: List, description: "View meeting tasks" },
   // ]
   const filteredNavigation = navigation.filter((item: any) => {
+    if (item.adminReportOnly) {
+      return isSuperAdmin || String(user?.role || "").toLowerCase() === "admin" || Boolean(user?.permissions?.includes("all"))
+    }
     if (item.superAdminOnly) {
       return isSuperAdmin
     }
