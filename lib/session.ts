@@ -1,4 +1,5 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto'
+import { deflateSync, inflateSync } from 'zlib'
 
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days — matches previous cookie lifetime
 
@@ -44,7 +45,13 @@ function readVerifiedPayload(raw: string): any | null {
   }
 
   try {
-    return JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'))
+    const buf = Buffer.from(encoded, 'base64url')
+    try {
+      const inflated = inflateSync(buf)
+      return JSON.parse(inflated.toString('utf8'))
+    } catch {
+      return JSON.parse(buf.toString('utf8'))
+    }
   } catch {
     return null
   }
@@ -75,7 +82,8 @@ export function createSessionCookieValue(
     deviceId: options?.deviceId,
     tokenVersion: options?.tokenVersion ?? 1,
   })
-  const encoded = Buffer.from(payload, 'utf8').toString('base64url')
+  const deflated = deflateSync(Buffer.from(payload, 'utf8'), { level: 9 })
+  const encoded = deflated.toString('base64url')
   return `${encoded}.${sign(encoded)}`
 }
 

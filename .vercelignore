@@ -1,0 +1,13 @@
+.env*
+.vercel
+.git
+node_modules
+.next
+docs
+scripts
+*.md
+scratch*
+temp*
+check*.js
+
+!data/daily-sales-report/*.json

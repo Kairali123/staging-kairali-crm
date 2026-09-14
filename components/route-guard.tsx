@@ -133,9 +133,27 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
       return
     }
 
-    // Super admin and admin have unrestricted access to all pages
+    // Check user roles
     const roleStr = String(user?.role || '').toLowerCase().trim()
-    if (roleStr === 'super_admin' || roleStr === 'admin' || user?.permissions?.includes('all')) return
+    const isSuperAdmin = roleStr === 'super_admin' || roleStr === 'super admin'
+
+    // Routes exclusively restricted to super admin (no other role or permission allowed)
+    const cleanPath = pathname.replace(/\/$/, '') || '/'
+    const superAdminOnlyRoutes = [
+      '/sales/reports/daily-alert',
+      '/good-lead-leakage',
+      '/marketing-daily-report',
+    ]
+    if (superAdminOnlyRoutes.includes(cleanPath)) {
+      if (!isSuperAdmin) {
+        router.replace('/access-denied')
+        return
+      }
+      return
+    }
+
+    // Super admin and admin have unrestricted access to all other pages
+    if (isSuperAdmin || roleStr === 'admin' || user?.permissions?.includes('all')) return
 
     // If route is restricted, redirect to access-denied unless user has the permission
     if (isRestricted(pathname)) {

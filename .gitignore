@@ -34,3 +34,6 @@ next-env.d.ts
 temp/
 *.tmp
 scratch/
+
+# Private runtime source snapshots: deployment only
+data/daily-sales-report/*.json
