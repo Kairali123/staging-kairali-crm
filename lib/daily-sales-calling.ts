@@ -1,6 +1,6 @@
 export type CallingEmployee={name:string;date:string;updatedAt:string;pending:number|null;appsheet:number|null;dialer:number|null;done:number|null;campaign:string;companies?:string[]}
 export type PendingCompany={appsheet:number|null;national:number|null;international:number|null}
-export type CallingData={employees:CallingEmployee[];pending:Record<string,PendingCompany>;pendingCapturedAt:string|null;pendingMode:'live'|'snapshot'|'unavailable';fetchedAt:string;warnings:string[]}
+export type CallingData={employees:CallingEmployee[];pending:Record<string,PendingCompany>;pendingCapturedAt:string|null;pendingMode:'live'|'snapshot'|'database'|'unavailable';fetchedAt:string;warnings:string[]}
 export function count(value:unknown):number|null{if(value===null||value===undefined||String(value).trim()==='')return 0;const n=Number(String(value).replace(/,/g,''));return Number.isFinite(n)&&n>=0?n:null}
 export function liveDate(value:unknown){const s=String(value||'');const m=s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);return m?`${m[3]}-${m[2]}-${m[1]}`:''}
 export function parseEmployees(rows:Record<string,unknown>[]):CallingEmployee[]{
@@ -17,7 +17,8 @@ export function callingSummary(data:CallingData|undefined,scope:string){
  const sum=(key:keyof PendingCompany)=>values.length&&values.every(v=>v[key]!==null)?values.reduce((n,v)=>n+v[key]!,0):null
  const dates=[...new Set(data?.employees.map(r=>r.date).filter(Boolean))];const sameDay=dates.length===1
  const appsheet=scope==='ALL'&&sameDay&&data?.employees.length&&data.employees.every(r=>r.appsheet!==null)?data.employees.reduce((n,r)=>n+r.appsheet!,0):null
- return {pendingAppsheet:sum('appsheet'),pendingNational:sum('national'),pendingInternational:sum('international'),appsheet,dates}
+ const pendingAppsheet=sum('appsheet')
+ return {pendingAppsheet,pendingNational:sum('national'),pendingInternational:sum('international'),appsheet,dates}
 }
 export const showCount=(value:number|null|undefined)=>value==null?'—':value.toLocaleString('en-IN')
 

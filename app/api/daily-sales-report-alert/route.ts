@@ -35,7 +35,7 @@ export async function GET(req:NextRequest){
   const report=combineSales(date,[...(sales as Record<string,unknown>[]).filter(r=>r.company!=='KTAHV'),...corrected],calls)
   report.cancellationSnapshotAt=sourceDates.capturedAt
   report.warnings.push(`KTAHV cancellations use AM status and CW dates from a verified Sheet snapshot captured ${sourceDates.capturedAt}; SQL CW dates have a known day/month sync mismatch. New cancellations after this snapshot need a refresh of the source snapshot.`)
-  const calling=await loadCalling()
+  const calling=await loadCalling(connection, date)
   for(const employee of calling.employees){
    const matches=(employeeCompanies as {user_name:string;company:string;company_name:string}[]).filter(r=>r.user_name?.trim().toLowerCase()===employee.name.toLowerCase())
    employee.companies=[...new Set(matches.flatMap(r=>[r.company,r.company_name].flatMap(value=>(value||'').toUpperCase().split(/[,;|]/).map(x=>x.trim()).filter(x=>Object.hasOwn(companies,x)))))]

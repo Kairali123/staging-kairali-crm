@@ -24,3 +24,23 @@ test('employee column mapping preserves source date and errors without exposing 
 test('company employee filter and totals exclude other companies without inventing zero for missing values',()=>{const {scopedEmployees,employeeTotal}=load('lib/daily-sales-calling.ts');const data={employees:[{name:'A',companies:['KTAHV'],pending:4},{name:'B',companies:['KAPPL'],pending:8},{name:'C',pending:null}]};assert.equal(scopedEmployees(data,'KTAHV').length,1);assert.equal(employeeTotal(scopedEmployees(data,'KTAHV'),'pending'),4);assert.equal(scopedEmployees(data,'ALL').length,3);assert.equal(employeeTotal(scopedEmployees(data,'ALL'),'pending'),null);assert.equal(scopedEmployees(data,'VILLARAAG').length,0)})
 
 test('booking-date sales remain gross while CW cancellations use their own selected day',async()=>{const {bookingAmounts,cancellationDates}=load('lib/daily-sales-bookings.ts');const rows=await bookingAmounts([{agent:'A',bookingDate:'2026-09-14',currency:'INR',amount:100,records:1}],[{agent:'A',bookingDate:'2026-09-01',currency:'INR',amount:40,records:1}]);assert.equal(rows.reduce((n,r)=>n+r.verified,0),100);assert.equal(rows.reduce((n,r)=>n+r.cancelled,0),40);await assert.rejects(()=>bookingAmounts([{agent:'A',bookingDate:'2026-09-14',currency:'UNKNOWN',amount:100,records:1}],[]))})
+
+test('loadCalling checks database first and falls back to DialerPending sheet snapshot when DB has no data',async()=>{
+ const {loadCalling}=load('lib/daily-sales-calling-server.ts');
+ const mockDBWithData={query:async(sql)=>{
+  if(String(sql).includes('SHOW TABLES'))return[['dialer_pending']];
+  return[[{company:'KTAHV',national_pending:50,international_pending:10,appsheet_pending:20}]];
+ }};
+ const dbResult=await loadCalling(mockDBWithData,'2026-09-14');
+ assert.equal(dbResult.pendingMode,'database');
+ assert.equal(dbResult.pending.KTAHV.national,50);
+ assert.equal(dbResult.pending.KTAHV.international,10);
+ assert.equal(dbResult.pending.KTAHV.appsheet,20);
+
+ const mockDBEmpty={query:async()=>[]};
+ const fallbackResult=await loadCalling(mockDBEmpty,'2026-09-14');
+ assert.ok(['live','snapshot'].includes(fallbackResult.pendingMode));
+ assert.ok(fallbackResult.pending.KTAHV.national>0);
+ assert.ok(fallbackResult.pending.VILLARAAG.national>0);
+ assert.ok(fallbackResult.pending.KAPPL.national>0);
+});

@@ -39,7 +39,7 @@ export default function DailySalesReportAlert(){
   {report?.cancellationSnapshotAt&&<p className={styles.sourceNote}>KTAHV cancellation dates · Sheet snapshot {new Date(report.cancellationSnapshotAt).toLocaleString('en-GB',{timeZone:'Asia/Kolkata'})} IST</p>}
   {error&&<div role="alert" className={styles.coverage}>{error}</div>}
   {loading&&<div role="status" className={styles.loading}>Preparing the daily sales briefing…</div>}
-  {report&&<><div className={styles.callingHeading}><h2>Calling overview</h2><p>Pending totals: {scope==='ALL'?'all companies':scope} · {calling?.pendingMode==='snapshot'?'Saved snapshot ·':'Live'} {calling?.pendingCapturedAt?new Date(calling.pendingCapturedAt).toLocaleString('en-GB',{timeZone:'Asia/Kolkata'}):'unavailable'} IST<br/>Calls done: Live sheet · {summary.dates.join(', ')||'unavailable'} · employee totals cover all companies</p></div>
+  {report&&<><div className={styles.callingHeading}><h2>Calling overview</h2><p>Pending totals: {scope==='ALL'?'all companies':scope} · {calling?.pendingMode==='database'?'Database':calling?.pendingMode==='snapshot'?'Sheet snapshot (DialerPending)':calling?.pendingMode==='live'?'Live (DialerPending)':'Unavailable'} · {calling?.pendingCapturedAt?new Date(calling.pendingCapturedAt).toLocaleString('en-GB',{timeZone:'Asia/Kolkata'})+' IST':'unavailable'}<br/>Calls done: Live sheet · {summary.dates.join(', ')||'unavailable'} · employee totals cover all companies</p></div>
   <div className={styles.metrics}>{[
  ['Pending leads (AppSheet)',showCount(summary.pendingAppsheet),'DialerPending · AppSheet total'],
  ['Pending leads National (Hopper)',showCount(summary.pendingNational),'DialerPending · National total'],
