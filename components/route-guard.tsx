@@ -46,6 +46,7 @@ const pagePermissions: Record<string, string> = {
   '/calls/reports': 'calls_report.view',
   '/sales/reports': 'sales_report.view',
   '/sales/reports/daily-alert': 'sales_report.view',
+  '/sales/reports/email-trigger-config': 'sales_report.view',
   // `sales_call_audit.view` is page access only — the data itself is gated
   // server-side by `viewSelf`/`viewAll`, so this key deliberately does not name a
   // scope. The email template is a whole-team artifact, so it names `viewAll`.

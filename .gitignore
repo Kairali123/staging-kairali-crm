@@ -37,3 +37,6 @@ scratch/
 .DS_Store
 # Private runtime source snapshots: deployment only
 data/daily-sales-report/*.json
+
+# Private persisted email configurations and worker credential
+/.local/email-triggers/

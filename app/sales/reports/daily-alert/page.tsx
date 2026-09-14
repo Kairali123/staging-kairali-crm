@@ -1,6 +1,8 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { emailConfigHref } from '@/lib/email-report-template'
 import { ArrowLeft, CalendarDays, ChevronDown, Download, RefreshCw, X } from 'lucide-react'
 import { companies, dayLabel, money, scopedRows, exportSalesHTML, type Company, type DailySalesReport } from '@/lib/daily-sales-report'
 import { callingSummary, showCount, employeeTotal, scopedEmployees } from '@/lib/daily-sales-calling'
@@ -10,6 +12,7 @@ import { copyReportHTML, printReport, reportJPG, saveReportFile } from '@/lib/ma
 import styles from './report.module.css'
 
 export default function DailySalesReportAlert(){
+ const router=useRouter()
  const [date,setDate]=useState(todayIST),[scope,setScope]=useState('ALL'),[report,setReport]=useState<DailySalesReport|null>(null),[error,setError]=useState(''),[loading,setLoading]=useState(true),[retry,setRetry]=useState(0),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false)
  const [dialog,setDialog]=useState<{kind:string;html:string;name:string;subject:string}|null>(null)
  const lock=useRef(false),closeButton=useRef<HTMLButtonElement>(null)
@@ -22,7 +25,7 @@ export default function DailySalesReportAlert(){
  const total=(key:'sales'|'unverified'|'cancelled'|'dialer'|'conversions')=>rows.reduce((n,r)=>n+r[key],0)
  const contributors=Object.values(rows.reduce<Record<string,{agent:string;sales:number}>>((acc,r)=>{const key=r.agent.toLowerCase();acc[key]??={agent:r.agent,sales:0};acc[key].sales+=r.sales;return acc},Object.create(null))).filter(r=>r.sales>0).sort((a,b)=>b.sales-a.sales)
  const totalSales=total('sales'),calling=report?.calling,summary=callingSummary(calling,scope),employees=scopedEmployees(calling,scope)
- async function action(kind:string){if(!report||lock.current)return;lock.current=true;setBusy(true);setNotice('')
+ async function action(kind:string){if(kind==='auto-email'){router.push(emailConfigHref('daily-sales-report',scope,date));return}if(!report||lock.current)return;lock.current=true;setBusy(true);setNotice('')
  try{const html=exportSalesHTML(report,scope),name=`Daily-Sales-Report-${date}-${scope}`,subject=`Daily Sales Report Alert | ${dayLabel(date)} | ${scope==='ALL'?'All companies':companies[scope as Company]}`
  if(kind==='print')await printReport(html)
  else if(kind==='jpg'){saveReportFile(await reportJPG(html),name+'.jpg');setNotice('JPG downloaded')}
@@ -33,7 +36,7 @@ export default function DailySalesReportAlert(){
  return <main className={styles.shell}>
   <nav className={styles.breadcrumb}><Link href="/sales/reports"><ArrowLeft size={15}/> Sales Report</Link><span>/ Daily Sales Report Alert</span></nav>
   <header className={styles.hero}><div className={styles.brand}>KAIRALI GROUP <span> / </span> DAILY SALES BRIEFING</div><div className={styles.heroTop}><div><h1>Daily Sales Report Alert</h1><p className={styles.date}><CalendarDays size={17}/>{dayLabel(date)} <small>IST</small></p><p className={styles.scope}>{scope==='ALL'?'All companies · Healing Village, Villa Raag & KAPPL':companies[scope as Company]}</p></div>
-  <div className={styles.controls}><label>Report date<input aria-label="Report date" type="date" value={date} max={todayIST()} onChange={e=>{if(e.target.value)reload(e.target.value)}}/></label><label>Company<select aria-label="Company" value={scope} onChange={e=>{setScope(e.target.value);setDialog(null)}}><option value="ALL">All companies</option>{Object.entries(companies).map(([code,name])=><option key={code} value={code}>{code} · {name}</option>)}</select></label><details className={styles.menu}><summary><Download size={15}/>Export & Share<ChevronDown size={14}/></summary><div>{[['print','Print / Save PDF'],['jpg','Download JPG'],['html','Download HTML'],['email','Email template'],['whatsapp','WhatsApp share']].map(([kind,label])=><button key={kind} disabled={!report||loading||busy} onClick={e=>{e.currentTarget.closest('details')!.open=false;void action(kind)}}>{label}</button>)}</div></details></div></div>
+  <div className={styles.controls}><label>Report date<input aria-label="Report date" type="date" value={date} max={todayIST()} onChange={e=>{if(e.target.value)reload(e.target.value)}}/></label><label>Company<select aria-label="Company" value={scope} onChange={e=>{setScope(e.target.value);setDialog(null)}}><option value="ALL">All companies</option>{Object.entries(companies).map(([code,name])=><option key={code} value={code}>{code} · {name}</option>)}</select></label><details className={styles.menu}><summary><Download size={15}/>Export & Share<ChevronDown size={14}/></summary><div>{[['print','Print / Save PDF'],['jpg','Download JPG'],['html','Download HTML'],['email','Email template'],['auto-email','Auto Trigger email'],['whatsapp','WhatsApp share']].map(([kind,label])=><button key={kind} disabled={!report||loading||busy} onClick={e=>{e.currentTarget.closest('details')!.open=false;void action(kind)}}>{label}</button>)}</div></details></div></div>
   <div className={styles.heroStats}><div><span>SALES VALUE</span><strong>{report?money(totalSales):'—'}</strong><small>KTAHV by booking date</small></div><div><span>UNVERIFIED SALES</span><strong>{report?money(total('unverified')):'—'}</strong><small>Awaiting verification</small></div><div><span>CANCELLED VALUE</span><strong>{report?money(total('cancelled')):'—'}</strong><small>Reported separately</small></div><div><span>SALES CONTRIBUTORS</span><strong>{report?contributors.length:'—'}</strong><small>Agents with positive sales</small></div></div></header>
   <div className={styles.toolbar}><span><i/> {loading?'Loading SQL report…':report?'SQL connected · Partial calling coverage':'Report unavailable'}</span><button disabled={loading} onClick={()=>reload()}><RefreshCw size={14}/>Refresh</button></div>
   {report?.cancellationSnapshotAt&&<p className={styles.sourceNote}>KTAHV cancellation dates · Sheet snapshot {new Date(report.cancellationSnapshotAt).toLocaleString('en-GB',{timeZone:'Asia/Kolkata'})} IST</p>}
