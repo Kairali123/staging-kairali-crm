@@ -43,5 +43,5 @@ export async function GET(req:NextRequest){
   const unmapped=calling.employees.filter(r=>!r.companies?.length).length
   if(unmapped)calling.warnings.push(`${unmapped} employees have no matched CRM company; visible under All companies only.`)
   return NextResponse.json({...report,calling,rows:report.rows.filter(r=>company==='ALL'||r.company===company)},{headers})
- }catch{if(connection)try{await connection.rollback()}catch{}return NextResponse.json({error:'SQL report unavailable. Please retry; no sample data has been substituted.'},{status:503,headers})}finally{connection?.release()}
+ }catch(err){console.error('[daily-sales-report-alert error]',err);if(connection)try{await connection.rollback()}catch{}return NextResponse.json({error:'SQL report unavailable. Please retry; no sample data has been substituted.'},{status:503,headers})}finally{connection?.release()}
 }

@@ -128,7 +128,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   useEffect(() => {
     if (pathname.startsWith("/fms")) setFmsExpanded(true)
     if (pathname.startsWith("/employee")) setEmployeeExpanded(true)
-    if (pathname.startsWith("/marketing")) setMarketingExpanded(true)
+    if (pathname.startsWith("/marketing") || pathname === "/google-adword-reports" || pathname === "/good-lead-leakage") setMarketingExpanded(true)
     if (pathname.startsWith("/doctor-consultation")) setDoctorConsultationExpanded(true)
     if (pathname.startsWith("/sales")) setSalesExpanded(true)
     if (pathname.startsWith("/voicecall")) setVoiceCallExpanded(true)
@@ -172,17 +172,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const navigation = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, permission: "dashboard.view" },
-    { name: "Good Lead Leakage Dashboard", href: "/good-lead-leakage", icon: BarChart3, superAdminOnly: true },
-    { name: "Marketing Daily Report", href: "/marketing-daily-report", icon: TrendingUp, superAdminOnly: true },
     { name: "User Management", href: "/users", icon: UserCog, superAdminOnly: true },
     { name: "Marketing Reports", icon: TrendingUp, permission: "marketing.view" },
     { name: "Riya Sharma", href: "/riya-sharma", icon: LayoutGrid, permission: "riya_sharma.view" },
     { name: "FMS Systems", icon: FileText, permission: "fms.view" },
     { name: "Calls Report", href: "/calls/reports", icon: PhoneCall, permission: "calls_report.view" },
     { name: "Sales Call Audit", href: "/sales-call-audit", icon: UserCheck, permission: "sales_call_audit.view" },
-    { name: "Sales Report", href: "/sales/reports", icon: IndianRupee, permission: "sales_report.view" },
-    { name: "Daily Sales Report Alert", href: "/sales/reports/daily-alert", icon: CalendarDays, superAdminOnly: true },
-    { name: "Sales Calling Master", href: "/sales-calling", icon: PhoneCall, CalendarDays, permission: "sales_calling.view" },
+    { name: "Sales Reports", icon: IndianRupee, permission: "sales_report.view" },
     { name: "Leads Assignment", href: "/leads/assign", icon: Shuffle, permission: "leads.view" },
     { name: "AI Deal Assistant", href: "/deal-assistant", icon: Sparkles, permission: "deal_assistant.view" },
     // { name: "K-Serve Billing Auditor", href: "/ksereve-billing-auditer", icon: FileText, permission: "bill_fms.view" },
@@ -193,24 +189,31 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "KAPPL New Order", icon: FileText, permission: "new-order-fms.view" },
     { name: "MR FMS", href: "/MR-FMS", icon: FileText, permission: "mr-fms.view" },
     { name: "KTAHV CRR Calling FMS", href: "/crr-fms", icon: FileText, permission: "crr_fms.view" },
-    { name: "KTAHV BOOKING FORM", href: "/fms/bookings/ktahv", icon: FileText, permission: "ktahv_booking_form.view", target: "_blank" },
+    // { name: "KTAHV BOOKING FORM", href: "/fms/bookings/ktahv", icon: FileText, permission: "ktahv_booking_form.view", target: "_blank" },
     { name: "Unified Portal Hub", icon: LayoutGrid, permission: "portal_hub.view" },
     { name: "Meetings", href: "/meetings", icon: StickyNote, permission: "meetings.view" },
     { name: "FMS Pending Bottleneck Tracker", href: "/fms/pending-tasks", icon: FileText, permission: "task_fms.view" },
     { name: "Cold Enquiry Reverification", href: "/fms/enquiry-reverification", icon: FileText, permission: "cold_enquiry_reverification.view" },
   ]
-
   const kapplNewOrderSubMenu = [
     { name: "New Order FMS", href: "/new-order-fms", icon: FileText, permission: "new-order-fms.view" },
     { name: "Primary Order Form", href: "/new-order-fms/primary-order-form", icon: FileText, permission: "new-order-fms.view" },
   ]
 
   const marketingSubMenu = [
-    { name: "Marketing Funnel", href: "/marketing-funnel", icon: Search, description: "Marketing Funnel", permission: "marketing_funnel.view" },
+    { name: "Good Lead Leakage", href: "/good-lead-leakage", icon: Search, description: "Good lead leakage report", superAdminOnly: true },
+    { name: "Marketing Daily Report", href: "/marketing-daily-report", icon: Search, description: "Marketing daily report", superAdminOnly: true },
     { name: "Google PPC Reports", href: "/marketing/google-ppc", icon: Search, description: "Google PPC ads reports", permission: "marketing_google_report.view" },
     { name: "Facebook PPC Reports", href: "/marketing/facebook-ppc", icon: Search, description: "Facebook PPC ads reports", permission: "marketing_facebook_report.view" },
     { name: "Google Adword Reports", href: "/google-adword-reports", icon: Search, description: "Google Ads campaign expense data", permission: "google_adword_report.view" },
+    { name: "Marketing Funnel", href: "/marketing-funnel", icon: Search, description: "Marketing Funnel", permission: "marketing_funnel.view" },
   ]
+
+  const isMarketingItemVisible = (item: (typeof marketingSubMenu)[number]) => {
+    if ("superAdminOnly" in item && item.superAdminOnly) return isSuperAdmin
+    if ("permission" in item && typeof item.permission === "string") return hasPermission(item.permission)
+    return true
+  }
 
   const fmsSubMenu = [
     { name: "KTAHV Booking FMS", href: "/fms/bookings/team", icon: Users, permission: "team.view", description: "KTAHV booking management" },
@@ -231,12 +234,17 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "New Prescription", href: "/doctor-consultation/prescription/new", icon: FileText, description: "Create prescription" },
   ]
 
-  const salesSubMenu = [
-    { name: "Sales Analytics", href: "/sales/analytics", icon: LineChart, description: "Sales analytics dashboard" },
-    { name: "Revenue Tracking", href: "/sales/revenue", icon: PieChart, description: "Track revenue" },
-    { name: "Sales Pipeline", href: "/sales/pipeline", icon: Target, description: "Sales pipeline view" },
-    { name: "Performance Metrics", href: "/sales/metrics", icon: BarChart3, description: "Performance metrics" },
+  const salesReportsSubMenu = [
+    { name: "Sales Report", href: "/sales/reports", icon: IndianRupee, permission: "sales_report.view", description: "Sales performance reports" },
+    { name: "Daily Sales Report Alert", href: "/sales/reports/daily-alert", icon: CalendarDays, superAdminOnly: true, description: "Daily sales report alert" },
+    { name: "Sales Calling Master", href: "/sales-calling", icon: PhoneCall, permission: "sales_calling.view", description: "Sales calling master" },
   ]
+
+  const isSalesItemVisible = (item: (typeof salesReportsSubMenu)[number]) => {
+    if ("superAdminOnly" in item && item.superAdminOnly) return isSuperAdmin
+    if ("permission" in item && typeof item.permission === "string") return hasPermission(item.permission)
+    return true
+  }
 
   const portalHubSubMenu = [
     { name: "🎯 Sales Target Portal", description: "KAPPL & KTAHV", url: "https://script.google.com/macros/s/AKfycbxivpk2sKXvyzQBUQKLpJNiijjpYebjJETZn9W1yd3sa5WFvlHjik8c9JkrkC0XX399/exec", permission: "sales_target_portal.view" },
@@ -256,6 +264,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (item.superAdminOnly) {
       return isSuperAdmin
     }
+    if (item.name === "Sales Reports") {
+      return isSuperAdmin || user?.permissions?.includes("all") || hasPermission("sales_report.view") || hasPermission("sales_calling.view")
+    }
     return user?.permissions?.includes("all") || (item.permission && hasPermission(item.permission))
   })
 
@@ -263,12 +274,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   filteredNavigation.forEach((item) => { if (item.href) searchableItems.push({ name: item.name, href: item.href, description: item.name, icon: item.icon }) })
   if (hasPermission("fms.view")) fmsSubMenu.filter((s) => !("permission" in s) || hasPermission(s.permission)).forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
   if (hasPermission("new-order-fms.view")) kapplNewOrderSubMenu.filter((s) => !("permission" in s) || hasPermission(s.permission)).forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.name, icon: item.icon }))
-  if (hasPermission("marketing.view")) marketingSubMenu.filter((s) => !("permission" in s) || hasPermission(s.permission)).forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
+  if (hasPermission("marketing.view") || isSuperAdmin) marketingSubMenu.filter(isMarketingItemVisible).forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
   if (hasPermission("employee.tools")) employeeSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
   if (hasPermission("doctor.consultation.view")) doctorConsultationSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
-  // Sales submenu entries currently point to pages that are not implemented.
-  // Keep them out of the active search surface until real routes exist.
-  // if (hasPermission("meetings.view")) meetingsSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
+  if (hasPermission("sales_report.view") || hasPermission("sales_calling.view") || isSuperAdmin) salesReportsSubMenu.filter(isSalesItemVisible).forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
 
   const searchResults = debouncedQuery.length > 0
     ? searchableItems.filter((item) => [item.name, item.description, item.href].some((f) => f.toLowerCase().includes(debouncedQuery.toLowerCase())))
@@ -298,16 +307,17 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     }
 
     if (item.name === "Marketing Reports") {
+      const isMarketingActive = pathname.startsWith("/marketing") || marketingSubMenu.some((sub) => sub.href === pathname)
       return (
         <div key={item.name}>
-          <button onClick={() => setMarketingExpanded(!marketingExpanded)} className={`group flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${pathname.startsWith("/marketing") ? "bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-md" : "text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"}`}>
-            <item.icon className={`mr-3 h-5 w-5 ${pathname.startsWith("/marketing") ? "text-white" : "text-purple-500"}`} />
+          <button onClick={() => setMarketingExpanded(!marketingExpanded)} className={`group flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${isMarketingActive ? "bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-md" : "text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"}`}>
+            <item.icon className={`mr-3 h-5 w-5 ${isMarketingActive ? "text-white" : "text-purple-500"}`} />
             {item.name}
-            {marketingExpanded ? <ChevronDown className={`ml-auto h-4 w-4 ${pathname.startsWith("/marketing") ? "text-white" : "text-gray-500"}`} /> : <ChevronRight className={`ml-auto h-4 w-4 ${pathname.startsWith("/marketing") ? "text-white" : "text-gray-500"}`} />}
+            {marketingExpanded ? <ChevronDown className={`ml-auto h-4 w-4 ${isMarketingActive ? "text-white" : "text-gray-500"}`} /> : <ChevronRight className={`ml-auto h-4 w-4 ${isMarketingActive ? "text-white" : "text-gray-500"}`} />}
           </button>
           {marketingExpanded && (
             <div className="ml-6 mt-2 space-y-1">
-              {marketingSubMenu.filter((s) => !("permission" in s) || hasPermission(s.permission)).map((subItem) => (
+              {marketingSubMenu.filter(isMarketingItemVisible).map((subItem) => (
                 <Link key={subItem.name} href={subItem.href} className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${pathname === subItem.href ? "bg-gradient-to-r from-purple-50 to-purple-100 text-purple-700 border-l-4 border-purple-500 shadow-sm" : "text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"}`} onClick={() => isMobile && setSidebarOpen(false)}>
                   <subItem.icon className={`mr-3 h-4 w-4 ${pathname === subItem.href ? "text-purple-600" : "text-gray-500"}`} />
                   {subItem.name}
@@ -363,17 +373,18 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       )
     }
 
-    if (item.name === "Sales Management") {
+    if (item.name === "Sales Reports") {
+      const isSalesActive = pathname.startsWith("/sales") || salesReportsSubMenu.some((sub) => sub.href === pathname)
       return (
         <div key={item.name}>
-          <button onClick={() => setSalesExpanded(!salesExpanded)} className={`group flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${pathname.startsWith("/sales") ? "bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-md" : "text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"}`}>
-            <item.icon className={`mr-3 h-5 w-5 ${pathname.startsWith("/sales") ? "text-white" : "text-orange-500"}`} />
+          <button onClick={() => setSalesExpanded(!salesExpanded)} className={`group flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${isSalesActive ? "bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-md" : "text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"}`}>
+            <item.icon className={`mr-3 h-5 w-5 ${isSalesActive ? "text-white" : "text-orange-500"}`} />
             {item.name}
-            {salesExpanded ? <ChevronDown className="ml-auto h-4 w-4" /> : <ChevronRight className="ml-auto h-4 w-4" />}
+            {salesExpanded ? <ChevronDown className={`ml-auto h-4 w-4 ${isSalesActive ? "text-white" : "text-gray-500"}`} /> : <ChevronRight className={`ml-auto h-4 w-4 ${isSalesActive ? "text-white" : "text-gray-500"}`} />}
           </button>
           {salesExpanded && (
             <div className="ml-6 mt-2 space-y-1">
-              {salesSubMenu.map((subItem) => (
+              {salesReportsSubMenu.filter(isSalesItemVisible).map((subItem) => (
                 <Link key={subItem.name} href={subItem.href} className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${pathname === subItem.href ? "bg-gradient-to-r from-orange-50 to-orange-100 text-orange-700 border-l-4 border-orange-500 shadow-sm" : "text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"}`} onClick={() => isMobile && setSidebarOpen(false)}>
                   <subItem.icon className={`mr-3 h-4 w-4 ${pathname === subItem.href ? "text-orange-600" : "text-gray-500"}`} />
                   {subItem.name}
@@ -513,11 +524,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <div key={item.name}>
           <button
             onClick={() => setKapplNewOrderExpanded(!kapplNewOrderExpanded)}
-            className={`group flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${
-              isActive
-                ? "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-md"
-                : "text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"
-            }`}
+            className={`group flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${isActive
+              ? "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-md"
+              : "text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"
+              }`}
           >
             <item.icon className={`mr-3 h-5 w-5 ${isActive ? "text-white" : "text-emerald-600"}`} />
             {item.name}
@@ -535,11 +545,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   <Link
                     key={subItem.name}
                     href={subItem.href}
-                    className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
-                      pathname === subItem.href
-                        ? "bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-700 border-l-4 border-emerald-500 shadow-sm font-semibold"
-                        : "text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"
-                    }`}
+                    className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${pathname === subItem.href
+                      ? "bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-700 border-l-4 border-emerald-500 shadow-sm font-semibold"
+                      : "text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"
+                      }`}
                     onClick={() => isMobile && setSidebarOpen(false)}
                   >
                     <subItem.icon className={`mr-3 h-4 w-4 ${pathname === subItem.href ? "text-emerald-600" : "text-gray-400"}`} />
@@ -566,7 +575,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       "Lead Assignment": "text-green-500", "AI Deal Assistant": "text-violet-500", "Marketing Funnel": "text-purple-500", "Sales Conversion Report": "text-orange-500",
       "Calling Panel": "text-green-500", "Sales Report": "text-orange-500", "Calls Report": "text-green-500",
       Performance: "text-red-500", Reports: "text-purple-500", "Help Desk": "text-gray-500",
-      "Sales Management": "text-orange-500", "Partner Onboarding System": "text-emerald-600",
+      "Sales Management": "text-orange-500", "Sales Reports": "text-orange-500", "Partner Onboarding System": "text-emerald-600",
       "KAPPL New Order": "text-emerald-600",
       "Good Lead Leakage Dashboard": "text-teal-600",
       "Marketing Daily Report": "text-purple-600",

@@ -16,8 +16,13 @@ export const cancellationSQL=`SELECT COALESCE(NULLIF(TRIM(b.booking_taken_by),''
  GROUP BY agent,bookingDate,currency`
 export type BookingAggregate={agent:string;bookingDate:string;currency:string;amount:number|string|null;records:number}
 export async function cancellationDates(date:string){
- const saved=JSON.parse(await readFile(join(process.cwd(),'data/daily-sales-report/cancellation-dates.json'),'utf8')) as {capturedAt:string;dates:{id:string;date:string}[]}
- return {ids:[...new Set(saved.dates.filter(r=>r.date===date).map(r=>r.id))],capturedAt:saved.capturedAt}
+ try{
+  const saved=JSON.parse(await readFile(join(process.cwd(),'data/daily-sales-report/cancellation-dates.json'),'utf8')) as {capturedAt:string;dates:{id:string;date:string}[]}
+  return {ids:[...new Set(saved.dates.filter(r=>r.date===date).map(r=>r.id))],capturedAt:saved.capturedAt}
+ }catch(err:any){
+  if(err?.code==='ENOENT')return {ids:[],capturedAt:new Date().toISOString()}
+  throw err
+ }
 }
 export async function bookingAmounts(bookings:BookingAggregate[],cancellations:BookingAggregate[]){
  const rates=new Map<string,Promise<number>>()
