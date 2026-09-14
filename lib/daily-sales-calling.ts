@@ -16,9 +16,12 @@ export function callingSummary(data:CallingData|undefined,scope:string){
  const values=data?Object.entries(data.pending).filter(([code])=>scope==='ALL'||scope===code).map(([,v])=>v):[]
  const sum=(key:keyof PendingCompany)=>values.length&&values.every(v=>v[key]!==null)?values.reduce((n,v)=>n+v[key]!,0):null
  const dates=[...new Set(data?.employees.map(r=>r.date).filter(Boolean))];const sameDay=dates.length===1
- const appsheet=scope==='ALL'&&sameDay&&data?.employees.length&&data.employees.every(r=>r.appsheet!==null)?data.employees.reduce((n,r)=>n+r.appsheet!,0):null
+ const scopedEmp=scopedEmployees(data,scope)
+ const appsheet=scope==='ALL'&&sameDay&&data?.employees.length&&data.employees.every(r=>r.appsheet!==null)?data.employees.reduce((n,r)=>n+r.appsheet!,0):employeeTotal(scopedEmp,'appsheet')
+ const dialer=employeeTotal(scopedEmp,'dialer')
+ const done=employeeTotal(scopedEmp,'done')
  const pendingAppsheet=sum('appsheet')
- return {pendingAppsheet,pendingNational:sum('national'),pendingInternational:sum('international'),appsheet,dates}
+ return {pendingAppsheet,pendingNational:sum('national'),pendingInternational:sum('international'),appsheet,dialer,done,dates}
 }
 export const showCount=(value:number|null|undefined)=>value==null?'—':value.toLocaleString('en-IN')
 
