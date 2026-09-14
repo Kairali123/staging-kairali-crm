@@ -6,7 +6,7 @@ export function yesterdayIST() {
 export const displayDate = (date: string) => new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(date + 'T12:00:00Z')) + ' (' + new Intl.DateTimeFormat('en-IN', { weekday: 'long', timeZone: 'UTC' }).format(new Date(date + 'T12:00:00Z')) + ')'
 const money = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 })
 const escape = (s: string | number) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
-const percent = (n: number, total: number) => total ? (n / total * 100).toFixed(2) + '%' : '—'
+const percent = (n: number, total: number) => total ? Math.round(n / total * 100) + '%' : '—'
 export function demoCompanies(date: string) {
   const offset = new Date(date + 'T12:00:00Z').getUTCDate() % 5
   return [
