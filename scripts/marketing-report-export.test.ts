@@ -35,3 +35,18 @@ test('recipient validation prevents headers and malformed or excessive addresses
  assert.deepEqual(parseReportRecipients('one@example.com; two@example.com, one@example.com'),['one@example.com','two@example.com'])
  for(const invalid of ['', 'a@example.com\r\nBcc: b@example.com','<a@example.com>','not-an-email'])assert.throws(()=>parseReportRecipients(invalid))
 })
+test('lead and sales values retain their heading positions in screen and export tables',()=>{
+ for(const html of [reportHTML(data.date!,data),reportExportHTML(data.date!,data,{scope:'KTAHV',expanded:['KTAHV-leads','KTAHV-sales']})]){
+  const tables=[...html.matchAll(/<table class="data"[\s\S]*?<\/table>/g)].map(m=>m[0]);assert(tables.length>0)
+  for(const table of tables){
+   const headers=[...table.matchAll(/<th scope="col"[^>]*>(.*?)<\/th>/g)].map(m=>m[1]);
+   const widths=[...table.matchAll(/<col style="width:(\d+)%">/g)].map(m=>Number(m[1]));assert.equal(widths.length,headers.length);assert.equal(widths.reduce((a,b)=>a+b,0),100)
+   const rows=[...table.matchAll(/<tr style="background:[\s\S]*?<\/tr>/g)];
+   for(const row of rows){const cells=[...row[0].matchAll(/<td style="[^"]*">(.*?)<\/td>/g)].map(m=>m[1]);assert.equal(cells.length,headers.length);assert(['Company total','Unique source'].includes(cells[0]));if(cells[0]==='Unique source'){assert.equal(cells[headers.indexOf('CAC (₹)')],'20.00');if(headers.includes('Verified sales (₹)')){assert.equal(cells[headers.indexOf('Verified sales (₹)')],'400.00');assert.equal(cells[headers.indexOf('Conversions')],'2')}else assert.equal(cells[headers.indexOf('Total leads')],'5')}}
+   assert(table.includes('table-layout:fixed'));assert(table.includes('text-align:right'))
+  }
+ }
+})
+test('print pagination applies row protection only to data and keeps footer out of document flow',()=>{
+ const html=reportExportHTML(data.date!,data,{scope:'all',expanded:['KTAHV-sales']});assert(html.includes('class="export-layout"'));assert(html.includes('thead{display:table-header-group}'));assert(html.includes('table:not([role="presentation"]) tr{break-inside:avoid'));assert(html.includes('.export-footer{display:none!important}'));assert(!html.includes('}tr{break-inside:avoid}'))
+})

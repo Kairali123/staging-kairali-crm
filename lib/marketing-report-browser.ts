@@ -29,7 +29,8 @@ export async function printReport(html:string){
  const cleanup=()=>frame.remove()
  frame.contentWindow!.addEventListener('afterprint',cleanup,{once:true})
  frame.contentWindow!.focus();frame.contentWindow!.print()
- setTimeout(cleanup,120000)
+ // Keep the document alive until the user closes print preview.
+ // A timeout can blank a preview while the user is still choosing PDF settings.
 }
 export async function copyReportHTML(html:string){
  const plain=new DOMParser().parseFromString(html,'text/html').body.textContent??''
