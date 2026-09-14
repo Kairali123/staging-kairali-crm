@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import Image from 'next/image'
 import Link from 'next/link'
 import { ArrowUpRight, Bot, CheckCheck, ChevronLeft, ChevronRight, Clock3, Database, Layers3, RefreshCw, Search, ShieldCheck } from 'lucide-react'
 import type { LeakageRow } from '@/lib/good-lead-leakage'
@@ -61,10 +60,19 @@ export default function GoodLeadLeakagePage(){
  const overlap=data?Math.max(0,Number(data.diagnostics.records)-Number(data.diagnostics.distinctReviewIds)-Number(data.diagnostics.missingReviewIds)):0
  const repeatedLeadIds=data?Math.max(0,Number(data.diagnostics.records)-Number(data.diagnostics.distinctLeadIds)-Number(data.diagnostics.missingLeadIds)):0
  const scope=filters.company==='ALL'?'All companies':filters.company
- return <main className={styles.root}>
-  <header className={styles.topbar}><div className={`${styles.shell} ${styles.topinner}`}><div className={styles.brand}><Image src="/logo1.png" alt="Kairali" width={122} height={46} priority/><div className={styles.brandLabel}><p className={styles.eyebrow}>Kairali intelligence</p>Sales quality & recovery</div></div><span className={styles.live}><span className={styles.dot}/>{loading?'Updating report':data?'Live SQL · Read only':'Report unavailable'}</span></div></header>
+ return <div className={styles.root}>
   <div className={styles.shell}>
-   <section className={styles.hero}><div><p className={styles.eyebrow}>Sales performance / Quality control</p><h1>Good Lead Leakage Dashboard</h1><p>Understand reopening decisions. Find the follow-up that needs attention.</p></div><Link className={styles.link} href="/fms/enquiry-reverification">Open review workflow <ArrowUpRight size={14}/></Link></section>
+   <section className={styles.hero}>
+    <div>
+     <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:8,flexWrap:'wrap'}}>
+      <p className={styles.eyebrow} style={{margin:0}}>Sales performance / Quality control</p>
+      <span className={styles.live}><span className={styles.dot}/>{loading?'Updating report':data?'Live SQL · Read only':'Report unavailable'}</span>
+     </div>
+     <h1>Good Lead Leakage Dashboard</h1>
+     <p>Understand reopening decisions. Find the follow-up that needs attention.</p>
+    </div>
+    <Link className={styles.link} href="/fms/enquiry-reverification">Open review workflow <ArrowUpRight size={14}/></Link>
+   </section>
    <form className={styles.toolbar} onSubmit={apply}>
     <div className={styles.filterRow}>
      <label className={styles.field}>Company<select value={draft.company} onChange={e=>setDraft({...draft,company:e.target.value})}><option value="ALL">All companies</option>{['KTAHV','KAPPL','VILLARAAG'].map(company=><option key={company}>{company}</option>)}</select></label>
@@ -95,6 +103,6 @@ export default function GoodLeadLeakagePage(){
     <section className={styles.panel}><div className={styles.panelHead}><div><p className={styles.eyebrow}>Connected source</p><h2>Live data, clear definitions</h2></div><Database size={18} color="#729681"/></div><div className={styles.quality}><div className={styles.qualityGrid}><div className={styles.qualityItem}><span>Current records</span><strong>{data?number(rows.filter(r=>r.origin==='Current').reduce((n,r)=>n+Number(r.cold),0)):'—'}</strong></div><div className={styles.qualityItem}><span>Archived records</span><strong>{data?number(rows.filter(r=>r.origin==='Archive').reduce((n,r)=>n+Number(r.cold),0)):'—'}</strong></div></div></div><details className={styles.details}><summary>Database, tables & counting rules</summary>{data&&<><p>MySQL · Read only</p><code>{data.provenance.database}</code>{data.provenance.tables.map(table=><code key={table}>{table}</code>)}</>}<p>Dates use review generation in IST. Manual confirmed reopens require a completed senior “Reopen” decision; current reviews also require the executive step. Archived records follow the completed archive workflow.</p><p>AI workflow contains recognized current AI categories. Other current records and archives are manual workflow. Reassignments and escalations are counted separately. “Records with reopen signal” is the union of AI and manual ordinary reopens, including AI recommendations later rejected by manual review.</p></details></section>
    </div>
    <footer className={styles.foot}><span>Kairali Group · Sales quality intelligence</span><span>Counts reconcile within the selected period. Conversion attribution is pending.</span></footer>
+   </div>
   </div>
- </main>
 }
