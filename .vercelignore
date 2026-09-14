@@ -3,7 +3,9 @@
 .git
 node_modules
 .next
-docs
+docs/*
+!docs/email-trigger-config
+docs/email-trigger-config/*.md
 scripts
 *.md
 scratch*
@@ -11,3 +13,5 @@ temp*
 check*.js
 
 !data/daily-sales-report/*.json
+
+.local
