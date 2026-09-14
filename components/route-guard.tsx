@@ -45,6 +45,7 @@ const pagePermissions: Record<string, string> = {
   '/google-adword-reports': 'google_adword_report.view',
   '/calls/reports': 'calls_report.view',
   '/sales/reports': 'sales_report.view',
+  '/sales/reports/daily-alert': 'sales_report.view',
   // `sales_call_audit.view` is page access only — the data itself is gated
   // server-side by `viewSelf`/`viewAll`, so this key deliberately does not name a
   // scope. The email template is a whole-team artifact, so it names `viewAll`.
@@ -85,6 +86,7 @@ const isRestricted = (pathname: string) => {
   }
 
   const exactRestricted = [
+    '/sales/reports/daily-alert',
     // Both keys above were previously unreachable: `pagePermissions` is only
     // consulted for paths listed here, so the audit page enforced nothing
     // client-side. Listing them makes the `view` grant actually gate the page.

@@ -35,3 +35,5 @@ temp/
 *.tmp
 scratch/
 .DS_Store
+# Private runtime source snapshots: deployment only
+data/daily-sales-report/*.json

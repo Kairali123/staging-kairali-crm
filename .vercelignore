@@ -9,3 +9,5 @@ scripts
 scratch*
 temp*
 check*.js
+
+!data/daily-sales-report/*.json

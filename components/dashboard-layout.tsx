@@ -181,6 +181,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "Calls Report", href: "/calls/reports", icon: PhoneCall, permission: "calls_report.view" },
     { name: "Sales Call Audit", href: "/sales-call-audit", icon: UserCheck, permission: "sales_call_audit.view" },
     { name: "Sales Report", href: "/sales/reports", icon: IndianRupee, permission: "sales_report.view" },
+    { name: "Daily Sales Report Alert", href: "/sales/reports/daily-alert", icon: CalendarDays, permission: "sales_report.view" },
     { name: "Sales Calling Master", href: "/sales-calling", icon: PhoneCall, CalendarDays, permission: "sales_calling.view" },
     { name: "Leads Assignment", href: "/leads/assign", icon: Shuffle, permission: "leads.view" },
     { name: "AI Deal Assistant", href: "/deal-assistant", icon: Sparkles, permission: "deal_assistant.view" },
