@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  outputFileTracingIncludes: {
+    '/api/daily-sales-report-alert': ['./data/daily-sales-report/*.json'],
+  },
   images: {
     unoptimized: true,
   },

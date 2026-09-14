@@ -172,6 +172,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const navigation = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, permission: "dashboard.view" },
+    { name: "Good Lead Leakage Dashboard", href: "/good-lead-leakage", icon: BarChart3, superAdminOnly: true },
+    { name: "Marketing Daily Report", href: "/marketing-daily-report", icon: TrendingUp, superAdminOnly: true },
     { name: "User Management", href: "/users", icon: UserCog, superAdminOnly: true },
     { name: "Marketing Reports", icon: TrendingUp, permission: "marketing.view" },
     { name: "Riya Sharma", href: "/riya-sharma", icon: LayoutGrid, permission: "riya_sharma.view" },
@@ -179,6 +181,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "Calls Report", href: "/calls/reports", icon: PhoneCall, permission: "calls_report.view" },
     { name: "Sales Call Audit", href: "/sales-call-audit", icon: UserCheck, permission: "sales_call_audit.view" },
     { name: "Sales Report", href: "/sales/reports", icon: IndianRupee, permission: "sales_report.view" },
+    { name: "Daily Sales Report Alert", href: "/sales/reports/daily-alert", icon: CalendarDays, superAdminOnly: true },
     { name: "Sales Calling Master", href: "/sales-calling", icon: PhoneCall, CalendarDays, permission: "sales_calling.view" },
     { name: "Leads Assignment", href: "/leads/assign", icon: Shuffle, permission: "leads.view" },
     { name: "AI Deal Assistant", href: "/deal-assistant", icon: Sparkles, permission: "deal_assistant.view" },
@@ -565,6 +568,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       Performance: "text-red-500", Reports: "text-purple-500", "Help Desk": "text-gray-500",
       "Sales Management": "text-orange-500", "Partner Onboarding System": "text-emerald-600",
       "KAPPL New Order": "text-emerald-600",
+      "Good Lead Leakage Dashboard": "text-teal-600",
+      "Marketing Daily Report": "text-purple-600",
+      "Daily Sales Report Alert": "text-amber-600",
     }
     return colorMap[itemName] || "text-gray-500"
   }

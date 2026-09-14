@@ -52,12 +52,12 @@ function isAccountActive(activeVal: any): boolean {
 export function parsePermissionsFromDbRow(row: Record<string, any> | null | undefined): string[] {
   if (!row) return []
 
-  const permissionsSet = new Set<string>()
-
-  // ONLY super_admin role gets blanket 'all'
+  // ONLY super_admin role gets blanket 'all' - no need for bloated redundant strings
   if (row.role === 'super_admin') {
-    permissionsSet.add('all')
+    return ['all']
   }
+
+  const permissionsSet = new Set<string>()
 
   const excludedKeys = new Set(['id', 'email', 'role', 'created_at', 'updated_at'])
 
@@ -86,6 +86,22 @@ export function parsePermissionsFromDbRow(row: Record<string, any> | null | unde
         permissionsSet.add(hyphenatedModule)
       }
       continue
+    }
+
+    // If val is a JSON object string, e.g. {"view":true,"export":true}
+    if (valStr.startsWith('{') && valStr.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(valStr)
+        for (const [action, enabled] of Object.entries(parsed)) {
+          if (enabled === true || enabled === 'true' || enabled === 1 || enabled === '1') {
+            permissionsSet.add(`${moduleName}.${action}`)
+            if (hyphenatedModule) {
+              permissionsSet.add(`${hyphenatedModule}.${action}`)
+            }
+          }
+        }
+        continue
+      } catch {}
     }
 
     // Comma-separated actions, e.g. "view,edit,assign,delete" or full keys like "leads.view,leads.edit"
@@ -216,7 +232,10 @@ export async function authenticateUserFromDb(
 
     // Merge any direct permissions from userlogin.permission column if present
     if (userRow.permission && typeof userRow.permission === 'string') {
-      const directPerms = userRow.permission.split(',').map((p: string) => p.trim()).filter(Boolean)
+      const directPerms = userRow.permission
+        .split(',')
+        .map((p: string) => p.trim())
+        .filter((p: string) => Boolean(p) && !/[{}"\\:<> ]/.test(p))
       permissions = Array.from(new Set([...permissions, ...directPerms]))
     }
 
@@ -224,8 +243,8 @@ export async function authenticateUserFromDb(
     // Admin and all other roles are strictly restricted to database permissions.
     if (userRole !== 'super_admin') {
       permissions = permissions.filter((p) => p.toLowerCase() !== 'all')
-    } else if (!permissions.includes('all')) {
-      permissions.push('all')
+    } else {
+      permissions = ['all']
     }
 
     // 6. Assemble action permissions
