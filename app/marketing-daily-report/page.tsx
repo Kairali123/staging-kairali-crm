@@ -54,11 +54,11 @@ export default function MarketingDailyReport(){
    else {saveReportFile(file,file.name);setNotice(share?'JPG downloaded. Attach it in WhatsApp.':'JPG downloaded')}
   }catch(e){setNotice(e instanceof Error?e.message:'Image unavailable')}finally{setBusy(false)}
  }
- if(loading)return <main className="p-10" role="status">Loading marketing report…</main>
- if(error)return <main className="p-10"><h1 className="text-2xl font-semibold">Marketing Daily Report</h1><p role="alert">{error}</p><button onClick={()=>{setLoading(true);setError('');setReport(null);setRetry(n=>n+1)}}>Retry</button></main>
+ if(loading)return <div className="p-10 flex flex-col items-center justify-center min-h-[400px]" role="status"><div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4" /><p className="text-gray-600 font-medium">Loading marketing report…</p></div>
+ if(error)return <div className="p-8 bg-white rounded-xl shadow-sm border border-red-100 max-w-xl mx-auto mt-8"><h1 className="text-2xl font-semibold text-gray-900 mb-2">Marketing Daily Report</h1><p className="text-red-600 mb-4" role="alert">{error}</p><button className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium" onClick={()=>{setLoading(true);setError('');setReport(null);setRetry(n=>n+1)}}>Retry</button></div>
  return <>
-  <iframe ref={frame} title="Marketing Daily Report" srcDoc={report?reportHTML(date,report):''} sandbox="allow-scripts" className="block h-screen w-full border-0"/>
-  {notice&&!dialog&&<p role="status" className="fixed bottom-5 right-5 z-50 rounded-lg bg-white p-4 text-sm shadow-lg">{notice}</p>}
+  <iframe ref={frame} title="Marketing Daily Report" srcDoc={report?reportHTML(date,report):''} sandbox="allow-scripts" className="block w-full border-0 rounded-xl shadow-sm bg-white" style={{ height: "calc(100vh - 120px)", minHeight: "750px" }}/>
+  {notice&&!dialog&&<p role="status" className="fixed bottom-5 right-5 z-50 rounded-lg bg-white p-4 text-sm shadow-lg border border-gray-100">{notice}</p>}
   {dialog&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3"><section role="dialog" aria-modal="true" aria-labelledby="export-title" className="flex max-h-[94vh] w-full max-w-6xl flex-col rounded-2xl bg-white p-5 shadow-2xl">
    <header className="flex items-start justify-between gap-4"><div><h2 id="export-title" className="text-xl font-semibold">{dialog.kind==='email'?'Email template':'WhatsApp report'}</h2><p className="mt-1 text-sm text-gray-600">{dialog.subject}</p><p className="mt-1 text-xs text-gray-500">Includes only the source sections you expanded. This preview is the exact export.</p></div><button disabled={busy} onClick={()=>{setDialog(null);setNotice('')}} className="rounded border px-3 py-2">Close</button></header>
    <iframe title="Export preview" srcDoc={dialog.html} sandbox="" className="my-4 min-h-0 w-full flex-1 border" style={{height:'55vh'}}/>

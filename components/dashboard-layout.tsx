@@ -172,6 +172,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const navigation = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, permission: "dashboard.view" },
+    { name: "Good Lead Leakage Dashboard", href: "/good-lead-leakage", icon: BarChart3, adminReportOnly: true },
     { name: "Marketing Daily Report", href: "/marketing-daily-report", icon: TrendingUp, permission: "marketing.view" },
     { name: "User Management", href: "/users", icon: UserCog, superAdminOnly: true },
     { name: "Marketing Reports", icon: TrendingUp, permission: "marketing.view" },
@@ -251,10 +252,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   //   { name: "Tasks", href: "/meetings/tasks", icon: List, description: "View meeting tasks" },
   // ]
   const filteredNavigation = navigation.filter((item: any) => {
+    if (item.adminReportOnly) {
+      return isSuperAdmin || String(user?.role || "").toLowerCase() === "admin" || Boolean(user?.permissions?.includes("all"))
+    }
     if (item.superAdminOnly) {
       return isSuperAdmin
     }
-    return user?.permissions?.includes("all") || (item.permission && hasPermission(item.permission))
+    return isSuperAdmin || String(user?.role || "").toLowerCase() === "admin" || user?.permissions?.includes("all") || (item.permission && hasPermission(item.permission))
   })
 
   const searchableItems: any[] = []
@@ -566,6 +570,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       Performance: "text-red-500", Reports: "text-purple-500", "Help Desk": "text-gray-500",
       "Sales Management": "text-orange-500", "Partner Onboarding System": "text-emerald-600",
       "KAPPL New Order": "text-emerald-600",
+      "Good Lead Leakage Dashboard": "text-teal-600",
+      "Marketing Daily Report": "text-purple-600",
     }
     return colorMap[itemName] || "text-gray-500"
   }
