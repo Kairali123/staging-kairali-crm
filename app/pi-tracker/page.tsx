@@ -1,3 +1,5 @@
-import BookingPIReviewTrackerPage from '../booking-pi-review-tracker/page'
+import { redirect } from 'next/navigation'
 
-export default BookingPIReviewTrackerPage
+export default function Page() {
+  redirect('/fms/booking-pi-review-tracker')
+}
