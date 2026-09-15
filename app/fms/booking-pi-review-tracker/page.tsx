@@ -6,6 +6,9 @@ import Link from 'next/link'
 interface PITrackerItem {
   id: string
   generatedAt: string
+  bookingDateTime: string | null
+  actualDateTime: string | null
+  isFreshBooking: boolean
   eventContext: string
   isOlderBooking: boolean
   reservationId: string
@@ -259,6 +262,24 @@ export default function BookingPIReviewTrackerPage() {
         .reviewToggle button.selected.no { color: #9a4c48; background: #fff; box-shadow: 0 1px 2px #12201618; }
         .reviewToggle button:disabled { cursor: not-allowed; opacity: .55; }
         .reviewLocked { border-left: 3px solid #c94c47; color: #a83834; background: #fff2f1; border-radius: 6px; min-width: 145px; padding: 8px 10px; }
+        .eventDateBlock { display: flex; flex-direction: column; gap: 3px; min-width: 160px; }
+        .eventDateRow { display: flex; align-items: flex-start; gap: 5px; }
+        .eventDateDot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
+        .eventDateDot.booking { background: #14251d; }
+        .eventDateDot.amend { background: #b45309; }
+        .eventDateDot.cancel { background: #dc2626; }
+        .eventDateLabel { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+        .eventDateLabel.booking { color: #6c7a72; }
+        .eventDateLabel.amend { color: #b45309; }
+        .eventDateLabel.cancel { color: #dc2626; }
+        .eventDateValue { font-size: 11px; font-weight: 700; }
+        .eventDateValue.booking { color: #14251d; }
+        .eventDateValue.amend { color: #b45309; }
+        .eventDateValue.cancel { color: #dc2626; }
+        .eventDateTime { font-size: 10px; font-weight: 500; opacity: .8; }
+        .eventDateTime.booking { color: #34453b; }
+        .eventDateTime.amend { color: #92400e; }
+        .eventDateTime.cancel { color: #b91c1c; }
         @media (max-width: 1100px) { .piMetricGrid { grid-template-columns: repeat(3, 1fr); } }
         @media (max-width: 760px) { .piMetricGrid { grid-template-columns: 1fr 1fr; } .salesFilterBar { flex-direction: column; align-items: flex-start; } }
       `}</style>
@@ -354,18 +375,18 @@ export default function BookingPIReviewTrackerPage() {
         {/* Metric Cards Grid */}
         <section className="piMetricGrid mb-6">
           <article>
-            <span className="text-[#6c7a72] text-[10px] font-bold block">Today’s sales</span>
+            <span className="text-[#6c7a72] text-[10px] font-bold block">Today's sales</span>
             <strong className="text-2xl text-[#14251d] my-2 block">
               ₹{activeMetrics.todaySalesAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
             </strong>
             <small className="text-[#6c7a72] text-[10px]">
-              {activeMetrics.todaySalesCount} new booking{activeMetrics.todaySalesCount === 1 ? '' : 's'}
+              {activeMetrics.todaySalesCount} fresh new booking{activeMetrics.todaySalesCount === 1 ? '' : 's'}
             </small>
           </article>
           <article className="current">
-            <span className="text-[#6c7a72] text-[10px] font-bold block">New PIs</span>
+            <span className="text-[#6c7a72] text-[10px] font-bold block">New PIs (Fresh)</span>
             <strong className="text-2xl text-[#14251d] my-2 block">{activeMetrics.newPi}</strong>
-            <small className="text-[#6c7a72] text-[10px]">PI first created today</small>
+            <small className="text-[#6c7a72] text-[10px]">Fresh booking on selected date</small>
           </article>
           <article className="amended">
             <span className="text-[#6c7a72] text-[10px] font-bold block">Amended today</span>
@@ -456,12 +477,74 @@ export default function BookingPIReviewTrackerPage() {
                   return (
                     <tr key={item.id} className="hover:bg-[#f8faf8] transition">
                       <td>
-                        <strong className="block text-xs text-[#14251d]">
-                          {new Date(item.generatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                        </strong>
-                        <small className={`block text-[10px] mt-1 ${item.isOlderBooking ? 'text-[#9a611e] font-bold' : 'text-[#849087]'}`}>
-                          {item.eventContext}
-                        </small>
+                        <div className="eventDateBlock">
+                          {/* Actual original booking date — always shown in black */}
+                          {item.bookingDateTime && (
+                            <div className="eventDateRow">
+                              <span className="eventDateDot booking" />
+                              <div>
+                                <span className="eventDateLabel booking">Booked</span>
+                                <div className="eventDateValue booking">
+                                  {new Date(item.bookingDateTime).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                </div>
+                                <div className="eventDateTime booking">
+                                  {new Date(item.bookingDateTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {/* Amend date — amber/orange */}
+                          {item.status === 'Amended' && item.actualDateTime && (
+                            <div className="eventDateRow" style={{ marginTop: 5 }}>
+                              <span className="eventDateDot amend" />
+                              <div>
+                                <span className="eventDateLabel amend">Amended</span>
+                                <div className="eventDateValue amend">
+                                  {new Date(item.actualDateTime).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                </div>
+                                <div className="eventDateTime amend">
+                                  {new Date(item.actualDateTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {/* Cancel date — red */}
+                          {item.status === 'Cancelled' && item.actualDateTime && (
+                            <div className="eventDateRow" style={{ marginTop: 5 }}>
+                              <span className="eventDateDot cancel" />
+                              <div>
+                                <span className="eventDateLabel cancel">Cancelled</span>
+                                <div className="eventDateValue cancel">
+                                  {new Date(item.actualDateTime).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                </div>
+                                <div className="eventDateTime cancel">
+                                  {new Date(item.actualDateTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {/* Fallback: no datetime stored yet */}
+                          {!item.bookingDateTime && (
+                            <div className="eventDateRow">
+                              <span className="eventDateDot booking" />
+                              <div>
+                                <span className="eventDateLabel booking">Booked</span>
+                                <div className="eventDateValue booking">
+                                  {new Date(item.generatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                </div>
+                                <div className="eventDateTime booking">
+                                  {new Date(item.generatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {/* Context label */}
+                          <span className={`text-[9px] font-bold mt-1 inline-block ${
+                            item.status === 'Amended' ? 'text-[#b45309]' :
+                            item.status === 'Cancelled' ? 'text-[#dc2626]' :
+                            item.isFreshBooking ? 'text-[#285d45]' : 'text-[#849087]'
+                          }`}>{item.eventContext}</span>
+                        </div>
                       </td>
                       <td>
                         <strong className="block text-xs text-[#14251d]">{item.reservationId}</strong>
