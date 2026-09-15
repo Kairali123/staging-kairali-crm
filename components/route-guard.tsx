@@ -42,13 +42,15 @@ const pagePermissions: Record<string, string> = {
   '/doctor-consultation/prescription/new': 'doctor.consultation.view',
   '/doctor-consultation/prescription/preview': 'doctor.consultation.view',
   '/marketing-dashboard': 'marketing.view',
+  '/good-lead-leakage': 'good_lead_leakage.view',
+  '/marketing-daily-report': 'marketing_daily_report.view',
   '/marketing-funnel': 'marketing_funnel.view',
   '/marketing/google-ppc': 'marketing_google_report.view',
   '/marketing/facebook-ppc': 'marketing_facebook_report.view',
   '/google-adword-reports': 'google_adword_report.view',
   '/calls/reports': 'calls_report.view',
   '/sales/reports': 'sales_report.view',
-  '/sales/reports/daily-alert': 'sales_report.view',
+  '/sales/reports/daily-alert': 'daily_sales_alert.view',
   '/sales/reports/email-trigger-config': 'sales_report.view',
   '/settings': 'sales_report.view',
   '/settings/automation': 'sales_report.view',
@@ -74,8 +76,9 @@ const pagePermissions: Record<string, string> = {
   '/voicecall/summary': 'ai_voice_summary.view',
   '/meetings': 'meetings.view',
   '/accounts-tracker': 'accounts_tracker.view',
-  '/fms/booking-pi-review-tracker': 'accounts_tracker.view',
-  '/pi-tracker': 'accounts_tracker.view',
+  '/fms/booking-pi-review-tracker': 'ktahv_pi_audit_tracker.view',
+  '/booking-pi-review-tracker': 'ktahv_pi_audit_tracker.view',
+  '/pi-tracker': 'ktahv_pi_audit_tracker.view',
   '/MR-FMS': 'mr-fms.view',
   '/crr-fms': 'crr_fms.view',
   '/voicecall/non-qualified': 'non_qualified.view',
@@ -119,7 +122,13 @@ const isRestricted = (pathname: string) => {
     '/leads/duplicates_old',
     '/reports',
     '/reports/sales-conversion',
-    '/marketing-dashboard'
+    '/marketing-dashboard',
+    '/fms/booking-pi-review-tracker',
+    '/booking-pi-review-tracker',
+    '/pi-tracker',
+    '/good-lead-leakage',
+    '/marketing-daily-report',
+    '/sales/reports/daily-alert'
   ]
 
   return exactRestricted.includes(path)
@@ -150,16 +159,10 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
     // Routes exclusively restricted to super admin (no other role or permission allowed)
     const cleanPath = pathname.replace(/\/$/, '') || '/'
     const superAdminOnlyRoutes = [
-      '/sales/reports/daily-alert',
-      '/good-lead-leakage',
-      '/marketing-daily-report',
       '/settings',
       '/settings/automation',
       '/settings/automation/email-triggers',
       '/sales/reports/email-trigger-config',
-      '/fms/booking-pi-review-tracker',
-      '/booking-pi-review-tracker',
-      '/pi-tracker',
     ]
     if (
       superAdminOnlyRoutes.includes(cleanPath) ||

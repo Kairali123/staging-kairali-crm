@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSessionUser } from '@/lib/authz'
+import { getSessionUser, hasPermission } from '@/lib/authz'
 import { getPool } from '@/lib/db'
 import { combineSales, companies } from '@/lib/daily-sales-report'
 import { reportWindow, salesSQL } from '@/lib/daily-sales-report-query'
@@ -12,7 +12,8 @@ export async function GET(req:NextRequest){
  const user=getSessionUser(req)
  if(!user)return NextResponse.json({error:'Unauthorized'},{status:401,headers})
  const role=String(user?.role||'').trim().toLowerCase()
- if(role!=='super_admin'&&role!=='super admin')return NextResponse.json({error:'Super administrator access required'},{status:403,headers})
+ const isSuperAdmin = role==='super_admin'||role==='super admin'||user?.permissions?.includes('all')
+ if(!isSuperAdmin && !hasPermission(user, 'daily_sales_alert.view')) return NextResponse.json({error:'Access denied. Permission required.'},{status:403,headers})
  const date=req.nextUrl.searchParams.get('date')||'',company=req.nextUrl.searchParams.get('company')||'ALL'
  let window:string[]
  try{window=reportWindow(date);if(company!=='ALL'&&!Object.hasOwn(companies,company))throw Error()}catch{return NextResponse.json({error:'Choose a valid report date and company'},{status:400,headers})}

@@ -1884,6 +1884,13 @@ export const PAGE_PERMISSIONS_MODULES: PagePermissionModule[] = [
     actions: ["view", "viewSelf", "viewAll", "write"],
     description: "QA scorecard evaluation, team reports & HR verification",
   },
+  {
+    key: "daily_sales_alert",
+    label: "Daily Sales Report Alert",
+    category: "Sales & Call Management",
+    actions: ["view"],
+    description: "Daily sales revenue, bookings & cancellation alert",
+  },
 
   // 3. FMS & Booking Systems
   {
@@ -1971,6 +1978,13 @@ export const PAGE_PERMISSIONS_MODULES: PagePermissionModule[] = [
       "stage11",
     ],
     description: "Reverify cold customer leads across stages",
+  },
+  {
+    key: "ktahv_pi_audit_tracker",
+    label: "KTAHV PI Audit Tracker",
+    category: "FMS & Booking Systems",
+    actions: ["view", "edit", "delete", "create"],
+    description: "Daily PI review, accounts audit & status tracking",
   },
 
   // 4. DialShree & AI Voice
@@ -2104,6 +2118,20 @@ export const PAGE_PERMISSIONS_MODULES: PagePermissionModule[] = [
     category: "Marketing & Analytics",
     actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
     description: "Adwords spend & source attribution",
+  },
+  {
+    key: "good_lead_leakage",
+    label: "Good Lead Leakage",
+    category: "Marketing & Analytics",
+    actions: ["view"],
+    description: "Good lead leakage report & analytics",
+  },
+  {
+    key: "marketing_daily_report",
+    label: "Marketing Daily Report",
+    category: "Marketing & Analytics",
+    actions: ["view"],
+    description: "Daily marketing spend, traffic & attribution report",
   },
 
   // 6. Financials & Partner Networks

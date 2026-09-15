@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSessionUser } from '@/lib/authz'
+import { getSessionUser, hasPermission } from '@/lib/authz'
 import { getPool } from '@/lib/db'
 import { leakageParams, leakageQuery, leakageDiagnosticsQuery } from '@/lib/good-lead-leakage'
 export const dynamic = 'force-dynamic'
@@ -9,7 +9,8 @@ export async function GET(req:NextRequest) {
  const user=getSessionUser(req)
  if(!user) return NextResponse.json({error:'Please sign in to view this dashboard.'},{status:401,headers})
  const role = String(user?.role || '').trim().toLowerCase()
- if(role !== 'super_admin' && role !== 'super admin') return NextResponse.json({error:'Super administrator access is required for this dashboard.'},{status:403,headers})
+ const isSuperAdmin = role === 'super_admin' || role === 'super admin' || user?.permissions?.includes('all')
+ if(!isSuperAdmin && !hasPermission(user, 'good_lead_leakage.view')) return NextResponse.json({error:'Access denied. Permission required.'},{status:403,headers})
  let params
  try { const p=req.nextUrl.searchParams; params=leakageParams(p.get('from')||'',p.get('to')||'',p.get('company')||'ALL',p.get('review')||'ALL') }
  catch { return NextResponse.json({error:'Select valid dates (up to 93 days), company and review filters.'},{status:400,headers}) }

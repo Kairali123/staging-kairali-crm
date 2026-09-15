@@ -51,6 +51,10 @@ export const PERMISSION_MODULE_COLUMNS = [
   'mr-fms',
   'dialshree_menu',
   'sales_calling',
+  'ktahv_pi_audit_tracker',
+  'good_lead_leakage',
+  'marketing_daily_report',
+  'daily_sales_alert',
 ] as const
 
 /**

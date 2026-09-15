@@ -210,8 +210,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   ]
 
   const marketingSubMenu = [
-    { name: "Good Lead Leakage", href: "/good-lead-leakage", icon: Search, description: "Good lead leakage report", superAdminOnly: true },
-    { name: "Marketing Daily Report", href: "/marketing-daily-report", icon: Search, description: "Marketing daily report", superAdminOnly: true },
+    { name: "Good Lead Leakage", href: "/good-lead-leakage", icon: Search, permission: "good_lead_leakage.view", description: "Good lead leakage report" },
+    { name: "Marketing Daily Report", href: "/marketing-daily-report", icon: Search, permission: "marketing_daily_report.view", description: "Marketing daily report" },
     { name: "Google PPC Reports", href: "/marketing/google-ppc", icon: Search, description: "Google PPC ads reports", permission: "marketing_google_report.view" },
     { name: "Facebook PPC Reports", href: "/marketing/facebook-ppc", icon: Search, description: "Facebook PPC ads reports", permission: "marketing_facebook_report.view" },
     { name: "Google Adword Reports", href: "/google-adword-reports", icon: Search, description: "Google Ads campaign expense data", permission: "google_adword_report.view" },
@@ -227,7 +227,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const fmsSubMenu = [
     { name: "KTAHV Booking FMS", href: "/fms/bookings/team", icon: Users, permission: "team.view", description: "KTAHV booking management" },
     { name: "Villa Raag Booking FMS", href: "/fms/bookings/villa-raag", icon: Home, permission: "villa_raag.view", description: "Villa Raag FMS" },
-    { name: "Booking PI Review Tracker", href: "/fms/booking-pi-review-tracker", icon: Receipt, superAdminOnly: true, description: "Daily PI review & accounts audit" },
+    { name: "Booking PI Review Tracker", href: "/fms/booking-pi-review-tracker", icon: Receipt, permission: "ktahv_pi_audit_tracker.view", description: "Daily PI review & accounts audit" },
   ]
 
   const employeeSubMenu = [
@@ -247,7 +247,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const salesReportsSubMenu = [
     { name: "Sales Report", href: "/sales/reports", icon: IndianRupee, permission: "sales_report.view", description: "Sales performance reports" },
-    { name: "Daily Sales Report Alert", href: "/sales/reports/daily-alert", icon: CalendarDays, superAdminOnly: true, description: "Daily sales report alert" },
+    { name: "Daily Sales Report Alert", href: "/sales/reports/daily-alert", icon: CalendarDays, permission: "daily_sales_alert.view", description: "Daily sales report alert" },
     { name: "Sales Calling Master", href: "/sales-calling", icon: PhoneCall, permission: "sales_calling.view", description: "Sales calling master" },
   ]
 
