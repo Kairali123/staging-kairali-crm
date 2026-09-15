@@ -50,6 +50,9 @@ const pagePermissions: Record<string, string> = {
   '/sales/reports': 'sales_report.view',
   '/sales/reports/daily-alert': 'sales_report.view',
   '/sales/reports/email-trigger-config': 'sales_report.view',
+  '/settings': 'sales_report.view',
+  '/settings/automation': 'sales_report.view',
+  '/settings/automation/email-triggers': 'sales_report.view',
   // `sales_call_audit.view` is page access only — the data itself is gated
   // server-side by `viewSelf`/`viewAll`, so this key deliberately does not name a
   // scope. The email template is a whole-team artifact, so it names `viewAll`.
@@ -150,8 +153,15 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
       '/sales/reports/daily-alert',
       '/good-lead-leakage',
       '/marketing-daily-report',
+      '/settings',
+      '/settings/automation',
+      '/settings/automation/email-triggers',
+      '/sales/reports/email-trigger-config',
     ]
-    if (superAdminOnlyRoutes.includes(cleanPath)) {
+    if (
+      superAdminOnlyRoutes.includes(cleanPath) ||
+      cleanPath.startsWith('/settings')
+    ) {
       if (!isSuperAdmin) {
         router.replace('/access-denied')
         return

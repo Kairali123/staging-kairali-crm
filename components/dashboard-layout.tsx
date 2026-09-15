@@ -57,6 +57,7 @@ import {
   Info,
   StickyNote,
   Sparkles,
+  Cpu,
 } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
@@ -95,6 +96,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isClearingCache, setIsClearingCache] = useState(false)
   const [meetingsExpanded, setMeetingsExpanded] = useState(false)
+  const [settingsExpanded, setSettingsExpanded] = useState(false)
+  const [automationExpanded, setAutomationExpanded] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedQuery, setDebouncedQuery] = useState("")
   const pathname = usePathname()
@@ -135,6 +138,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (pathname.startsWith("/dialShree") || pathname.startsWith("/dialshree")) setDialShreeExpanded(true)
     if (pathname.startsWith("/meetings")) setMeetingsExpanded(true)
     if (pathname.startsWith("/new-order-fms")) setKapplNewOrderExpanded(true)
+    if (pathname.startsWith("/settings")) {
+      setSettingsExpanded(true)
+      setAutomationExpanded(true)
+    }
   }, [pathname])
 
   const handleLogout = async () => { await authLogout(); router.push("/") }
@@ -172,6 +179,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const navigation = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, permission: "dashboard.view" },
+    { name: "Settings", icon: Settings, superAdminOnly: true },
     { name: "User Management", href: "/users", icon: UserCog, superAdminOnly: true },
     { name: "Marketing Reports", icon: TrendingUp, permission: "marketing.view" },
     { name: "Doctor Consultation", icon: Stethoscope, permission: "doctor.consultation.view" },
@@ -240,7 +248,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const salesReportsSubMenu = [
     { name: "Sales Report", href: "/sales/reports", icon: IndianRupee, permission: "sales_report.view", description: "Sales performance reports" },
     { name: "Daily Sales Report Alert", href: "/sales/reports/daily-alert", icon: CalendarDays, superAdminOnly: true, description: "Daily sales report alert" },
-    { name: "Email Trigger Config", href: "/sales/reports/email-trigger-config", icon: Mail, superAdminOnly: true, description: "Scheduled email trigger configuration" },
     { name: "Sales Calling Master", href: "/sales-calling", icon: PhoneCall, permission: "sales_calling.view", description: "Sales calling master" },
   ]
 
@@ -282,6 +289,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   if (hasPermission("employee.tools")) employeeSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
   if (hasPermission("doctor.consultation.view")) doctorConsultationSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
   if (hasPermission("sales_report.view") || hasPermission("sales_calling.view") || isSuperAdmin) salesReportsSubMenu.filter(isSalesItemVisible).forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
+  if (isSuperAdmin) {
+    searchableItems.push({ name: "Automation Settings", href: "/settings/automation", description: "Automation settings and modules hub", icon: Cpu })
+    searchableItems.push({ name: "Email Triggers", href: "/settings/automation/email-triggers", description: "Scheduled email trigger configuration", icon: Mail })
+  }
 
   const searchResults = debouncedQuery.length > 0
     ? searchableItems.filter((item) => [item.name, item.description, item.href].some((f) => f.toLowerCase().includes(debouncedQuery.toLowerCase())))
@@ -565,6 +576,85 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       )
     }
 
+    if (item.name === "Settings") {
+      if (!isSuperAdmin) return null
+      const isSettingsActive = pathname.startsWith("/settings")
+      const isAutomationActive = pathname.startsWith("/settings/automation")
+      const isEmailTriggersActive = pathname === "/settings/automation/email-triggers"
+
+      return (
+        <div key={item.name}>
+          <button
+            onClick={() => setSettingsExpanded(!settingsExpanded)}
+            className={`group flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${
+              isSettingsActive
+                ? "bg-gradient-to-r from-slate-700 to-slate-800 text-white shadow-md"
+                : "text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"
+            }`}
+          >
+            <item.icon className={`mr-3 h-5 w-5 ${isSettingsActive ? "text-white" : "text-slate-600"}`} />
+            {item.name}
+            {settingsExpanded ? (
+              <ChevronDown className={`ml-auto h-4 w-4 ${isSettingsActive ? "text-white" : "text-gray-500"}`} />
+            ) : (
+              <ChevronRight className={`ml-auto h-4 w-4 ${isSettingsActive ? "text-white" : "text-gray-500"}`} />
+            )}
+          </button>
+          {settingsExpanded && (
+            <div className="ml-5 mt-2 space-y-1 pl-2 border-l-2 border-slate-200">
+              {/* Automation Section */}
+              <div>
+                <button
+                  onClick={() => setAutomationExpanded(!automationExpanded)}
+                  className={`group flex items-center w-full px-2.5 py-2 text-xs font-semibold uppercase tracking-wider rounded-md transition-all duration-200 ${
+                    isAutomationActive
+                      ? "text-indigo-700 bg-indigo-50/70"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                  }`}
+                >
+                  <Cpu className="mr-2 h-4 w-4 text-indigo-600" />
+                  Automation
+                  {automationExpanded ? (
+                    <ChevronDown className="ml-auto h-3.5 w-3.5 text-gray-500" />
+                  ) : (
+                    <ChevronRight className="ml-auto h-3.5 w-3.5 text-gray-500" />
+                  )}
+                </button>
+                {automationExpanded && (
+                  <div className="ml-3 mt-1 space-y-1 pl-2 border-l border-indigo-200">
+                    <Link
+                      href="/settings/automation/email-triggers"
+                      className={`group flex items-center px-2.5 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${
+                        isEmailTriggersActive
+                          ? "bg-indigo-100 text-indigo-800 font-semibold"
+                          : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                      }`}
+                      onClick={() => isMobile && setSidebarOpen(false)}
+                    >
+                      <Mail className="mr-2 h-3.5 w-3.5 text-indigo-600" />
+                      Email Triggers
+                    </Link>
+                    <Link
+                      href="/settings/automation"
+                      className={`group flex items-center px-2.5 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${
+                        pathname === "/settings/automation"
+                          ? "bg-indigo-100 text-indigo-800 font-semibold"
+                          : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                      }`}
+                      onClick={() => isMobile && setSidebarOpen(false)}
+                    >
+                      <LayoutGrid className="mr-2 h-3.5 w-3.5 text-slate-400" />
+                      All Modules
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )
+    }
+
     return (
       <Link key={item.name} href={item.href} {...(item.target ? { target: item.target } : {})} className={`group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${pathname === item.href ? "bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-md" : "text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"}`} onClick={() => isMobile && setSidebarOpen(false)}>
         <item.icon className={`mr-3 h-5 w-5 ${pathname === item.href ? "text-white" : getIconColor(item.name)}`} />
@@ -587,6 +677,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       "Doctor Consultation": "text-teal-600",
       "Booking PI Review Tracker": "text-indigo-600",
       "Doctor Consultation Report": "text-teal-600",
+      Settings: "text-slate-600",
+      Automation: "text-indigo-600",
     }
     return colorMap[itemName] || "text-gray-500"
   }

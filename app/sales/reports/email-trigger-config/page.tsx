@@ -1,12 +1,27 @@
-import { readFile } from 'node:fs/promises'
-import path from 'node:path'
-import EmailConfigBridge from './report-bridge'
+import { redirect } from 'next/navigation'
+
 export const dynamic = 'force-dynamic'
-export default async function EmailTriggerConfigPage() {
-  const root = path.join(process.cwd(), 'docs/email-trigger-config')
-  const [html, renderer, body, bridge, persistence] = await Promise.all(['index.html', 'report-renderer.js', 'report-body.js', 'report-link.js', 'persistence.js'].map(file => readFile(path.join(root, file), 'utf8')))
-  // Inline only repository-owned scripts, never report data or query-string values.
-  const inline = (script: string) => '<script>' + script.replace(/<\/script/gi, '<\\/script') + '</script>'
-  const document = html.replace('<script src="report-renderer.js"></script>', inline(renderer)).replace('<script src="report-body.js"></script>', inline(body)).replace('<script src="report-link.js"></script>', inline(bridge)).replace('<script src="persistence.js"></script>', inline(persistence))
-  return <EmailConfigBridge document={document}/>
+
+interface PageProps {
+  searchParams?: Promise<Record<string, string | string[] | undefined>> | Record<string, string | string[] | undefined>
+}
+
+export default async function LegacyEmailTriggerConfigRedirectPage({ searchParams }: PageProps) {
+  const resolvedParams = searchParams ? await Promise.resolve(searchParams) : undefined
+  const params = new URLSearchParams()
+
+  if (resolvedParams) {
+    for (const [key, value] of Object.entries(resolvedParams)) {
+      if (typeof value === 'string') {
+        params.set(key, value)
+      } else if (Array.isArray(value)) {
+        value.forEach((v) => {
+          if (v) params.append(key, v)
+        })
+      }
+    }
+  }
+
+  const query = params.toString()
+  redirect(`/settings/automation/email-triggers${query ? `?${query}` : ''}`)
 }
