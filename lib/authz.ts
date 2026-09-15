@@ -301,6 +301,13 @@ export function hasPartnerAccess(user: unknown): boolean {
   )
 }
 
+export function hasDialShreeSummaryAccess(user: unknown): boolean {
+  return (
+    hasAnyPermission(user, ['dialshree.view', 'dialshree_summary.view']) ||
+    hasAdminRole(user, 'lower')
+  )
+}
+
 export function hasDoctorConsultationAccess(user: unknown): boolean {
   return (
     hasAnyPermission(user, ['doctor.consultation.view', 'prescriptions.create']) ||

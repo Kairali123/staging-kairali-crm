@@ -17,6 +17,10 @@ draw=function(){beforePersistentDraw();if(!linkedHost)return;normalizeDraft();co
  const submit=$('#triggerForm button[type="submit"]');submit.textContent=savePending?'Saving…':draft.status==='Active'?'Save & activate':'Save configuration';submit.disabled=savePending||!storageReady;
 };
 $('#triggerForm').onsubmit=e=>{if(!linkedHost)return beforePersistentSubmit(e);e.preventDefault();if(savePending)return;collect();normalizeDraft();if(!storageReady){toast('Storage unavailable. Configuration has not been saved.');return}
+ if(!draft.name?.trim()||!draft.template?.trim()||(draft.status==='Active'&&!draft.to?.trim())){step=0;draw();toast('Please add a trigger name, template name and To recipient.');return}
+ if([draft.to,draft.cc,draft.bcc].some(v=>v&&v.split(',').filter(x=>x.trim()).some(x=>!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x.trim())))){step=0;draw();toast('Enter valid email addresses, separated by commas.');return}
+ if(!draft.subject?.trim()||(draft.bodyType!=='Full report in email body'&&!draft.body?.trim())){step=1;draw();toast('Please add an email subject and body.');return}
+ if(!draft.start||!draft.time||(draft.end&&draft.end<draft.start)||(draft.frequency==='Every 6 hours'&&(!Number.isInteger(+draft.interval)||+draft.interval<1||+draft.interval>168))||(draft.frequency==='Custom'&&(!draft.custom?.trim()||!draft.custom.split(',').every(v=>/^([01]\d|2[0-3]):[0-5]\d$/.test(v.trim()))))){step=2;draw();toast('Check the schedule dates, times and repeat interval.');return}
  const config={...draft};if(typeof config.id!=='string')delete config.id;delete config.nextRun;delete config.lastResult;delete config.result;delete config.owner;delete config.sender;delete config.updatedAt;
  savePending=true;$('#triggerForm button[type="submit"]').disabled=true;window.parent.postMessage({type:'email-config-save',config},'*');};
 window.addEventListener('message',event=>{if(event.source!==window.parent||window.parent===window)return;const m=event.data;
