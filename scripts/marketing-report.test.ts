@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { reportWindow, combineReport } from '../lib/marketing-report-query.ts'
-import { reportHTML, reportExportHTML } from '../lib/marketing-daily-report.ts'
+import { reportWindow, combineReport } from '../lib/marketing-report-query'
+import { reportHTML, reportExportHTML } from '../lib/marketing-daily-report'
 
 test('rejects impossible and injected dates, handles leap day',()=>{
   for(const value of ['2026-02-29','2026-13-01','2026-09-10\' OR 1=1','']) assert.throws(()=>reportWindow(value))

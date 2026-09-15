@@ -1,7 +1,7 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {reportHTML,reportExportHTML,displayDate,validateReportView,type ReportData} from '../lib/marketing-daily-report.ts'
-import {signReportSnapshot,readReportSnapshot,parseReportRecipients} from '../lib/marketing-report-email.ts'
+import {reportHTML,reportExportHTML,displayDate,validateReportView,type ReportData} from '../lib/marketing-daily-report'
+import {signReportSnapshot,readReportSnapshot,parseReportRecipients} from '../lib/marketing-report-email'
 const base={description:'',traffic:100,sources:['Unique source'],leads:[5],high:[3],medium:[1],low:[1],trafficBySource:[100],spend:[100],sale:400,bookings:2,totalLeads:5,totalSpend:100,liveSales:[{source:'Unique source',spend:100,conversions:2,verified:400,unverified:12,cancelled:0}]}
 const data:ReportData={date:'2026-09-11',companies:[{...base,name:'KTAHV'},{...base,name:'KAPPL',totalLeads:7}]}
 test('date has explicit weekday and management output excludes technical diagnostics',()=>{
