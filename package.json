@@ -24,7 +24,8 @@
     "db:order-form:migrate": "node scripts/migrate-order-form-security.mjs --up",
     "db:order-form:rollback": "node scripts/migrate-order-form-security.mjs --down",
     "typecheck": "tsc --noEmit --incremental false",
-    "start": "next start"
+    "start": "next start",
+    "email-trigger:worker": "node scripts/email-trigger-worker.mjs"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.10",

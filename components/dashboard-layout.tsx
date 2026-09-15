@@ -174,6 +174,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, permission: "dashboard.view" },
     { name: "User Management", href: "/users", icon: UserCog, superAdminOnly: true },
     { name: "Marketing Reports", icon: TrendingUp, permission: "marketing.view" },
+    { name: "Doctor Consultation", icon: Stethoscope, permission: "doctor.consultation.view" },
     { name: "Riya Sharma", href: "/riya-sharma", icon: LayoutGrid, permission: "riya_sharma.view" },
     { name: "FMS Systems", icon: FileText, permission: "fms.view" },
     { name: "Calls Report", href: "/calls/reports", icon: PhoneCall, permission: "calls_report.view" },
@@ -185,6 +186,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "AI Voice Lead Qual.", icon: Phone, permission: "ai_voice_menu.view" },
     { name: "DialShree Lead Qual.", icon: PhoneCall, permission: "dialshree_menu.view" },
     { name: "KTAHV Accounts Tracker", href: "/accounts-tracker", icon: Receipt, permission: "accounts_tracker.view" },
+    { name: "Booking PI Review Tracker", href: "/booking-pi-review-tracker", icon: Receipt, permission: "accounts_tracker.view" },
     { name: "Partner Onboarding System", href: "/partners", icon: Building2, permission: "partners.view" },
     { name: "KAPPL New Order", icon: FileText, permission: "new-order-fms.view" },
     { name: "MR FMS", href: "/MR-FMS", icon: FileText, permission: "mr-fms.view" },
@@ -229,6 +231,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const doctorConsultationSubMenu = [
     { name: "Overview", href: "/doctor-consultation", icon: LayoutDashboard, description: "Consultation overview" },
+    { name: "Consultation Report", href: "/doctor-consultation/report", icon: FileText, description: "Doctor consultation management report" },
     { name: "Calendar", href: "/doctor-consultation/calendar", icon: Calendar, description: "Consultation calendar" },
     { name: "History", href: "/doctor-consultation/history", icon: Activity, description: "Consultation history" },
     { name: "New Prescription", href: "/doctor-consultation/prescription/new", icon: FileText, description: "Create prescription" },
@@ -237,6 +240,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const salesReportsSubMenu = [
     { name: "Sales Report", href: "/sales/reports", icon: IndianRupee, permission: "sales_report.view", description: "Sales performance reports" },
     { name: "Daily Sales Report Alert", href: "/sales/reports/daily-alert", icon: CalendarDays, superAdminOnly: true, description: "Daily sales report alert" },
+    { name: "Email Trigger Config", href: "/sales/reports/email-trigger-config", icon: Mail, superAdminOnly: true, description: "Scheduled email trigger configuration" },
     { name: "Sales Calling Master", href: "/sales-calling", icon: PhoneCall, permission: "sales_calling.view", description: "Sales calling master" },
   ]
 
@@ -580,6 +584,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       "Good Lead Leakage Dashboard": "text-teal-600",
       "Marketing Daily Report": "text-purple-600",
       "Daily Sales Report Alert": "text-amber-600",
+      "Doctor Consultation": "text-teal-600",
+      "Booking PI Review Tracker": "text-indigo-600",
+      "Doctor Consultation Report": "text-teal-600",
     }
     return colorMap[itemName] || "text-gray-500"
   }

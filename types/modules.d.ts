@@ -28,6 +28,7 @@ declare module 'nodemailer' {
   }
 
   export interface Transporter {
+    close(): void;
     sendMail(mailOptions: SendMailOptions): Promise<any>;
   }
 

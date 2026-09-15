@@ -203,6 +203,8 @@ const protectedRoutes = [
   '/meetings',
   '/partners',
   '/accounts-tracker',
+  '/booking-pi-review-tracker',
+  '/pi-tracker',
   '/sales-calling',
   '/sales-call-audit',
   '/new-order-fms',
@@ -283,6 +285,7 @@ const exemptApiPaths = new Set([
   '/api/sales-call-audit',
   // Scheduled Vercel cron job — handler enforces Bearer $CRON_SECRET
   '/api/cron/sales-call-audit-daily-email',
+  '/api/cron/email-triggers', // Handler verifies local worker secret; hosted execution is disabled.
 ])
 
 // No active API prefix exemptions. `/api/meetings/*` stays behind the signed
