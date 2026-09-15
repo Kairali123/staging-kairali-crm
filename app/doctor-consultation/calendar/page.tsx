@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { DashboardLayout } from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -279,7 +280,8 @@ export default function DoctorConsultationCalendar() {
   }
 
   return (
-    <div className="space-y-6">
+    <DashboardLayout>
+      <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -404,6 +406,7 @@ export default function DoctorConsultationCalendar() {
         {view === "day" && renderDayView()}
       </div>
     </div>
+    </DashboardLayout>
   )
 }
 

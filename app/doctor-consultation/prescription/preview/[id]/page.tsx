@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { DashboardLayout } from "@/components/dashboard-layout"
 import { useParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -123,7 +124,8 @@ export default function PrescriptionPreview() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <DashboardLayout>
+      <div className="min-h-screen bg-gray-50">
       {/* Header - Hidden in print */}
       <div className="bg-white border-b border-gray-200 p-4 print:hidden">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
@@ -320,5 +322,6 @@ export default function PrescriptionPreview() {
         </Card>
       </div>
     </div>
+    </DashboardLayout>
   )
 }

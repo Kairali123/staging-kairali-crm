@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { DashboardLayout } from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -365,7 +366,8 @@ export default function DoctorConsultationOverview() {
   }
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <DashboardLayout>
+      <div className="space-y-6 p-4 md:p-6">
       <div className="space-y-4 mt-6">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full lg:w-auto">
@@ -1099,6 +1101,7 @@ export default function DoctorConsultationOverview() {
         consultation={actionDialog.consultation}
       />
     </div>
+    </DashboardLayout>
   )
 }
 

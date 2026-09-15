@@ -35,9 +35,12 @@ const pagePermissions: Record<string, string> = {
   '/fms/riya-sharma': 'fms.view',
   '/fms/v3': 'fms.view',
   '/doctor-consultation': 'doctor.consultation.view',
+  '/doctor-consultation/report': 'doctor.consultation.view',
+  '/reports/doctor-consultation': 'doctor.consultation.view',
   '/doctor-consultation/calendar': 'doctor.consultation.view',
   '/doctor-consultation/history': 'doctor.consultation.view',
   '/doctor-consultation/prescription/new': 'doctor.consultation.view',
+  '/doctor-consultation/prescription/preview': 'doctor.consultation.view',
   '/marketing-dashboard': 'marketing.view',
   '/marketing-funnel': 'marketing_funnel.view',
   '/marketing/google-ppc': 'marketing_google_report.view',
@@ -45,6 +48,8 @@ const pagePermissions: Record<string, string> = {
   '/google-adword-reports': 'google_adword_report.view',
   '/calls/reports': 'calls_report.view',
   '/sales/reports': 'sales_report.view',
+  '/sales/reports/daily-alert': 'sales_report.view',
+  '/sales/reports/email-trigger-config': 'sales_report.view',
   // `sales_call_audit.view` is page access only — the data itself is gated
   // server-side by `viewSelf`/`viewAll`, so this key deliberately does not name a
   // scope. The email template is a whole-team artifact, so it names `viewAll`.
@@ -66,6 +71,8 @@ const pagePermissions: Record<string, string> = {
   '/voicecall/summary': 'ai_voice_summary.view',
   '/meetings': 'meetings.view',
   '/accounts-tracker': 'accounts_tracker.view',
+  '/booking-pi-review-tracker': 'accounts_tracker.view',
+  '/pi-tracker': 'accounts_tracker.view',
   '/MR-FMS': 'mr-fms.view',
   '/crr-fms': 'crr_fms.view',
   '/voicecall/non-qualified': 'non_qualified.view',
