@@ -5,5 +5,5 @@ export const emailReportTemplates = {
 } as const
 export type EmailReportId = keyof typeof emailReportTemplates
 export function emailConfigHref(id: EmailReportId, scope: string, date: string) {
-  return '/sales/reports/email-trigger-config?' + new URLSearchParams({ report: id, scope, date })
+  return '/settings/automation/email-triggers?' + new URLSearchParams({ report: id, scope, date })
 }

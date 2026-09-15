@@ -2,6 +2,7 @@
 const nextConfig = {
   outputFileTracingIncludes: {
     '/sales/reports/email-trigger-config': ['./docs/email-trigger-config/*.html', './docs/email-trigger-config/*.js'],
+    '/settings/automation/email-triggers': ['./docs/email-trigger-config/*.html', './docs/email-trigger-config/*.js'],
     '/api/daily-sales-report-alert': ['./data/daily-sales-report/*.json'],
   },
   images: {

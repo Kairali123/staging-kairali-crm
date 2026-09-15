@@ -8,7 +8,7 @@ import {nextRun} from '@/lib/email-triggers/schedule'
 export const runtime='nodejs'
 export const dynamic='force-dynamic'
 const headers={'Cache-Control':'private, no-store'}
-function authorized(req:NextRequest){const u=getSessionUser(req);return u&&(hasAdminRole(u,'lower')||hasPermission(u,'all'))?u:null}
+function authorized(req:NextRequest){const u=getSessionUser(req);if(!u)return null;const r=String(u.role||'').trim().toLowerCase();return (r==='super_admin'||r==='super admin')?u:null}
 export async function GET(req:NextRequest){if(!authorized(req))return NextResponse.json({error:'Administrator access required'},{status:403,headers});try{const state=await readState();return NextResponse.json({...state,smtpReady:marketingMailConfig().configured,workerReady:!!state.heartbeat&&Date.now()-Date.parse(state.heartbeat)<120000,sender:marketingMailConfig().user||''},{headers})}catch{return NextResponse.json({error:'Persistent storage unavailable on this server'},{status:503,headers})}}
 export async function POST(req:NextRequest){
  const user=authorized(req);if(!user)return NextResponse.json({error:'Administrator access required'},{status:403,headers})
