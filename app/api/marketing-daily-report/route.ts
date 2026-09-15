@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSessionUser } from '@/lib/authz'
+import { getSessionUser, hasPermission } from '@/lib/authz'
 import { getPool } from '@/lib/db'
 import { reportWindow, reportQueries, combineReport, type AggregateRow } from '@/lib/marketing-report-query'
 import { signReportSnapshot, marketingMailConfig } from '@/lib/marketing-report-email'
@@ -10,8 +10,8 @@ export async function GET(req: NextRequest) {
   const user = getSessionUser(req)
   if (!user) return NextResponse.json({error:'Unauthorized'}, {status:401,headers})
   const role = String(user?.role || '').trim().toLowerCase()
-  const isSuperAdmin = role === 'super_admin' || role === 'super admin'
-  if (!isSuperAdmin) return NextResponse.json({error:'Super administrator access required'}, {status:403,headers})
+  const isSuperAdmin = role === 'super_admin' || role === 'super admin' || user?.permissions?.includes('all')
+  if (!isSuperAdmin && !hasPermission(user, 'marketing_daily_report.view')) return NextResponse.json({error:'Access denied. Permission required.'}, {status:403,headers})
   const date=req.nextUrl.searchParams.get('date')||''
   let window: string[]
   try { window=reportWindow(date) } catch { return NextResponse.json({error:'Use a valid YYYY-MM-DD report date'}, {status:400,headers}) }

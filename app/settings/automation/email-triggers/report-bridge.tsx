@@ -7,7 +7,7 @@ import { companies, exportSalesHTML, type DailySalesReport } from '@/lib/daily-s
 import { reportExportHTML, type ReportData } from '@/lib/marketing-daily-report'
 import { emailReportTemplates, type EmailReportId } from '@/lib/email-report-template'
 
-export default function EmailConfigBridge({ document }: { document: string }) {
+export default function EmailConfigBridge({ document: documentHtml }: { document: string }) {
   const { user, isLoading } = useAuth()
   const router = useRouter()
   const roleStr = String(user?.role || '').toLowerCase().trim()
@@ -25,7 +25,8 @@ export default function EmailConfigBridge({ document }: { document: string }) {
     let initializing = false
     function send(data: object) { frame.current?.contentWindow?.postMessage(data, '*') }
     const listener = async (event: MessageEvent) => {
-      if (event.source !== frame.current?.contentWindow || event.origin !== 'null') return
+      if (event.source !== frame.current?.contentWindow) return
+      if (event.origin !== 'null' && event.origin !== window.location.origin && event.origin !== '') return
       const message = event.data
       if (message?.type === 'email-config-ready') {
         if (initializing) return
@@ -77,16 +78,35 @@ export default function EmailConfigBridge({ document }: { document: string }) {
       }
     }
     window.addEventListener('message', listener)
-    if (frame.current) frame.current.srcdoc = document
+    if (frame.current && frame.current.srcdoc !== documentHtml) {
+      frame.current.srcdoc = documentHtml
+    }
     return () => { request?.abort(); window.removeEventListener('message', listener) }
-  }, [document])
+  }, [documentHtml])
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex h-64 items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        </div>
+      </DashboardLayout>
+    )
+  }
+
   if (!isSuperAdmin) {
     return null
   }
 
   return (
     <DashboardLayout>
-      <iframe ref={frame} title="Email Triggering Config" sandbox="allow-scripts allow-forms" style={{ width: '100%', height: 'calc(100vh - 90px)', minHeight: 700, border: 0 }} />
+      <iframe
+        ref={frame}
+        srcDoc={documentHtml}
+        title="Email Triggering Config"
+        sandbox="allow-scripts allow-forms"
+        style={{ width: '100%', height: 'calc(100vh - 90px)', minHeight: 700, border: 0 }}
+      />
     </DashboardLayout>
   )
 }
