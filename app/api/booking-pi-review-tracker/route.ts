@@ -37,11 +37,22 @@ async function ensureTables() {
       generated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_booking_date_reservation (booking_date, reservation_id),
       INDEX idx_booking_date (booking_date),
       INDEX idx_reservation_id (reservation_id),
       INDEX idx_sales_doer (sales_doer)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `)
+
+  // Safe migration: add the unique key if table already existed without it
+  try {
+    await pool.query(`
+      ALTER TABLE booking_pi_records
+      ADD UNIQUE KEY uk_booking_date_reservation (booking_date, reservation_id)
+    `)
+  } catch (_) {
+    // Ignore: key already exists or duplicate rows present (handled at read time)
+  }
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS booking_pi_reviews (
@@ -62,6 +73,29 @@ async function ensureTables() {
       INDEX idx_reservation (reservation_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `)
+
+}
+
+// ─── Live FX rates from conversion_ratio table ────────────────────────────────
+// Reads the most-recent row (by date DESC, id DESC).
+// The table stores:  usd  = how many INR per 1 USD
+//                    euro = how many INR per 1 EUR
+// Falls back to safe hardcoded defaults only if the table is empty / unreachable.
+async function getConversionRates(pool: any): Promise<{ usdRate: number; eurRate: number }> {
+  try {
+    const [rows]: any = await pool.query(
+      `SELECT usd, euro FROM conversion_ratio ORDER BY date DESC, id DESC LIMIT 1`
+    )
+    if (Array.isArray(rows) && rows.length > 0) {
+      const usdRate = Number(rows[0].usd) > 0 ? Number(rows[0].usd) : 85.74
+      const eurRate = Number(rows[0].euro) > 0 ? Number(rows[0].euro) : 89.26
+      return { usdRate, eurRate }
+    }
+  } catch (e) {
+    console.warn('[PI tracker] conversion_ratio lookup failed — using fallback rates', e)
+  }
+  // Fallback: last-known safe rates
+  return { usdRate: 85.74, eurRate: 89.26 }
 }
 
 function getTodayIST(): string {
@@ -89,7 +123,39 @@ export async function GET(req: NextRequest) {
     await ensureTables()
     const pool = await getPool()
 
+    // Fetch live FX rates from conversion_ratio table (most-recent row by date)
+    const { usdRate, eurRate } = await getConversionRates(pool)
+
+    // Stale-row correction: fix booking_pi_records rows that were stored with
+    // fx_rate=1 (unconverted). Runs on every request but WHERE clause makes it a no-op
+    // once rows are corrected. Also normalises 'EURO'/'DOLLAR' → ISO codes.
+    await pool.query(
+      `UPDATE booking_pi_records
+       SET fx_rate                 = ?,
+           currency                = 'USD',
+           original_invoice_amount = invoice_amount,
+           invoice_amount          = ROUND(invoice_amount * ?, 2),
+           updated_at              = CURRENT_TIMESTAMP
+       WHERE currency IN ('USD', 'DOLLAR', 'DOLLARS', 'US DOLLAR')
+         AND (fx_rate IS NULL OR fx_rate <= 1.0001)
+         AND invoice_amount > 0`,
+      [usdRate, usdRate]
+    )
+    await pool.query(
+      `UPDATE booking_pi_records
+       SET fx_rate                 = ?,
+           currency                = 'EUR',
+           original_invoice_amount = invoice_amount,
+           invoice_amount          = ROUND(invoice_amount * ?, 2),
+           updated_at              = CURRENT_TIMESTAMP
+       WHERE currency IN ('EUR', 'EURO')
+         AND (fx_rate IS NULL OR fx_rate <= 1.0001)
+         AND invoice_amount > 0`,
+      [eurRate, eurRate]
+    )
+
     const { searchParams } = new URL(req.url)
+
     let date = searchParams.get('date') || getTodayIST()
 
     // 1. Fetch records from booking_pi_records for the selected date
@@ -98,8 +164,10 @@ export async function GET(req: NextRequest) {
       [date]
     )
 
-    // 2. If no records exist in booking_pi_records for this date, seed/import from ktahv_bookings_fms_v3_part1
-    if (!rows || rows.length === 0) {
+    // 2. Always sync/upsert from ktahv_bookings_fms_v3_part1 so clicking "Sync from SQL"
+    //    refreshes stale values (e.g. wrong fx_rate=1 from earlier seeds).
+    //    ON DUPLICATE KEY UPDATE in the INSERT ensures no duplicates are created.
+    {
       const [sourceRows]: any = await pool.query(
         `SELECT
           nb.reservation_id,
@@ -134,10 +202,17 @@ export async function GET(req: NextRequest) {
           const checkIn = formatDateStr(sr.arrival_date)
           const checkOut = formatDateStr(sr.departure_date)
           const salesDoer = sr.booking_taken_by || 'Unassigned'
-          const invAmt = parseFloat(sr.invoice_amount) || 0
-          const curr = (sr.currency || 'INR').trim().toUpperCase()
-          const fxRate = curr === 'EUR' ? 89.26 : curr === 'USD' ? 85.74 : 1.0
-          const origAmt = curr !== 'INR' ? Math.round(invAmt / fxRate) : invAmt
+          // source invoice_amount is in the booking's native currency (USD/EUR/INR)
+          // origAmt = source amount in foreign currency
+          // invAmtINR = converted to INR for display
+          const sourceAmt = parseFloat(sr.invoice_amount) || 0
+          const rawCurr = (sr.currency || 'INR').trim().toUpperCase()
+          const curr = rawCurr === 'EURO' ? 'EUR'
+                     : rawCurr === 'DOLLAR' || rawCurr === 'DOLLARS' || rawCurr === 'US DOLLAR' ? 'USD'
+                     : rawCurr
+          const fxRate = curr === 'EUR' ? eurRate : curr === 'USD' ? usdRate : 1.0
+          const origAmt = sourceAmt                                       // original foreign amount
+          const invAmtINR = curr !== 'INR' ? Math.round(sourceAmt * fxRate) : sourceAmt  // in INR
           const piLink = sr.invoice_url_new || sr.nb_bvs_pi_link || ''
 
           let statusStr = 'Current'
@@ -151,20 +226,50 @@ export async function GET(req: NextRequest) {
           const amendReason = sr.nb_bvs_doer_remarks || null
           const eventContext = statusStr === 'Cancelled' ? 'Cancelled Booking' : statusStr === 'Amended' ? 'Amended Booking' : 'New Booking'
 
-          await pool.query(
-            `INSERT INTO booking_pi_records (
-              booking_date, reservation_id, pi_number, guest, booking_status,
-              check_in_date, check_out_date, sales_doer, invoice_amount, currency,
-              original_invoice_amount, fx_rate, previous_invoice_amount, status,
-              cancellation_reason, amendment_reason, event_context, pi_link, generated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.00, ?, ?, ?, ?, ?, NOW())`,
+          // Step 1: UPDATE existing record — always refreshes fx_rate/amounts on every Sync
+          // This works even without a unique key on the table
+          const [updateResult]: any = await pool.query(
+            `UPDATE booking_pi_records
+             SET invoice_amount          = ?,
+                 currency                = ?,
+                 original_invoice_amount = ?,
+                 fx_rate                 = ?,
+                 status                  = ?,
+                 booking_status          = ?,
+                 cancellation_reason     = ?,
+                 amendment_reason        = ?,
+                 event_context           = ?,
+                 pi_link                 = ?,
+                 sales_doer              = ?,
+                 check_in_date           = ?,
+                 check_out_date          = ?,
+                 updated_at              = CURRENT_TIMESTAMP
+             WHERE booking_date = ? AND reservation_id = ?`,
             [
-              date, resId, piNum, guest, bStatus,
-              checkIn, checkOut, salesDoer, invAmt, curr,
-              origAmt, fxRate, statusStr,
-              cancelReason, amendReason, eventContext, piLink
+              invAmtINR, curr, origAmt, fxRate, statusStr, bStatus,
+              cancelReason, amendReason, eventContext, piLink,
+              salesDoer, checkIn, checkOut,
+              date, resId
             ]
           )
+
+          // Step 2: INSERT only if no existing row was found (affectedRows === 0)
+          if (updateResult.affectedRows === 0) {
+            await pool.query(
+              `INSERT INTO booking_pi_records (
+                booking_date, reservation_id, pi_number, guest, booking_status,
+                check_in_date, check_out_date, sales_doer, invoice_amount, currency,
+                original_invoice_amount, fx_rate, previous_invoice_amount, status,
+                cancellation_reason, amendment_reason, event_context, pi_link, generated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.00, ?, ?, ?, ?, ?, NOW())`,
+              [
+                date, resId, piNum, guest, bStatus,
+                checkIn, checkOut, salesDoer, invAmtINR, curr,
+                origAmt, fxRate, statusStr,
+                cancelReason, amendReason, eventContext, piLink
+              ]
+            )
+          }
         }
 
         // Re-query after insertion
@@ -176,7 +281,20 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 3. Fetch all review statuses from booking_pi_reviews
+    // 3. Deduplicate by reservation_id — keep only the latest row per booking
+    // (safety net for any pre-existing duplicates before the unique constraint was applied)
+    if (Array.isArray(rows)) {
+      const seen = new Map<string, any>()
+      for (const r of rows) {
+        // rows are already sorted by generated_at DESC, id DESC — first seen = newest
+        if (!seen.has(r.reservation_id)) {
+          seen.set(r.reservation_id, r)
+        }
+      }
+      rows = Array.from(seen.values())
+    }
+
+    // 4. Fetch all review statuses from booking_pi_reviews
     const [reviews]: any = await pool.query(`SELECT * FROM booking_pi_reviews`)
     const reviewMap: Record<string, any> = {}
     if (Array.isArray(reviews)) {

@@ -194,7 +194,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "AI Voice Lead Qual.", icon: Phone, permission: "ai_voice_menu.view" },
     { name: "DialShree Lead Qual.", icon: PhoneCall, permission: "dialshree_menu.view" },
     { name: "KTAHV Accounts Tracker", href: "/accounts-tracker", icon: Receipt, permission: "accounts_tracker.view" },
-    { name: "Booking PI Review Tracker", href: "/booking-pi-review-tracker", icon: Receipt, permission: "accounts_tracker.view" },
     { name: "Partner Onboarding System", href: "/partners", icon: Building2, permission: "partners.view" },
     { name: "KAPPL New Order", icon: FileText, permission: "new-order-fms.view" },
     { name: "MR FMS", href: "/MR-FMS", icon: FileText, permission: "mr-fms.view" },
@@ -228,6 +227,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const fmsSubMenu = [
     { name: "KTAHV Booking FMS", href: "/fms/bookings/team", icon: Users, permission: "team.view", description: "KTAHV booking management" },
     { name: "Villa Raag Booking FMS", href: "/fms/bookings/villa-raag", icon: Home, permission: "villa_raag.view", description: "Villa Raag FMS" },
+    { name: "Booking PI Review Tracker", href: "/fms/booking-pi-review-tracker", icon: Receipt, superAdminOnly: true, description: "Daily PI review & accounts audit" },
   ]
 
   const employeeSubMenu = [
@@ -283,7 +283,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const searchableItems: any[] = []
   filteredNavigation.forEach((item) => { if (item.href) searchableItems.push({ name: item.name, href: item.href, description: item.name, icon: item.icon }) })
-  if (hasPermission("fms.view")) fmsSubMenu.filter((s) => !("permission" in s) || hasPermission(s.permission)).forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
+  if (hasPermission("fms.view")) fmsSubMenu.filter((s) => {
+    if ("superAdminOnly" in s && s.superAdminOnly) return isSuperAdmin
+    if ("permission" in s && typeof s.permission === "string") return hasPermission(s.permission)
+    return true
+  }).forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
   if (hasPermission("new-order-fms.view")) kapplNewOrderSubMenu.filter((s) => !("permission" in s) || hasPermission(s.permission)).forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.name, icon: item.icon }))
   if (hasPermission("marketing.view") || isSuperAdmin) marketingSubMenu.filter(isMarketingItemVisible).forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
   if (hasPermission("employee.tools")) employeeSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
@@ -300,16 +304,21 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const renderNavigationItem = (item: any, isMobile = false) => {
     if (item.name === "FMS Systems") {
+      const isFmsActive = pathname.startsWith("/fms") || fmsSubMenu.some((sub) => sub.href === pathname)
       return (
         <div key={item.name}>
-          <button onClick={() => setFmsExpanded(!fmsExpanded)} className={`group flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${pathname.startsWith("/fms") ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md" : "text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"}`}>
-            <item.icon className={`mr-3 h-5 w-5 ${pathname.startsWith("/fms") ? "text-white" : "text-blue-500"}`} />
+          <button onClick={() => setFmsExpanded(!fmsExpanded)} className={`group flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${isFmsActive ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md" : "text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"}`}>
+            <item.icon className={`mr-3 h-5 w-5 ${isFmsActive ? "text-white" : "text-blue-500"}`} />
             {item.name}
-            {fmsExpanded ? <ChevronDown className={`ml-auto h-4 w-4 ${pathname.startsWith("/fms") ? "text-white" : "text-gray-500"}`} /> : <ChevronRight className={`ml-auto h-4 w-4 ${pathname.startsWith("/fms") ? "text-white" : "text-gray-500"}`} />}
+            {fmsExpanded ? <ChevronDown className={`ml-auto h-4 w-4 ${isFmsActive ? "text-white" : "text-gray-500"}`} /> : <ChevronRight className={`ml-auto h-4 w-4 ${isFmsActive ? "text-white" : "text-gray-500"}`} />}
           </button>
           {fmsExpanded && (
             <div className="ml-6 mt-2 space-y-1">
-              {fmsSubMenu.filter((s) => !("permission" in s) || hasPermission(s.permission)).map((subItem) => (
+              {fmsSubMenu.filter((s) => {
+                if ("superAdminOnly" in s && s.superAdminOnly) return isSuperAdmin
+                if ("permission" in s && typeof s.permission === "string") return hasPermission(s.permission)
+                return true
+              }).map((subItem) => (
                 <Link key={subItem.name} href={subItem.href} className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${pathname === subItem.href ? "bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 border-l-4 border-blue-500 shadow-sm" : "text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"}`} onClick={() => isMobile && setSidebarOpen(false)}>
                   <subItem.icon className={`mr-3 h-4 w-4 ${pathname === subItem.href ? "text-blue-600" : "text-gray-500"}`} />
                   {subItem.name}
@@ -320,6 +329,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </div>
       )
     }
+
 
     if (item.name === "Marketing Reports") {
       const isMarketingActive = pathname.startsWith("/marketing") || marketingSubMenu.some((sub) => sub.href === pathname)

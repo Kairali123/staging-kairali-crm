@@ -74,7 +74,7 @@ const pagePermissions: Record<string, string> = {
   '/voicecall/summary': 'ai_voice_summary.view',
   '/meetings': 'meetings.view',
   '/accounts-tracker': 'accounts_tracker.view',
-  '/booking-pi-review-tracker': 'accounts_tracker.view',
+  '/fms/booking-pi-review-tracker': 'accounts_tracker.view',
   '/pi-tracker': 'accounts_tracker.view',
   '/MR-FMS': 'mr-fms.view',
   '/crr-fms': 'crr_fms.view',
@@ -157,6 +157,9 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
       '/settings/automation',
       '/settings/automation/email-triggers',
       '/sales/reports/email-trigger-config',
+      '/fms/booking-pi-review-tracker',
+      '/booking-pi-review-tracker',
+      '/pi-tracker',
     ]
     if (
       superAdminOnlyRoutes.includes(cleanPath) ||
