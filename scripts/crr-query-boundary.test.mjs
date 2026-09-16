@@ -13,6 +13,7 @@ let lastExecutedQueries = [];
 let mockProcessRows = [];
 let mockCallingRows = [];
 let mockTrackerRows = [];
+let mockTrackerPart2Rows = [];
 let mockCheckinRows = [];
 let mockPermRows = [];
 
@@ -21,6 +22,7 @@ const mockPool = {
         lastExecutedQueries.push({ sql: sql.replace(/\s+/g, ' ').trim(), values });
         if (sql.includes('KTAHV_CRR_Process_FMS')) return [mockProcessRows];
         if (sql.includes('KTAHV_CRR_Calling_FMS')) return [mockCallingRows];
+        if (sql.includes('ktahv_guest_tracker_part2')) return [mockTrackerPart2Rows];
         if (sql.includes('ktahv_guest_tracker')) return [mockTrackerRows];
         if (sql.includes('ktahv_checkinmasterfms')) return [mockCheckinRows];
         if (sql.includes('user_role_permissions')) return [mockPermRows];
@@ -56,6 +58,7 @@ test('CRR Query Boundary & Security Contract Suite', async (t) => {
         mockProcessRows = [];
         mockCallingRows = [];
         mockTrackerRows = [];
+        mockTrackerPart2Rows = [];
         mockCheckinRows = [];
         mockPermRows = [];
     });
@@ -762,5 +765,97 @@ test('CRR Query Boundary & Security Contract Suite', async (t) => {
                 `Stage ${st} with a real plannedDate must NOT be locked by the missing-planned gate`
             );
         }
+    });
+
+    await t.test('21. Stages 9, 10, and 11 two-phase to_show model', async () => {
+        mockProcessRows = [{
+            id: 1,
+            timestamp: '2026-09-02 14:00:00',
+            check_in_date: '2026-09-05',
+            check_out_date: '2026-09-10',
+            client_name: 'Test Client',
+            booking_id: 'BK-999',
+            uid: 'UID-999',
+            reservation_id: 'RES-999',
+            booking_status: 'Confirmed'
+        }];
+        // Case A: Data present but to_show = 'false'
+        mockTrackerRows = [{
+            booking_id: 'BK-999',
+            arrival_planned: '2026-09-05',
+            arrival_actual: '2026-09-05',
+            arrival_doer_name: 'Driver 1',
+            departure_planned: '2026-09-10',
+            departure_actual: '2026-09-10',
+            departure_doer_name: 'Driver 2',
+            stage11_planned: '2026-09-05',
+            stage11_actual: '2026-09-05',
+            doctor_assigned_to_the_client: 'Dr. Rahul R',
+            stage11_to_show: 'false',
+        }];
+        mockTrackerPart2Rows = [{
+            booking_id: 'BK-999',
+            stage9_to_show: 'false',
+            stage10_to_show: 'false',
+        }];
+
+        const reqA = createMockRequest('http://localhost:3000/api/crr-calling/bookings', 'valid');
+        const resA = await GET(reqA);
+        assert.equal(resA.status, 200);
+        const jsonA = await resA.json();
+        const guestA = jsonA.data[0];
+
+        const s9A = guestA.stages.find(s => s.stage === 9);
+        assert.equal(s9A.toShow, false);
+        assert.equal(s9A.completed, false);
+        assert.equal(s9A.submitted, true);
+
+        const s10A = guestA.stages.find(s => s.stage === 10);
+        assert.equal(s10A.toShow, false);
+        assert.equal(s10A.completed, false);
+        assert.equal(s10A.submitted, true);
+
+        const s11A = guestA.stages.find(s => s.stage === 11);
+        assert.equal(s11A.toShow, false);
+        assert.equal(s11A.completed, false);
+        assert.equal(s11A.submitted, true);
+
+        // Case B: to_show = 'true'
+        mockTrackerRows = [{
+            booking_id: 'BK-999',
+            arrival_planned: '2026-09-05',
+            arrival_actual: '2026-09-05',
+            arrival_doer_name: 'Driver 1',
+            departure_planned: '2026-09-10',
+            departure_actual: '2026-09-10',
+            departure_doer_name: 'Driver 2',
+            stage11_planned: '2026-09-05',
+            stage11_actual: '2026-09-05',
+            doctor_assigned_to_the_client: 'Dr. Rahul R',
+            stage11_to_show: 'true',
+        }];
+        mockTrackerPart2Rows = [{
+            booking_id: 'BK-999',
+            stage9_to_show: 'true',
+            stage10_to_show: 'true',
+        }];
+
+        const reqB = createMockRequest('http://localhost:3000/api/crr-calling/bookings', 'valid');
+        const resB = await GET(reqB);
+        assert.equal(resB.status, 200);
+        const jsonB = await resB.json();
+        const guestB = jsonB.data[0];
+
+        const s9B = guestB.stages.find(s => s.stage === 9);
+        assert.equal(s9B.toShow, true);
+        assert.equal(s9B.completed, true);
+
+        const s10B = guestB.stages.find(s => s.stage === 10);
+        assert.equal(s10B.toShow, true);
+        assert.equal(s10B.completed, true);
+
+        const s11B = guestB.stages.find(s => s.stage === 11);
+        assert.equal(s11B.toShow, true);
+        assert.equal(s11B.completed, true);
     });
 });

@@ -33,7 +33,7 @@ export interface StageInfo {
     plannedDate: string | null;
     completed: boolean;   // true only when that stage's Status column === "Done"
     actualDate?: string | null;      // completion timestamp from actualCol
-    toShow?: boolean;                // KTAHV_CRR_Calling_FMS.to_show; only populated for stages 1,5,6,7
+    toShow?: boolean;                // Two-phase to_show (stages 1, 5, 6, 7, 9, 10, 11)
     submitted?: boolean;             // true if stage has saved/submitted data in MySQL
     savedData?: Record<string, string | number | null> | null; // saved form values for prefill
     stageKey?: string | null;        // KTAHV_CRR_Calling_FMS.stage_key (e.g. ${uid}_Stage1)

@@ -237,7 +237,7 @@ export async function GET(req: NextRequest) {
         );
 
         // 3. Concurrently fetch all related sub-queries in parallel with explicit projections
-        const [callingResult, trackerResult, checkinResult, permResult] = await Promise.all([
+        const [callingResult, trackerResult, trackerPart2Result, checkinResult, permResult] = await Promise.all([
             uids.length > 0
                 ? pool.query<any[]>(
                     `SELECT id, uid, stage_key, call_purpose, planned, actual, to_show, updated_at, timestamp,
@@ -258,11 +258,24 @@ export async function GET(req: NextRequest) {
                             client_arrival_data_upload_remarks, departure_planned, departure_actual,
                             departure_doer_name, client_departure_data_upload_remarks,
                             doctor_assigned_to_the_client, stage11_change_the_doctor_if_required,
-                            stage11_planned, stage11_actual, stage11_status, stage11_timestamp, updated_at
+                            stage11_planned, stage11_actual, stage11_status, stage11_timestamp, updated_at,
+                            stage11_to_show
                      FROM ktahv_guest_tracker
                      WHERE booking_id IN (?)`,
                     [bookingIds]
                   )
+                : Promise.resolve([[]] as any),
+            bookingIds.length > 0
+                ? pool.query<any[]>(
+                    `SELECT id, booking_id, stage9_to_show, stage10_to_show
+                     FROM ktahv_guest_tracker_part2
+                     WHERE booking_id IN (?)
+                     ORDER BY id ASC`,
+                    [bookingIds]
+                  ).catch((e) => {
+                      console.warn("[crr-calling/bookings] Failed to fetch ktahv_guest_tracker_part2:", e);
+                      return [[]] as any;
+                  })
                 : Promise.resolve([[]] as any),
             checkinKeys.length > 0
                 ? pool.query<any[]>(
@@ -303,6 +316,16 @@ export async function GET(req: NextRequest) {
         const tRows = trackerResult[0] || [];
         for (const tr of tRows) {
             if (tr.booking_id) trackerMap.set(String(tr.booking_id).trim(), tr);
+        }
+
+        const trackerPart2Map = new Map<string, any>();
+        const t2Rows = trackerPart2Result?.[0] || [];
+        for (const tr2 of t2Rows) {
+            if (tr2.booking_id) {
+                const bId = String(tr2.booking_id).trim();
+                trackerPart2Map.set(bId, tr2);
+                trackerPart2Map.set(bId.toLowerCase(), tr2);
+            }
         }
 
         // 5. Build CheckinMaster map
@@ -608,10 +631,14 @@ export async function GET(req: NextRequest) {
                 stageKey: uid ? `${uid}_Stage8` : null,
             };
 
-            // Stage 9: Driver Assignment – Arrival Pickup (Guest Tracker)
+            const tracker2 = trackerPart2Map.get(bookingId) || trackerPart2Map.get(bookingId.toLowerCase());
+
+            // Stage 9: Driver Assignment – Arrival Pickup (Guest Tracker & Tracker Part 2)
             const s9Planned = tracker?.arrival_planned || row.stage1_call_date_planned || null;
             const s9Actual = tracker?.arrival_actual || null;
             const s9DriverName = tracker?.arrival_doer_name && tracker.arrival_doer_name !== bookingTakenBy ? tracker.arrival_doer_name : "";
+            const s9ToShow = parseToShow(tracker2?.stage9_to_show ?? tracker?.stage9_to_show);
+            const hasS9Data = Boolean(s9Actual || s9DriverName || tracker?.client_arrival_data_upload_remarks);
             const s9Saved = tracker ? {
                 pickupRequired: tracker.arrival_planned || s9DriverName ? "Yes" : "",
                 driverName: s9DriverName,
@@ -625,10 +652,12 @@ export async function GET(req: NextRequest) {
                 stageKey: uid ? `${uid}_Stage9` : null,
             } : null;
 
-            // Stage 10: Driver Assignment – Departure Drop (Guest Tracker)
+            // Stage 10: Driver Assignment – Departure Drop (Guest Tracker & Tracker Part 2)
             const s10Planned = tracker?.departure_planned || row.stage6_call_date_planned || null;
             const s10Actual = tracker?.departure_actual || null;
             const s10DriverName = tracker?.departure_doer_name && tracker.departure_doer_name !== bookingTakenBy ? tracker.departure_doer_name : "";
+            const s10ToShow = parseToShow(tracker2?.stage10_to_show ?? tracker?.stage10_to_show);
+            const hasS10Data = Boolean(s10Actual || s10DriverName || tracker?.client_departure_data_upload_remarks);
             const s10Saved = tracker ? {
                 dropRequired: tracker.departure_planned || s10DriverName ? "Yes" : "",
                 driverName: s10DriverName,
@@ -643,16 +672,14 @@ export async function GET(req: NextRequest) {
             } : null;
 
             // Stage 11: Guest Requirement Verification (Guest Tracker)
-            // Planned/actual come from the tracker's own stage11_* columns. Completion is
-            // stage11_actual being set - NOT "a doctor is assigned", which marked rows
-            // complete with no actual date and left actual-dated rows sitting in Pending.
-            // No stage11_planned (i.e. no guest-tracker row) => stage 11 was never
-            // scheduled for this booking, so it is not a pending task. Hence no
-            // fallback to arrival_planned / check_in_date here.
+            // Planned/actual come from the tracker's own stage11_* columns.
+            // Two-phase: complete only when (actual or submitted data) + to_show=true.
             const s11Planned = tracker?.stage11_planned || null;
             const s11Doctor = tracker?.doctor_assigned_to_the_client || tracker?.stage11_change_the_doctor_if_required || row.stage9_doer || "";
             const s11Actual = tracker?.stage11_actual || null;
-            const s11Completed = Boolean(s11Actual) || !s11Planned;
+            const s11ToShow = parseToShow(tracker?.stage11_to_show);
+            const hasS11Data = Boolean(s11Actual || s11Doctor || tracker?.stage11_status);
+            const s11Completed = (!s11Planned && !hasS11Data) ? true : (Boolean(s11Actual || hasS11Data) && s11ToShow);
             const s11Saved = tracker ? {
                 doctorAssignedToClient: s11Doctor,
                 email: getDoctorEmail(s11Doctor),
@@ -686,10 +713,10 @@ export async function GET(req: NextRequest) {
                 // Stage 7: two-phase
                 { stage: 7, available: true, locked: isLockedDate(s7Planned, todayStr), plannedDate: formatDMYDate(s7Planned), completed: Boolean(s7Actual || hasS7Data) && s7ToShow, toShow: s7ToShow, submitted: hasS7Data, actualDate: formatDMYDate(s7Actual) || (hasS7Data ? formatDMYDate(c7?.updated_at || c7?.timestamp) : null), savedData: s7Saved, stageKey: c7?.stage_key || (uid ? `${uid}_Stage7` : null) },
                 { stage: 8, available: true, locked: isLockedDate(s8Planned, todayStr), plannedDate: formatDMYDate(s8Planned), completed: s8Completed, actualDate: s8ActualDateDisplay, savedData: s8Saved, stageKey: uid ? `${uid}_Stage8` : null },
-                // Stages 9,10,11 — excluded from to_show rule, single-phase as before
-                { stage: 9, available: true, locked: isLockedDate(s9Planned, todayStr), plannedDate: formatDMYDate(s9Planned), completed: Boolean(s9Actual), actualDate: formatDMYDate(s9Actual), savedData: s9Saved, stageKey: uid ? `${uid}_Stage9` : null },
-                { stage: 10, available: true, locked: isLockedDate(s10Planned, todayStr), plannedDate: formatDMYDate(s10Planned), completed: Boolean(s10Actual), actualDate: formatDMYDate(s10Actual), savedData: s10Saved, stageKey: uid ? `${uid}_Stage10` : null },
-                { stage: 11, available: true, locked: isLockedDate(s11Planned, todayStr), plannedDate: formatDMYDate(s11Planned), completed: s11Completed, actualDate: formatDMYDate(s11Actual), savedData: s11Saved, stageKey: uid ? `${uid}_Stage11` : null },
+                // Stages 9, 10, 11 — two-phase with to_show
+                { stage: 9, available: true, locked: isLockedDate(s9Planned, todayStr), plannedDate: formatDMYDate(s9Planned), completed: Boolean(s9Actual || hasS9Data) && s9ToShow, toShow: s9ToShow, submitted: hasS9Data, actualDate: formatDMYDate(s9Actual), savedData: s9Saved, stageKey: uid ? `${uid}_Stage9` : null },
+                { stage: 10, available: true, locked: isLockedDate(s10Planned, todayStr), plannedDate: formatDMYDate(s10Planned), completed: Boolean(s10Actual || hasS10Data) && s10ToShow, toShow: s10ToShow, submitted: hasS10Data, actualDate: formatDMYDate(s10Actual), savedData: s10Saved, stageKey: uid ? `${uid}_Stage10` : null },
+                { stage: 11, available: true, locked: isLockedDate(s11Planned, todayStr), plannedDate: formatDMYDate(s11Planned), completed: s11Completed, toShow: s11ToShow, submitted: hasS11Data, actualDate: formatDMYDate(s11Actual), savedData: s11Saved, stageKey: uid ? `${uid}_Stage11` : null },
             ];
 
             return {
