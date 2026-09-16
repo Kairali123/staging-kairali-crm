@@ -315,27 +315,30 @@ export async function GET(req: NextRequest) {
                 // ── BRANCH 2: from= & to= (date-range, server-side) ──────────
             } else if (useRange) {
 
-                // fromRaw = "2025-11-01", toRaw = "2025-11-15"
-                // Use IST boundaries: 00:00:00 → 23:59:59 on those calendar days
+                // fromRaw = "2026-09-15", toRaw = "2026-09-15"
+                // IST boundaries: from 00:00:00 on start date to next day 00:00:00
                 const fromStr = `${fromRaw} 00:00:00`
-                const toStr = `${toRaw}   23:59:59`
+                const toDateObj = new Date(`${toRaw}T00:00:00`)
+                toDateObj.setDate(toDateObj.getDate() + 1)
+                const pad = (n: number) => String(n).padStart(2, '0')
+                const toStr = `${toDateObj.getFullYear()}-${pad(toDateObj.getMonth() + 1)}-${pad(toDateObj.getDate())} 00:00:00`
 
                 const [countRows]: any = await connection.query(`
                     SELECT COUNT(DISTINCT m.lead_id) as total
                     FROM master_buffer m
                     INNER JOIN staging_buffer_new s
                       ON m.lead_id = s.Lead_id
-                    WHERE m.Timestamp BETWEEN ? AND ?
-                `, [fromStr, toStr])
+                    WHERE (m.Date_Time BETWEEN ? AND ? OR ((m.Date_Time IS NULL OR m.Date_Time = '' OR m.Date_Time = '0000-00-00 00:00:00') AND m.Timestamp BETWEEN ? AND ?))
+                `, [fromStr, toStr, fromStr, toStr])
                 total = countRows[0].total
 
                 const [result]: any = await connection.query(
                     `SELECT * FROM (${INNER_QUERY}
-                    WHERE m.Timestamp BETWEEN ? AND ?
+                    WHERE (m.Date_Time BETWEEN ? AND ? OR ((m.Date_Time IS NULL OR m.Date_Time = '' OR m.Date_Time = '0000-00-00 00:00:00') AND m.Timestamp BETWEEN ? AND ?))
                     ) t WHERE t.rn = 1
                     ORDER BY t.Timestamp DESC
                     LIMIT ? OFFSET ?
-                    `, [fromStr, toStr, limit, offset])
+                    `, [fromStr, toStr, fromStr, toStr, limit, offset])
 
                 rows = result
 
