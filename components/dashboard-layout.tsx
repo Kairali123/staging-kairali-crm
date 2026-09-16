@@ -133,7 +133,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (pathname.startsWith("/employee")) setEmployeeExpanded(true)
     if (pathname.startsWith("/marketing") || pathname === "/google-adword-reports" || pathname === "/good-lead-leakage") setMarketingExpanded(true)
     if (pathname.startsWith("/doctor-consultation")) setDoctorConsultationExpanded(true)
-    if (pathname.startsWith("/sales")) setSalesExpanded(true)
+    if (pathname.startsWith("/sales") || pathname.startsWith("/sales-calling")) setSalesExpanded(true)
     if (pathname.startsWith("/voicecall")) setVoiceCallExpanded(true)
     if (pathname.startsWith("/dialShree") || pathname.startsWith("/dialshree")) setDialShreeExpanded(true)
     if (pathname.startsWith("/meetings")) setMeetingsExpanded(true)
@@ -276,7 +276,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       return isSuperAdmin
     }
     if (item.name === "Sales Reports") {
-      return isSuperAdmin || user?.permissions?.includes("all") || hasPermission("sales_report.view") || hasPermission("sales_calling.view")
+      return isSuperAdmin || user?.permissions?.includes("all") || salesReportsSubMenu.some(isSalesItemVisible)
     }
     return user?.permissions?.includes("all") || (item.permission && hasPermission(item.permission))
   })
@@ -292,7 +292,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   if (hasPermission("marketing.view") || isSuperAdmin) marketingSubMenu.filter(isMarketingItemVisible).forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
   if (hasPermission("employee.tools")) employeeSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
   if (hasPermission("doctor.consultation.view")) doctorConsultationSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
-  if (hasPermission("sales_report.view") || hasPermission("sales_calling.view") || isSuperAdmin) salesReportsSubMenu.filter(isSalesItemVisible).forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
+  if (isSuperAdmin || user?.permissions?.includes("all") || salesReportsSubMenu.some(isSalesItemVisible)) salesReportsSubMenu.filter(isSalesItemVisible).forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
   if (isSuperAdmin) {
     searchableItems.push({ name: "Automation Settings", href: "/settings/automation", description: "Automation settings and modules hub", icon: Cpu })
     searchableItems.push({ name: "Email Triggers", href: "/settings/automation/email-triggers", description: "Scheduled email trigger configuration", icon: Mail })
@@ -399,7 +399,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     }
 
     if (item.name === "Sales Reports") {
-      const isSalesActive = pathname.startsWith("/sales") || salesReportsSubMenu.some((sub) => sub.href === pathname)
+      const visibleSubMenu = salesReportsSubMenu.filter(isSalesItemVisible)
+      if (visibleSubMenu.length === 0) return null
+      const isSalesActive = visibleSubMenu.some((sub) => pathname === sub.href || (sub.href !== "/" && pathname.startsWith(sub.href)))
       return (
         <div key={item.name}>
           <button onClick={() => setSalesExpanded(!salesExpanded)} className={`group flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${isSalesActive ? "bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-md" : "text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"}`}>
@@ -409,7 +411,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </button>
           {salesExpanded && (
             <div className="ml-6 mt-2 space-y-1">
-              {salesReportsSubMenu.filter(isSalesItemVisible).map((subItem) => (
+              {visibleSubMenu.map((subItem) => (
                 <Link key={subItem.name} href={subItem.href} className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${pathname === subItem.href ? "bg-gradient-to-r from-orange-50 to-orange-100 text-orange-700 border-l-4 border-orange-500 shadow-sm" : "text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"}`} onClick={() => isMobile && setSidebarOpen(false)}>
                   <subItem.icon className={`mr-3 h-4 w-4 ${pathname === subItem.href ? "text-orange-600" : "text-gray-500"}`} />
                   {subItem.name}

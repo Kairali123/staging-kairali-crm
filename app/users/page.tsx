@@ -1891,6 +1891,13 @@ export const PAGE_PERMISSIONS_MODULES: PagePermissionModule[] = [
     actions: ["view"],
     description: "Daily sales revenue, bookings & cancellation alert",
   },
+  {
+    key: "sales_calling",
+    label: "Sales Calling Master",
+    category: "Sales & Call Management",
+    actions: ["view"],
+    description: "Sales calling master",
+  },
 
   // 3. FMS & Booking Systems
   {
