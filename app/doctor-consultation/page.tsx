@@ -13,6 +13,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
 import {
   Stethoscope,
@@ -42,6 +48,7 @@ import {
   ChevronRight,
   Layers,
   FileCheck,
+  MoreVertical,
 } from "lucide-react"
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
@@ -336,7 +343,9 @@ export default function DoctorConsultationPage() {
 
   // Action Click Handler (Safely clears pointer-events before opening dialog)
   const handleActionClick = (type: string, consultation: Consultation) => {
-    document.body.style.pointerEvents = "auto"
+    setTimeout(() => {
+      document.body.style.pointerEvents = "auto"
+    }, 0)
     setActionDialog({ type, consultation, open: true })
   }
 
@@ -1101,17 +1110,23 @@ export default function DoctorConsultationPage() {
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-slate-800 hover:bg-slate-800 border-b border-slate-700">
-                          <TableHead className="w-[140px] text-white font-bold text-xs uppercase tracking-wider">
+                          <TableHead className="sticky left-0 z-20 bg-slate-800 w-[140px] min-w-[140px] text-white font-bold text-xs uppercase tracking-wider">
                             Scheduled Date
                           </TableHead>
-                          <TableHead className="w-[130px] text-white font-bold text-xs uppercase tracking-wider">
+                          <TableHead className="sticky left-[140px] z-20 bg-slate-800 w-[130px] min-w-[130px] text-white font-bold text-xs uppercase tracking-wider">
                             Consultation ID
                           </TableHead>
-                          <TableHead className="min-w-[200px] text-white font-bold text-xs uppercase tracking-wider">
+                          <TableHead className="sticky left-[270px] z-20 bg-slate-800 w-[220px] min-w-[220px] text-white font-bold text-xs uppercase tracking-wider border-r border-slate-700 shadow-[4px_0_6px_-2px_rgba(0,0,0,0.2)]">
                             Patient Details
                           </TableHead>
                           <TableHead className="min-w-[180px] text-white font-bold text-xs uppercase tracking-wider">
                             Doctor Alignment
+                          </TableHead>
+                          <TableHead className="w-[150px] text-white font-bold text-xs uppercase tracking-wider">
+                            Appointment Type
+                          </TableHead>
+                          <TableHead className="w-[130px] text-white font-bold text-xs uppercase tracking-wider">
+                            Doctor Calendar
                           </TableHead>
                           <TableHead className="w-[150px] text-white font-bold text-xs uppercase tracking-wider">
                             Stage & SLA
@@ -1119,13 +1134,19 @@ export default function DoctorConsultationPage() {
                           <TableHead className="w-[110px] text-white font-bold text-xs uppercase tracking-wider">
                             Status
                           </TableHead>
+                          <TableHead className="w-[110px] text-white font-bold text-xs uppercase tracking-wider">
+                            Prescription
+                          </TableHead>
                           <TableHead className="w-[130px] text-white font-bold text-xs uppercase tracking-wider">
-                            Diagnostic Assets
+                            Clinical Report
+                          </TableHead>
+                          <TableHead className="w-[130px] text-white font-bold text-xs uppercase tracking-wider">
+                            IVR Recording
                           </TableHead>
                           <TableHead className="w-[120px] text-white font-bold text-xs uppercase tracking-wider">
                             Sales Rep
                           </TableHead>
-                          <TableHead className="text-right sticky right-0 bg-slate-900 z-10 w-[240px] text-white font-bold text-xs uppercase tracking-wider shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.2)]">
+                          <TableHead className="text-right w-[110px] text-white font-bold text-xs uppercase tracking-wider">
                             Actions
                           </TableHead>
                         </TableRow>
@@ -1134,13 +1155,14 @@ export default function DoctorConsultationPage() {
                         {paginatedConsultations.map((c, idx) => {
                           const dt = formatDateTime(c.scheduledDateTime || c.scheduledDate)
                           const delay = getDelayBadge(c.delayHours || 0)
+                          const rowBg = idx % 2 === 0 ? "bg-white" : "bg-slate-50"
                           return (
                             <TableRow
                               key={c.id}
-                              className={`transition-colors hover:bg-blue-50/60 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}
+                              className={`group transition-colors hover:bg-blue-50/60 ${rowBg}`}
                             >
-                              {/* Scheduled Date */}
-                              <TableCell className="text-xs py-3">
+                              {/* Scheduled Date (Sticky 1) */}
+                              <TableCell className={`sticky left-0 z-10 w-[140px] min-w-[140px] ${rowBg} group-hover:bg-blue-50 text-xs py-3`}>
                                 <div className="font-bold text-slate-900 flex items-center gap-1.5">
                                   <Calendar className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
                                   <span>{dt.date}</span>
@@ -1153,8 +1175,8 @@ export default function DoctorConsultationPage() {
                                 )}
                               </TableCell>
 
-                              {/* Consultation ID */}
-                              <TableCell className="text-xs py-3">
+                              {/* Consultation ID (Sticky 2) */}
+                              <TableCell className={`sticky left-[140px] z-10 w-[130px] min-w-[130px] ${rowBg} group-hover:bg-blue-50 text-xs py-3`}>
                                 <div className="flex items-center gap-1">
                                   <span className="font-mono font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
                                     {c.consultationId}
@@ -1174,8 +1196,8 @@ export default function DoctorConsultationPage() {
                                 )}
                               </TableCell>
 
-                              {/* Patient Details */}
-                              <TableCell className="text-xs py-3">
+                              {/* Patient Details (Sticky 3) */}
+                              <TableCell className={`sticky left-[270px] z-10 w-[220px] min-w-[220px] ${rowBg} group-hover:bg-blue-50 border-r border-slate-200 shadow-[4px_0_6px_-2px_rgba(0,0,0,0.05)] text-xs py-3`}>
                                 <div className="font-bold text-sm text-slate-900 leading-snug">
                                   {c.patientName}
                                 </div>
@@ -1200,26 +1222,39 @@ export default function DoctorConsultationPage() {
 
                               {/* Doctor Alignment */}
                               <TableCell className="text-xs py-3">
-                                <div className="font-bold text-slate-800 truncate max-w-[170px]" title={c.doctorAlignment}>
+                                <div className="font-bold text-slate-800 truncate max-w-[180px]" title={c.doctorAlignment}>
                                   {c.doctorAlignment || "Unassigned"}
                                 </div>
-                                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                                  {c.appointmentType && (
-                                    <Badge variant="outline" className="bg-slate-100 text-slate-700 text-[10px] px-1.5 py-0 font-semibold border-slate-300">
-                                      {c.appointmentType}
-                                    </Badge>
-                                  )}
-                                  {c.doctorCalendarLink && (
-                                    <a
-                                      href={c.doctorCalendarLink}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-[10px] text-blue-700 font-semibold hover:underline inline-flex items-center gap-0.5 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200"
-                                    >
-                                      <ExternalLink className="h-2.5 w-2.5" /> Cal
-                                    </a>
-                                  )}
-                                </div>
+                              </TableCell>
+
+                              {/* Appointment Type */}
+                              <TableCell className="text-xs py-3">
+                                {c.appointmentType ? (
+                                  <Badge variant="outline" className="bg-slate-100 text-slate-700 text-[11px] px-2 py-0.5 font-semibold border-slate-300 whitespace-nowrap">
+                                    {c.appointmentType}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-slate-400 text-xs">—</span>
+                                )}
+                              </TableCell>
+
+                              {/* Doctor Calendar */}
+                              <TableCell className="text-xs py-3">
+                                {c.doctorCalendarLink ? (
+                                  <a
+                                    href={c.doctorCalendarLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[11px] text-blue-700 font-semibold hover:underline inline-flex items-center gap-1 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded border border-blue-200 transition-colors whitespace-nowrap"
+                                    title="Open Doctor Calendar"
+                                  >
+                                    <Calendar className="h-3 w-3 text-blue-600" />
+                                    <span>Cal</span>
+                                    <ExternalLink className="h-2.5 w-2.5 text-blue-500" />
+                                  </a>
+                                ) : (
+                                  <span className="text-slate-400 text-xs">—</span>
+                                )}
                               </TableCell>
 
                               {/* Stage & SLA */}
@@ -1240,41 +1275,55 @@ export default function DoctorConsultationPage() {
                                 </Badge>
                               </TableCell>
 
-                              {/* Assets */}
+                              {/* Prescription */}
                               <TableCell className="text-xs py-3">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  {c.hasPrescription ? (
-                                    <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[10px] font-bold px-1.5 py-0">
-                                      Rx Done
-                                    </Badge>
-                                  ) : (
-                                    <Badge variant="outline" className="text-[10px] text-slate-500 border-slate-300 px-1.5 py-0 font-medium">
-                                      No Rx
-                                    </Badge>
-                                  )}
-                                  {c.clientReportLink && (
-                                    <a
-                                      href={c.clientReportLink}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="p-1 text-blue-600 hover:text-blue-800 rounded bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-colors"
-                                      title="View Clinical Report"
-                                    >
-                                      <FileText className="h-3.5 w-3.5" />
-                                    </a>
-                                  )}
-                                  {c.ivrUrl && (
-                                    <a
-                                      href={c.ivrUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="p-1 text-emerald-600 hover:text-emerald-800 rounded bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition-colors"
-                                      title="IVR Call Recording"
-                                    >
-                                      <PhoneCall className="h-3.5 w-3.5" />
-                                    </a>
-                                  )}
-                                </div>
+                                {c.hasPrescription ? (
+                                  <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[10px] font-bold px-2 py-0.5 whitespace-nowrap">
+                                    Rx Done
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-[10px] text-slate-500 border-slate-300 px-2 py-0.5 font-medium whitespace-nowrap">
+                                    No Rx
+                                  </Badge>
+                                )}
+                              </TableCell>
+
+                              {/* Clinical Report */}
+                              <TableCell className="text-xs py-3">
+                                {c.clientReportLink ? (
+                                  <a
+                                    href={c.clientReportLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[11px] text-blue-700 font-semibold hover:underline inline-flex items-center gap-1 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded border border-blue-200 transition-colors whitespace-nowrap"
+                                    title="View Clinical Report"
+                                  >
+                                    <FileText className="h-3 w-3 text-blue-600" />
+                                    <span>Report</span>
+                                    <ExternalLink className="h-2.5 w-2.5 text-blue-500" />
+                                  </a>
+                                ) : (
+                                  <span className="text-slate-400 text-xs">—</span>
+                                )}
+                              </TableCell>
+
+                              {/* IVR Recording */}
+                              <TableCell className="text-xs py-3">
+                                {c.ivrUrl ? (
+                                  <a
+                                    href={c.ivrUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[11px] text-emerald-700 font-semibold hover:underline inline-flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200 transition-colors whitespace-nowrap"
+                                    title="Listen to IVR Call Recording"
+                                  >
+                                    <PhoneCall className="h-3 w-3 text-emerald-600" />
+                                    <span>Audio</span>
+                                    <ExternalLink className="h-2.5 w-2.5 text-emerald-500" />
+                                  </a>
+                                ) : (
+                                  <span className="text-slate-400 text-xs">—</span>
+                                )}
                               </TableCell>
 
                               {/* Sales Rep */}
@@ -1289,9 +1338,9 @@ export default function DoctorConsultationPage() {
                                 )}
                               </TableCell>
 
-                              {/* Actions Column (Sticky Right) */}
-                              <TableCell className="text-right sticky right-0 bg-white z-10 border-l border-slate-200 py-2.5 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.05)]">
-                                <div className="flex items-center justify-end gap-1">
+                              {/* Actions Column */}
+                              <TableCell className="text-right py-2.5">
+                                <div className="flex items-center justify-end gap-1.5">
                                   <Button
                                     variant="outline"
                                     size="sm"
@@ -1301,51 +1350,57 @@ export default function DoctorConsultationPage() {
                                   >
                                     <Eye className="h-3 w-3 mr-1" /> View
                                   </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleActionClick("schedule", c)}
-                                    className="h-7 w-7 p-0 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-300"
-                                    title="Schedule / Reschedule Appointment"
-                                  >
-                                    <CalendarDays className="h-3.5 w-3.5" />
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleActionClick("reports", c)}
-                                    className="h-7 w-7 p-0 text-blue-700 bg-blue-50 hover:bg-blue-100 border-blue-300"
-                                    title="Update Clinical Reports"
-                                  >
-                                    <FileText className="h-3.5 w-3.5" />
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleActionClick("reminder", c)}
-                                    className="h-7 w-7 p-0 text-amber-700 bg-amber-50 hover:bg-amber-100 border-amber-300"
-                                    title="Reminder Call Management"
-                                  >
-                                    <PhoneCall className="h-3.5 w-3.5" />
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleActionClick("prescription", c)}
-                                    className="h-7 w-7 p-0 text-teal-700 bg-teal-50 hover:bg-teal-100 border-teal-300"
-                                    title="Upload Digital Prescription"
-                                  >
-                                    <Upload className="h-3.5 w-3.5" />
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleActionClick("transfer", c)}
-                                    className="h-7 w-7 p-0 text-rose-700 bg-rose-50 hover:bg-rose-100 border-rose-300"
-                                    title="Transfer Case (KAPPL/KTAHV)"
-                                  >
-                                    <UserCheck className="h-3.5 w-3.5" />
-                                  </Button>
+
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-7 w-7 p-0 text-slate-600 hover:text-slate-900 hover:bg-slate-100 border-slate-300"
+                                        title="More Actions"
+                                      >
+                                        <MoreVertical className="h-3.5 w-3.5" />
+                                        <span className="sr-only">More actions</span>
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-52 bg-white border border-slate-200 shadow-lg rounded-md p-1">
+                                      <DropdownMenuItem
+                                        onClick={() => handleActionClick("schedule", c)}
+                                        className="cursor-pointer flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 rounded"
+                                      >
+                                        <CalendarDays className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                        <span>Schedule / Reschedule</span>
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={() => handleActionClick("reports", c)}
+                                        className="cursor-pointer flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-slate-700 hover:text-blue-700 hover:bg-blue-50 rounded"
+                                      >
+                                        <FileText className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                                        <span>Clinical Reports</span>
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={() => handleActionClick("reminder", c)}
+                                        className="cursor-pointer flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-slate-700 hover:text-amber-700 hover:bg-amber-50 rounded"
+                                      >
+                                        <PhoneCall className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                                        <span>Reminder Call</span>
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={() => handleActionClick("prescription", c)}
+                                        className="cursor-pointer flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-slate-700 hover:text-teal-700 hover:bg-teal-50 rounded"
+                                      >
+                                        <Upload className="h-3.5 w-3.5 text-teal-600 shrink-0" />
+                                        <span>Upload Prescription</span>
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={() => handleActionClick("transfer", c)}
+                                        className="cursor-pointer flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-slate-700 hover:text-rose-700 hover:bg-rose-50 rounded"
+                                      >
+                                        <UserCheck className="h-3.5 w-3.5 text-rose-600 shrink-0" />
+                                        <span>Transfer Case</span>
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
                                 </div>
                               </TableCell>
                             </TableRow>

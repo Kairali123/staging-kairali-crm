@@ -33,4 +33,5 @@ next-env.d.ts
 /temp/
 temp/
 *.tmp
-scratch/
+scratch/
+.local/

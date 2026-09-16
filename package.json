@@ -23,6 +23,10 @@
     "db:order-form:status": "node scripts/migrate-order-form-security.mjs --status",
     "db:order-form:migrate": "node scripts/migrate-order-form-security.mjs --up",
     "db:order-form:rollback": "node scripts/migrate-order-form-security.mjs --down",
+    "db:email-triggers:plan": "node scripts/migrate-email-triggers.mjs --plan",
+    "db:email-triggers:status": "node scripts/migrate-email-triggers.mjs --status",
+    "db:email-triggers:migrate": "node scripts/migrate-email-triggers.mjs --up",
+    "db:email-triggers:rollback": "node scripts/migrate-email-triggers.mjs --down",
     "typecheck": "tsc --noEmit --incremental false",
     "start": "next start",
     "email-trigger:worker": "node scripts/email-trigger-worker.mjs"
