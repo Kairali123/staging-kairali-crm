@@ -19,8 +19,8 @@ export const reportQueries = {
     SUM(LOWER(TRIM(COALESCE(Intent,''))) NOT IN ('high','medium','low')) AS unclassified
     FROM (SELECT m.Verified_Source, m.WebSite_Name, s.Lead_Relates_to_which_company, s.Intent,
       ROW_NUMBER() OVER (PARTITION BY m.lead_id ORDER BY s.Timestamp_2 DESC,s.sl_no DESC,m.sl_no DESC) AS rn
-      FROM master_buffer m INNER JOIN staging_buffer_new s ON m.lead_id=s.Lead_id
-      WHERE m.Timestamp >= ? AND m.Timestamp < ?) ranked
+      FROM master_buffer m STRAIGHT_JOIN staging_buffer_new s ON m.lead_id=s.Lead_id
+      WHERE m.Date_Time >= ? AND m.Date_Time < ?) ranked
     WHERE rn=1 AND LOWER(COALESCE(WebSite_Name,'')) NOT LIKE '%kserve api outcomes%'
     GROUP BY company, Verified_Source`,
   traffic: `SELECT comapany_name AS company, COALESCE(medium, '') AS source,
