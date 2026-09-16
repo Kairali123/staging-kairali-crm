@@ -6,6 +6,9 @@ import Link from 'next/link'
 interface PITrackerItem {
   id: string
   generatedAt: string
+  bookingDateTime: string | null
+  actualDateTime: string | null
+  isFreshBooking: boolean
   eventContext: string
   isOlderBooking: boolean
   reservationId: string
@@ -456,9 +459,57 @@ export default function BookingPIReviewTrackerPage() {
                   return (
                     <tr key={item.id} className="hover:bg-[#f8faf8] transition">
                       <td>
-                        <strong className="block text-xs text-[#14251d]">
-                          {new Date(item.generatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                        </strong>
+                        {/* Actual Booking Creation Date & Time — Always Black */}
+                        <div className="text-xs font-semibold text-[#14251d]">
+                          <span className="text-[10px] text-[#758078] font-normal block">Booked:</span>
+                          {item.bookingDateTime
+                            ? new Date(item.bookingDateTime).toLocaleString('en-IN', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })
+                            : new Date(item.generatedAt).toLocaleString('en-IN', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                        </div>
+
+                        {/* Event / Action Date & Time from actual column */}
+                        {item.status === 'Amended' && (
+                          <div className="text-xs font-semibold text-amber-700 mt-1">
+                            <span className="text-[10px] text-amber-600 font-normal block">Amended:</span>
+                            {item.actualDateTime
+                              ? new Date(item.actualDateTime).toLocaleString('en-IN', {
+                                  day: '2-digit',
+                                  month: 'short',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })
+                              : 'Actual date sync pending'}
+                          </div>
+                        )}
+
+                        {item.status === 'Cancelled' && (
+                          <div className="text-xs font-semibold text-red-600 mt-1">
+                            <span className="text-[10px] text-red-500 font-normal block">Cancelled:</span>
+                            {item.actualDateTime
+                              ? new Date(item.actualDateTime).toLocaleString('en-IN', {
+                                  day: '2-digit',
+                                  month: 'short',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })
+                              : 'Actual date sync pending'}
+                          </div>
+                        )}
+
                         <small className={`block text-[10px] mt-1 ${item.isOlderBooking ? 'text-[#9a611e] font-bold' : 'text-[#849087]'}`}>
                           {item.eventContext}
                         </small>
