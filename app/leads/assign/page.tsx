@@ -67,7 +67,7 @@ import { useRef } from "react"
 import Loader from "@/components/Loader"
 import { registerLeadsMemoryCacheReset, LEADS_CACHE_CLEARED_EVENT } from "@/lib/leads-cache-control"
 import { normalizeVSrc, normalizeVSrcKey } from "@/lib/lead-source"
-import { parseCRMDate, formatIST } from "@/lib/lead-date"
+import { parseCRMDate, formatIST, getLeadFullDateTime } from "@/lib/lead-date"
 import { formatDelay, delayColor } from "@/lib/lead-delay"
 import { sanitizeIvrUrl } from "@/lib/lead-media"
 import { PField } from "@/components/lead-detail-field"
@@ -582,7 +582,7 @@ export default function LeadAssignmentPage() {
             const grouped: Record<string, any> = {}
             json.data.all.forEach((lead: any) => {
               const company = lead.company || 'KTAHV'
-              
+
               // Normalize date to DD-MM-YYYY format
               let date = '-'
               if (lead.dateTime) {
@@ -728,9 +728,9 @@ export default function LeadAssignmentPage() {
 
         countSource.forEach((lead) => {
           // Optimize: avoid expensive `new Date()` and `parseCRMDate` inside loops for 50k+ items
-          // lead.updatedAt is 'DD/MM/YYYY HH:MM:SS', so substring(0, 10) gives 'DD/MM/YYYY', replace gives 'DD-MM-YYYY'
-          const dateStr = lead.updatedAt && lead.updatedAt.length >= 10
-            ? lead.updatedAt.substring(0, 10).replace(/\//g, '-')
+          const leadDateVal = getLeadFullDateTime(lead)
+          const dateStr = leadDateVal && leadDateVal.length >= 10
+            ? leadDateVal.substring(0, 10).replace(/\//g, '-')
             : '-'
           const srcRaw = lead.vSrc || "Others"
           const src = srcRaw.trim().charAt(0).toUpperCase() + srcRaw.trim().slice(1).toLowerCase()
@@ -971,8 +971,9 @@ export default function LeadAssignmentPage() {
     if (!data || data.length === 0) return
     let maxTs = lastFetchedTimestampRef.current ? new Date(lastFetchedTimestampRef.current).getTime() : 0
     data.forEach((lead) => {
-      if (lead.updatedAt) {
-        const t = new Date(lead.updatedAt).getTime()
+      const dateVal = getLeadFullDateTime(lead)
+      if (dateVal) {
+        const t = parseCRMDate(dateVal) || new Date(dateVal).getTime()
         if (t > maxTs) maxTs = t
       }
     })
@@ -1002,7 +1003,7 @@ export default function LeadAssignmentPage() {
             if (dateFilter === "all") return true
             if (!startDate || !endDate) return false
 
-            const leadMs = parseCRMDate(lead.updatedAt || lead.createdAt)
+            const leadMs = parseCRMDate(getLeadFullDateTime(lead))
             const startMs = new Date(startDate).setHours(0, 0, 0, 0)
             const endMs = new Date(endDate).setHours(23, 59, 59, 999)
 
@@ -1077,7 +1078,7 @@ export default function LeadAssignmentPage() {
 
             const leadsForThisCache = trulyNew.filter((lead: AssignmentLead) => {
               if (cacheFrom === 'all') return true
-              const leadMs = parseCRMDate(lead.updatedAt || lead.createdAt)
+              const leadMs = parseCRMDate(getLeadFullDateTime(lead))
               const cStartMs = new Date(cacheFrom).setHours(0, 0, 0, 0)
               const cEndMs = new Date(cacheTo).setHours(23, 59, 59, 999)
               return leadMs >= cStartMs && leadMs <= cEndMs
@@ -1296,11 +1297,15 @@ export default function LeadAssignmentPage() {
 
     // ✅ ADDED: Local date filtering to ensure UI strictly follows the selected range
     if (dateFilter !== "all" && startDate && endDate) {
-      const startMs = new Date(startDate).setHours(0, 0, 0, 0)
-      const endMs = new Date(endDate).setHours(23, 59, 59, 999)
+      const startMs = parseCRMDate(`${startDate} 00:00:00`)
+      const toDateObj = new Date(`${endDate}T00:00:00`)
+      toDateObj.setDate(toDateObj.getDate() + 1)
+      const pad = (n: number) => String(n).padStart(2, '0')
+      const nextDayStr = `${toDateObj.getFullYear()}-${pad(toDateObj.getMonth() + 1)}-${pad(toDateObj.getDate())}`
+      const endMs = parseCRMDate(`${nextDayStr} 00:00:00`)
 
       filtered = filtered.filter((lead) => {
-        const leadMs = parseCRMDate(lead.updatedAt || lead.createdAt)
+        const leadMs = parseCRMDate(getLeadFullDateTime(lead))
         return leadMs >= startMs && leadMs <= endMs
       })
     }
@@ -1315,10 +1320,14 @@ export default function LeadAssignmentPage() {
 
       // Also apply date filter to analytics if needed (though usually allBuf is already date-filtered)
       if (dateFilter !== "all" && startDate && endDate) {
-        const startMs = new Date(startDate).setHours(0, 0, 0, 0)
-        const endMs = new Date(endDate).setHours(23, 59, 59, 999)
+        const startMs = parseCRMDate(`${startDate} 00:00:00`)
+        const toDateObj = new Date(`${endDate}T00:00:00`)
+        toDateObj.setDate(toDateObj.getDate() + 1)
+        const pad = (n: number) => String(n).padStart(2, '0')
+        const nextDayStr = `${toDateObj.getFullYear()}-${pad(toDateObj.getMonth() + 1)}-${pad(toDateObj.getDate())}`
+        const endMs = parseCRMDate(`${nextDayStr} 00:00:00`)
         analyticsFiltered = analyticsFiltered.filter((l: any) => {
-          const leadMs = parseCRMDate(l.updatedAt || l.createdAt)
+          const leadMs = parseCRMDate(getLeadFullDateTime(l))
           return leadMs >= startMs && leadMs <= endMs
         })
       }
@@ -1566,7 +1575,7 @@ export default function LeadAssignmentPage() {
     //    We only additionally filter by the clicked date row and source key, plus the priority param.
     const normalizedSourceKey = normalizeVSrcKey(source)
     let filtered = filteredLeads.filter(l => {
-      const leadDate = formatDateToDDMMYYYY(l.updatedAt)
+      const leadDate = formatDateToDDMMYYYY(getLeadFullDateTime(l))
       const leadSourceKey = normalizeVSrcKey(l.vSrc)
       const dateMatch = leadDate === date
       const sourceMatch = leadSourceKey === normalizedSourceKey
@@ -1578,7 +1587,7 @@ export default function LeadAssignmentPage() {
     // 3. Map to LeadRow type expected by LeadDetailModal
     const mappedLeads = filtered.map((l, index) => ({
       srNo: index + 1,
-      dateTime: l.updatedAt || l.createdAt || "",
+      dateTime: getLeadFullDateTime(l),
       id: l.id || "",
       name: l.name || "",
       mobile: l.phone || "",
@@ -3029,7 +3038,7 @@ Cancelled Amt:
     }>();
 
     filteredLeads.forEach(l => {
-      const date = formatDateToDDMMYYYY(l.updatedAt);
+      const date = formatDateToDDMMYYYY(getLeadFullDateTime(l));
       const srcKey = normalizeVSrcKey(l.vSrc);
       const key = `${date}__${srcKey}`;
       const existing = microMetricMap.get(key) || {
@@ -3188,7 +3197,7 @@ Cancelled Amt:
 
     // 4. Create entries and count leads (using filteredLeads)
     filteredLeads.forEach(lead => {
-      const date = formatDateToDDMMYYYY(lead.updatedAt)
+      const date = formatDateToDDMMYYYY(getLeadFullDateTime(lead))
       const { key: sourceKey } = normalizeVSrc(lead?.vSrc)
 
       if (!grouped[date]) {
@@ -4795,51 +4804,51 @@ Cancelled Amt:
                   <div className="overflow-x-auto">
                     <div className="inline-block min-w-full align-middle">
                       <table className="min-w-full divide-y divide-slate-300">
-                      <thead style={{ backgroundColor: '#1e3a5f' }}>
-                        <tr>
-                          {/* STICKY - Data Source Column */}
-                          <th
-                            className="sticky left-0 z-20 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-white/10"
-                            style={{ backgroundColor: '#1e3a5f' }}
-                            onClick={() => handleDataSourceSort("dataSource")}
-                          >
-                            <div className="flex items-center gap-1">
-                              Data Source {renderDataSourceSortIcon("dataSource")}
-                            </div>
-                          </th>
+                        <thead style={{ backgroundColor: '#1e3a5f' }}>
+                          <tr>
+                            {/* STICKY - Data Source Column */}
+                            <th
+                              className="sticky left-0 z-20 px-4 py-2.5 text-left text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-white/10"
+                              style={{ backgroundColor: '#1e3a5f' }}
+                              onClick={() => handleDataSourceSort("dataSource")}
+                            >
+                              <div className="flex items-center gap-1">
+                                Data Source {renderDataSourceSortIcon("dataSource")}
+                              </div>
+                            </th>
 
 
-                          {/* STICKY - Total Traffic Column */}
-                          <th
-                            className="sticky left-[180px] z-20 px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-white/10"
-                            style={{ backgroundColor: '#1e3a5f' }}
-                            onClick={() => handleDataSourceSort("totalTraffic")}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              Total Traffic {renderDataSourceSortIcon("totalTraffic")}
-                            </div>
-                          </th>
-
-                          {/* STICKY - Total Leads Column */}
-                          <th
-                            colSpan={2}
-                            className="sticky left-[300px] z-20 px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-white/10"
-                            style={{ backgroundColor: '#1e3a5f' }}
-                            onClick={() => handleDataSourceSort("totalLeads")}
-                          >
-                            <div className="flex flex-col items-center gap-0.5">
+                            {/* STICKY - Total Traffic Column */}
+                            <th
+                              className="sticky left-[180px] z-20 px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-white/10"
+                              style={{ backgroundColor: '#1e3a5f' }}
+                              onClick={() => handleDataSourceSort("totalTraffic")}
+                            >
                               <div className="flex items-center justify-center gap-1">
-                                Total Leads {renderDataSourceSortIcon("totalLeads")}
+                                Total Traffic {renderDataSourceSortIcon("totalTraffic")}
                               </div>
-                              <div className="flex gap-3 text-[11px] font-semibold normal-case mt-0.5">
-                                <span>Count</span>
-                                <span className="text-white/40">|</span>
-                                <span>TAT</span>
-                              </div>
-                            </div>
-                          </th>
+                            </th>
 
-                          {/* Avg TAT Column - Commented out as requested
+                            {/* STICKY - Total Leads Column */}
+                            <th
+                              colSpan={2}
+                              className="sticky left-[300px] z-20 px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-white/10"
+                              style={{ backgroundColor: '#1e3a5f' }}
+                              onClick={() => handleDataSourceSort("totalLeads")}
+                            >
+                              <div className="flex flex-col items-center gap-0.5">
+                                <div className="flex items-center justify-center gap-1">
+                                  Total Leads {renderDataSourceSortIcon("totalLeads")}
+                                </div>
+                                <div className="flex gap-3 text-[11px] font-semibold normal-case mt-0.5">
+                                  <span>Count</span>
+                                  <span className="text-white/40">|</span>
+                                  <span>TAT</span>
+                                </div>
+                              </div>
+                            </th>
+
+                            {/* Avg TAT Column - Commented out as requested
                           <th
                             className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-white/10"
                             onClick={() => handleDataSourceSort("avgTat")}
@@ -4850,410 +4859,410 @@ Cancelled Amt:
                           </th>
                           */}
 
-                          {/* HIGH QUALITY */}
-                          <th
-                            colSpan={3}
-                            className="px-2 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider border-l border-white/20 cursor-pointer hover:bg-white/10"
-                            onClick={() => handleDataSourceSort("highPriority")}
-                          >
-                            <div className="flex flex-col items-center gap-0.5">
-                              <div className="flex items-center gap-1">
-                                High Intent {renderDataSourceSortIcon("highPriority")}
+                            {/* HIGH QUALITY */}
+                            <th
+                              colSpan={3}
+                              className="px-2 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider border-l border-white/20 cursor-pointer hover:bg-white/10"
+                              onClick={() => handleDataSourceSort("highPriority")}
+                            >
+                              <div className="flex flex-col items-center gap-0.5">
+                                <div className="flex items-center gap-1">
+                                  High Intent {renderDataSourceSortIcon("highPriority")}
+                                </div>
+                                <div className="flex gap-3 text-[11px] font-semibold normal-case mt-0.5">
+                                  <span>Count</span>
+                                  <span className="text-white/40">|</span>
+                                  <span>%</span>
+                                  <span className="text-white/40">|</span>
+                                  <span>TAT</span>
+                                </div>
                               </div>
-                              <div className="flex gap-3 text-[11px] font-semibold normal-case mt-0.5">
-                                <span>Count</span>
-                                <span className="text-white/40">|</span>
-                                <span>%</span>
-                                <span className="text-white/40">|</span>
-                                <span>TAT</span>
+                            </th>
+
+                            {/* MEDIUM QUALITY */}
+                            <th
+                              colSpan={3}
+                              className="px-2 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider border-l border-white/20 cursor-pointer hover:bg-white/10"
+                              onClick={() => handleDataSourceSort("mediumPriority")}
+                            >
+                              <div className="flex flex-col items-center gap-0.5">
+                                <div className="flex items-center gap-1">
+                                  Medium Intent {renderDataSourceSortIcon("mediumPriority")}
+                                </div>
+                                <div className="flex gap-3 text-[11px] font-semibold normal-case mt-0.5">
+                                  <span>Count</span>
+                                  <span className="text-white/40">|</span>
+                                  <span>%</span>
+                                  <span className="text-white/40">|</span>
+                                  <span>TAT</span>
+                                </div>
                               </div>
-                            </div>
-                          </th>
+                            </th>
 
-                          {/* MEDIUM QUALITY */}
-                          <th
-                            colSpan={3}
-                            className="px-2 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider border-l border-white/20 cursor-pointer hover:bg-white/10"
-                            onClick={() => handleDataSourceSort("mediumPriority")}
-                          >
-                            <div className="flex flex-col items-center gap-0.5">
-                              <div className="flex items-center gap-1">
-                                Medium Intent {renderDataSourceSortIcon("mediumPriority")}
+                            {/* LOW QUALITY */}
+                            <th
+                              colSpan={3}
+                              className="px-2 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider border-l border-white/20 cursor-pointer hover:bg-white/10"
+                              onClick={() => handleDataSourceSort("lowPriority")}
+                            >
+                              <div className="flex flex-col items-center gap-0.5">
+                                <div className="flex items-center gap-1">
+                                  Low Intent {renderDataSourceSortIcon("lowPriority")}
+                                </div>
+                                <div className="flex gap-3 text-[11px] font-semibold normal-case mt-0.5">
+                                  <span>Count</span>
+                                  <span className="text-white/40">|</span>
+                                  <span>%</span>
+                                  <span className="text-white/40">|</span>
+                                  <span>TAT</span>
+                                </div>
                               </div>
-                              <div className="flex gap-3 text-[11px] font-semibold normal-case mt-0.5">
-                                <span>Count</span>
-                                <span className="text-white/40">|</span>
-                                <span>%</span>
-                                <span className="text-white/40">|</span>
-                                <span>TAT</span>
+                            </th>
+
+                            {/* 🔹 DIVIDER COLUMN */}
+                            <th className="w-[2px] px-0 py-0 bg-white/30"></th>
+
+                            {/* CONVERSION METRICS */}
+                            <th
+                              className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-white/10"
+                              onClick={() => handleDataSourceSort("convertedCount")}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                Verified Converted Quantity {renderDataSourceSortIcon("convertedCount")}
                               </div>
-                            </div>
-                          </th>
-
-                          {/* LOW QUALITY */}
-                          <th
-                            colSpan={3}
-                            className="px-2 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider border-l border-white/20 cursor-pointer hover:bg-white/10"
-                            onClick={() => handleDataSourceSort("lowPriority")}
-                          >
-                            <div className="flex flex-col items-center gap-0.5">
-                              <div className="flex items-center gap-1">
-                                Low Intent {renderDataSourceSortIcon("lowPriority")}
+                            </th>
+                            <th
+                              className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-white/10"
+                              onClick={() => handleDataSourceSort("conversionAmount")}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                Verified Conv. Amount {renderDataSourceSortIcon("conversionAmount")}
                               </div>
-                              <div className="flex gap-3 text-[11px] font-semibold normal-case mt-0.5">
-                                <span>Count</span>
-                                <span className="text-white/40">|</span>
-                                <span>%</span>
-                                <span className="text-white/40">|</span>
-                                <span>TAT</span>
+                            </th>
+                            <th
+                              className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-white/10"
+                              onClick={() => handleDataSourceSort("conversionPercentage")}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                Verified Conv. % {renderDataSourceSortIcon("conversionPercentage")}
                               </div>
-                            </div>
-                          </th>
+                            </th>
 
-                          {/* 🔹 DIVIDER COLUMN */}
-                          <th className="w-[2px] px-0 py-0 bg-white/30"></th>
+                            {/* SPEND & ROI METRICS */}
+                            <th
+                              className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-white/10"
+                              onClick={() => handleDataSourceSort("spendAmount")}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                Spend Amt {renderDataSourceSortIcon("spendAmount")}
+                              </div>
+                            </th>
+                            <th
+                              className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-white/10"
+                              onClick={() => handleDataSourceSort("roas")}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                ROAS % {renderDataSourceSortIcon("roas")}
+                              </div>
+                            </th>
+                            <th
+                              className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-white/10"
+                              onClick={() => handleDataSourceSort("cac")}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                CAC {renderDataSourceSortIcon("cac")}
+                              </div>
+                            </th>
 
-                          {/* CONVERSION METRICS */}
-                          <th
-                            className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-white/10"
-                            onClick={() => handleDataSourceSort("convertedCount")}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              Verified Converted Quantity {renderDataSourceSortIcon("convertedCount")}
-                            </div>
-                          </th>
-                          <th
-                            className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-white/10"
-                            onClick={() => handleDataSourceSort("conversionAmount")}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              Verified Conv. Amount {renderDataSourceSortIcon("conversionAmount")}
-                            </div>
-                          </th>
-                          <th
-                            className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-white/10"
-                            onClick={() => handleDataSourceSort("conversionPercentage")}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              Verified Conv. % {renderDataSourceSortIcon("conversionPercentage")}
-                            </div>
-                          </th>
+                            {/* BLUE COLUMN - COLLECTION AMOUNT */}
+                            <th
+                              className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-blue-600/90"
+                              style={{ backgroundColor: '#2563eb' }}
+                              onClick={() => handleDataSourceSort("collectionAmount")}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                Collection Amt {renderDataSourceSortIcon("collectionAmount")}
+                              </div>
+                            </th>
 
-                          {/* SPEND & ROI METRICS */}
-                          <th
-                            className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-white/10"
-                            onClick={() => handleDataSourceSort("spendAmount")}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              Spend Amt {renderDataSourceSortIcon("spendAmount")}
-                            </div>
-                          </th>
-                          <th
-                            className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-white/10"
-                            onClick={() => handleDataSourceSort("roas")}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              ROAS % {renderDataSourceSortIcon("roas")}
-                            </div>
-                          </th>
-                          <th
-                            className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-white/10"
-                            onClick={() => handleDataSourceSort("cac")}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              CAC {renderDataSourceSortIcon("cac")}
-                            </div>
-                          </th>
+                            {/* RED HEADERS - WASTE ANALYSIS */}
+                            <th
+                              className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-red-600/90"
+                              style={{ backgroundColor: '#dc2626' }}
+                              onClick={() => handleDataSourceSort("wastedQty")}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                Wasted Lead Qty {renderDataSourceSortIcon("wastedQty")}
+                              </div>
+                            </th>
 
-                          {/* BLUE COLUMN - COLLECTION AMOUNT */}
-                          <th
-                            className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-blue-600/90"
-                            style={{ backgroundColor: '#2563eb' }}
-                            onClick={() => handleDataSourceSort("collectionAmount")}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              Collection Amt {renderDataSourceSortIcon("collectionAmount")}
-                            </div>
-                          </th>
+                            <th
+                              className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-red-600/90"
+                              style={{ backgroundColor: '#dc2626' }}
+                              onClick={() => handleDataSourceSort("wastePercentage")}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                Wasted Lead % {renderDataSourceSortIcon("wastePercentage")}
+                              </div>
+                            </th>
 
-                          {/* RED HEADERS - WASTE ANALYSIS */}
-                          <th
-                            className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-red-600/90"
-                            style={{ backgroundColor: '#dc2626' }}
-                            onClick={() => handleDataSourceSort("wastedQty")}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              Wasted Lead Qty {renderDataSourceSortIcon("wastedQty")}
-                            </div>
-                          </th>
+                            <th
+                              className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider"
+                              style={{ backgroundColor: '#dc2626' }}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                Lost Reason
+                              </div>
+                            </th>
 
-                          <th
-                            className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-red-600/90"
-                            style={{ backgroundColor: '#dc2626' }}
-                            onClick={() => handleDataSourceSort("wastePercentage")}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              Wasted Lead % {renderDataSourceSortIcon("wastePercentage")}
-                            </div>
-                          </th>
+                            <th
+                              className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-red-600/90"
+                              style={{ backgroundColor: '#dc2626' }}
+                              onClick={() => handleDataSourceSort("potentialLostValue")}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                Potential Lost Value {renderDataSourceSortIcon("potentialLostValue")}
+                              </div>
+                            </th>
 
-                          <th
-                            className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider"
-                            style={{ backgroundColor: '#dc2626' }}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              Lost Reason
-                            </div>
-                          </th>
+                            {/* PURPLE COLUMN - UNVERIFIED CONVERSION AMOUNT */}
+                            <th
+                              className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-purple-600/90"
+                              style={{ backgroundColor: '#9333ea' }}
+                              onClick={() => handleDataSourceSort("unverifiedConversionAmount")}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                Unverified Conv. Amt {renderDataSourceSortIcon("unverifiedConversionAmount")}
+                              </div>
+                            </th>
 
-                          <th
-                            className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-red-600/90"
-                            style={{ backgroundColor: '#dc2626' }}
-                            onClick={() => handleDataSourceSort("potentialLostValue")}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              Potential Lost Value {renderDataSourceSortIcon("potentialLostValue")}
-                            </div>
-                          </th>
+                            {/* RED HEADERS - CANCELLED LEAD ANALYSIS */}
+                            <th
+                              className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-red-600/90"
+                              style={{ backgroundColor: '#dc2626' }}
+                              onClick={() => handleDataSourceSort("cancelledLeadQty")}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                Cancelled Booking / Order Qty {renderDataSourceSortIcon("cancelledLeadQty")}
+                              </div>
+                            </th>
 
-                          {/* PURPLE COLUMN - UNVERIFIED CONVERSION AMOUNT */}
-                          <th
-                            className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-purple-600/90"
-                            style={{ backgroundColor: '#9333ea' }}
-                            onClick={() => handleDataSourceSort("unverifiedConversionAmount")}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              Unverified Conv. Amt {renderDataSourceSortIcon("unverifiedConversionAmount")}
-                            </div>
-                          </th>
+                            <th
+                              className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-red-600/90"
+                              style={{ backgroundColor: '#dc2626' }}
+                              onClick={() => handleDataSourceSort("cancelledLeadAmount")}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                Cancelled Booking / Order Amount {renderDataSourceSortIcon("cancelledLeadAmount")}
+                              </div>
+                            </th>
 
-                          {/* RED HEADERS - CANCELLED LEAD ANALYSIS */}
-                          <th
-                            className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-red-600/90"
-                            style={{ backgroundColor: '#dc2626' }}
-                            onClick={() => handleDataSourceSort("cancelledLeadQty")}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              Cancelled Booking / Order Qty {renderDataSourceSortIcon("cancelledLeadQty")}
-                            </div>
-                          </th>
+                            <th
+                              className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-red-600/90"
+                              style={{ backgroundColor: '#dc2626' }}
+                              onClick={() => handleDataSourceSort("cancellationLeadPercentage")}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                Cancelled Booking / Order % {renderDataSourceSortIcon("cancellationLeadPercentage")}
+                              </div>
+                            </th>
 
-                          <th
-                            className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-red-600/90"
-                            style={{ backgroundColor: '#dc2626' }}
-                            onClick={() => handleDataSourceSort("cancelledLeadAmount")}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              Cancelled Booking / Order Amount {renderDataSourceSortIcon("cancelledLeadAmount")}
-                            </div>
-                          </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200">
+                          {(() => {
+                            // Pagination calculations
+                            const allDateGroups = dataSourceDateGroups
+                            const startIndex =
+                              (dataSourceCurrentPage - 1) * dataSourceItemsPerPage
 
-                          <th
-                            className="px-4 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider cursor-pointer hover:bg-red-600/90"
-                            style={{ backgroundColor: '#dc2626' }}
-                            onClick={() => handleDataSourceSort("cancellationLeadPercentage")}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              Cancelled Booking / Order % {renderDataSourceSortIcon("cancellationLeadPercentage")}
-                            </div>
-                          </th>
-
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200">
-                        {(() => {
-                          // Pagination calculations
-                          const allDateGroups = dataSourceDateGroups
-                          const startIndex =
-                            (dataSourceCurrentPage - 1) * dataSourceItemsPerPage
-
-                          const paginatedDateGroups =
-                            dataSourceDateGroups.slice(
-                              startIndex,
-                              startIndex + dataSourceItemsPerPage
-                            )
+                            const paginatedDateGroups =
+                              dataSourceDateGroups.slice(
+                                startIndex,
+                                startIndex + dataSourceItemsPerPage
+                              )
 
 
-                          return paginatedDateGroups.map((dateGroup) => (
-                            <React.Fragment key={dateGroup.date}>
-                              {/* Date Row (Parent) */}
-                              <tr
-                                className="cursor-pointer font-semibold border-b-2 border-slate-300 hover:opacity-90 transition-opacity"
-                                style={{ backgroundColor: expandedDataSourceDates.has(dateGroup.date) ? '#BFDBFF' : '#f1f5f9' }}
-                                onClick={() => toggleDataSourceDate(dateGroup.date)}
-                              >
-                                {/* STICKY - Data Source/Date Column */}
-                                <td
-                                  className="sticky left-0 z-10 px-4 py-3 text-sm text-slate-900 whitespace-nowrap"
+                            return paginatedDateGroups.map((dateGroup) => (
+                              <React.Fragment key={dateGroup.date}>
+                                {/* Date Row (Parent) */}
+                                <tr
+                                  className="cursor-pointer font-semibold border-b-2 border-slate-300 hover:opacity-90 transition-opacity"
                                   style={{ backgroundColor: expandedDataSourceDates.has(dateGroup.date) ? '#BFDBFF' : '#f1f5f9' }}
+                                  onClick={() => toggleDataSourceDate(dateGroup.date)}
                                 >
-                                  <div className="flex items-center gap-2 min-w-max">
-                                    {expandedDataSourceDates.has(dateGroup.date) ? (
-                                      <ChevronDown className="w-5 h-5 text-blue-600 flex-shrink-0" />
-                                    ) : (
-                                      <ChevronRight className="w-5 h-5 text-blue-600 flex-shrink-0" />
-                                    )}
-                                    <Calendar className="w-4 h-4 text-slate-600 flex-shrink-0" />
-                                    <span className="font-bold text-slate-800">{dateGroup.date}</span>
-                                    <span className="text-xs text-slate-600 ml-1">({dateGroup.sources.length} sources)</span>
-                                    <div
-                                      className="flex items-center gap-1 ml-1"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <button
-                                        onClick={() => handleDownloadCSV(dateGroup)}
-                                        title="Download CSV"
-                                        className="p-1 rounded hover:bg-blue-100 text-blue-600 transition-colors"
+                                  {/* STICKY - Data Source/Date Column */}
+                                  <td
+                                    className="sticky left-0 z-10 px-4 py-3 text-sm text-slate-900 whitespace-nowrap"
+                                    style={{ backgroundColor: expandedDataSourceDates.has(dateGroup.date) ? '#BFDBFF' : '#f1f5f9' }}
+                                  >
+                                    <div className="flex items-center gap-2 min-w-max">
+                                      {expandedDataSourceDates.has(dateGroup.date) ? (
+                                        <ChevronDown className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                                      ) : (
+                                        <ChevronRight className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                                      )}
+                                      <Calendar className="w-4 h-4 text-slate-600 flex-shrink-0" />
+                                      <span className="font-bold text-slate-800">{dateGroup.date}</span>
+                                      <span className="text-xs text-slate-600 ml-1">({dateGroup.sources.length} sources)</span>
+                                      <div
+                                        className="flex items-center gap-1 ml-1"
+                                        onClick={(e) => e.stopPropagation()}
                                       >
-                                        <Download className="w-3.5 h-3.5" />
-                                      </button>
-                                      <button
-                                        onClick={() => handlePrint(dateGroup)}
-                                        title="Print"
-                                        className="p-1 rounded hover:bg-slate-300 text-slate-600 transition-colors"
-                                      >
-                                        <Printer className="w-3.5 h-3.5" />
-                                      </button>
+                                        <button
+                                          onClick={() => handleDownloadCSV(dateGroup)}
+                                          title="Download CSV"
+                                          className="p-1 rounded hover:bg-blue-100 text-blue-600 transition-colors"
+                                        >
+                                          <Download className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => handlePrint(dateGroup)}
+                                          title="Print"
+                                          className="p-1 rounded hover:bg-slate-300 text-slate-600 transition-colors"
+                                        >
+                                          <Printer className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
                                     </div>
-                                  </div>
-                                </td>
+                                  </td>
 
-                                {/* STICKY - Total Traffic Column */}
-                                <td
-                                  className="sticky left-[180px] z-10 px-4 py-3 text-center"
-                                  style={{ backgroundColor: expandedDataSourceDates.has(dateGroup.date) ? '#BFDBFF' : '#f1f5f9' }}
-                                >
-                                  <span className="text-sm font-bold text-slate-900">
-                                    {dateGroup.totals.totalTraffic || 0}
-                                  </span>
-                                </td>
+                                  {/* STICKY - Total Traffic Column */}
+                                  <td
+                                    className="sticky left-[180px] z-10 px-4 py-3 text-center"
+                                    style={{ backgroundColor: expandedDataSourceDates.has(dateGroup.date) ? '#BFDBFF' : '#f1f5f9' }}
+                                  >
+                                    <span className="text-sm font-bold text-slate-900">
+                                      {dateGroup.totals.totalTraffic || 0}
+                                    </span>
+                                  </td>
 
-                                {/* STICKY - Total Leads Column */}
-                                <td
-                                  className="sticky left-[300px] z-10 px-4 py-3 text-center"
-                                  style={{ backgroundColor: expandedDataSourceDates.has(dateGroup.date) ? '#BFDBFF' : '#f1f5f9' }}
-                                >
-                                  <span className="text-sm font-bold text-slate-900">
-                                    {dateGroup.totals.totalLeads}
-                                  </span>
-                                </td>
+                                  {/* STICKY - Total Leads Column */}
+                                  <td
+                                    className="sticky left-[300px] z-10 px-4 py-3 text-center"
+                                    style={{ backgroundColor: expandedDataSourceDates.has(dateGroup.date) ? '#BFDBFF' : '#f1f5f9' }}
+                                  >
+                                    <span className="text-sm font-bold text-slate-900">
+                                      {dateGroup.totals.totalLeads}
+                                    </span>
+                                  </td>
 
-                                {/* Avg TAT Column */}
-                                <td className="px-4 py-3 text-center">
-                                  {(() => {
-                                    const avgTat = dateGroup.totals.avgTat || 0
-                                    const dc = delayColor(avgTat)
-                                    return (
-                                      <span className={`inline-flex items-center ${dc.bg} border ${dc.border} rounded-full px-2.5 py-0.5 shadow-sm`}>
-                                        <span className={`text-[10px] font-bold ${dc.text}`}>
-                                          {formatDelay(avgTat)}
+                                  {/* Avg TAT Column */}
+                                  <td className="px-4 py-3 text-center">
+                                    {(() => {
+                                      const avgTat = dateGroup.totals.avgTat || 0
+                                      const dc = delayColor(avgTat)
+                                      return (
+                                        <span className={`inline-flex items-center ${dc.bg} border ${dc.border} rounded-full px-2.5 py-0.5 shadow-sm`}>
+                                          <span className={`text-[10px] font-bold ${dc.text}`}>
+                                            {formatDelay(avgTat)}
+                                          </span>
                                         </span>
-                                      </span>
-                                    )
-                                  })()}
-                                </td>
+                                      )
+                                    })()}
+                                  </td>
 
-                                {/* High Priority - Count */}
-                                <td className="px-2 py-3 text-center border-l border-slate-300" style={{ backgroundColor: expandedDataSourceDates.has(dateGroup.date) ? '#d1fae5' : 'transparent' }}>
-                                  <span className="text-sm font-bold text-green-900">
-                                    {dateGroup.totals.highPriority}
-                                  </span>
-                                </td>
-                                {/* High Priority - % */}
-                                <td className="px-2 py-3 text-center" style={{ backgroundColor: expandedDataSourceDates.has(dateGroup.date) ? '#d1fae5' : 'transparent' }}>
-                                  <span className="text-xs font-semibold text-green-800">
-                                    {dateGroup.totals.totalLeads > 0 ? ((dateGroup.totals.highPriority / dateGroup.totals.totalLeads) * 100).toFixed(1) : '0.0'}%
-                                  </span>
-                                </td>
-                                {/* High Priority - TAT */}
-                                <td className="px-2 py-3 text-center" style={{ backgroundColor: expandedDataSourceDates.has(dateGroup.date) ? '#d1fae5' : 'transparent' }}>
-                                  {(() => {
-                                    const t = dateGroup.totals.highPriorityAvgTat || 0
-                                    if (!t) return <span className="text-xs text-slate-400">—</span>
-                                    const dc = delayColor(t)
-                                    return <span className={`text-[10px] font-bold ${dc.bg} border ${dc.border} rounded px-1.5 py-0.5 ${dc.text}`}>{formatDelay(t)}</span>
-                                  })()}
-                                </td>
+                                  {/* High Priority - Count */}
+                                  <td className="px-2 py-3 text-center border-l border-slate-300" style={{ backgroundColor: expandedDataSourceDates.has(dateGroup.date) ? '#d1fae5' : 'transparent' }}>
+                                    <span className="text-sm font-bold text-green-900">
+                                      {dateGroup.totals.highPriority}
+                                    </span>
+                                  </td>
+                                  {/* High Priority - % */}
+                                  <td className="px-2 py-3 text-center" style={{ backgroundColor: expandedDataSourceDates.has(dateGroup.date) ? '#d1fae5' : 'transparent' }}>
+                                    <span className="text-xs font-semibold text-green-800">
+                                      {dateGroup.totals.totalLeads > 0 ? ((dateGroup.totals.highPriority / dateGroup.totals.totalLeads) * 100).toFixed(1) : '0.0'}%
+                                    </span>
+                                  </td>
+                                  {/* High Priority - TAT */}
+                                  <td className="px-2 py-3 text-center" style={{ backgroundColor: expandedDataSourceDates.has(dateGroup.date) ? '#d1fae5' : 'transparent' }}>
+                                    {(() => {
+                                      const t = dateGroup.totals.highPriorityAvgTat || 0
+                                      if (!t) return <span className="text-xs text-slate-400">—</span>
+                                      const dc = delayColor(t)
+                                      return <span className={`text-[10px] font-bold ${dc.bg} border ${dc.border} rounded px-1.5 py-0.5 ${dc.text}`}>{formatDelay(t)}</span>
+                                    })()}
+                                  </td>
 
-                                {/* Medium Priority - Count */}
-                                <td className="px-2 py-3 text-center border-l border-slate-300" style={{ backgroundColor: expandedDataSourceDates.has(dateGroup.date) ? '#fef3c7' : 'transparent' }}>
-                                  <span className="text-sm font-bold text-amber-900">
-                                    {dateGroup.totals.mediumPriority}
-                                  </span>
-                                </td>
-                                {/* Medium Priority - % */}
-                                <td className="px-2 py-3 text-center" style={{ backgroundColor: expandedDataSourceDates.has(dateGroup.date) ? '#fef3c7' : 'transparent' }}>
-                                  <span className="text-xs font-semibold text-amber-800">
-                                    {dateGroup.totals.totalLeads > 0 ? ((dateGroup.totals.mediumPriority / dateGroup.totals.totalLeads) * 100).toFixed(1) : '0.0'}%
-                                  </span>
-                                </td>
-                                {/* Medium Priority - TAT */}
-                                <td className="px-2 py-3 text-center" style={{ backgroundColor: expandedDataSourceDates.has(dateGroup.date) ? '#fef3c7' : 'transparent' }}>
-                                  {(() => {
-                                    const t = dateGroup.totals.mediumPriorityAvgTat || 0
-                                    if (!t) return <span className="text-xs text-slate-400">—</span>
-                                    const dc = delayColor(t)
-                                    return <span className={`text-[10px] font-bold ${dc.bg} border ${dc.border} rounded px-1.5 py-0.5 ${dc.text}`}>{formatDelay(t)}</span>
-                                  })()}
-                                </td>
+                                  {/* Medium Priority - Count */}
+                                  <td className="px-2 py-3 text-center border-l border-slate-300" style={{ backgroundColor: expandedDataSourceDates.has(dateGroup.date) ? '#fef3c7' : 'transparent' }}>
+                                    <span className="text-sm font-bold text-amber-900">
+                                      {dateGroup.totals.mediumPriority}
+                                    </span>
+                                  </td>
+                                  {/* Medium Priority - % */}
+                                  <td className="px-2 py-3 text-center" style={{ backgroundColor: expandedDataSourceDates.has(dateGroup.date) ? '#fef3c7' : 'transparent' }}>
+                                    <span className="text-xs font-semibold text-amber-800">
+                                      {dateGroup.totals.totalLeads > 0 ? ((dateGroup.totals.mediumPriority / dateGroup.totals.totalLeads) * 100).toFixed(1) : '0.0'}%
+                                    </span>
+                                  </td>
+                                  {/* Medium Priority - TAT */}
+                                  <td className="px-2 py-3 text-center" style={{ backgroundColor: expandedDataSourceDates.has(dateGroup.date) ? '#fef3c7' : 'transparent' }}>
+                                    {(() => {
+                                      const t = dateGroup.totals.mediumPriorityAvgTat || 0
+                                      if (!t) return <span className="text-xs text-slate-400">—</span>
+                                      const dc = delayColor(t)
+                                      return <span className={`text-[10px] font-bold ${dc.bg} border ${dc.border} rounded px-1.5 py-0.5 ${dc.text}`}>{formatDelay(t)}</span>
+                                    })()}
+                                  </td>
 
-                                {/* Low Priority - Count */}
-                                <td
-                                  className="px-2 py-3 text-center border-l border-slate-300"
-                                  style={{ backgroundColor: expandedDataSourceDates.has(dateGroup.date) ? '#fee2e2' : 'transparent' }}
-                                >
-                                  <span className="text-sm font-bold text-red-900">
-                                    {dateGroup.totals.lowPriority}
-                                  </span>
-                                </td>
-                                {/* Low Priority - % */}
-                                <td
-                                  className="px-2 py-3 text-center"
-                                  style={{ backgroundColor: expandedDataSourceDates.has(dateGroup.date) ? '#fee2e2' : 'transparent' }}
-                                >
-                                  <span className="text-xs font-semibold text-red-800">
-                                    {dateGroup.totals.totalLeads > 0
-                                      ? ((dateGroup.totals.lowPriority / dateGroup.totals.totalLeads) * 100).toFixed(1)
-                                      : '0.0'}%
-                                  </span>
-                                </td>
-                                {/* Low Priority - TAT */}
-                                <td className="px-2 py-3 text-center" style={{ backgroundColor: expandedDataSourceDates.has(dateGroup.date) ? '#fee2e2' : 'transparent' }}>
-                                  {(() => {
-                                    const t = dateGroup.totals.lowPriorityAvgTat || 0
-                                    if (!t) return <span className="text-xs text-slate-400">—</span>
-                                    const dc = delayColor(t)
-                                    return <span className={`text-[10px] font-bold ${dc.bg} border ${dc.border} rounded px-1.5 py-0.5 ${dc.text}`}>{formatDelay(t)}</span>
-                                  })()}
-                                </td>
+                                  {/* Low Priority - Count */}
+                                  <td
+                                    className="px-2 py-3 text-center border-l border-slate-300"
+                                    style={{ backgroundColor: expandedDataSourceDates.has(dateGroup.date) ? '#fee2e2' : 'transparent' }}
+                                  >
+                                    <span className="text-sm font-bold text-red-900">
+                                      {dateGroup.totals.lowPriority}
+                                    </span>
+                                  </td>
+                                  {/* Low Priority - % */}
+                                  <td
+                                    className="px-2 py-3 text-center"
+                                    style={{ backgroundColor: expandedDataSourceDates.has(dateGroup.date) ? '#fee2e2' : 'transparent' }}
+                                  >
+                                    <span className="text-xs font-semibold text-red-800">
+                                      {dateGroup.totals.totalLeads > 0
+                                        ? ((dateGroup.totals.lowPriority / dateGroup.totals.totalLeads) * 100).toFixed(1)
+                                        : '0.0'}%
+                                    </span>
+                                  </td>
+                                  {/* Low Priority - TAT */}
+                                  <td className="px-2 py-3 text-center" style={{ backgroundColor: expandedDataSourceDates.has(dateGroup.date) ? '#fee2e2' : 'transparent' }}>
+                                    {(() => {
+                                      const t = dateGroup.totals.lowPriorityAvgTat || 0
+                                      if (!t) return <span className="text-xs text-slate-400">—</span>
+                                      const dc = delayColor(t)
+                                      return <span className={`text-[10px] font-bold ${dc.bg} border ${dc.border} rounded px-1.5 py-0.5 ${dc.text}`}>{formatDelay(t)}</span>
+                                    })()}
+                                  </td>
 
-                                {/* 🔹 SEPARATOR COLUMN (LINE) */}
-                                <td className="px-0 py-0 border-l border-slate-300"></td>
+                                  {/* 🔹 SEPARATOR COLUMN (LINE) */}
+                                  <td className="px-0 py-0 border-l border-slate-300"></td>
 
-                                {/* Conversion Metrics */}
-                                <td className="px-4 py-3 text-center text-sm font-bold text-slate-900">
-                                  {dateGroup.totals.convertedCount}
-                                </td>
-                                <td className="px-4 py-3 text-center text-sm font-bold text-slate-900">
-                                  ₹{Math.floor(dateGroup.totals.conversionAmount).toLocaleString("en-IN")}
-                                </td>
-                                <td className="px-4 py-3 text-center text-sm font-bold text-slate-900">
-                                  {dateGroup.totals.conversionPercentage}%
-                                </td>
+                                  {/* Conversion Metrics */}
+                                  <td className="px-4 py-3 text-center text-sm font-bold text-slate-900">
+                                    {dateGroup.totals.convertedCount}
+                                  </td>
+                                  <td className="px-4 py-3 text-center text-sm font-bold text-slate-900">
+                                    ₹{Math.floor(dateGroup.totals.conversionAmount).toLocaleString("en-IN")}
+                                  </td>
+                                  <td className="px-4 py-3 text-center text-sm font-bold text-slate-900">
+                                    {dateGroup.totals.conversionPercentage}%
+                                  </td>
 
-                                {/* Spend & ROI Metrics */}
-                                <td className="px-4 py-3 text-center text-sm font-bold text-slate-900">
-                                  ₹{Math.floor(dateGroup.totals.spendAmount).toLocaleString("en-IN")}
-                                </td>
-                                <td className="px-4 py-3 text-center text-sm font-bold text-slate-900">
-                                  {parseFloat(dateGroup.totals.roas) === 0 ? "0x" : `${dateGroup.totals.roas}x`}
-                                </td>
-                                <td className="px-4 py-3 text-center text-sm font-bold text-slate-900">
-                                  {parseFloat(dateGroup.totals.cac) === 0 ? "0" : `${dateGroup.totals.cac}`}
-                                </td>
+                                  {/* Spend & ROI Metrics */}
+                                  <td className="px-4 py-3 text-center text-sm font-bold text-slate-900">
+                                    ₹{Math.floor(dateGroup.totals.spendAmount).toLocaleString("en-IN")}
+                                  </td>
+                                  <td className="px-4 py-3 text-center text-sm font-bold text-slate-900">
+                                    {parseFloat(dateGroup.totals.roas) === 0 ? "0x" : `${dateGroup.totals.roas}x`}
+                                  </td>
+                                  <td className="px-4 py-3 text-center text-sm font-bold text-slate-900">
+                                    {parseFloat(dateGroup.totals.cac) === 0 ? "0" : `${dateGroup.totals.cac}`}
+                                  </td>
 
-                                {/* BLUE COLUMN - Collection Amount */}
-                                {/* <td
+                                  {/* BLUE COLUMN - Collection Amount */}
+                                  {/* <td
                                   className="px-4 py-3 text-center text-sm font-bold text-white"
                                   style={{ backgroundColor: '#3b82f6' }}
                                 >
@@ -5270,250 +5279,250 @@ Cancelled Amt:
                                     `₹0`
                                   )}
                                 </td> */}
-                                <td
-                                  className="px-4 py-3 text-center text-sm font-bold text-white"
-                                  style={{ backgroundColor: '#3b82f6' }}
-                                >
-                                  {dateGroup.totals.collectionAmount > 0 ? (
-                                    <button
-                                      onClick={(e) => { e.stopPropagation(); handleOpenCollectionModal(dateGroup.date) }}
-                                      style={{
-                                        color: '#fff',
-                                        textDecoration: 'underline',
-                                        fontWeight: 700,
-                                        background: 'none',
-                                        border: 'none',
-                                        padding: 0,
-                                        cursor: 'pointer',
-                                      }}
-                                    >
-                                      ₹{Math.floor(dateGroup.totals.collectionAmount).toLocaleString("en-IN")}
-                                    </button>
-                                  ) : (
-                                    `₹0`
-                                  )}
-                                </td>
-
-                                {/* RED COLUMNS - Waste Analysis */}
-                                <td className="px-4 py-3 text-center text-sm font-bold text-slate-900">
-                                  {dateGroup.totals.wastedQty || 0}
-                                </td>
-                                <td className="px-4 py-3 text-center text-sm font-bold text-slate-900">
-                                  {dateGroup.totals.totalLeads > 0
-                                    ? ((dateGroup.totals.wastedQty / dateGroup.totals.totalLeads) * 100).toFixed(1)
-                                    : '0.0'}%
-                                </td>
-                                <td className="px-4 py-3 text-center text-sm text-slate-700">
-                                  {(dateGroup.totals.wastedQty || 0) > 0 && (
-                                    <div className="flex flex-wrap gap-1 justify-center">
-                                      {dateGroup.totals.lostReasons?.slice(0, 1).map((reason: string, idx: number) => (
-                                        <span
-                                          key={idx}
-                                          className="px-2 py-0.5 text-xs rounded-full"
-                                          style={{
-                                            backgroundColor: ['#fee2e2', '#fef3c7', '#dbeafe', '#f3e8ff', '#d1fae5'][idx % 5],
-                                            color: ['#991b1b', '#92400e', '#1e40af', '#6b21a8', '#065f46'][idx % 5]
-                                          }}
-                                        >
-                                          View Reason
-                                        </span>
-                                      ))}
-                                    </div>
-                                  )}
-                                </td>
-                                <td className="px-4 py-3 text-center text-sm font-bold text-slate-900">
-                                  ₹{Math.floor(dateGroup.totals.potentialLostValue || 0).toLocaleString("en-IN")}
-                                </td>
-
-                                {/* PURPLE COLUMN - Unverified Conversion Amount */}
-                                <td className="px-4 py-3 text-center text-sm font-bold text-white" style={{ backgroundColor: '#a855f7' }}>
-                                  ₹{Math.floor(dateGroup.totals.unverifiedConversionAmount || 0).toLocaleString("en-IN")}
-                                </td>
-
-                                {/* RED COLUMNS - Cancelled Lead Analysis */}
-                                <td className="px-4 py-3 text-center text-sm font-bold text-slate-900">
-                                  {dateGroup.totals.cancelledLeadQty || 0}
-                                </td>
-                                <td className="px-4 py-3 text-center text-sm font-bold text-slate-900">
-                                  ₹{Math.floor(dateGroup.totals.cancelledLeadAmount || 0).toLocaleString("en-IN")}
-                                </td>
-                                <td className="px-4 py-3 text-center text-sm font-bold text-slate-900">
-                                  {dateGroup.totals.totalLeads > 0
-                                    ? ((dateGroup.totals.cancelledLeadQty / dateGroup.totals.totalLeads) * 100).toFixed(1)
-                                    : '0.0'}%
-                                </td>
-                              </tr>
-
-                              {/* Source Rows (Nested) - WITH CONDITIONAL LINKS */}
-                              {expandedDataSourceDates.has(dateGroup.date) && dateGroup.sources.filter(source =>
-                                source.totalLeads > 0 ||
-                                source.convertedCount > 0 ||
-                                source.conversionAmount > 0 ||
-                                source.totalTraffic > 0 ||
-                                source.wastedQty > 0 ||
-                                source.cancelledLeadQty > 0 ||
-                                source.unverifiedConversionAmount > 0
-                              )
-                                .map((source, sourceIdx) => (
-                                  <tr
-                                    key={`${dateGroup.date}-${source.dataSource}`}
-                                    className="bg-white hover:bg-slate-50 transition-colors"
+                                  <td
+                                    className="px-4 py-3 text-center text-sm font-bold text-white"
+                                    style={{ backgroundColor: '#3b82f6' }}
                                   >
-                                    {/* STICKY - Data Source Name */}
-                                    <td
-                                      className="sticky left-0 z-10 bg-white px-4 py-3 pl-12 text-sm font-medium text-slate-700 border-b border-slate-100"
-                                    >
-                                      {source.dataSource}
-                                    </td>
+                                    {dateGroup.totals.collectionAmount > 0 ? (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); handleOpenCollectionModal(dateGroup.date) }}
+                                        style={{
+                                          color: '#fff',
+                                          textDecoration: 'underline',
+                                          fontWeight: 700,
+                                          background: 'none',
+                                          border: 'none',
+                                          padding: 0,
+                                          cursor: 'pointer',
+                                        }}
+                                      >
+                                        ₹{Math.floor(dateGroup.totals.collectionAmount).toLocaleString("en-IN")}
+                                      </button>
+                                    ) : (
+                                      `₹0`
+                                    )}
+                                  </td>
 
-                                    {/* STICKY - Total Traffic with placeholder */}
-                                    <td
-                                      className="sticky left-[180px] z-10 bg-white px-4 py-3 text-center text-sm border-b border-slate-100"
-                                    >
-                                      <span className="text-slate-900 font-semibold">
-                                        {source.totalTraffic || 0}
-                                      </span>
-                                    </td>
-
-                                    {/* STICKY - Total Leads with Link */}
-                                    <td
-                                      className="sticky left-[300px] z-10 bg-white px-4 py-3 text-center text-sm border-b border-slate-100"
-                                    >
-                                      {source.totalLeads > 0 ? (
-                                        <button
-                                          onClick={() => handleOpenLeadDetailModal(dateGroup.date, source.dataSource, "All")}
-                                          style={{ color: '#0037ba', textDecoration: 'underline', fontWeight: 700, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-                                        >
-                                          {source.totalLeads}
-                                        </button>
-                                      ) : (
-                                        <span className="text-slate-900">{source.totalLeads}</span>
-                                      )}
-
-                                    </td>
-
-                                    {/* Avg TAT Column */}
-                                    <td className="px-4 py-3 text-center text-sm border-b border-slate-100">
-                                      {(() => {
-                                        const avgTat = source.avgTat || 0
-                                        const dc = delayColor(avgTat)
-                                        return (
-                                          <span className={`inline-flex items-center ${dc.bg} border ${dc.border} rounded-full px-2 py-0.5`}>
-                                            <span className={`text-[10px] font-semibold ${dc.text}`}>
-                                              {formatDelay(avgTat)}
-                                            </span>
+                                  {/* RED COLUMNS - Waste Analysis */}
+                                  <td className="px-4 py-3 text-center text-sm font-bold text-slate-900">
+                                    {dateGroup.totals.wastedQty || 0}
+                                  </td>
+                                  <td className="px-4 py-3 text-center text-sm font-bold text-slate-900">
+                                    {dateGroup.totals.totalLeads > 0
+                                      ? ((dateGroup.totals.wastedQty / dateGroup.totals.totalLeads) * 100).toFixed(1)
+                                      : '0.0'}%
+                                  </td>
+                                  <td className="px-4 py-3 text-center text-sm text-slate-700">
+                                    {(dateGroup.totals.wastedQty || 0) > 0 && (
+                                      <div className="flex flex-wrap gap-1 justify-center">
+                                        {dateGroup.totals.lostReasons?.slice(0, 1).map((reason: string, idx: number) => (
+                                          <span
+                                            key={idx}
+                                            className="px-2 py-0.5 text-xs rounded-full"
+                                            style={{
+                                              backgroundColor: ['#fee2e2', '#fef3c7', '#dbeafe', '#f3e8ff', '#d1fae5'][idx % 5],
+                                              color: ['#991b1b', '#92400e', '#1e40af', '#6b21a8', '#065f46'][idx % 5]
+                                            }}
+                                          >
+                                            View Reason
                                           </span>
-                                        )
-                                      })()}
-                                    </td>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3 text-center text-sm font-bold text-slate-900">
+                                    ₹{Math.floor(dateGroup.totals.potentialLostValue || 0).toLocaleString("en-IN")}
+                                  </td>
 
-                                    {/* ✅ HIGH PRIORITY - CONDITIONAL LINK */}
-                                    <td className="px-2 py-3 text-center border-l border-slate-200 border-b border-slate-100" style={{ backgroundColor: '#f0fdf4' }}>
-                                      {source.highPriority > 0 ? (
-                                        <button
-                                          onClick={() => handleOpenLeadDetailModal(dateGroup.date, source.dataSource, "High")}
-                                          style={{ color: '#0037ba', textDecoration: 'underline', fontWeight: 700, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-                                        >
-                                          <span className="text-sm">
+                                  {/* PURPLE COLUMN - Unverified Conversion Amount */}
+                                  <td className="px-4 py-3 text-center text-sm font-bold text-white" style={{ backgroundColor: '#a855f7' }}>
+                                    ₹{Math.floor(dateGroup.totals.unverifiedConversionAmount || 0).toLocaleString("en-IN")}
+                                  </td>
+
+                                  {/* RED COLUMNS - Cancelled Lead Analysis */}
+                                  <td className="px-4 py-3 text-center text-sm font-bold text-slate-900">
+                                    {dateGroup.totals.cancelledLeadQty || 0}
+                                  </td>
+                                  <td className="px-4 py-3 text-center text-sm font-bold text-slate-900">
+                                    ₹{Math.floor(dateGroup.totals.cancelledLeadAmount || 0).toLocaleString("en-IN")}
+                                  </td>
+                                  <td className="px-4 py-3 text-center text-sm font-bold text-slate-900">
+                                    {dateGroup.totals.totalLeads > 0
+                                      ? ((dateGroup.totals.cancelledLeadQty / dateGroup.totals.totalLeads) * 100).toFixed(1)
+                                      : '0.0'}%
+                                  </td>
+                                </tr>
+
+                                {/* Source Rows (Nested) - WITH CONDITIONAL LINKS */}
+                                {expandedDataSourceDates.has(dateGroup.date) && dateGroup.sources.filter(source =>
+                                  source.totalLeads > 0 ||
+                                  source.convertedCount > 0 ||
+                                  source.conversionAmount > 0 ||
+                                  source.totalTraffic > 0 ||
+                                  source.wastedQty > 0 ||
+                                  source.cancelledLeadQty > 0 ||
+                                  source.unverifiedConversionAmount > 0
+                                )
+                                  .map((source, sourceIdx) => (
+                                    <tr
+                                      key={`${dateGroup.date}-${source.dataSource}`}
+                                      className="bg-white hover:bg-slate-50 transition-colors"
+                                    >
+                                      {/* STICKY - Data Source Name */}
+                                      <td
+                                        className="sticky left-0 z-10 bg-white px-4 py-3 pl-12 text-sm font-medium text-slate-700 border-b border-slate-100"
+                                      >
+                                        {source.dataSource}
+                                      </td>
+
+                                      {/* STICKY - Total Traffic with placeholder */}
+                                      <td
+                                        className="sticky left-[180px] z-10 bg-white px-4 py-3 text-center text-sm border-b border-slate-100"
+                                      >
+                                        <span className="text-slate-900 font-semibold">
+                                          {source.totalTraffic || 0}
+                                        </span>
+                                      </td>
+
+                                      {/* STICKY - Total Leads with Link */}
+                                      <td
+                                        className="sticky left-[300px] z-10 bg-white px-4 py-3 text-center text-sm border-b border-slate-100"
+                                      >
+                                        {source.totalLeads > 0 ? (
+                                          <button
+                                            onClick={() => handleOpenLeadDetailModal(dateGroup.date, source.dataSource, "All")}
+                                            style={{ color: '#0037ba', textDecoration: 'underline', fontWeight: 700, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                                          >
+                                            {source.totalLeads}
+                                          </button>
+                                        ) : (
+                                          <span className="text-slate-900">{source.totalLeads}</span>
+                                        )}
+
+                                      </td>
+
+                                      {/* Avg TAT Column */}
+                                      <td className="px-4 py-3 text-center text-sm border-b border-slate-100">
+                                        {(() => {
+                                          const avgTat = source.avgTat || 0
+                                          const dc = delayColor(avgTat)
+                                          return (
+                                            <span className={`inline-flex items-center ${dc.bg} border ${dc.border} rounded-full px-2 py-0.5`}>
+                                              <span className={`text-[10px] font-semibold ${dc.text}`}>
+                                                {formatDelay(avgTat)}
+                                              </span>
+                                            </span>
+                                          )
+                                        })()}
+                                      </td>
+
+                                      {/* ✅ HIGH PRIORITY - CONDITIONAL LINK */}
+                                      <td className="px-2 py-3 text-center border-l border-slate-200 border-b border-slate-100" style={{ backgroundColor: '#f0fdf4' }}>
+                                        {source.highPriority > 0 ? (
+                                          <button
+                                            onClick={() => handleOpenLeadDetailModal(dateGroup.date, source.dataSource, "High")}
+                                            style={{ color: '#0037ba', textDecoration: 'underline', fontWeight: 700, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                                          >
+                                            <span className="text-sm">
+                                              {source.highPriority}
+                                            </span>
+                                          </button>
+                                        ) : (
+                                          <span className="text-sm font-semibold text-green-900">
                                             {source.highPriority}
                                           </span>
-                                        </button>
-                                      ) : (
-                                        <span className="text-sm font-semibold text-green-900">
-                                          {source.highPriority}
+                                        )}
+
+                                      </td>
+                                      {/* High Priority - % */}
+                                      <td className="px-2 py-3 text-center border-b border-slate-100" style={{ backgroundColor: '#f0fdf4' }}>
+                                        <span className="text-xs text-green-700">
+                                          {source.totalLeads > 0 ? ((source.highPriority / source.totalLeads) * 100).toFixed(1) : '0.0'}%
                                         </span>
-                                      )}
+                                      </td>
+                                      {/* High Priority - TAT */}
+                                      <td className="px-2 py-3 text-center border-b border-slate-100" style={{ backgroundColor: '#f0fdf4' }}>
+                                        {(() => {
+                                          const t = source.highPriorityAvgTat || 0
+                                          if (!t) return <span className="text-xs text-slate-400">—</span>
+                                          const dc = delayColor(t)
+                                          return <span className={`text-[10px] font-bold ${dc.bg} border ${dc.border} rounded px-1 py-0.5 ${dc.text}`}>{formatDelay(t)}</span>
+                                        })()}
+                                      </td>
 
-                                    </td>
-                                    {/* High Priority - % */}
-                                    <td className="px-2 py-3 text-center border-b border-slate-100" style={{ backgroundColor: '#f0fdf4' }}>
-                                      <span className="text-xs text-green-700">
-                                        {source.totalLeads > 0 ? ((source.highPriority / source.totalLeads) * 100).toFixed(1) : '0.0'}%
-                                      </span>
-                                    </td>
-                                    {/* High Priority - TAT */}
-                                    <td className="px-2 py-3 text-center border-b border-slate-100" style={{ backgroundColor: '#f0fdf4' }}>
-                                      {(() => {
-                                        const t = source.highPriorityAvgTat || 0
-                                        if (!t) return <span className="text-xs text-slate-400">—</span>
-                                        const dc = delayColor(t)
-                                        return <span className={`text-[10px] font-bold ${dc.bg} border ${dc.border} rounded px-1 py-0.5 ${dc.text}`}>{formatDelay(t)}</span>
-                                      })()}
-                                    </td>
-
-                                    {/* ✅ MEDIUM PRIORITY - CONDITIONAL LINK */}
-                                    <td className="px-2 py-3 text-center border-l border-slate-200 border-b border-slate-100" style={{ backgroundColor: '#fefce8' }}>
-                                      {source.mediumPriority > 0 ? (
-                                        <button
-                                          onClick={() => handleOpenLeadDetailModal(dateGroup.date, source.dataSource, "Medium")}
-                                          style={{ color: '#0037ba', textDecoration: 'underline', fontWeight: 700, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-                                        >
-                                          <span className="text-sm">
+                                      {/* ✅ MEDIUM PRIORITY - CONDITIONAL LINK */}
+                                      <td className="px-2 py-3 text-center border-l border-slate-200 border-b border-slate-100" style={{ backgroundColor: '#fefce8' }}>
+                                        {source.mediumPriority > 0 ? (
+                                          <button
+                                            onClick={() => handleOpenLeadDetailModal(dateGroup.date, source.dataSource, "Medium")}
+                                            style={{ color: '#0037ba', textDecoration: 'underline', fontWeight: 700, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                                          >
+                                            <span className="text-sm">
+                                              {source.mediumPriority}
+                                            </span>
+                                          </button>
+                                        ) : (
+                                          <span className="text-sm font-semibold text-amber-900">
                                             {source.mediumPriority}
                                           </span>
-                                        </button>
-                                      ) : (
-                                        <span className="text-sm font-semibold text-amber-900">
-                                          {source.mediumPriority}
+                                        )}
+
+                                      </td>
+                                      {/* Medium Priority - % */}
+                                      <td className="px-2 py-3 text-center border-b border-slate-100" style={{ backgroundColor: '#fefce8' }}>
+                                        <span className="text-xs text-amber-700">
+                                          {source.totalLeads > 0 ? ((source.mediumPriority / source.totalLeads) * 100).toFixed(1) : '0.0'}%
                                         </span>
-                                      )}
+                                      </td>
+                                      {/* Medium Priority - TAT */}
+                                      <td className="px-2 py-3 text-center border-b border-slate-100" style={{ backgroundColor: '#fefce8' }}>
+                                        {(() => {
+                                          const t = source.mediumPriorityAvgTat || 0
+                                          if (!t) return <span className="text-xs text-slate-400">—</span>
+                                          const dc = delayColor(t)
+                                          return <span className={`text-[10px] font-bold ${dc.bg} border ${dc.border} rounded px-1 py-0.5 ${dc.text}`}>{formatDelay(t)}</span>
+                                        })()}
+                                      </td>
 
-                                    </td>
-                                    {/* Medium Priority - % */}
-                                    <td className="px-2 py-3 text-center border-b border-slate-100" style={{ backgroundColor: '#fefce8' }}>
-                                      <span className="text-xs text-amber-700">
-                                        {source.totalLeads > 0 ? ((source.mediumPriority / source.totalLeads) * 100).toFixed(1) : '0.0'}%
-                                      </span>
-                                    </td>
-                                    {/* Medium Priority - TAT */}
-                                    <td className="px-2 py-3 text-center border-b border-slate-100" style={{ backgroundColor: '#fefce8' }}>
-                                      {(() => {
-                                        const t = source.mediumPriorityAvgTat || 0
-                                        if (!t) return <span className="text-xs text-slate-400">—</span>
-                                        const dc = delayColor(t)
-                                        return <span className={`text-[10px] font-bold ${dc.bg} border ${dc.border} rounded px-1 py-0.5 ${dc.text}`}>{formatDelay(t)}</span>
-                                      })()}
-                                    </td>
-
-                                    {/* ✅ LOW PRIORITY - CONDITIONAL LINK */}
-                                    <td className="px-2 py-3 text-center border-l border-slate-200 border-b border-slate-100" style={{ backgroundColor: '#fef2f2' }}>
-                                      {source.lowPriority > 0 ? (
-                                        <button
-                                          onClick={() => handleOpenLeadDetailModal(dateGroup.date, source.dataSource, "Low")}
-                                          style={{ color: '#0037ba', textDecoration: 'underline', fontWeight: 700, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-                                        >
-                                          <span className="text-sm">
+                                      {/* ✅ LOW PRIORITY - CONDITIONAL LINK */}
+                                      <td className="px-2 py-3 text-center border-l border-slate-200 border-b border-slate-100" style={{ backgroundColor: '#fef2f2' }}>
+                                        {source.lowPriority > 0 ? (
+                                          <button
+                                            onClick={() => handleOpenLeadDetailModal(dateGroup.date, source.dataSource, "Low")}
+                                            style={{ color: '#0037ba', textDecoration: 'underline', fontWeight: 700, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                                          >
+                                            <span className="text-sm">
+                                              {source.lowPriority}
+                                            </span>
+                                          </button>
+                                        ) : (
+                                          <span className="text-sm font-semibold text-red-900">
                                             {source.lowPriority}
                                           </span>
-                                        </button>
-                                      ) : (
-                                        <span className="text-sm font-semibold text-red-900">
-                                          {source.lowPriority}
+                                        )}
+
+                                      </td>
+                                      {/* Low Priority - % */}
+                                      <td className="px-2 py-3 text-center border-b border-slate-100" style={{ backgroundColor: '#fef2f2' }}>
+                                        <span className="text-xs text-red-700">
+                                          {source.totalLeads > 0 ? ((source.lowPriority / source.totalLeads) * 100).toFixed(1) : '0.0'}%
                                         </span>
-                                      )}
+                                      </td>
+                                      {/* Low Priority - TAT */}
+                                      <td className="px-2 py-3 text-center border-b border-slate-100" style={{ backgroundColor: '#fef2f2' }}>
+                                        {(() => {
+                                          const t = source.lowPriorityAvgTat || 0
+                                          if (!t) return <span className="text-xs text-slate-400">—</span>
+                                          const dc = delayColor(t)
+                                          return <span className={`text-[10px] font-bold ${dc.bg} border ${dc.border} rounded px-1 py-0.5 ${dc.text}`}>{formatDelay(t)}</span>
+                                        })()}
+                                      </td>
 
-                                    </td>
-                                    {/* Low Priority - % */}
-                                    <td className="px-2 py-3 text-center border-b border-slate-100" style={{ backgroundColor: '#fef2f2' }}>
-                                      <span className="text-xs text-red-700">
-                                        {source.totalLeads > 0 ? ((source.lowPriority / source.totalLeads) * 100).toFixed(1) : '0.0'}%
-                                      </span>
-                                    </td>
-                                    {/* Low Priority - TAT */}
-                                    <td className="px-2 py-3 text-center border-b border-slate-100" style={{ backgroundColor: '#fef2f2' }}>
-                                      {(() => {
-                                        const t = source.lowPriorityAvgTat || 0
-                                        if (!t) return <span className="text-xs text-slate-400">—</span>
-                                        const dc = delayColor(t)
-                                        return <span className={`text-[10px] font-bold ${dc.bg} border ${dc.border} rounded px-1 py-0.5 ${dc.text}`}>{formatDelay(t)}</span>
-                                      })()}
-                                    </td>
+                                      {/* 🔹 DIVIDER COLUMN */}
+                                      <td className="px-0 py-0 border-l border-slate-200 bg-transparent"></td>
 
-                                    {/* 🔹 DIVIDER COLUMN */}
-                                    <td className="px-0 py-0 border-l border-slate-200 bg-transparent"></td>
-
-                                    {/* ✅ CONVERTED QUANTITY - CONDITIONAL LINK */}
-                                    {/* <td className="px-4 py-3 text-center text-sm border-b border-slate-100">
+                                      {/* ✅ CONVERTED QUANTITY - CONDITIONAL LINK */}
+                                      {/* <td className="px-4 py-3 text-center text-sm border-b border-slate-100">
                                       {source.convertedCount > 0 ? (
                                         <a
                                           href={`https://script.google.com/a/macros/kairali.com/s/AKfycbwm61wP8sRe_okUPf2UCTzs1j3T2piYYeHbFsVTJGT-K1kIQUUykCEZ0mHoYFj-sHjBXQ/exec?company=${selectedCompany}&date=${dateGroup.date.split("-").reverse().join("-")}&src=${source.dataSource}`}
@@ -5527,21 +5536,21 @@ Cancelled Amt:
                                         <span className="text-slate-700">{source.convertedCount}</span>
                                       )}
                                     </td> */}
-                                    <td className="px-4 py-3 text-center text-sm border-b border-slate-100">
-                                      {source.convertedCount > 0 ? (
-                                        <button
-                                          onClick={() => handleOpenVerifiedModal(dateGroup.date, source.dataSource)}
-                                          style={{ color: '#0037ba', textDecoration: 'underline', fontWeight: 700, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-                                        >
-                                          {source.convertedCount}
-                                        </button>
-                                      ) : (
-                                        <span className="text-slate-700">{source.convertedCount}</span>
-                                      )}
-                                    </td>
+                                      <td className="px-4 py-3 text-center text-sm border-b border-slate-100">
+                                        {source.convertedCount > 0 ? (
+                                          <button
+                                            onClick={() => handleOpenVerifiedModal(dateGroup.date, source.dataSource)}
+                                            style={{ color: '#0037ba', textDecoration: 'underline', fontWeight: 700, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                                          >
+                                            {source.convertedCount}
+                                          </button>
+                                        ) : (
+                                          <span className="text-slate-700">{source.convertedCount}</span>
+                                        )}
+                                      </td>
 
-                                    {/* Conversion Amount */}
-                                    {/* <td className="px-4 py-3 text-center text-sm border-b border-slate-100">
+                                      {/* Conversion Amount */}
+                                      {/* <td className="px-4 py-3 text-center text-sm border-b border-slate-100">
                                       {source.conversionAmount > 0 ? (
                                         <a
                                           href={`https://script.google.com/a/macros/kairali.com/s/AKfycbwm61wP8sRe_okUPf2UCTzs1j3T2piYYeHbFsVTJGT-K1kIQUUykCEZ0mHoYFj-sHjBXQ/exec?company=${selectedCompany}&date=${dateGroup.date.split("-").reverse().join("-")}&src=${source.dataSource}`}
@@ -5555,45 +5564,45 @@ Cancelled Amt:
                                         <span className="text-slate-700">₹0</span>
                                       )}
                                     </td> */}
-                                    <td className="px-4 py-3 text-center text-sm border-b border-slate-100">
-                                      {source.conversionAmount > 0 ? (
-                                        <button
-                                          onClick={() => handleOpenVerifiedModal(dateGroup.date, source.dataSource)}
-                                          style={{ color: '#0037ba', textDecoration: 'underline', fontWeight: 700, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-                                        >
-                                          ₹{Math.floor(source.conversionAmount).toLocaleString("en-IN")}
-                                        </button>
-                                      ) : (
-                                        <span className="text-slate-700">₹0</span>
-                                      )}
-                                    </td>
+                                      <td className="px-4 py-3 text-center text-sm border-b border-slate-100">
+                                        {source.conversionAmount > 0 ? (
+                                          <button
+                                            onClick={() => handleOpenVerifiedModal(dateGroup.date, source.dataSource)}
+                                            style={{ color: '#0037ba', textDecoration: 'underline', fontWeight: 700, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                                          >
+                                            ₹{Math.floor(source.conversionAmount).toLocaleString("en-IN")}
+                                          </button>
+                                        ) : (
+                                          <span className="text-slate-700">₹0</span>
+                                        )}
+                                      </td>
 
 
-                                    {/* Conversion Percentage */}
-                                    <td className="px-4 py-3 text-center text-sm text-slate-700 border-b border-slate-100">
-                                      {source.conversionPercentage}%
-                                    </td>
+                                      {/* Conversion Percentage */}
+                                      <td className="px-4 py-3 text-center text-sm text-slate-700 border-b border-slate-100">
+                                        {source.conversionPercentage}%
+                                      </td>
 
-                                    {/* Spend Amount */}
-                                    <td className="px-4 py-3 text-center text-sm text-slate-700 border-b border-slate-100">
-                                      ₹{Math.floor(source.spendAmount).toLocaleString("en-IN")}
-                                    </td>
-                                    {/* ROAS */}
-                                    <td className="px-4 py-3 text-center text-sm text-slate-700 border-b border-slate-100">
-                                      {parseFloat(source.roas) === 0 ? "0x" : `${source.roas}x`}
-                                    </td>
-                                    {/* CAC */}
-                                    <td className="px-4 py-3 text-center text-sm text-slate-700 border-b border-slate-100">
-                                      {parseFloat(source.cac) === 0 ? "0" : `${source.cac}`}
-                                    </td>
+                                      {/* Spend Amount */}
+                                      <td className="px-4 py-3 text-center text-sm text-slate-700 border-b border-slate-100">
+                                        ₹{Math.floor(source.spendAmount).toLocaleString("en-IN")}
+                                      </td>
+                                      {/* ROAS */}
+                                      <td className="px-4 py-3 text-center text-sm text-slate-700 border-b border-slate-100">
+                                        {parseFloat(source.roas) === 0 ? "0x" : `${source.roas}x`}
+                                      </td>
+                                      {/* CAC */}
+                                      <td className="px-4 py-3 text-center text-sm text-slate-700 border-b border-slate-100">
+                                        {parseFloat(source.cac) === 0 ? "0" : `${source.cac}`}
+                                      </td>
 
-                                    {/* Collection Amount - Only at date subtotal & grand total level */}
-                                    <td className="px-4 py-3 text-center text-sm border-b border-slate-100" style={{ backgroundColor: '#dbeafe', color: '#94a3b8' }}>
-                                      —
-                                    </td>
+                                      {/* Collection Amount - Only at date subtotal & grand total level */}
+                                      <td className="px-4 py-3 text-center text-sm border-b border-slate-100" style={{ backgroundColor: '#dbeafe', color: '#94a3b8' }}>
+                                        —
+                                      </td>
 
-                                    {/* ✅ WASTED QTY - CONDITIONAL LINK */}
-                                    {/* <td className="px-4 py-3 text-center text-sm border-b border-slate-100">
+                                      {/* ✅ WASTED QTY - CONDITIONAL LINK */}
+                                      {/* <td className="px-4 py-3 text-center text-sm border-b border-slate-100">
                                       {(source.wastedQty || 0) > 0 ? (
                                         <a
                                           href={`https://script.google.com/macros/s/AKfycbyepUl170PJVzR2iecl7kMExjlRO_isTfOn1JrZftN3q5h4HoeJRv81K_QJUEVdp_YhoA/exec?company=${selectedCompany}&date=${dateGroup.date.split("-").reverse().join("-")}&src=${source.dataSource}&priority=All&showConverted=false`}
@@ -5608,24 +5617,24 @@ Cancelled Amt:
                                       )}
                                     </td> */}
 
-                                    <td className="px-4 py-3 text-center text-sm border-b border-slate-100">
-                                      {(source.wastedQty || 0) > 0 ? (
-                                        <button
-                                          onClick={() => handleOpenWastedModal(dateGroup.date, source.dataSource, undefined, source.wastedQty)}
-                                          style={{ color: '#0037ba', textDecoration: 'underline', fontWeight: 700, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-                                        >
-                                          {source.wastedQty || 0}
-                                        </button>
-                                      ) : (
-                                        <span className="text-slate-700">{source.wastedQty || 0}</span>
-                                      )}
-                                    </td>
-                                    {/* Waste Percentage */}
-                                    <td className="px-4 py-3 text-center text-sm text-slate-700 border-b border-slate-100">
-                                      {source.totalLeads > 0 ? ((source.wastedQty / source.totalLeads) * 100).toFixed(1) : '0.0'}%
-                                    </td>
-                                    {/* Lost Reasons */}
-                                    {/* <td className="px-4 py-3 text-center text-sm text-slate-700 border-b border-slate-100">
+                                      <td className="px-4 py-3 text-center text-sm border-b border-slate-100">
+                                        {(source.wastedQty || 0) > 0 ? (
+                                          <button
+                                            onClick={() => handleOpenWastedModal(dateGroup.date, source.dataSource, undefined, source.wastedQty)}
+                                            style={{ color: '#0037ba', textDecoration: 'underline', fontWeight: 700, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                                          >
+                                            {source.wastedQty || 0}
+                                          </button>
+                                        ) : (
+                                          <span className="text-slate-700">{source.wastedQty || 0}</span>
+                                        )}
+                                      </td>
+                                      {/* Waste Percentage */}
+                                      <td className="px-4 py-3 text-center text-sm text-slate-700 border-b border-slate-100">
+                                        {source.totalLeads > 0 ? ((source.wastedQty / source.totalLeads) * 100).toFixed(1) : '0.0'}%
+                                      </td>
+                                      {/* Lost Reasons */}
+                                      {/* <td className="px-4 py-3 text-center text-sm text-slate-700 border-b border-slate-100">
                                     <div className="flex flex-wrap gap-1 justify-center">
                                       {source.lostReasons?.split(',').map((reason, idx) => (
                                         <span
@@ -5643,7 +5652,7 @@ Cancelled Amt:
                                   </td> */}
 
 
-                                    {/* <td className="px-4 py-3 text-center text-sm text-slate-700 border-b border-slate-100">
+                                      {/* <td className="px-4 py-3 text-center text-sm text-slate-700 border-b border-slate-100">
                                       {(source.wastedQty || 0) > 0 && (
                                         <div className="flex flex-wrap gap-1 justify-center">
                                           {source.lostReasons?.split(',').map((reason: string, idx: number) => {
@@ -5671,43 +5680,43 @@ Cancelled Amt:
                                         </div>
                                       )}
                                     </td> */}
-                                    <td className="px-4 py-3 text-center text-sm text-slate-700 border-b border-slate-100">
-                                      {(source.wastedQty || 0) > 0 && (
-                                        <div className="flex flex-wrap gap-1 justify-center">
-                                          {source.lostReasons?.split(',').map((reason: string, idx: number) => {
-                                            const cleanReason = reason.includes('(')
-                                              ? reason.split('(')[0].trim()
-                                              : reason.trim();
+                                      <td className="px-4 py-3 text-center text-sm text-slate-700 border-b border-slate-100">
+                                        {(source.wastedQty || 0) > 0 && (
+                                          <div className="flex flex-wrap gap-1 justify-center">
+                                            {source.lostReasons?.split(',').map((reason: string, idx: number) => {
+                                              const cleanReason = reason.includes('(')
+                                                ? reason.split('(')[0].trim()
+                                                : reason.trim();
 
-                                            return (
-                                              <button
-                                                key={idx}
-                                                onClick={() => handleOpenWastedModal(dateGroup.date, source.dataSource, cleanReason)}
-                                                className="px-2 py-0.5 text-xs rounded-full cursor-pointer"
-                                                style={{
-                                                  backgroundColor: ['#fee2e2', '#fef3c7', '#dbeafe', '#f3e8ff', '#d1fae5'][idx % 5],
-                                                  color: ['#633a3a', '#92400e', '#1e40af', '#6b21a8', '#065f46'][idx % 5],
-                                                  textDecoration: 'underline',
-                                                  fontWeight: 600,
-                                                  border: 'none',
-                                                }}
-                                              >
-                                                View Reason
-                                              </button>
-                                            )
-                                          })}
-                                        </div>
-                                      )}
-                                    </td>
+                                              return (
+                                                <button
+                                                  key={idx}
+                                                  onClick={() => handleOpenWastedModal(dateGroup.date, source.dataSource, cleanReason)}
+                                                  className="px-2 py-0.5 text-xs rounded-full cursor-pointer"
+                                                  style={{
+                                                    backgroundColor: ['#fee2e2', '#fef3c7', '#dbeafe', '#f3e8ff', '#d1fae5'][idx % 5],
+                                                    color: ['#633a3a', '#92400e', '#1e40af', '#6b21a8', '#065f46'][idx % 5],
+                                                    textDecoration: 'underline',
+                                                    fontWeight: 600,
+                                                    border: 'none',
+                                                  }}
+                                                >
+                                                  View Reason
+                                                </button>
+                                              )
+                                            })}
+                                          </div>
+                                        )}
+                                      </td>
 
-                                    {/* Potential Lost Value */}
-                                    <td className="px-4 py-3 text-center text-sm text-slate-700 border-b border-slate-100">
-                                      ₹{Math.floor(source.potentialLostValue || 0).toLocaleString("en-IN")}
-                                    </td>
+                                      {/* Potential Lost Value */}
+                                      <td className="px-4 py-3 text-center text-sm text-slate-700 border-b border-slate-100">
+                                        ₹{Math.floor(source.potentialLostValue || 0).toLocaleString("en-IN")}
+                                      </td>
 
-                                    {/* Unverified Conversion Amount - Now date+source wise */}
+                                      {/* Unverified Conversion Amount - Now date+source wise */}
 
-                                    {/* <td
+                                      {/* <td
                                       className="px-4 py-3 text-center text-sm font-semibold border-b border-slate-100"
                                       style={{ backgroundColor: '#f3e8ff', color: '#7c3aed' }}
                                     >
@@ -5730,323 +5739,323 @@ Cancelled Amt:
                                         </span>
                                       )}
                                     </td> */}
-                                    <td
-                                      className="px-4 py-3 text-center text-sm font-semibold border-b border-slate-100"
-                                      style={{ backgroundColor: '#f3e8ff', color: '#7c3aed' }}
-                                    >
-                                      {source.unverifiedConversionAmount > 0 ? (
-                                        <button
-                                          onClick={() => handleOpenUnverifiedModal(dateGroup.date, source.dataSource)}
-                                          style={{
-                                            color: '#7c3aed',
-                                            textDecoration: 'underline',
-                                            fontWeight: 700,
-                                            background: 'none',
-                                            border: 'none',
-                                            padding: 0,
-                                            cursor: 'pointer',
-                                          }}
-                                        >
-                                          ₹{Math.floor(source.unverifiedConversionAmount).toLocaleString("en-IN")}
-                                        </button>
-                                      ) : (
-                                        <span>
-                                          ₹{Math.floor(source.unverifiedConversionAmount || 0).toLocaleString("en-IN")}
-                                        </span>
-                                      )}
-                                    </td>
-                                    {/* Cancelled Lead Qty */}
-                                    <td className="px-4 py-3 text-center text-sm text-slate-700 border-b border-slate-100">
-                                      {source.cancelledLeadQty || 0}
-                                    </td>
-                                    {/* Cancelled Lead Amount */}
-                                    <td className="px-4 py-3 text-center text-sm text-slate-700 border-b border-slate-100">
-                                      ₹{Math.floor(source.cancelledLeadAmount || 0).toLocaleString("en-IN")}
-                                    </td>
-                                    {/* Cancellation Percentage */}
-                                    <td className="px-4 py-3 text-center text-sm text-slate-700 border-b border-slate-100">
-                                      {source.totalLeads > 0 ? ((source.cancelledLeadQty / source.totalLeads) * 100).toFixed(1) : '0.0'}%
-                                    </td>
-                                  </tr>
-                                ))}
-                            </React.Fragment>
-                          ))
-                        })()}
-                      </tbody>
+                                      <td
+                                        className="px-4 py-3 text-center text-sm font-semibold border-b border-slate-100"
+                                        style={{ backgroundColor: '#f3e8ff', color: '#7c3aed' }}
+                                      >
+                                        {source.unverifiedConversionAmount > 0 ? (
+                                          <button
+                                            onClick={() => handleOpenUnverifiedModal(dateGroup.date, source.dataSource)}
+                                            style={{
+                                              color: '#7c3aed',
+                                              textDecoration: 'underline',
+                                              fontWeight: 700,
+                                              background: 'none',
+                                              border: 'none',
+                                              padding: 0,
+                                              cursor: 'pointer',
+                                            }}
+                                          >
+                                            ₹{Math.floor(source.unverifiedConversionAmount).toLocaleString("en-IN")}
+                                          </button>
+                                        ) : (
+                                          <span>
+                                            ₹{Math.floor(source.unverifiedConversionAmount || 0).toLocaleString("en-IN")}
+                                          </span>
+                                        )}
+                                      </td>
+                                      {/* Cancelled Lead Qty */}
+                                      <td className="px-4 py-3 text-center text-sm text-slate-700 border-b border-slate-100">
+                                        {source.cancelledLeadQty || 0}
+                                      </td>
+                                      {/* Cancelled Lead Amount */}
+                                      <td className="px-4 py-3 text-center text-sm text-slate-700 border-b border-slate-100">
+                                        ₹{Math.floor(source.cancelledLeadAmount || 0).toLocaleString("en-IN")}
+                                      </td>
+                                      {/* Cancellation Percentage */}
+                                      <td className="px-4 py-3 text-center text-sm text-slate-700 border-b border-slate-100">
+                                        {source.totalLeads > 0 ? ((source.cancelledLeadQty / source.totalLeads) * 100).toFixed(1) : '0.0'}%
+                                      </td>
+                                    </tr>
+                                  ))}
+                              </React.Fragment>
+                            ))
+                          })()}
+                        </tbody>
 
-                      <tfoot className="bg-slate-800 border-t-2 border-slate-900">
-                        <tr className="font-bold text-white">
-                          {/* STICKY - Grand Total */}
-                          <td
-                            className="sticky left-0 z-10 px-4 py-3 uppercase text-sm tracking-wide"
-                            style={{ backgroundColor: '#1e293b' }}
-                          >
-                            Grand Total
-                          </td>
+                        <tfoot className="bg-slate-800 border-t-2 border-slate-900">
+                          <tr className="font-bold text-white">
+                            {/* STICKY - Grand Total */}
+                            <td
+                              className="sticky left-0 z-10 px-4 py-3 uppercase text-sm tracking-wide"
+                              style={{ backgroundColor: '#1e293b' }}
+                            >
+                              Grand Total
+                            </td>
 
-                          {/* STICKY - Total Traffic */}
-                          <td
-                            className="sticky left-[180px] z-10 px-4 py-3 text-center"
-                            style={{ backgroundColor: '#1e293b' }}
-                          >
-                            {grandTotals.totalTraffic || 0}
-                          </td>
+                            {/* STICKY - Total Traffic */}
+                            <td
+                              className="sticky left-[180px] z-10 px-4 py-3 text-center"
+                              style={{ backgroundColor: '#1e293b' }}
+                            >
+                              {grandTotals.totalTraffic || 0}
+                            </td>
 
-                          {/* STICKY - Total Leads */}
-                          <td
-                            className="sticky left-[300px] z-10 px-4 py-3 text-center"
-                            style={{ backgroundColor: '#1e293b' }}
-                          >
-                            {totalLeads}
-                          </td>
+                            {/* STICKY - Total Leads */}
+                            <td
+                              className="sticky left-[300px] z-10 px-4 py-3 text-center"
+                              style={{ backgroundColor: '#1e293b' }}
+                            >
+                              {totalLeads}
+                            </td>
 
-                          {/* Avg TAT Column */}
-                          <td className="px-4 py-3 text-center text-sm font-bold text-slate-200">
-                            {(() => {
-                              const grandAvgTat = grandTotals.tatCount > 0 ? Math.round(grandTotals.tatSum / grandTotals.tatCount) : 0
-                              const dc = delayColor(grandAvgTat)
-                              return (
-                                <span className={`inline-flex items-center ${dc.bg} border ${dc.border} rounded-full px-2 py-0.5`}>
-                                  <span className={`text-[10px] font-bold ${dc.text}`}>
-                                    {formatDelay(grandAvgTat)}
+                            {/* Avg TAT Column */}
+                            <td className="px-4 py-3 text-center text-sm font-bold text-slate-200">
+                              {(() => {
+                                const grandAvgTat = grandTotals.tatCount > 0 ? Math.round(grandTotals.tatSum / grandTotals.tatCount) : 0
+                                const dc = delayColor(grandAvgTat)
+                                return (
+                                  <span className={`inline-flex items-center ${dc.bg} border ${dc.border} rounded-full px-2 py-0.5`}>
+                                    <span className={`text-[10px] font-bold ${dc.text}`}>
+                                      {formatDelay(grandAvgTat)}
+                                    </span>
                                   </span>
-                                </span>
-                              )
-                            })()}
-                          </td>
+                                )
+                              })()}
+                            </td>
 
-                          {/* High Priority */}
-                          <td className="px-2 py-3 text-center text-green-300">
-                            {grandTotals.high}
-                          </td>
-                          <td className="px-2 py-3 text-center text-green-300">
-                            {grandTotals.totalLeads > 0
-                              ? ((grandTotals.high / grandTotals.totalLeads) * 100).toFixed(1)
-                              : "0.0"}%
-                          </td>
-                          <td className="px-2 py-3 text-center">
-                            {(() => {
-                              const t = grandTotals.highPriorityTatCount > 0 ? Math.round(grandTotals.highPriorityTatSum / grandTotals.highPriorityTatCount) : 0
-                              if (!t) return <span className="text-xs text-slate-500">—</span>
-                              const dc = delayColor(t)
-                              return <span className={`text-[10px] font-bold ${dc.bg} border ${dc.border} rounded px-1.5 py-0.5 ${dc.text}`}>{formatDelay(t)}</span>
-                            })()}
-                          </td>
+                            {/* High Priority */}
+                            <td className="px-2 py-3 text-center text-green-300">
+                              {grandTotals.high}
+                            </td>
+                            <td className="px-2 py-3 text-center text-green-300">
+                              {grandTotals.totalLeads > 0
+                                ? ((grandTotals.high / grandTotals.totalLeads) * 100).toFixed(1)
+                                : "0.0"}%
+                            </td>
+                            <td className="px-2 py-3 text-center">
+                              {(() => {
+                                const t = grandTotals.highPriorityTatCount > 0 ? Math.round(grandTotals.highPriorityTatSum / grandTotals.highPriorityTatCount) : 0
+                                if (!t) return <span className="text-xs text-slate-500">—</span>
+                                const dc = delayColor(t)
+                                return <span className={`text-[10px] font-bold ${dc.bg} border ${dc.border} rounded px-1.5 py-0.5 ${dc.text}`}>{formatDelay(t)}</span>
+                              })()}
+                            </td>
 
-                          {/* Medium Priority */}
-                          <td className="px-2 py-3 text-center text-amber-300">
-                            {grandTotals.medium}
-                          </td>
-                          <td className="px-2 py-3 text-center text-amber-300">
-                            {grandTotals.totalLeads > 0
-                              ? ((grandTotals.medium / grandTotals.totalLeads) * 100).toFixed(1)
-                              : "0.0"}%
-                          </td>
-                          <td className="px-2 py-3 text-center">
-                            {(() => {
-                              const t = grandTotals.mediumPriorityTatCount > 0 ? Math.round(grandTotals.mediumPriorityTatSum / grandTotals.mediumPriorityTatCount) : 0
-                              if (!t) return <span className="text-xs text-slate-500">—</span>
-                              const dc = delayColor(t)
-                              return <span className={`text-[10px] font-bold ${dc.bg} border ${dc.border} rounded px-1.5 py-0.5 ${dc.text}`}>{formatDelay(t)}</span>
-                            })()}
-                          </td>
+                            {/* Medium Priority */}
+                            <td className="px-2 py-3 text-center text-amber-300">
+                              {grandTotals.medium}
+                            </td>
+                            <td className="px-2 py-3 text-center text-amber-300">
+                              {grandTotals.totalLeads > 0
+                                ? ((grandTotals.medium / grandTotals.totalLeads) * 100).toFixed(1)
+                                : "0.0"}%
+                            </td>
+                            <td className="px-2 py-3 text-center">
+                              {(() => {
+                                const t = grandTotals.mediumPriorityTatCount > 0 ? Math.round(grandTotals.mediumPriorityTatSum / grandTotals.mediumPriorityTatCount) : 0
+                                if (!t) return <span className="text-xs text-slate-500">—</span>
+                                const dc = delayColor(t)
+                                return <span className={`text-[10px] font-bold ${dc.bg} border ${dc.border} rounded px-1.5 py-0.5 ${dc.text}`}>{formatDelay(t)}</span>
+                              })()}
+                            </td>
 
-                          {/* Low Priority */}
-                          <td className="px-2 py-3 text-center text-red-300">
-                            {grandTotals.low}
-                          </td>
-                          <td className="px-2 py-3 text-center text-red-300">
-                            {grandTotals.totalLeads > 0
-                              ? ((grandTotals.low / grandTotals.totalLeads) * 100).toFixed(1)
-                              : "0.0"}%
-                          </td>
-                          <td className="px-2 py-3 text-center">
-                            {(() => {
-                              const t = grandTotals.lowPriorityTatCount > 0 ? Math.round(grandTotals.lowPriorityTatSum / grandTotals.lowPriorityTatCount) : 0
-                              if (!t) return <span className="text-xs text-slate-500">—</span>
-                              const dc = delayColor(t)
-                              return <span className={`text-[10px] font-bold ${dc.bg} border ${dc.border} rounded px-1.5 py-0.5 ${dc.text}`}>{formatDelay(t)}</span>
-                            })()}
-                          </td>
+                            {/* Low Priority */}
+                            <td className="px-2 py-3 text-center text-red-300">
+                              {grandTotals.low}
+                            </td>
+                            <td className="px-2 py-3 text-center text-red-300">
+                              {grandTotals.totalLeads > 0
+                                ? ((grandTotals.low / grandTotals.totalLeads) * 100).toFixed(1)
+                                : "0.0"}%
+                            </td>
+                            <td className="px-2 py-3 text-center">
+                              {(() => {
+                                const t = grandTotals.lowPriorityTatCount > 0 ? Math.round(grandTotals.lowPriorityTatSum / grandTotals.lowPriorityTatCount) : 0
+                                if (!t) return <span className="text-xs text-slate-500">—</span>
+                                const dc = delayColor(t)
+                                return <span className={`text-[10px] font-bold ${dc.bg} border ${dc.border} rounded px-1.5 py-0.5 ${dc.text}`}>{formatDelay(t)}</span>
+                              })()}
+                            </td>
 
-                          {/* Divider */}
-                          <td className="px-0 py-0 border-l border-slate-600"></td>
+                            {/* Divider */}
+                            <td className="px-0 py-0 border-l border-slate-600"></td>
 
-                          {/* Converted */}
-                          <td className="px-4 py-3 text-center">
-                            {grandTotals.converted}
-                          </td>
+                            {/* Converted */}
+                            <td className="px-4 py-3 text-center">
+                              {grandTotals.converted}
+                            </td>
 
-                          {/* Conversion Amount */}
-                          <td className="px-4 py-3 text-center">
-                            ₹{Math.floor(grandTotals.convAmount).toLocaleString("en-IN")}
-                          </td>
+                            {/* Conversion Amount */}
+                            <td className="px-4 py-3 text-center">
+                              ₹{Math.floor(grandTotals.convAmount).toLocaleString("en-IN")}
+                            </td>
 
-                          {/* Conversion Percentage */}
-                          <td className="px-4 py-3 text-center">{grandConversionPercentage}%</td>
+                            {/* Conversion Percentage */}
+                            <td className="px-4 py-3 text-center">{grandConversionPercentage}%</td>
 
-                          {/* Spend Amount */}
-                          <td className="px-4 py-3 text-center">
-                            ₹{Math.floor(grandTotals.spend).toLocaleString("en-IN")}
-                          </td>
+                            {/* Spend Amount */}
+                            <td className="px-4 py-3 text-center">
+                              ₹{Math.floor(grandTotals.spend).toLocaleString("en-IN")}
+                            </td>
 
-                          {/* ROAS */}
-                          <td className="px-4 py-3 text-center">
-                            {parseFloat(grandROAS) === 0 ? "0x" : `${grandROAS}x`}
-                          </td>
-                          {/* CAC */}
-                          <td className="px-4 py-3 text-center">
-                            {parseFloat(grandCAC) === 0 ? "0" : `${grandCAC}`}
-                          </td>
+                            {/* ROAS */}
+                            <td className="px-4 py-3 text-center">
+                              {parseFloat(grandROAS) === 0 ? "0x" : `${grandROAS}x`}
+                            </td>
+                            {/* CAC */}
+                            <td className="px-4 py-3 text-center">
+                              {parseFloat(grandCAC) === 0 ? "0" : `${grandCAC}`}
+                            </td>
 
-                          {/* BLUE COLUMN - Collection Amount */}
-                          <td className="px-4 py-3 text-center" style={{ backgroundColor: '#1e40af' }}>
-                            ₹{Math.floor(grandTotals.collectionAmount || 0).toLocaleString("en-IN")}
-                          </td>
+                            {/* BLUE COLUMN - Collection Amount */}
+                            <td className="px-4 py-3 text-center" style={{ backgroundColor: '#1e40af' }}>
+                              ₹{Math.floor(grandTotals.collectionAmount || 0).toLocaleString("en-IN")}
+                            </td>
 
-                          {/* RED COLUMNS - Waste Analysis */}
-                          <td className="px-4 py-3 text-center">
-                            {grandTotals.wastedQty || 0}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            {grandTotals.totalLeads > 0
-                              ? ((grandTotals.wastedQty / grandTotals.totalLeads) * 100).toFixed(1)
-                              : "0.0"}%
-                          </td>
-                          <td className="px-4 py-3 text-center">—</td>
-                          <td className="px-4 py-3 text-center">
-                            ₹{Math.floor(grandTotals.potentialLostValue || 0).toLocaleString("en-IN")}
-                          </td>
+                            {/* RED COLUMNS - Waste Analysis */}
+                            <td className="px-4 py-3 text-center">
+                              {grandTotals.wastedQty || 0}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              {grandTotals.totalLeads > 0
+                                ? ((grandTotals.wastedQty / grandTotals.totalLeads) * 100).toFixed(1)
+                                : "0.0"}%
+                            </td>
+                            <td className="px-4 py-3 text-center">—</td>
+                            <td className="px-4 py-3 text-center">
+                              ₹{Math.floor(grandTotals.potentialLostValue || 0).toLocaleString("en-IN")}
+                            </td>
 
-                          {/* PURPLE COLUMN - Unverified Conversion Amount */}
-                          <td className="px-4 py-3 text-center" style={{ backgroundColor: '#7c3aed' }}>
-                            ₹{Math.floor(grandTotals.unverifiedConversionAmount || 0).toLocaleString("en-IN")}
-                          </td>
+                            {/* PURPLE COLUMN - Unverified Conversion Amount */}
+                            <td className="px-4 py-3 text-center" style={{ backgroundColor: '#7c3aed' }}>
+                              ₹{Math.floor(grandTotals.unverifiedConversionAmount || 0).toLocaleString("en-IN")}
+                            </td>
 
-                          {/* RED COLUMNS - Cancelled Lead Analysis */}
-                          <td className="px-4 py-3 text-center">
-                            {grandTotals.cancelledLeadQty || 0}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            ₹{Math.floor(grandTotals.cancelledLeadAmount || 0).toLocaleString("en-IN")}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            {grandTotals.totalLeads > 0
-                              ? ((grandTotals.cancelledLeadQty / grandTotals.totalLeads) * 100).toFixed(1)
-                              : "0.0"}%
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Pagination Controls */}
-                {dataSourceDateGroups.length > 0 && (() => {
-                  const dsTotalPages = Math.ceil(dataSourceDateGroups.length / dataSourceItemsPerPage)
-                  const dsStart = (dataSourceCurrentPage - 1) * dataSourceItemsPerPage + 1
-                  const dsEnd = Math.min(dataSourceCurrentPage * dataSourceItemsPerPage, dataSourceDateGroups.length)
-                  return (
-                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 px-6 py-4 border-t bg-gradient-to-r from-slate-50 to-blue-50">
-
-                      {/* Left - Info */}
-                      <div className="flex items-center gap-2 text-sm text-slate-600">
-                        <span>Showing</span>
-                        <span className="font-bold text-slate-800 bg-white border border-slate-200 px-2 py-0.5 rounded">
-                          {dsStart}–{dsEnd}
-                        </span>
-                        <span>of</span>
-                        <span className="font-bold text-blue-700">{dataSourceDateGroups.length}</span>
-                        <span>dates</span>
-                      </div>
-
-                      {/* Center - Page Numbers */}
-                      <div className="flex items-center gap-1">
-                        <Button size="sm" variant="outline"
-                          disabled={dataSourceCurrentPage === 1}
-                          onClick={() => setDataSourceCurrentPage(1)}
-                          className="h-8 w-8 p-0 text-xs"
-                        >«</Button>
-
-                        <Button size="sm" variant="outline"
-                          disabled={dataSourceCurrentPage === 1}
-                          onClick={() => setDataSourceCurrentPage((p) => Math.max(1, p - 1))}
-                          className="h-8 px-3 text-xs"
-                        >‹ Prev</Button>
-
-                        {(() => {
-                          const pages = []
-                          const cur = dataSourceCurrentPage
-                          let start = Math.max(1, cur - 2)
-                          let end = Math.min(dsTotalPages, cur + 2)
-                          if (cur <= 3) end = Math.min(5, dsTotalPages)
-                          if (cur >= dsTotalPages - 2) start = Math.max(1, dsTotalPages - 4)
-                          if (start > 1) pages.push(<span key="s-ellipsis" className="px-1 text-slate-400">…</span>)
-                          for (let i = start; i <= end; i++) {
-                            pages.push(
-                              <button key={i} onClick={() => setDataSourceCurrentPage(i)}
-                                className={`h-8 w-8 rounded-md text-xs font-semibold transition-all ${i === cur
-                                  ? 'bg-blue-600 text-white shadow-md border border-blue-700'
-                                  : 'bg-white text-slate-700 border border-slate-300 hover:bg-blue-50 hover:border-blue-300'
-                                  }`}
-                              >{i}</button>
-                            )
-                          }
-                          if (end < dsTotalPages) pages.push(<span key="e-ellipsis" className="px-1 text-slate-400">…</span>)
-                          return pages
-                        })()}
-
-                        <Button size="sm" variant="outline"
-                          disabled={dataSourceCurrentPage === dsTotalPages}
-                          onClick={() => setDataSourceCurrentPage((p) => Math.min(dsTotalPages, p + 1))}
-                          className="h-8 px-3 text-xs"
-                        >Next ›</Button>
-
-                        <Button size="sm" variant="outline"
-                          disabled={dataSourceCurrentPage === dsTotalPages}
-                          onClick={() => setDataSourceCurrentPage(dsTotalPages)}
-                          className="h-8 w-8 p-0 text-xs"
-                        >»</Button>
-                      </div>
-
-                      {/* Right - Rows per page & Go to page */}
-                      <div className="flex flex-wrap items-center gap-4">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-slate-500">Rows/page</span>
-                          <select
-                            value={dataSourceItemsPerPage}
-                            onChange={(e) => {
-                              setDataSourceItemsPerPage(Number(e.target.value))
-                              setDataSourceCurrentPage(1)
-                            }}
-                            className="h-8 rounded-md border border-slate-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          >
-                            {[5, 10, 15, 25, 50].map((size) => (
-                              <option key={size} value={size}>{size}</option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-slate-500">Go to</span>
-                          <input
-                            type="number" min={1} max={dsTotalPages}
-                            value={dataSourceGotoPage}
-                            onChange={(e) => setDataSourceGotoPage(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleDataSourceGotoPage()}
-                            className="h-8 w-16 rounded-md border border-slate-300 px-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="#"
-                          />
-                          <Button size="sm" className="h-8 bg-blue-600 hover:bg-blue-700 text-xs px-3"
-                            onClick={handleDataSourceGotoPage}
-                          >Go</Button>
-                        </div>
-                      </div>
-
+                            {/* RED COLUMNS - Cancelled Lead Analysis */}
+                            <td className="px-4 py-3 text-center">
+                              {grandTotals.cancelledLeadQty || 0}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              ₹{Math.floor(grandTotals.cancelledLeadAmount || 0).toLocaleString("en-IN")}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              {grandTotals.totalLeads > 0
+                                ? ((grandTotals.cancelledLeadQty / grandTotals.totalLeads) * 100).toFixed(1)
+                                : "0.0"}%
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
                     </div>
-                  )
-                })()}
-              </>
+                  </div>
+
+                  {/* Pagination Controls */}
+                  {dataSourceDateGroups.length > 0 && (() => {
+                    const dsTotalPages = Math.ceil(dataSourceDateGroups.length / dataSourceItemsPerPage)
+                    const dsStart = (dataSourceCurrentPage - 1) * dataSourceItemsPerPage + 1
+                    const dsEnd = Math.min(dataSourceCurrentPage * dataSourceItemsPerPage, dataSourceDateGroups.length)
+                    return (
+                      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 px-6 py-4 border-t bg-gradient-to-r from-slate-50 to-blue-50">
+
+                        {/* Left - Info */}
+                        <div className="flex items-center gap-2 text-sm text-slate-600">
+                          <span>Showing</span>
+                          <span className="font-bold text-slate-800 bg-white border border-slate-200 px-2 py-0.5 rounded">
+                            {dsStart}–{dsEnd}
+                          </span>
+                          <span>of</span>
+                          <span className="font-bold text-blue-700">{dataSourceDateGroups.length}</span>
+                          <span>dates</span>
+                        </div>
+
+                        {/* Center - Page Numbers */}
+                        <div className="flex items-center gap-1">
+                          <Button size="sm" variant="outline"
+                            disabled={dataSourceCurrentPage === 1}
+                            onClick={() => setDataSourceCurrentPage(1)}
+                            className="h-8 w-8 p-0 text-xs"
+                          >«</Button>
+
+                          <Button size="sm" variant="outline"
+                            disabled={dataSourceCurrentPage === 1}
+                            onClick={() => setDataSourceCurrentPage((p) => Math.max(1, p - 1))}
+                            className="h-8 px-3 text-xs"
+                          >‹ Prev</Button>
+
+                          {(() => {
+                            const pages = []
+                            const cur = dataSourceCurrentPage
+                            let start = Math.max(1, cur - 2)
+                            let end = Math.min(dsTotalPages, cur + 2)
+                            if (cur <= 3) end = Math.min(5, dsTotalPages)
+                            if (cur >= dsTotalPages - 2) start = Math.max(1, dsTotalPages - 4)
+                            if (start > 1) pages.push(<span key="s-ellipsis" className="px-1 text-slate-400">…</span>)
+                            for (let i = start; i <= end; i++) {
+                              pages.push(
+                                <button key={i} onClick={() => setDataSourceCurrentPage(i)}
+                                  className={`h-8 w-8 rounded-md text-xs font-semibold transition-all ${i === cur
+                                    ? 'bg-blue-600 text-white shadow-md border border-blue-700'
+                                    : 'bg-white text-slate-700 border border-slate-300 hover:bg-blue-50 hover:border-blue-300'
+                                    }`}
+                                >{i}</button>
+                              )
+                            }
+                            if (end < dsTotalPages) pages.push(<span key="e-ellipsis" className="px-1 text-slate-400">…</span>)
+                            return pages
+                          })()}
+
+                          <Button size="sm" variant="outline"
+                            disabled={dataSourceCurrentPage === dsTotalPages}
+                            onClick={() => setDataSourceCurrentPage((p) => Math.min(dsTotalPages, p + 1))}
+                            className="h-8 px-3 text-xs"
+                          >Next ›</Button>
+
+                          <Button size="sm" variant="outline"
+                            disabled={dataSourceCurrentPage === dsTotalPages}
+                            onClick={() => setDataSourceCurrentPage(dsTotalPages)}
+                            className="h-8 w-8 p-0 text-xs"
+                          >»</Button>
+                        </div>
+
+                        {/* Right - Rows per page & Go to page */}
+                        <div className="flex flex-wrap items-center gap-4">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-slate-500">Rows/page</span>
+                            <select
+                              value={dataSourceItemsPerPage}
+                              onChange={(e) => {
+                                setDataSourceItemsPerPage(Number(e.target.value))
+                                setDataSourceCurrentPage(1)
+                              }}
+                              className="h-8 rounded-md border border-slate-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              {[5, 10, 15, 25, 50].map((size) => (
+                                <option key={size} value={size}>{size}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-slate-500">Go to</span>
+                            <input
+                              type="number" min={1} max={dsTotalPages}
+                              value={dataSourceGotoPage}
+                              onChange={(e) => setDataSourceGotoPage(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && handleDataSourceGotoPage()}
+                              className="h-8 w-16 rounded-md border border-slate-300 px-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="#"
+                            />
+                            <Button size="sm" className="h-8 bg-blue-600 hover:bg-blue-700 text-xs px-3"
+                              onClick={handleDataSourceGotoPage}
+                            >Go</Button>
+                          </div>
+                        </div>
+
+                      </div>
+                    )
+                  })()}
+                </>
               ) : (
                 <div className="space-y-8 p-6">
                   {/* Lead Priority Distribution by Source */}
@@ -6509,11 +6518,10 @@ Cancelled Amt:
                         <td className="px-4 py-3 whitespace-nowrap border-r border-slate-100">
                           <div className="text-sm">
                             <div className="font-medium text-slate-900">
-                              {/* {new Date(lead.updatedAt).toLocaleDateString("en-GB")} */}
-                              {new Date(parseCRMDate(lead.updatedAt)).toLocaleDateString("en-GB")}
+                              {new Date(parseCRMDate(getLeadFullDateTime(lead))).toLocaleDateString("en-GB")}
                             </div>
                             <div className="text-xs text-slate-500">
-                              {new Date(parseCRMDate(lead.updatedAt)).toLocaleTimeString("en-GB", { hour12: false })}
+                              {new Date(parseCRMDate(getLeadFullDateTime(lead))).toLocaleTimeString("en-GB", { hour12: false })}
                             </div>
                           </div>
                         </td>
@@ -6749,7 +6757,7 @@ Cancelled Amt:
                         <td className="px-4 py-3 whitespace-nowrap border-r border-slate-100">
                           <div className="flex items-center justify-center">
                             {(() => {
-                              const delay = calculateTimeDelay(lead.updatedAt)
+                              const delay = calculateTimeDelay(getLeadFullDateTime(lead))
                               const isNegative = delay.startsWith("-")
 
                               // Parse hours for color determination
