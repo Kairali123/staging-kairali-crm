@@ -33,4 +33,6 @@ next-env.d.ts
 /temp/
 temp/
 *.tmp
-scratch/
+scratch/
+# Local notification configuration, recipients and worker secrets
+/.local/

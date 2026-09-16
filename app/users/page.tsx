@@ -1810,7 +1810,7 @@ export interface PagePermissionModule {
   description: string
 }
 
-export const PAGE_PERMISSIONS_MODULES: PagePermissionModule[] = [
+const PAGE_PERMISSIONS_MODULES: PagePermissionModule[] = [
   // 1. Core Workspace
   {
     key: "dashboard",
@@ -2218,7 +2218,7 @@ export const PAGE_PERMISSIONS_MODULES: PagePermissionModule[] = [
   },
 ]
 
-export function buildPermissionKey(moduleKey: string, action: string): string {
+function buildPermissionKey(moduleKey: string, action: string): string {
   if (moduleKey.includes(".view")) {
     if (action === "view") return moduleKey
     return `${moduleKey}.${action}`
@@ -2226,7 +2226,7 @@ export function buildPermissionKey(moduleKey: string, action: string): string {
   return `${moduleKey}.${action}`
 }
 
-export function isActionGranted(
+function isActionGranted(
   permissions: string[],
   moduleKey: string,
   action: string
@@ -2681,7 +2681,7 @@ function ManagePagePermissionsModal({
 }
 
 // Backward-compatible PERMISSION_GROUPS export
-export const PERMISSION_GROUPS: {
+const PERMISSION_GROUPS: {
   category: string
   description: string
   permissions: { key: string; label: string; description: string }[]
@@ -2703,7 +2703,7 @@ export const PERMISSION_GROUPS: {
   return Array.from(catMap.values())
 })()
 
-export const ROLE_DEFAULT_PERMISSIONS: Record<string, string[]> = {
+const ROLE_DEFAULT_PERMISSIONS: Record<string, string[]> = {
   super_admin: ["all"],
   admin: [
     "dashboard.view",

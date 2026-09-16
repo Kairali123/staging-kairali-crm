@@ -61,3 +61,33 @@
 | DB-012 | 2026-08-18T11:49Z | Closeout duplicate control | Four advancement events contain 45 unique daily IDs and all six pairwise intersections are empty; the extra morning event records a truthful stage transition within the first scheduled wave | State and wave-artifact duplicate-set verification |
 | DB-012 | 2026-08-18T11:51Z | Tuesday closeout GitHub synchronization | #2/#14/#15/#16/#25 record 45/25, 51/51 requests, 39/51 reconciliation packets, 12 optional cases, review status, 24/23/14 issue counts, HOLD gate and zero production writes | GitHub comment mutation readbacks 5327753611, 5327753803, 5327754004, 5327754231 and 5327754438 |
 | DB-012 | 2026-08-18T11:52Z | Daily communication cap | The earlier consolidated escalation remains the single escalation for the delay; the material 18 August email was already sent, so closeout progress was GitHub-only | State email date/message readback; Gmail thread readback |
+
+## 2026-09-16 — WA-001 (partial; integration not complete)
+
+- Added `/settings/automation/whatsapp`, navigation, server-authorized draft persistence, template status refresh and guarded manual test-send adapter.
+- Signed-in Edge browser: saved Daily Sales Report Alert and Marketing Daily Report drafts (09:00 IST, previous day, no recipients); page reload retained both. Generated both real report JPEG previews for 2026-09-15. Sales image preview left visible. Browser console error list was empty.
+- `node --test scripts/whatsapp-triggers.test.cjs`: 10/10 passed; mocked provider. Covers input validation, approved IMAGE gate, missing credentials, provider errors, persistence/rollback, authorization, origin, revisions, consent and duplicate send reservation.
+- Focused ESLint: clean. Full TypeScript check initially exhausted default 2 GB heap; 6 GB retry completed with 24 errors in untouched existing files and none in the WhatsApp changes. Full-project check is not green.
+- `git -c core.whitespace=cr-at-eol diff --check`: passed.
+- Workspace validator remains failed: missing `.github/workflows/database-control-autopilot.yml` and `database-control-verify.yml` and dependent workflow checks; unrelated control files were not repaired.
+- Redlava existing approved report templates require DOCUMENT/PDF. Prepared replacement sales IMAGE template form with synthetic example values; sample upload failed because browser extension file-URL access is disabled. No template submitted and no Meta approval claimed.
+- No API key is configured locally, no recipient message sent, no production deployment/database mutation. Background scheduling is not yet implemented; server rejects Active. Task remains open.
+- Rollback and provider contract: `docs/whatsapp-trigger-config/README.md`. Dev server generated its standard AGENTS.md Next.js guidance and normal local security audit entries during browser verification.
+
+## 2026-09-16 — WA-001 continuation
+
+- User requested autonomous step-by-step completion. Implemented local daily scheduler, isolated server JPEG renderer, independently authenticated worker endpoint, heartbeat-gated Active state, durable run/recipient reservations, missed-run skipping and pause-on-uncertain-acceptance.
+- Installed playwright-core; lockfile delta is one direct package. Existing local Edge is used for rendering; no user profile or network is allowed in the rendering context.
+- `npm run whatsapp-trigger:worker -- --once`: worker ready, processed 0. Private state readback: rendererReady true, both configurations Draft, zero runs.
+- Focused tests now 18/18; focused lint clean and changed-file transpilation passed. Repeat whole-repository typecheck was stopped after excessive resource use without results; earlier unrelated 24 errors remain unresolved.
+- Browser control briefly failed and later recovered. Updated authenticated page renders the new guarded Active option and saved selection correctly.
+- Redlava template submission and API key connection remain incomplete. Explicit confirmation for extension file-URL access was requested, with the access expansion explained; no permission change performed while waiting. No approval or delivery claimed.
+
+- Continuation final readback: authenticated WhatsApp page visibly shows “Worker ready · activate a trigger to send”; Active remains disabled because provider/template/consent requirements are not met. Continuous local worker running; repeated ticks process 0.
+
+## 2026-09-16 — WA-001 template submissions
+
+- Explicit file-URL permission approval received; Edge ChatGPT extension switch verified on.
+- sales-sample.jpg and marketing-sample.jpg uploaded successfully. Both replacement IMAGE templates submitted with en / UTILITY, date and company variables.
+- Redlava list readback: crm_daily_sales_report_image PENDING (16:11:31); crm_marketing_daily_report_image PENDING (16:15:07). Approval not claimed.
+- Existing API key found; local configuration authorized by user continuation. Native Terminal access denied by computer-use safety tool; no credential transferred. Local user configuration and test recipient remain needed. No live sends.

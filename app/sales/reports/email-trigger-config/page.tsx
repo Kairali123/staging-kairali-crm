@@ -3,11 +3,11 @@ import { redirect } from 'next/navigation'
 export const dynamic = 'force-dynamic'
 
 interface PageProps {
-  searchParams?: Promise<Record<string, string | string[] | undefined>> | Record<string, string | string[] | undefined>
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
 }
 
 export default async function LegacyEmailTriggerConfigRedirectPage({ searchParams }: PageProps) {
-  const resolvedParams = searchParams ? await Promise.resolve(searchParams) : undefined
+  const resolvedParams = searchParams ? await searchParams : undefined
   const params = new URLSearchParams()
 
   if (resolvedParams) {

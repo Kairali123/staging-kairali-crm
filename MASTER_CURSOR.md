@@ -2,27 +2,31 @@
 
 ## LIVE TASK
 
-**DB-012**
+**WA-001**
 
-Operate the CARMA-DB autonomous database delivery structure for Satyam.
+Build WhatsApp Trigger configuration for the two existing daily reports, inspect Redlava templates, and connect approved image templates.
+
+DB-012 is paused for the explicit 2026-09-16 user request; its checkpoint below is preserved.
 
 ## NEXT ACTION
 
-Advance the remaining 12 optional value-free consumer reconciliation packets without duplicates.
-Obtain Satyam's value-free dispositions for #19–#24 and accountable-owner PR review,
-plus Sunaj's independent re-review. Keep the audit at HOLD — QA/QC only; no Stage 2
-mutation is authorized. Tuesday is at 45/25 with 51/51 requests and 39/51 reconciliation
-packets ready; there is no workload cap.
+WA-001: Local page, both live report previews, and background renderer verified.
+Edge file-URL permission was enabled after explicit user approval. Both IMAGE
+replacement templates were submitted on 2026-09-16; Redlava readback is PENDING.
+Existing Redlava TestKey is available. User authorized local configuration by
+"continue", but native Terminal access was denied by the computer-use safety tool;
+key was not copied into local environment. User must configure REDLAVA_API_KEY locally
+without sharing its value in chat/Git. Then refresh API template status, verify Meta
+approval, and obtain an explicit test recipient before sending. Both triggers Draft.
+DB-012 is paused with its existing checkpoint preserved below.
 
 ## EXIT EVIDENCE
 
-- All 51 registered systems have evidence for all eight discovery categories and
-  Satyam's completeness attestation.
-- Dashboard #15, Batch #16, and per-focus issues stay synchronized with the registry.
-- Higher-risk changes have Sunaj's independent verification, regression proof, and a
-  rollback record.
-- No restricted data is published and no production database mutation is automated.
-- Satyam gives final CARMA-DB approval and the final digest is delivered.
+- WhatsApp configuration saved/reloaded and actual report image preview verified.
+- Both mapped templates verified APPROVED / IMAGE from Redlava.
+- Live API configuration and explicit test delivery evidence available.
+- Durable background image scheduling implemented and verified before Active is allowed.
+- No unsupported approval or delivery claims; rollback and focused tests recorded.
 
 ## LAST CHECKPOINT
 

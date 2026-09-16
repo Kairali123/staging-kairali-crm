@@ -48,7 +48,7 @@ const mockComplaintDetail = {
   customerSatisfaction: 4,
 }
 
-export default function ComplaintDetailPage({ params }: { params: { id: string } }) {
+export default function ComplaintDetailPage() {
   const [activeModal, setActiveModal] = useState<string | null>(null)
 
   const getSeverityColor = (severity: string) => {

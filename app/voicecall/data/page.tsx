@@ -1,11 +1,12 @@
 import { redirect } from "next/navigation";
 
 interface Props {
-    searchParams: { tab?: string };
+    searchParams: Promise<{ tab?: string }>;
 }
 
-export default function VoiceDataPage({ searchParams }: Props) {
-    if (searchParams.tab === "received") {
+export default async function VoiceDataPage({ searchParams }: Props) {
+    const resolvedSearchParams = await searchParams;
+    if (resolvedSearchParams.tab === "received") {
         redirect("/voicecall/data/received");
     }
     redirect("/voicecall/data/sent");

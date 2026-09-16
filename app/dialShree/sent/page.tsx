@@ -17,7 +17,7 @@ type DotColor = "g" | "o" | "r" | "b" | "x";
 
 // ─── Format Date/Time ─────────────────────────────────────────────────────────
 
-export function formatDisplayDateTime(val: any): string {
+function formatDisplayDateTime(val: any): string {
     if (!val || val === "—" || val === "null" || val === "undefined") return "—";
     const s = String(val).trim();
     if (!s) return "—";

@@ -10,7 +10,7 @@ let memoryCache: any[] | null = null;
 let lastFetchTime = 0;
 const CACHE_TTL = 3 * 60 * 1000; // 3 minutes
 
-export function clearDialShreeSentMemoryCache() {
+function clearDialShreeSentMemoryCache() {
     memoryCache = null;
     lastFetchTime = 0;
 }
@@ -24,7 +24,7 @@ const noStoreHeaders = {
 const MAX_SCAN_ROWS = 25000;
 const MAX_LEAD_LOOKUP_ROWS = 100;
 
-export function hasDialShreeSentAccess(user: any): boolean {
+function hasDialShreeSentAccess(user: any): boolean {
     if (!user) return false;
     if (hasAdminRole(user, 'lower')) return true;
     const roleStr = String(user?.role || "").trim().toLowerCase();
@@ -68,7 +68,7 @@ function mapCompany(websiteName: string, dataSource: string, campaignName: strin
     return "KAC";
 }
 
-export function parseDeliveryStatus(responseResult: string | null, actionAfterException: string | null): {
+function parseDeliveryStatus(responseResult: string | null, actionAfterException: string | null): {
     label: string;
     category: "sent" | "exception" | "pending";
     color: "green" | "red" | "orange" | "blue" | "gray";
