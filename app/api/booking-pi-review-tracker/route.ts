@@ -119,20 +119,76 @@ function getTodayIST(): string {
 
 function formatDateStr(val: any): string | null {
   if (!val) return null
-  if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) return val
-  const d = new Date(val)
+  if (typeof val === 'string') {
+    const trimmed = val.trim()
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed
+    const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})/)
+    if (match && !trimmed.includes('T') && !trimmed.includes('Z')) {
+      return match[1]
+    }
+  }
+  const d = val instanceof Date ? val : new Date(val)
   if (isNaN(d.getTime())) return null
-  const yyyy = d.getFullYear()
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  return `${yyyy}-${mm}-${dd}`
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d)
 }
 
 function formatDateTimeStr(val: any): string | null {
   if (!val) return null
-  const d = new Date(val)
+  if (typeof val === 'string') {
+    const trimmed = val.trim()
+    if (!trimmed) return null
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(trimmed)) return trimmed
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return `${trimmed} 00:00:00`
+  }
+  const d = val instanceof Date ? val : new Date(val)
   if (isNaN(d.getTime())) return null
-  return d.toISOString()
+
+  // Format as 'YYYY-MM-DD HH:MM:SS' in Asia/Kolkata for MySQL DATETIME columns
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(d)
+
+  const m: Record<string, string> = {}
+  for (const p of parts) {
+    m[p.type] = p.value
+  }
+  const hour = m.hour === '24' ? '00' : m.hour
+
+  return `${m.year}-${m.month}-${m.day} ${hour}:${m.minute}:${m.second}`
+}
+
+function toIsoStringWithIST(val: any): string | null {
+  if (!val) return null
+  if (val instanceof Date) {
+    return isNaN(val.getTime()) ? null : val.toISOString()
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim()
+    if (!trimmed) return null
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(trimmed)) {
+      const d = new Date(trimmed.replace(' ', 'T') + '+05:30')
+      return isNaN(d.getTime()) ? null : d.toISOString()
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      const d = new Date(`${trimmed}T00:00:00+05:30`)
+      return isNaN(d.getTime()) ? null : d.toISOString()
+    }
+    const d = new Date(trimmed)
+    return isNaN(d.getTime()) ? null : d.toISOString()
+  }
+  return null
 }
 
 export async function GET(req: NextRequest) {
@@ -383,9 +439,9 @@ export async function GET(req: NextRequest) {
 
         items.push({
           id: String(r.id),
-          generatedAt: r.generated_at ? new Date(r.generated_at).toISOString() : new Date().toISOString(),
-          bookingDateTime: r.booking_datetime ? new Date(r.booking_datetime).toISOString() : null,
-          actualDateTime: r.actual_datetime ? new Date(r.actual_datetime).toISOString() : null,
+          generatedAt: toIsoStringWithIST(r.generated_at) || new Date().toISOString(),
+          bookingDateTime: toIsoStringWithIST(r.booking_datetime),
+          actualDateTime: toIsoStringWithIST(r.actual_datetime),
           isFreshBooking,
           eventContext: r.event_context || (status === 'Cancelled' ? 'Cancelled Booking' : status === 'Amended' ? 'Amended Booking' : 'New Booking'),
           isOlderBooking: Boolean(r.is_older_booking),
@@ -414,7 +470,7 @@ export async function GET(req: NextRequest) {
           reviewLocked: isReviewed,
           reviewStatus: revData ? revData.review_status : 'Pending',
           reviewedBy: revData ? revData.reviewed_by : 'Accounts',
-          reviewedAt: revData && revData.reviewed_at ? new Date(revData.reviewed_at).toISOString() : null,
+          reviewedAt: toIsoStringWithIST(revData?.reviewed_at),
         })
       }
     }
