@@ -11,6 +11,8 @@ async function ensureTables() {
     CREATE TABLE IF NOT EXISTS booking_pi_records (
       id INT AUTO_INCREMENT PRIMARY KEY,
       booking_date DATE NOT NULL,
+      booking_datetime DATETIME NULL,
+      actual_datetime DATETIME NULL,
       reservation_id VARCHAR(100) NOT NULL,
       pi_number VARCHAR(100) NOT NULL,
       guest VARCHAR(255) NOT NULL,
@@ -43,6 +45,14 @@ async function ensureTables() {
       INDEX idx_sales_doer (sales_doer)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `)
+
+  // Safe migration: add booking_datetime and actual_datetime columns if missing
+  try {
+    await pool.query(`ALTER TABLE booking_pi_records ADD COLUMN booking_datetime DATETIME NULL`)
+  } catch (_) {}
+  try {
+    await pool.query(`ALTER TABLE booking_pi_records ADD COLUMN actual_datetime DATETIME NULL`)
+  } catch (_) {}
 
   // Safe migration: add the unique key if table already existed without it
   try {
@@ -118,6 +128,13 @@ function formatDateStr(val: any): string | null {
   return `${yyyy}-${mm}-${dd}`
 }
 
+function formatDateTimeStr(val: any): string | null {
+  if (!val) return null
+  const d = new Date(val)
+  if (isNaN(d.getTime())) return null
+  return d.toISOString()
+}
+
 export async function GET(req: NextRequest) {
   try {
     await ensureTables()
@@ -160,19 +177,18 @@ export async function GET(req: NextRequest) {
 
     // 1. Fetch records from booking_pi_records for the selected date
     let [rows]: any = await pool.query(
-      `SELECT * FROM booking_pi_records WHERE booking_date = ? ORDER BY generated_at DESC, id DESC`,
-      [date]
+      `SELECT * FROM booking_pi_records WHERE booking_date = ? OR DATE(booking_datetime) = ? OR DATE(actual_datetime) = ? ORDER BY generated_at DESC, id DESC`,
+      [date, date, date]
     )
 
-    // 2. Always sync/upsert from ktahv_bookings_fms_v3_part1 so clicking "Sync from SQL"
-    //    refreshes stale values (e.g. wrong fx_rate=1 from earlier seeds).
-    //    ON DUPLICATE KEY UPDATE in the INSERT ensures no duplicates are created.
+    // 2. Always sync/upsert from ktahv_bookings_fms_v3_part1
     {
       const [sourceRows]: any = await pool.query(
         `SELECT
           nb.reservation_id,
           nb.client_name,
           nb.booking_datetime,
+          nb.timestamp,
           nb.arrival_date,
           nb.departure_date,
           nb.invoice_amount,
@@ -184,13 +200,14 @@ export async function GET(req: NextRequest) {
           nbs.nb_bvs_action_status,
           nbs.nb_bvs_doer_remarks,
           nbs.nb_bvs_reason_of_cancellation,
+          nbs.nb_bvs_actual,
           inv.invoice_url_new
         FROM ktahv_bookings_fms_v3_part1 nb
         LEFT JOIN ktahv_bookings_fms_v3_nb_booking_verification_stage nbs ON nb.reservation_id COLLATE utf8mb4_unicode_ci = nbs.reservation_id COLLATE utf8mb4_unicode_ci
         LEFT JOIN ktahv_invoicing_format inv ON nb.reservation_id COLLATE utf8mb4_unicode_ci = inv.booking_id COLLATE utf8mb4_unicode_ci
-        WHERE DATE(nb.booking_datetime) = ?
+        WHERE DATE(nb.booking_datetime) = ? OR DATE(nbs.nb_bvs_actual) = ?
         ORDER BY nb.timestamp DESC`,
-        [date]
+        [date, date]
       )
 
       if (Array.isArray(sourceRows) && sourceRows.length > 0) {
@@ -202,17 +219,17 @@ export async function GET(req: NextRequest) {
           const checkIn = formatDateStr(sr.arrival_date)
           const checkOut = formatDateStr(sr.departure_date)
           const salesDoer = sr.booking_taken_by || 'Unassigned'
-          // source invoice_amount is in the booking's native currency (USD/EUR/INR)
-          // origAmt = source amount in foreign currency
-          // invAmtINR = converted to INR for display
+          const bookingDt = formatDateTimeStr(sr.booking_datetime || sr.timestamp)
+          const actualDt = formatDateTimeStr(sr.nb_bvs_actual)
+
           const sourceAmt = parseFloat(sr.invoice_amount) || 0
           const rawCurr = (sr.currency || 'INR').trim().toUpperCase()
           const curr = rawCurr === 'EURO' ? 'EUR'
                      : rawCurr === 'DOLLAR' || rawCurr === 'DOLLARS' || rawCurr === 'US DOLLAR' ? 'USD'
                      : rawCurr
           const fxRate = curr === 'EUR' ? eurRate : curr === 'USD' ? usdRate : 1.0
-          const origAmt = sourceAmt                                       // original foreign amount
-          const invAmtINR = curr !== 'INR' ? Math.round(sourceAmt * fxRate) : sourceAmt  // in INR
+          const origAmt = sourceAmt
+          const invAmtINR = curr !== 'INR' ? Math.round(sourceAmt * fxRate) : sourceAmt
           const piLink = sr.invoice_url_new || sr.nb_bvs_pi_link || ''
 
           let statusStr = 'Current'
@@ -225,9 +242,9 @@ export async function GET(req: NextRequest) {
           const cancelReason = sr.nb_bvs_reason_of_cancellation || null
           const amendReason = sr.nb_bvs_doer_remarks || null
           const eventContext = statusStr === 'Cancelled' ? 'Cancelled Booking' : statusStr === 'Amended' ? 'Amended Booking' : 'New Booking'
+          const isOlderBooking = Boolean(bookingDt && formatDateStr(bookingDt) !== date)
 
-          // Step 1: UPDATE existing record — always refreshes fx_rate/amounts on every Sync
-          // This works even without a unique key on the table
+          // Step 1: UPDATE existing record
           const [updateResult]: any = await pool.query(
             `UPDATE booking_pi_records
              SET invoice_amount          = ?,
@@ -239,34 +256,37 @@ export async function GET(req: NextRequest) {
                  cancellation_reason     = ?,
                  amendment_reason        = ?,
                  event_context           = ?,
+                 is_older_booking        = ?,
                  pi_link                 = ?,
                  sales_doer              = ?,
                  check_in_date           = ?,
                  check_out_date          = ?,
+                 booking_datetime        = ?,
+                 actual_datetime         = ?,
                  updated_at              = CURRENT_TIMESTAMP
              WHERE booking_date = ? AND reservation_id = ?`,
             [
               invAmtINR, curr, origAmt, fxRate, statusStr, bStatus,
-              cancelReason, amendReason, eventContext, piLink,
-              salesDoer, checkIn, checkOut,
+              cancelReason, amendReason, eventContext, isOlderBooking ? 1 : 0, piLink,
+              salesDoer, checkIn, checkOut, bookingDt, actualDt,
               date, resId
             ]
           )
 
-          // Step 2: INSERT only if no existing row was found (affectedRows === 0)
+          // Step 2: INSERT only if no existing row was found
           if (updateResult.affectedRows === 0) {
             await pool.query(
               `INSERT INTO booking_pi_records (
-                booking_date, reservation_id, pi_number, guest, booking_status,
+                booking_date, booking_datetime, actual_datetime, reservation_id, pi_number, guest, booking_status,
                 check_in_date, check_out_date, sales_doer, invoice_amount, currency,
                 original_invoice_amount, fx_rate, previous_invoice_amount, status,
-                cancellation_reason, amendment_reason, event_context, pi_link, generated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.00, ?, ?, ?, ?, ?, NOW())`,
+                cancellation_reason, amendment_reason, event_context, is_older_booking, pi_link, generated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.00, ?, ?, ?, ?, ?, ?, NOW())`,
               [
-                date, resId, piNum, guest, bStatus,
+                date, bookingDt, actualDt, resId, piNum, guest, bStatus,
                 checkIn, checkOut, salesDoer, invAmtINR, curr,
                 origAmt, fxRate, statusStr,
-                cancelReason, amendReason, eventContext, piLink
+                cancelReason, amendReason, eventContext, isOlderBooking ? 1 : 0, piLink
               ]
             )
           }
@@ -274,19 +294,17 @@ export async function GET(req: NextRequest) {
 
         // Re-query after insertion
         const [insertedRows]: any = await pool.query(
-          `SELECT * FROM booking_pi_records WHERE booking_date = ? ORDER BY generated_at DESC, id DESC`,
-          [date]
+          `SELECT * FROM booking_pi_records WHERE booking_date = ? OR DATE(booking_datetime) = ? OR DATE(actual_datetime) = ? ORDER BY generated_at DESC, id DESC`,
+          [date, date, date]
         )
         rows = insertedRows
       }
     }
 
     // 3. Deduplicate by reservation_id — keep only the latest row per booking
-    // (safety net for any pre-existing duplicates before the unique constraint was applied)
     if (Array.isArray(rows)) {
       const seen = new Map<string, any>()
       for (const r of rows) {
-        // rows are already sorted by generated_at DESC, id DESC — first seen = newest
         if (!seen.has(r.reservation_id)) {
           seen.set(r.reservation_id, r)
         }
@@ -304,7 +322,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 4. Map records into expected frontend format
+    // 5. Map records into expected frontend format
     const items: any[] = []
     const salesBreakdownMap: Record<string, any> = {}
 
@@ -327,8 +345,10 @@ export async function GET(req: NextRequest) {
 
         const invAmount = Number(r.invoice_amount) || 0
         const salesDoer = r.sales_doer || 'Unassigned'
+        const bookingDateStr = formatDateStr(r.booking_datetime || r.generated_at)
+        const isFreshBooking = bookingDateStr === date && status === 'Current'
 
-        if (status === 'Current') {
+        if (isFreshBooking) {
           todaySalesCount++
           todaySalesAmount += invAmount
           newPi++
@@ -346,7 +366,7 @@ export async function GET(req: NextRequest) {
           }
         }
         const sb = salesBreakdownMap[salesDoer]
-        if (status === 'Current') {
+        if (isFreshBooking) {
           sb.todaySalesCount++
           sb.todaySalesAmount += invAmount
           sb.newPi++
@@ -364,6 +384,9 @@ export async function GET(req: NextRequest) {
         items.push({
           id: String(r.id),
           generatedAt: r.generated_at ? new Date(r.generated_at).toISOString() : new Date().toISOString(),
+          bookingDateTime: r.booking_datetime ? new Date(r.booking_datetime).toISOString() : null,
+          actualDateTime: r.actual_datetime ? new Date(r.actual_datetime).toISOString() : null,
+          isFreshBooking,
           eventContext: r.event_context || (status === 'Cancelled' ? 'Cancelled Booking' : status === 'Amended' ? 'Amended Booking' : 'New Booking'),
           isOlderBooking: Boolean(r.is_older_booking),
           reservationId: r.reservation_id,
