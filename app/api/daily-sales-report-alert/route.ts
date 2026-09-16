@@ -28,7 +28,7 @@ export async function GET(req:NextRequest){
   const [sales]=await connection.query({sql:salesSQL,timeout:20000},window)
   const sourceDates=await cancellationDates(date)
   const [bookings]=await connection.query({sql:bookingSQL,timeout:20000},window)
-  const [cancellations]=await connection.query({sql:cancellationSQL,timeout:20000},[JSON.stringify(sourceDates.ids)])
+  const [cancellations]=await connection.query({sql:cancellationSQL,timeout:20000},window)
   const calls: Record<string,unknown>[]=[]
   const [employeeCompanies]=await connection.query('SELECT user_name, company, company_name FROM userlogin')
   let ktahvRawDetails: any[] = []
@@ -48,7 +48,8 @@ export async function GET(req:NextRequest){
       FROM ktahv_bookings_fms_v3_part1 b
       LEFT JOIN ktahv_bookings_fms_v3_nb_booking_verification_stage nbs ON b.reservation_id COLLATE utf8mb4_unicode_ci = nbs.reservation_id COLLATE utf8mb4_unicode_ci
       LEFT JOIN ktahv_invoicing_format inv ON b.reservation_id COLLATE utf8mb4_unicode_ci = inv.booking_id COLLATE utf8mb4_unicode_ci
-      WHERE b.booking_datetime >= ? AND b.booking_datetime < ?`,
+      WHERE b.booking_datetime >= ? AND b.booking_datetime < ?
+        AND LOWER(TRIM(COALESCE(b.booking_status,''))) NOT IN ('cancelled','booking cancelled','canceled')`,
       timeout: 20000
     }, window)
     const seen = new Set<string>()

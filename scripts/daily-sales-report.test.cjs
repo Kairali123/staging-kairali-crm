@@ -39,7 +39,7 @@ test('sales quantity reflects contributing record count and grand total equals a
  assert.equal(kappl.reduce((n,r)=>n+r.quantity,0),5);
 
  const html=model.exportSalesHTML(report,'ALL');
- assert(html.includes('<th>Agent Name</th><th>Sales Quantity</th><th>Sales Value</th><th>Cancelled Value</th>'));
+ assert(html.includes('<th>Agent Name</th><th>Sales Quantity</th><th>Sales Value</th><th>Cancelled Qty</th><th>Cancelled Value</th>'));
 });
 test('salesDetails attach to agent rows and export renders clean sales quantity without PI badge',()=>{
  const sales=[
