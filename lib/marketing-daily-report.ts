@@ -38,18 +38,26 @@ export function scopeLabel(data: ReportData, scope: string) {
 }
 function leadValues(c: CompanyReport, i?: number): (string|number)[] {
   const total=i===undefined,n=total?c.totalLeads:c.leads[i],traffic=total?c.traffic:c.trafficBySource?.[i],h=total?sum(c.high):c.high[i],m=total?sum(c.medium):c.medium[i],l=total?(c.low?sum(c.low):n-h-m):(c.low?.[i]??n-h-m),spend=total?c.totalSpend:c.spend[i]
-  return [total?'Company total':c.sources[i],traffic??'—',traffic?percent(n,traffic):'—',c.qualityAvailable===false?'—':n,...[h,m,l].map(q=>c.qualityAvailable===false?'—':q+' · '+percent(q,n)),money(spend),n?money(spend/n):'—']
+  return [total?'Company total':c.sources[i],traffic??'—',traffic?percent(n,traffic):'—',c.qualityAvailable===false?'—':n,...[h,m,l].map(q=>c.qualityAvailable===false?'—':q+' -- '+percent(q,n)),money(spend),n?money(spend/n):'—']
 }
 function salesValues(c:CompanyReport,i?:number):(string|number)[]{
  const r=i===undefined?{source:'Company total',spend:c.totalSpend,conversions:c.bookings,verified:c.sale,unverified:c.unverified??0,cancelled:c.cancelled??0}:c.liveSales?.[i]??{source:c.sources[i],spend:c.spend[i],conversions:0,verified:0,unverified:0,cancelled:0}
  const leads=i===undefined?c.totalLeads:c.leads[i]
  return [r.source,money(r.spend),r.conversions,money(r.verified),r.spend?(r.verified/r.spend).toFixed(2)+'×':'—',leads?money(r.spend/leads):'—',money(r.unverified),money(r.cancelled)]
 }
+function formatCell(value:string|number,header:string){
+ const s=String(value)
+ if(['High quality','Medium quality','Low quality'].includes(header)&&s.includes(' -- ')){
+  const [count,pct]=s.split(' -- ')
+  return `${escape(count)} <span style="color:#788b81;font-weight:normal;margin:0 5px">--</span> <span style="font-weight:700;color:#dc2626">${escape(pct)}</span>`
+ }
+ return escape(value)
+}
 function table(headers:string[],rows:(string|number)[][],email=false){
  const border='border-bottom:1px solid #e5eae7;border-right:1px solid #edf1ed;'
  const widths=headers.length===9?[20,8,9,8,11,11,11,12,10]:[20,11,8,14,8,10,14,15]
  if(rows.some(row=>row.length!==headers.length))throw new Error('Report column count mismatch')
- return `<table class="data" width="100%" cellspacing="0" cellpadding="0" style="width:100%;table-layout:fixed;border-collapse:collapse;font-family:Arial,sans-serif;font-size:${email?'11':'12'}px;color:#203c35"><colgroup>${widths.map(width=>`<col style="width:${width}%">`).join('')}</colgroup><thead><tr>${headers.map((h,j)=>`<th scope="col" style="padding:11px 8px;text-align:${j?'right':'left'};vertical-align:middle;overflow-wrap:anywhere;background:#f0f4f1;color:#53675f;${border}">${escape(h)}</th>`).join('')}</tr></thead><tbody>${rows.map((row,i)=>`<tr style="background:${i%2?'#f8faf8':'#ffffff'}">${row.map((value,j)=>`<td style="padding:12px 8px;vertical-align:top;overflow-wrap:anywhere;font-variant-numeric:tabular-nums;${border}text-align:${j?'right':'left'};${j?'':'font-weight:600;'}">${escape(value)}</td>`).join('')}</tr>`).join('')}</tbody></table>`
+ return `<table class="data" width="100%" cellspacing="0" cellpadding="0" style="width:100%;table-layout:fixed;border-collapse:collapse;font-family:Arial,sans-serif;font-size:${email?'11':'12'}px;color:#203c35"><colgroup>${widths.map(width=>`<col style="width:${width}%">`).join('')}</colgroup><thead><tr>${headers.map((h,j)=>`<th scope="col" style="padding:11px 8px;text-align:${j?'right':'left'};vertical-align:middle;overflow-wrap:anywhere;background:#f0f4f1;color:#53675f;${border}">${escape(h)}</th>`).join('')}</tr></thead><tbody>${rows.map((row,i)=>`<tr style="background:${i%2?'#f8faf8':'#ffffff'}">${row.map((value,j)=>`<td style="padding:12px 8px;vertical-align:top;overflow-wrap:anywhere;font-variant-numeric:tabular-nums;${border}text-align:${j?'right':'left'};${j?'':'font-weight:600;'}">${formatCell(value,headers[j])}</td>`).join('')}</tr>`).join('')}</tbody></table>`
 }
 function overview(companies:CompanyReport[],scope:string){
  const total=(fn:(c:CompanyReport)=>number)=>sum(companies.map(fn)),leads=total(c=>c.totalLeads),spend=total(c=>c.totalSpend),sales=total(c=>c.sale),traffic=total(c=>c.traffic)
