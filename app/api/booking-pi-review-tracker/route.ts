@@ -401,8 +401,10 @@ export async function GET(req: NextRequest) {
 
         const invAmount = Number(r.invoice_amount) || 0
         const salesDoer = r.sales_doer || 'Unassigned'
-        const bookingDateStr = formatDateStr(r.booking_datetime || r.generated_at)
-        const isFreshBooking = bookingDateStr === date && status === 'Current'
+        const bookingDateStr = formatDateStr(r.booking_datetime || r.booking_date || r.generated_at)
+        // A booking made TODAY counts toward "Today's sales" and "New PIs" even if it
+        // was amended on the same day. Only Cancelled bookings are excluded from sales.
+        const isFreshBooking = bookingDateStr === date && status !== 'Cancelled'
 
         if (isFreshBooking) {
           todaySalesCount++
@@ -426,7 +428,10 @@ export async function GET(req: NextRequest) {
           sb.todaySalesCount++
           sb.todaySalesAmount += invAmount
           sb.newPi++
-        } else if (status === 'Amended') {
+        }
+        // These run independently so a same-day amendment increments both fresh-booking
+        // counters (above) AND the amended/cancelled counter for the salesperson.
+        if (status === 'Amended') {
           sb.amended++
         } else if (status === 'Cancelled') {
           sb.cancelled++
