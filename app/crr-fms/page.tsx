@@ -729,31 +729,37 @@ export default function CRRCallingProcessPage() {
     const [activeDriverArrivalGuestId, setActiveDriverArrivalGuestId] = useState<number | null>(null);
     const activeDriverArrivalGuest = guests.find((g) => g.id === activeDriverArrivalGuestId) || null;
     const isStage9Complete = activeDriverArrivalGuest?.stageStatus?.[8] === "Complete";
+    const isStage9Processing = activeDriverArrivalGuest?.stageStatus?.[8] === "Processing";
     // Missing planned date → locked for ALL users (Super Admin included). Future planned date → locked only for non-admins.
     const isDriverArrivalDisabled = !activeDriverArrivalGuest ||
         (activeDriverArrivalGuest && hasStageNoPlannedDate(activeDriverArrivalGuest, 9)) ||
         (!isAdminRole && isStageLocked(activeDriverArrivalGuest, 9)) ||
-        isStage9Complete;
+        isStage9Complete ||
+        isStage9Processing;
 
     // "Driver Assignment - Departure Drop" modal (Stage 10)
     const [activeDriverDepartureGuestId, setActiveDriverDepartureGuestId] = useState<number | null>(null);
     const activeDriverDepartureGuest = guests.find((g) => g.id === activeDriverDepartureGuestId) || null;
     const isStage10Complete = activeDriverDepartureGuest?.stageStatus?.[9] === "Complete";
+    const isStage10Processing = activeDriverDepartureGuest?.stageStatus?.[9] === "Processing";
     // Missing planned date → locked for ALL users (Super Admin included). Future planned date → locked only for non-admins.
     const isDriverDepartureDisabled = !activeDriverDepartureGuest ||
         (activeDriverDepartureGuest && hasStageNoPlannedDate(activeDriverDepartureGuest, 10)) ||
         (!isAdminRole && isStageLocked(activeDriverDepartureGuest, 10)) ||
-        isStage10Complete;
+        isStage10Complete ||
+        isStage10Processing;
 
     // "Guest Requirement Verification" modal (Stage 11)
     const [activeRequirementVerificationGuestId, setActiveRequirementVerificationGuestId] = useState<number | null>(null);
     const activeRequirementVerificationGuest = guests.find((g) => g.id === activeRequirementVerificationGuestId) || null;
     const isStage11Complete = activeRequirementVerificationGuest?.stageStatus?.[10] === "Complete";
+    const isStage11Processing = activeRequirementVerificationGuest?.stageStatus?.[10] === "Processing";
     // Missing planned date → locked for ALL users (Super Admin included). Future planned date → locked only for non-admins.
     const isRequirementVerificationDisabled = !activeRequirementVerificationGuest ||
         (activeRequirementVerificationGuest && hasStageNoPlannedDate(activeRequirementVerificationGuest, 11)) ||
         (!isAdminRole && isStageLocked(activeRequirementVerificationGuest, 11)) ||
-        isStage11Complete;
+        isStage11Complete ||
+        isStage11Processing;
 
     // "Booking & Guest Details" shared popup — used by the 3 not-yet-built action buttons
     const [activeDetailsGuestId, setActiveDetailsGuestId] = useState<number | null>(null);
@@ -1378,7 +1384,7 @@ export default function CRRCallingProcessPage() {
         if (!canEditStage(9)) return;
         if (!activeDriverArrivalGuest) return;
         if (!isAdminRole && isStageLocked(activeDriverArrivalGuest, 9)) return;
-        if (isStage9Complete) return;
+        if (isStage9Complete || isStage9Processing) return;
 
         const guestId = activeDriverArrivalGuest.id;
         const targetId = activeDriverArrivalGuest.uid || activeDriverArrivalGuest.bookingId;
@@ -1412,7 +1418,7 @@ export default function CRRCallingProcessPage() {
         if (!canEditStage(10)) return;
         if (!activeDriverDepartureGuest) return;
         if (!isAdminRole && isStageLocked(activeDriverDepartureGuest, 10)) return;
-        if (isStage10Complete) return;
+        if (isStage10Complete || isStage10Processing) return;
 
         const guestId = activeDriverDepartureGuest.id;
         const targetId = activeDriverDepartureGuest.uid || activeDriverDepartureGuest.bookingId;
@@ -1446,7 +1452,7 @@ export default function CRRCallingProcessPage() {
         if (!canEditStage(11)) return;
         if (!activeRequirementVerificationGuest) return;
         if (!isAdminRole && isStageLocked(activeRequirementVerificationGuest, 11)) return;
-        if (isStage11Complete) return;
+        if (isStage11Complete || isStage11Processing) return;
 
         const guestId = activeRequirementVerificationGuest.id;
         const targetId = activeRequirementVerificationGuest.uid || activeRequirementVerificationGuest.bookingId;

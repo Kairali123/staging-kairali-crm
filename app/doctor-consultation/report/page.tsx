@@ -12,7 +12,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { toast } from "sonner"
 import {
   Stethoscope,
@@ -33,6 +34,7 @@ import {
   Eye,
   ExternalLink,
   ChevronRight,
+  ChevronLeft,
   User,
   Phone,
   BarChart3,
@@ -40,6 +42,15 @@ import {
   ShieldCheck,
   Building2,
   ArrowUpRight,
+  Award,
+  Zap,
+  RotateCcw,
+  Sparkles,
+  CalendarDays,
+  Check,
+  FileSpreadsheet,
+  AlertCircle,
+  ChevronDown,
 } from "lucide-react"
 import {
   ResponsiveContainer,
@@ -53,12 +64,23 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   Legend,
 } from "recharts"
 import type { SourceReportRow, DoctorPerformanceRow, DetailedConsultationItem } from "@/app/api/doctor/report/route"
 
-const CHART_COLORS = ["#0d9488", "#3b82f6", "#8b5cf6", "#f59e0b", "#ef4444", "#10b981", "#6366f1", "#ec4899", "#14b8a6", "#64748b"]
+const CHART_COLORS = [
+  "#2563eb", // blue-600
+  "#0d9488", // teal-600
+  "#8b5cf6", // purple-500
+  "#f59e0b", // amber-500
+  "#10b981", // emerald-500
+  "#ef4444", // red-500
+  "#6366f1", // indigo-500
+  "#ec4899", // pink-500
+  "#06b6d4", // cyan-500
+  "#64748b", // slate-500
+]
 
 export default function DoctorConsultationReportPage() {
   const { user, isLoading } = useAuth()
@@ -66,12 +88,15 @@ export default function DoctorConsultationReportPage() {
 
   // State management
   const [period, setPeriod] = useState<string>("this_week")
-  const [customRange, setCustomRange] = useState({ start: "2026-08-31", end: "2026-09-06" })
   const [sourceFilter, setSourceFilter] = useState<string>("all")
   const [doctorFilter, setDoctorFilter] = useState<string>("all")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [searchQuery, setSearchQuery] = useState<string>("")
   const [activeTab, setActiveTab] = useState<string>("summary")
+
+  // Pagination for detailed records table
+  const [currentPage, setCurrentPage] = useState<number>(1)
+  const [recordsPerPage, setRecordsPerPage] = useState<number>(10)
 
   // Data states
   const [isFetching, setIsFetching] = useState<boolean>(true)
@@ -89,6 +114,19 @@ export default function DoctorConsultationReportPage() {
   const [emailRecipients, setEmailRecipients] = useState<string>("director@kairali.com, dme@kairali.com")
   const [isSendingEmail, setIsSendingEmail] = useState<boolean>(false)
 
+  // ── Radix Focus Lock / Freeze Prevention ─────────────────────────────────────
+  useEffect(() => {
+    const clearPointerLock = () => {
+      if (document.body.style.pointerEvents === "none") {
+        document.body.style.pointerEvents = "auto"
+      }
+    }
+    clearPointerLock()
+    const observer = new MutationObserver(clearPointerLock)
+    observer.observe(document.body, { attributes: true, attributeFilter: ["style"] })
+    return () => observer.disconnect()
+  }, [])
+
   // Redirect if unauthenticated
   useEffect(() => {
     if (!isLoading && !user) {
@@ -97,7 +135,7 @@ export default function DoctorConsultationReportPage() {
   }, [user, isLoading, router])
 
   // Fetch report data
-  const fetchReportData = async () => {
+  const fetchReportData = async (showToast = false) => {
     setIsFetching(true)
     try {
       const params = new URLSearchParams()
@@ -117,6 +155,10 @@ export default function DoctorConsultationReportPage() {
       setDetailedConsultations(data.detailedConsultations || [])
       if (data.meta?.weeklyDateRange) setWeeklyDateRange(data.meta.weeklyDateRange)
       if (data.meta?.overallDateRange) setOverallDateRange(data.meta.overallDateRange)
+
+      if (showToast) {
+        toast.success("Consultation report data refreshed")
+      }
     } catch (err) {
       console.error(err)
       toast.error("Error loading doctor consultation report data")
@@ -131,7 +173,12 @@ export default function DoctorConsultationReportPage() {
     }
   }, [user, period, sourceFilter, doctorFilter, statusFilter])
 
-  // Filtered detailed consultations on the client side
+  // Reset pagination on filter change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, sourceFilter, doctorFilter, statusFilter, period])
+
+  // Filtered detailed consultations on client
   const filteredRecords = useMemo(() => {
     let list = [...detailedConsultations]
     if (searchQuery) {
@@ -142,11 +189,21 @@ export default function DoctorConsultationReportPage() {
           c.consultationId.toLowerCase().includes(q) ||
           c.enquiryId.toLowerCase().includes(q) ||
           c.mobile.includes(q) ||
-          c.email.toLowerCase().includes(q)
+          c.email.toLowerCase().includes(q) ||
+          c.doctorName.toLowerCase().includes(q) ||
+          c.enquirySource.toLowerCase().includes(q)
       )
     }
     return list
   }, [detailedConsultations, searchQuery])
+
+  // Paginated records
+  const paginatedRecords = useMemo(() => {
+    const startIndex = (currentPage - 1) * recordsPerPage
+    return filteredRecords.slice(startIndex, startIndex + recordsPerPage)
+  }, [filteredRecords, currentPage, recordsPerPage])
+
+  const totalPages = Math.max(1, Math.ceil(filteredRecords.length / recordsPerPage))
 
   // Currency formatter
   const formatCurrency = (val: number) => {
@@ -157,11 +214,35 @@ export default function DoctorConsultationReportPage() {
     }).format(val || 0)
   }
 
+  // Active filter count
+  const hasActiveFilters = period !== "this_week" || sourceFilter !== "all" || doctorFilter !== "all" || statusFilter !== "all" || searchQuery !== ""
+
+  const clearFilters = () => {
+    setPeriod("this_week")
+    setSourceFilter("all")
+    setDoctorFilter("all")
+    setStatusFilter("all")
+    setSearchQuery("")
+    toast.info("All filters reset to default")
+  }
+
   // Export to CSV
   const handleExportCSV = () => {
     try {
-      const headers = ["Enquiry Source", "Total Consults", "Done", "Cancelled", "Pending", "Converted", "Conversion %", "Revenue (INR)"]
-      const rows = overallReport.rows.map((r) => [
+      const headers = [
+        "Report Section",
+        "Enquiry Source",
+        "Total Consults",
+        "Done / Completed",
+        "Cancelled",
+        "Pending",
+        "Converted",
+        "Conversion %",
+        "Revenue (INR)",
+      ]
+
+      const weeklyRows = weeklyReport.rows.map((r) => [
+        `"Weekly (${weeklyDateRange})"`,
         `"${r.source}"`,
         r.totalConsults,
         r.done,
@@ -171,16 +252,32 @@ export default function DoctorConsultationReportPage() {
         `"${r.conversionRate}%"`,
         r.revenue,
       ])
-      const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n")
+
+      const overallRows = overallReport.rows.map((r) => [
+        `"Cumulative (${overallDateRange})"`,
+        `"${r.source}"`,
+        r.totalConsults,
+        r.done,
+        r.cancelled,
+        r.pending,
+        r.converted,
+        `"${r.conversionRate}%"`,
+        r.revenue,
+      ])
+
+      const csvContent =
+        "data:text/csv;charset=utf-8," +
+        [headers.join(","), ...weeklyRows.map((e) => e.join(",")), ...overallRows.map((e) => e.join(","))].join("\n")
+
       const encodedUri = encodeURI(csvContent)
       const link = document.createElement("a")
       link.setAttribute("href", encodedUri)
-      link.setAttribute("download", `Doctor_Consultation_Report_${new Date().toISOString().split("T")[0]}.csv`)
+      link.setAttribute("download", `Kairali_Doctor_Consultation_Report_${new Date().toISOString().split("T")[0]}.csv`)
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
       toast.success("Doctor Consultation Report CSV downloaded successfully")
-    } catch (e) {
+    } catch {
       toast.error("Failed to export report to CSV")
     }
   }
@@ -200,7 +297,7 @@ export default function DoctorConsultationReportPage() {
     setTimeout(() => {
       setIsSendingEmail(false)
       setIsEmailModalOpen(false)
-      toast.success(`Doctor Consultation Report digest sent to: ${emailRecipients}`)
+      toast.success(`Executive Doctor Consultation Report digest sent to: ${emailRecipients}`)
     }, 1200)
   }
 
@@ -208,227 +305,376 @@ export default function DoctorConsultationReportPage() {
     return <Loader isLoading={true} contentOnly />
   }
 
-  const wTotals = weeklyReport.totals || { totalConsults: 0, done: 0, cancelled: 0, pending: 0, converted: 0, conversionRate: 0, revenue: 0 }
-  const oTotals = overallReport.totals || { totalConsults: 0, done: 0, cancelled: 0, pending: 0, converted: 0, conversionRate: 0, revenue: 0 }
+  const wTotals = weeklyReport.totals || {
+    totalConsults: 0,
+    done: 0,
+    cancelled: 0,
+    pending: 0,
+    converted: 0,
+    conversionRate: 0,
+    revenue: 0,
+    avgRevenuePerConsult: 0,
+  }
+
+  const oTotals = overallReport.totals || {
+    totalConsults: 0,
+    done: 0,
+    cancelled: 0,
+    pending: 0,
+    converted: 0,
+    conversionRate: 0,
+    revenue: 0,
+    avgRevenuePerConsult: 0,
+  }
 
   return (
     <DashboardLayout>
-      <Loader isLoading={isFetching} contentOnly />
-      <div className="space-y-6 pb-12">
-        {/* Executive Hero Header */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-teal-800 via-teal-900 to-slate-900 border border-teal-700/50 shadow-2xl p-6 sm:p-8 text-white">
-          <div className="absolute right-0 top-0 -mt-8 -mr-8 w-96 h-96 rounded-full bg-teal-500/10 blur-3xl pointer-events-none" />
-          <div className="absolute left-1/3 bottom-0 -mb-12 w-64 h-64 rounded-full bg-emerald-500/10 blur-2xl pointer-events-none" />
+      <TooltipProvider>
+        <Loader isLoading={isFetching} contentOnly />
 
-          <div className="relative z-10 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-            {/* Title & Badge */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => router.push("/doctor-consultation")}
-                  className="bg-white/10 hover:bg-white/20 text-white border-white/20 backdrop-blur-md text-xs font-medium"
-                >
-                  ← Overview
-                </Button>
-                <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-400/30 px-3 py-1 font-semibold text-xs tracking-wider uppercase backdrop-blur-md">
-                  Management Report Sheet
-                </Badge>
-                <Badge variant="outline" className="bg-white/10 text-white/90 border-white/20 text-xs">
-                  <Calendar className="w-3 h-3 mr-1 text-teal-300" />
-                  Period: {weeklyDateRange}
-                </Badge>
+        {/* Print styling helper */}
+        <style jsx global>{`
+          @media print {
+            body {
+              background: white !important;
+              color: black !important;
+            }
+            .no-print,
+            header,
+            aside,
+            nav,
+            button {
+              display: none !important;
+            }
+            .print-full-width {
+              width: 100% !important;
+              max-width: 100% !important;
+              padding: 0 !important;
+              margin: 0 !important;
+            }
+            .shadow-md,
+            .shadow-lg,
+            .shadow-xl,
+            .shadow-2xl {
+              box-shadow: none !important;
+            }
+          }
+        `}</style>
+
+        <div className="space-y-6 pb-14 print-full-width">
+          {/* ═══════════════════════════════════════════════════════════════════
+              1. EXECUTIVE HERO HEADER SECTION (Consistent with Doctor Hub)
+          ════════════════════════════════════════════════════════════════════ */}
+          <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-800 border-b border-blue-500 shadow-[0_8px_30px_rgba(59,130,246,0.25)] rounded-2xl overflow-hidden text-white no-print">
+            <div className="w-full px-5 sm:px-8 py-6 sm:py-7 relative">
+              {/* Background ambient lighting effects */}
+              <div className="absolute right-0 top-0 -mt-8 -mr-8 w-96 h-96 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+              <div className="absolute left-1/3 bottom-0 -mb-12 w-64 h-64 rounded-full bg-indigo-400/20 blur-2xl pointer-events-none" />
+
+              {/* Back Button */}
+              <button
+                onClick={() => router.push("/doctor-consultation")}
+                className="mb-4 flex items-center gap-2 rounded-lg bg-white/10 px-3.5 py-1.5 text-xs font-semibold text-white backdrop-blur-sm border border-white/20 hover:bg-white/20 transition-colors cursor-pointer"
+              >
+                ← Back to Doctor Hub
+              </button>
+
+              <div className="relative z-10 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+                {/* Left Section - Icon, Title & Navigation Pills */}
+                <div className="space-y-4 w-full lg:max-w-3xl">
+                  <div className="flex items-start sm:items-center gap-4">
+                    {/* Icon Container */}
+                    <div className="h-14 w-14 sm:h-16 sm:w-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shadow-xl border border-white/30 flex-shrink-0">
+                      <FileText className="h-7 w-7 sm:h-8 sm:w-8 text-white" />
+                    </div>
+
+                    {/* Title & Subtitle */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-white tracking-tight leading-tight">
+                          Doctor Consultation Report Sheet
+                        </h1>
+                        <span className="bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 text-xs px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider backdrop-blur-sm">
+                          Executive Management
+                        </span>
+                      </div>
+                      <p className="text-sm sm:text-base text-blue-100/90 mt-1 font-medium">
+                        Comprehensive weekly & cumulative audit of clinical consultations, channel conversions & revenue
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Unified Hub Navigation Bar */}
+                  <div className="flex items-center gap-2 flex-wrap pt-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => router.push("/doctor-consultation")}
+                      className="bg-white/15 hover:bg-white/25 text-white border-white/30 text-xs font-semibold backdrop-blur-sm transition-all shadow-sm"
+                    >
+                      <Stethoscope className="mr-1.5 h-3.5 w-3.5" /> Overview Hub
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="bg-white text-blue-900 hover:bg-white/95 text-xs font-bold shadow-md transition-all scale-[1.02] border-white/40"
+                    >
+                      <FileText className="mr-1.5 h-3.5 w-3.5 text-blue-700" /> Reports Hub
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => router.push("/doctor-consultation/calendar")}
+                      className="bg-white/15 hover:bg-white/25 text-white border-white/30 text-xs font-semibold backdrop-blur-sm transition-all shadow-sm"
+                    >
+                      <CalendarDays className="mr-1.5 h-3.5 w-3.5" /> Doctor Calendar
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => router.push("/doctor-consultation/history")}
+                      className="bg-white/15 hover:bg-white/25 text-white border-white/30 text-xs font-semibold backdrop-blur-sm transition-all shadow-sm"
+                    >
+                      <TrendingUp className="mr-1.5 h-3.5 w-3.5" /> Call History
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => router.push("/doctor-consultation/prescription/new")}
+                      className="bg-white/15 hover:bg-white/25 text-white border-white/30 text-xs font-semibold backdrop-blur-sm transition-all shadow-sm"
+                    >
+                      + New Prescription
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Right Section - Action Buttons */}
+                <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto lg:justify-end">
+                  <Button
+                    onClick={() => fetchReportData(true)}
+                    variant="outline"
+                    size="sm"
+                    className="bg-white/10 hover:bg-white/20 text-white border-white/25 backdrop-blur-md font-medium text-xs h-9"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isFetching ? "animate-spin" : ""}`} />
+                    Refresh
+                  </Button>
+                  <Button
+                    onClick={handleExportCSV}
+                    variant="outline"
+                    size="sm"
+                    className="bg-white/10 hover:bg-white/20 text-white border-white/25 backdrop-blur-md font-medium text-xs h-9"
+                  >
+                    <Download className="w-3.5 h-3.5 mr-1.5 text-emerald-300" />
+                    Export CSV
+                  </Button>
+                  <Button
+                    onClick={handlePrint}
+                    variant="outline"
+                    size="sm"
+                    className="bg-white/10 hover:bg-white/20 text-white border-white/25 backdrop-blur-md font-medium text-xs h-9"
+                  >
+                    <Printer className="w-3.5 h-3.5 mr-1.5 text-blue-200" />
+                    Print Sheet
+                  </Button>
+                  <Button
+                    onClick={() => setIsEmailModalOpen(true)}
+                    size="sm"
+                    className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold text-xs h-9 shadow-lg shadow-emerald-950/30 border border-emerald-400/40"
+                  >
+                    <Mail className="w-3.5 h-3.5 mr-1.5" />
+                    Email Digest
+                  </Button>
+                </div>
               </div>
+            </div>
+          </div>
 
-              <div className="flex items-center gap-4">
-                <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-teal-400 to-emerald-600 flex items-center justify-center shadow-xl border border-white/20 flex-shrink-0">
-                  <Stethoscope className="h-7 w-7 text-white" />
+          {/* ═══════════════════════════════════════════════════════════════════
+              2. EXECUTIVE KPI METRIC CARDS
+          ════════════════════════════════════════════════════════════════════ */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5">
+            {/* KPI 1: Total Consultations */}
+            <Card className="border-blue-100/80 bg-gradient-to-br from-white via-blue-50/20 to-blue-50/50 shadow-sm hover:shadow-md transition-all rounded-xl">
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-blue-700">Total Consults</span>
+                  <div className="p-2 rounded-xl bg-blue-100 text-blue-700 shadow-sm">
+                    <BarChart3 className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <div className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">
+                    {wTotals.totalConsults}
+                  </div>
+                  <div className="text-[11px] font-medium text-slate-500 mt-1 flex items-center justify-between pt-1 border-t border-slate-100">
+                    <span>Overall Cumulative:</span>
+                    <span className="font-bold text-slate-800">{oTotals.totalConsults?.toLocaleString()}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* KPI 2: Done / Completed */}
+            <Card className="border-emerald-100/80 bg-gradient-to-br from-white via-emerald-50/20 to-emerald-50/50 shadow-sm hover:shadow-md transition-all rounded-xl">
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Done (Completed)</span>
+                  <div className="p-2 rounded-xl bg-emerald-100 text-emerald-700 shadow-sm">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <div className="text-2xl sm:text-3xl font-black text-emerald-600 tabular-nums">
+                    {wTotals.done}
+                  </div>
+                  <div className="text-[11px] font-medium text-slate-500 mt-1 flex items-center justify-between pt-1 border-t border-slate-100">
+                    <span>Completion Rate:</span>
+                    <span className="font-bold text-emerald-700">
+                      {oTotals.totalConsults > 0
+                        ? `${Math.round((oTotals.done / oTotals.totalConsults) * 100)}%`
+                        : "0%"}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* KPI 3: Cancelled */}
+            <Card className="border-rose-100/80 bg-gradient-to-br from-white via-rose-50/20 to-rose-50/50 shadow-sm hover:shadow-md transition-all rounded-xl">
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-rose-700">Cancelled</span>
+                  <div className="p-2 rounded-xl bg-rose-100 text-rose-700 shadow-sm">
+                    <XCircle className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <div className="text-2xl sm:text-3xl font-black text-rose-600 tabular-nums">
+                    {wTotals.cancelled}
+                  </div>
+                  <div className="text-[11px] font-medium text-slate-500 mt-1 flex items-center justify-between pt-1 border-t border-slate-100">
+                    <span>Overall Cancelled:</span>
+                    <span className="font-bold text-rose-700">{oTotals.cancelled?.toLocaleString()}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* KPI 4: Pending Queue */}
+            <Card className="border-amber-100/80 bg-gradient-to-br from-white via-amber-50/20 to-amber-50/50 shadow-sm hover:shadow-md transition-all rounded-xl">
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700">Pending Queue</span>
+                  <div className="p-2 rounded-xl bg-amber-100 text-amber-700 shadow-sm">
+                    <Clock className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <div className="text-2xl sm:text-3xl font-black text-amber-600 tabular-nums">
+                    {wTotals.pending}
+                  </div>
+                  <div className="text-[11px] font-medium text-slate-500 mt-1 flex items-center justify-between pt-1 border-t border-slate-100">
+                    <span>Overall Pending:</span>
+                    <span className="font-bold text-amber-700">{oTotals.pending?.toLocaleString()}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* KPI 5: Conversion Rate */}
+            <Card className="border-purple-100/80 bg-gradient-to-br from-white via-purple-50/20 to-purple-50/50 shadow-sm hover:shadow-md transition-all rounded-xl">
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-purple-700">Conversion Rate</span>
+                  <div className="p-2 rounded-xl bg-purple-100 text-purple-700 shadow-sm">
+                    <Target className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <div className="text-2xl sm:text-3xl font-black text-purple-700 tabular-nums">
+                    {oTotals.conversionRate}%
+                  </div>
+                  <div className="text-[11px] font-medium text-slate-500 mt-1 flex items-center justify-between pt-1 border-t border-slate-100">
+                    <span>Converted Patients:</span>
+                    <span className="font-bold text-purple-800">{oTotals.converted} leads</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* KPI 6: Overall Revenue Attributed */}
+            <Card className="border-indigo-900 bg-gradient-to-br from-slate-900 via-indigo-950 to-blue-950 text-white shadow-md hover:shadow-lg transition-all rounded-xl">
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-300">Total Revenue</span>
+                  <div className="p-2 rounded-xl bg-white/10 text-emerald-400">
+                    <IndianRupee className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <div className="text-2xl sm:text-3xl font-black text-emerald-300 tabular-nums">
+                    ₹{(oTotals.revenue / 10000000).toFixed(2)} Cr
+                  </div>
+                  <div className="text-[11px] font-medium text-slate-300 mt-1 flex items-center justify-between pt-1 border-t border-white/10">
+                    <span>Avg / Conversion:</span>
+                    <span className="font-bold text-white">
+                      ₹{Math.round(oTotals.avgRevenuePerConsult / 1000)}k
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* ═══════════════════════════════════════════════════════════════════
+              3. ADVANCED FILTERS & CONTROLS CARD
+          ════════════════════════════════════════════════════════════════════ */}
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm no-print">
+            {/* Filter Header */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 sm:px-5 py-3.5 bg-gradient-to-r from-blue-50/70 via-slate-50 to-indigo-50/70 border-b border-slate-200 rounded-t-xl">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-sm flex-shrink-0">
+                  <Filter className="w-4 h-4" />
                 </div>
                 <div>
-                  <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-white">
-                    Doctor Consultation Report Sheet
-                  </h1>
-                  <p className="text-sm sm:text-base text-teal-100/90 font-medium mt-1">
-                    Executive summary of weekly & overall doctor consultations, channel conversions & revenue breakdown
+                  <h3 className="text-sm font-bold text-slate-900 leading-tight">
+                    Filters & Date Range Selector
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Refine consultation analytics by timeframe, source, doctor, or keyword
                   </p>
                 </div>
               </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                {hasActiveFilters && (
+                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs">
+                    Filters Active
+                  </Badge>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={clearFilters}
+                  disabled={!hasActiveFilters}
+                  className="bg-white border-slate-300 text-slate-700 text-xs font-medium hover:bg-slate-50 h-8"
+                >
+                  <RotateCcw className="w-3 h-3 mr-1.5 text-slate-500" />
+                  Reset Filters
+                </Button>
+              </div>
             </div>
 
-            {/* Quick Action Buttons */}
-            <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-              <Button
-                onClick={() => fetchReportData()}
-                variant="outline"
-                size="sm"
-                className="bg-white/10 hover:bg-white/20 text-white border-white/20 backdrop-blur-md font-medium"
-              >
-                <RefreshCw className={`w-4 h-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />
-                Refresh
-              </Button>
-              <Button
-                onClick={handleExportCSV}
-                variant="outline"
-                size="sm"
-                className="bg-white/10 hover:bg-white/20 text-white border-white/20 backdrop-blur-md font-medium"
-              >
-                <Download className="w-4 h-4 mr-2 text-emerald-300" />
-                Export CSV
-              </Button>
-              <Button
-                onClick={handlePrint}
-                variant="outline"
-                size="sm"
-                className="bg-white/10 hover:bg-white/20 text-white border-white/20 backdrop-blur-md font-medium"
-              >
-                <Printer className="w-4 h-4 mr-2 text-teal-300" />
-                Print Sheet
-              </Button>
-              <Button
-                onClick={() => setIsEmailModalOpen(true)}
-                size="sm"
-                className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-semibold shadow-lg shadow-teal-900/50 border border-emerald-400/30"
-              >
-                <Mail className="w-4 h-4 mr-2" />
-                Email Digest
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* Executive KPI Metric Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
-          {/* KPI 1: Total Consults */}
-          <Card className="border-teal-100 bg-gradient-to-br from-white to-teal-50/30 shadow-md hover:shadow-lg transition-all">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-teal-700">Total Consults</span>
-                <div className="p-2 rounded-xl bg-teal-100 text-teal-700">
-                  <BarChart3 className="w-4 h-4" />
-                </div>
-              </div>
-              <div className="mt-3">
-                <div className="text-2xl font-black text-slate-900 tabular-nums">{wTotals.totalConsults}</div>
-                <div className="text-xs font-semibold text-slate-500 mt-1 flex items-center justify-between">
-                  <span>Overall Total:</span>
-                  <span className="font-bold text-slate-700">{oTotals.totalConsults?.toLocaleString()}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* KPI 2: Done */}
-          <Card className="border-emerald-100 bg-gradient-to-br from-white to-emerald-50/30 shadow-md hover:shadow-lg transition-all">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-emerald-700">Completed (Done)</span>
-                <div className="p-2 rounded-xl bg-emerald-100 text-emerald-700">
-                  <CheckCircle2 className="w-4 h-4" />
-                </div>
-              </div>
-              <div className="mt-3">
-                <div className="text-2xl font-black text-emerald-600 tabular-nums">{wTotals.done}</div>
-                <div className="text-xs font-semibold text-slate-500 mt-1 flex items-center justify-between">
-                  <span>Overall Done:</span>
-                  <span className="font-bold text-emerald-700">{oTotals.done?.toLocaleString()}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* KPI 3: Cancelled */}
-          <Card className="border-rose-100 bg-gradient-to-br from-white to-rose-50/30 shadow-md hover:shadow-lg transition-all">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-rose-700">Cancelled</span>
-                <div className="p-2 rounded-xl bg-rose-100 text-rose-700">
-                  <XCircle className="w-4 h-4" />
-                </div>
-              </div>
-              <div className="mt-3">
-                <div className="text-2xl font-black text-rose-600 tabular-nums">{wTotals.cancelled}</div>
-                <div className="text-xs font-semibold text-slate-500 mt-1 flex items-center justify-between">
-                  <span>Overall Cancelled:</span>
-                  <span className="font-bold text-rose-700">{oTotals.cancelled?.toLocaleString()}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* KPI 4: Pending */}
-          <Card className="border-amber-100 bg-gradient-to-br from-white to-amber-50/30 shadow-md hover:shadow-lg transition-all">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-amber-700">Pending</span>
-                <div className="p-2 rounded-xl bg-amber-100 text-amber-700">
-                  <Clock className="w-4 h-4" />
-                </div>
-              </div>
-              <div className="mt-3">
-                <div className="text-2xl font-black text-amber-600 tabular-nums">{wTotals.pending}</div>
-                <div className="text-xs font-semibold text-slate-500 mt-1 flex items-center justify-between">
-                  <span>Overall Pending:</span>
-                  <span className="font-bold text-amber-700">{oTotals.pending?.toLocaleString()}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* KPI 5: Conversion % */}
-          <Card className="border-purple-100 bg-gradient-to-br from-white to-purple-50/30 shadow-md hover:shadow-lg transition-all">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-purple-700">Overall Conv. %</span>
-                <div className="p-2 rounded-xl bg-purple-100 text-purple-700">
-                  <Target className="w-4 h-4" />
-                </div>
-              </div>
-              <div className="mt-3">
-                <div className="text-2xl font-black text-purple-700 tabular-nums">{oTotals.conversionRate}%</div>
-                <div className="text-xs font-semibold text-slate-500 mt-1 flex items-center justify-between">
-                  <span>Converted Leads:</span>
-                  <span className="font-bold text-purple-800">{oTotals.converted} leads</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* KPI 6: Overall Revenue */}
-          <Card className="border-blue-100 bg-gradient-to-br from-blue-900 to-slate-900 text-white shadow-lg hover:shadow-xl transition-all">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-teal-300">Total Revenue</span>
-                <div className="p-2 rounded-xl bg-white/10 text-emerald-400">
-                  <IndianRupee className="w-4 h-4" />
-                </div>
-              </div>
-              <div className="mt-3">
-                <div className="text-xl font-black text-emerald-300 tabular-nums">
-                  ₹{(oTotals.revenue / 10000000).toFixed(2)} Cr
-                </div>
-                <div className="text-xs font-medium text-slate-300 mt-1 flex items-center justify-between">
-                  <span>Avg per Conv:</span>
-                  <span className="font-bold text-white">₹{Math.round(oTotals.avgRevenuePerConsult / 1000)}k</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Interactive Filter & Search Controls */}
-        <Card className="border-slate-200 shadow-md">
-          <CardContent className="p-4 sm:p-5">
-            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
-              {/* Left Filters */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 flex-1">
-                {/* Period Selector */}
+            {/* Filter Inputs Grid */}
+            <div className="p-4 sm:p-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+                {/* 1. Timeframe Period */}
                 <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5 block">
                     Timeframe Period
                   </label>
                   <Select value={period} onValueChange={setPeriod}>
-                    <SelectTrigger className="h-10 bg-slate-50 border-slate-300 font-medium">
+                    <SelectTrigger className="h-9 bg-slate-50 border-slate-300 text-xs font-medium">
                       <SelectValue placeholder="Select period" />
                     </SelectTrigger>
                     <SelectContent>
@@ -437,23 +683,22 @@ export default function DoctorConsultationReportPage() {
                       <SelectItem value="this_month">This Month</SelectItem>
                       <SelectItem value="last_month">Last Month</SelectItem>
                       <SelectItem value="ytd">Year To Date (2026)</SelectItem>
-                      <SelectItem value="all_time">Overall Total (02-07-2024 to Date)</SelectItem>
-                      <SelectItem value="custom">Custom Date Range</SelectItem>
+                      <SelectItem value="all_time">Cumulative (02-07-2024 to Date)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
-                {/* Enquiry Source Selector */}
+                {/* 2. Enquiry Source */}
                 <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5 block">
                     Enquiry Source
                   </label>
                   <Select value={sourceFilter} onValueChange={setSourceFilter}>
-                    <SelectTrigger className="h-10 bg-slate-50 border-slate-300 font-medium">
+                    <SelectTrigger className="h-9 bg-slate-50 border-slate-300 text-xs font-medium">
                       <SelectValue placeholder="All Sources" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Enquiry Sources</SelectItem>
+                      <SelectItem value="all">All Sources</SelectItem>
                       <SelectItem value="Website">Website</SelectItem>
                       <SelectItem value="PriyaSharma AI Chat">PriyaSharma AI Chat</SelectItem>
                       <SelectItem value="Google">Google</SelectItem>
@@ -468,13 +713,13 @@ export default function DoctorConsultationReportPage() {
                   </Select>
                 </div>
 
-                {/* Doctor Alignment Selector */}
+                {/* 3. Doctor Alignment */}
                 <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5 block">
                     Doctor / Specialist
                   </label>
                   <Select value={doctorFilter} onValueChange={setDoctorFilter}>
-                    <SelectTrigger className="h-10 bg-slate-50 border-slate-300 font-medium">
+                    <SelectTrigger className="h-9 bg-slate-50 border-slate-300 text-xs font-medium">
                       <SelectValue placeholder="All Doctors" />
                     </SelectTrigger>
                     <SelectContent>
@@ -487,13 +732,13 @@ export default function DoctorConsultationReportPage() {
                   </Select>
                 </div>
 
-                {/* Status Selector */}
+                {/* 4. Status Filter */}
                 <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5 block">
                     Status
                   </label>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="h-10 bg-slate-50 border-slate-300 font-medium">
+                    <SelectTrigger className="h-9 bg-slate-50 border-slate-300 text-xs font-medium">
                       <SelectValue placeholder="All Statuses" />
                     </SelectTrigger>
                     <SelectContent>
@@ -505,323 +750,502 @@ export default function DoctorConsultationReportPage() {
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
 
-              {/* Global Search Input & Clear */}
-              <div className="flex flex-col justify-end gap-1.5 lg:w-72">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
-                  Search Consultations
-                </label>
-                <div className="relative">
-                  <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-                  <Input
-                    placeholder="Search by Patient, ID, Phone..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9 h-10 bg-white border-slate-300 font-medium"
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery("")}
-                      className="absolute right-3 top-2.5 text-xs text-slate-400 hover:text-slate-600 bg-slate-100 rounded-full w-5 h-5 flex items-center justify-center"
-                    >
-                      ✕
-                    </button>
-                  )}
+                {/* 5. Search Bar */}
+                <div>
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5 block">
+                    Search Keyword
+                  </label>
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
+                    <Input
+                      placeholder="Patient, ID, mobile, source..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-8.5 h-9 bg-white border-slate-300 text-xs font-medium"
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery("")}
+                        className="absolute right-2.5 top-2.5 text-xs text-slate-400 hover:text-slate-600 bg-slate-100 rounded-full w-4 h-4 flex items-center justify-center"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Main Tabbed Management Views */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="bg-slate-200/80 p-1 rounded-xl grid grid-cols-2 sm:grid-cols-4 max-w-2xl">
-            <TabsTrigger value="summary" className="rounded-lg text-xs sm:text-sm font-semibold py-2.5">
-              <FileText className="w-4 h-4 mr-2" />
-              Executive Summary
-            </TabsTrigger>
-            <TabsTrigger value="doctors" className="rounded-lg text-xs sm:text-sm font-semibold py-2.5">
-              <User className="w-4 h-4 mr-2" />
-              Doctor Analytics
-            </TabsTrigger>
-            <TabsTrigger value="charts" className="rounded-lg text-xs sm:text-sm font-semibold py-2.5">
-              <BarChart3 className="w-4 h-4 mr-2" />
-              Visual Analytics
-            </TabsTrigger>
-            <TabsTrigger value="records" className="rounded-lg text-xs sm:text-sm font-semibold py-2.5">
-              <Stethoscope className="w-4 h-4 mr-2" />
-              Detailed Sheet ({filteredRecords.length})
-            </TabsTrigger>
-          </TabsList>
+          {/* ═══════════════════════════════════════════════════════════════════
+              4. MAIN MANAGEMENT VIEWS (TABS)
+          ════════════════════════════════════════════════════════════════════ */}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            <div className="border-b border-slate-200 pb-2 no-print">
+              <TabsList className="bg-slate-100 p-1 rounded-xl h-11">
+                <TabsTrigger value="summary" className="rounded-lg text-xs sm:text-sm font-semibold px-4 py-2">
+                  <FileText className="w-4 h-4 mr-2 text-blue-600" />
+                  Executive Report Tables
+                </TabsTrigger>
+                <TabsTrigger value="doctors" className="rounded-lg text-xs sm:text-sm font-semibold px-4 py-2">
+                  <User className="w-4 h-4 mr-2 text-emerald-600" />
+                  Doctor Analytics
+                </TabsTrigger>
+                <TabsTrigger value="charts" className="rounded-lg text-xs sm:text-sm font-semibold px-4 py-2">
+                  <BarChart3 className="w-4 h-4 mr-2 text-purple-600" />
+                  Visual Intelligence
+                </TabsTrigger>
+                <TabsTrigger value="records" className="rounded-lg text-xs sm:text-sm font-semibold px-4 py-2">
+                  <Stethoscope className="w-4 h-4 mr-2 text-teal-600" />
+                  Consultation Register ({filteredRecords.length})
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
-          {/* TAB 1: EXECUTIVE SUMMARY & SOURCE TABLES */}
-          <TabsContent value="summary" className="space-y-8">
-            {/* Section A: Selected Weekly / Period Consultation Report */}
-            <Card className="border-teal-200/80 shadow-lg overflow-hidden">
-              <CardHeader className="bg-gradient-to-r from-teal-700 via-teal-800 to-slate-800 text-white p-5 sm:p-6">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div>
-                    <CardTitle className="text-xl font-bold text-white flex items-center gap-2">
-                      <span>Weekly Doctor Consultation Report</span>
-                      <Badge className="bg-teal-400/20 text-teal-200 border-teal-400/40 text-xs font-medium">
+            {/* ─────────────────────────────────────────────────────────────
+                TAB 1: EXECUTIVE REPORT TABLES (Weekly + Cumulative)
+            ────────────────────────────────────────────────────────────── */}
+            <TabsContent value="summary" className="space-y-8">
+              {/* SECTION A: WEEKLY REPORT TABLE */}
+              <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                {/* Header Banner */}
+                <div className="bg-gradient-to-r from-blue-700 via-blue-800 to-indigo-900 text-white p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <h2 className="text-lg sm:text-xl font-black text-white">
+                        Weekly Doctor Consultation Report
+                      </h2>
+                      <Badge className="bg-blue-400/20 text-blue-200 border-blue-400/40 text-xs font-semibold">
                         {weeklyDateRange}
                       </Badge>
-                    </CardTitle>
-                    <CardDescription className="text-teal-100/80 text-xs sm:text-sm mt-1">
-                      Breakdown of inbound consultations by enquiry source for the active weekly period
-                    </CardDescription>
+                    </div>
+                    <p className="text-xs sm:text-sm text-blue-100/80">
+                      Breakdown of inbound consultations by enquiry source for the active weekly tracking window
+                    </p>
                   </div>
-                  <Badge variant="outline" className="bg-white/10 text-white border-white/20 px-3 py-1 font-semibold text-xs">
-                    Total: {wTotals.totalConsults} Consultations
-                  </Badge>
+
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <div className="text-xs text-blue-200 font-semibold uppercase tracking-wider">Weekly Volume</div>
+                      <div className="text-2xl font-black text-white tabular-nums">{wTotals.totalConsults} Consults</div>
+                    </div>
+                  </div>
                 </div>
-              </CardHeader>
-              <CardContent className="p-0">
+
+                {/* Table Content */}
                 <div className="overflow-x-auto">
                   <Table>
-                    <TableHeader className="bg-slate-100 border-b border-slate-200">
+                    <TableHeader className="bg-slate-50 border-b border-slate-200">
                       <TableRow>
-                        <TableHead className="font-extrabold text-slate-800 py-3.5 pl-6 text-sm">Enquiry Source</TableHead>
-                        <TableHead className="font-extrabold text-slate-800 text-center py-3.5 text-sm">Total Consults</TableHead>
-                        <TableHead className="font-extrabold text-emerald-800 text-center py-3.5 text-sm">✅ Done</TableHead>
-                        <TableHead className="font-extrabold text-rose-800 text-center py-3.5 text-sm">❌ Cancelled</TableHead>
-                        <TableHead className="font-extrabold text-amber-800 text-center py-3.5 text-sm">⏳ Pending</TableHead>
-                        <TableHead className="font-extrabold text-purple-800 text-center py-3.5 text-sm">🎯 Converted</TableHead>
-                        <TableHead className="font-extrabold text-slate-800 text-center py-3.5 text-sm">📈 Conversion %</TableHead>
-                        <TableHead className="font-extrabold text-teal-800 text-right py-3.5 pr-6 text-sm">💰 Revenue (₹)</TableHead>
+                        <TableHead className="font-black text-slate-800 py-3.5 pl-6 text-xs uppercase tracking-wider">
+                          Enquiry Source
+                        </TableHead>
+                        <TableHead className="font-black text-slate-800 text-center py-3.5 text-xs uppercase tracking-wider">
+                          Total Consults
+                        </TableHead>
+                        <TableHead className="font-black text-emerald-800 text-center py-3.5 text-xs uppercase tracking-wider">
+                          Done
+                        </TableHead>
+                        <TableHead className="font-black text-rose-800 text-center py-3.5 text-xs uppercase tracking-wider">
+                          Cancelled
+                        </TableHead>
+                        <TableHead className="font-black text-amber-800 text-center py-3.5 text-xs uppercase tracking-wider">
+                          Pending
+                        </TableHead>
+                        <TableHead className="font-black text-purple-800 text-center py-3.5 text-xs uppercase tracking-wider">
+                          Converted
+                        </TableHead>
+                        <TableHead className="font-black text-slate-800 text-center py-3.5 text-xs uppercase tracking-wider">
+                          Conv. %
+                        </TableHead>
+                        <TableHead className="font-black text-slate-800 text-right py-3.5 pr-6 text-xs uppercase tracking-wider">
+                          Revenue (₹)
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {weeklyReport.rows.map((r, idx) => (
                         <TableRow
                           key={r.source}
-                          className={`hover:bg-teal-50/40 transition-colors ${
-                            idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"
+                          className={`hover:bg-blue-50/40 transition-colors border-b border-slate-100 ${
+                            idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"
                           }`}
                         >
-                          <TableCell className="font-bold text-slate-900 pl-6 py-4 flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-teal-500 inline-block" />
+                          <TableCell className="font-bold text-slate-900 pl-6 py-3.5 text-sm flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-blue-600 inline-block" />
                             {r.source}
                           </TableCell>
-                          <TableCell className="text-center font-bold text-slate-800 py-4 tabular-nums">
+                          <TableCell className="text-center font-bold text-slate-800 py-3.5 text-sm tabular-nums">
                             {r.totalConsults}
                           </TableCell>
-                          <TableCell className="text-center font-semibold text-emerald-700 py-4 tabular-nums">
+                          <TableCell className="text-center font-semibold text-emerald-700 py-3.5 text-sm tabular-nums">
                             {r.done}
                           </TableCell>
-                          <TableCell className="text-center font-semibold text-rose-700 py-4 tabular-nums">
+                          <TableCell className="text-center font-semibold text-rose-700 py-3.5 text-sm tabular-nums">
                             {r.cancelled}
                           </TableCell>
-                          <TableCell className="text-center font-semibold text-amber-700 py-4 tabular-nums">
+                          <TableCell className="text-center font-semibold text-amber-700 py-3.5 text-sm tabular-nums">
                             {r.pending}
                           </TableCell>
-                          <TableCell className="text-center font-bold text-purple-700 py-4 tabular-nums">
+                          <TableCell className="text-center font-bold text-purple-700 py-3.5 text-sm tabular-nums">
                             {r.converted}
                           </TableCell>
-                          <TableCell className="text-center font-bold text-slate-800 py-4 tabular-nums">
+                          <TableCell className="text-center font-bold text-slate-800 py-3.5 text-sm tabular-nums">
                             <Badge
                               variant="outline"
                               className={
                                 r.conversionRate > 0
                                   ? "bg-purple-50 text-purple-700 border-purple-200 font-bold"
-                                  : "bg-slate-100 text-slate-600 border-slate-200"
+                                  : "bg-slate-100 text-slate-600 border-slate-200 font-medium"
                               }
                             >
                               {r.conversionRate.toFixed(2)}%
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-right font-black text-teal-800 pr-6 py-4 tabular-nums">
+                          <TableCell className="text-right font-black text-slate-900 pr-6 py-3.5 text-sm tabular-nums">
                             {formatCurrency(r.revenue)}
                           </TableCell>
                         </TableRow>
                       ))}
 
                       {/* Weekly Summary Total Row */}
-                      <TableRow className="bg-teal-900 text-white font-extrabold border-t-2 border-teal-700">
-                        <TableCell className="pl-6 py-4 text-base font-black text-teal-100">Total (Weekly)</TableCell>
-                        <TableCell className="text-center text-base py-4 text-white tabular-nums">{wTotals.totalConsults}</TableCell>
-                        <TableCell className="text-center text-base py-4 text-emerald-300 tabular-nums">{wTotals.done}</TableCell>
-                        <TableCell className="text-center text-base py-4 text-rose-300 tabular-nums">{wTotals.cancelled}</TableCell>
-                        <TableCell className="text-center text-base py-4 text-amber-300 tabular-nums">{wTotals.pending}</TableCell>
-                        <TableCell className="text-center text-base py-4 text-purple-300 tabular-nums">{wTotals.converted}</TableCell>
-                        <TableCell className="text-center text-base py-4 text-white tabular-nums">{wTotals.conversionRate?.toFixed(2)}%</TableCell>
-                        <TableCell className="text-right pr-6 py-4 text-base font-black text-emerald-300 tabular-nums">
+                      <TableRow className="bg-slate-900 text-white font-extrabold border-t-2 border-blue-600">
+                        <TableCell className="pl-6 py-4 text-sm font-black text-blue-200 uppercase tracking-wide">
+                          Total (Weekly)
+                        </TableCell>
+                        <TableCell className="text-center text-sm py-4 text-white font-black tabular-nums">
+                          {wTotals.totalConsults}
+                        </TableCell>
+                        <TableCell className="text-center text-sm py-4 text-emerald-300 font-black tabular-nums">
+                          {wTotals.done}
+                        </TableCell>
+                        <TableCell className="text-center text-sm py-4 text-rose-300 font-black tabular-nums">
+                          {wTotals.cancelled}
+                        </TableCell>
+                        <TableCell className="text-center text-sm py-4 text-amber-300 font-black tabular-nums">
+                          {wTotals.pending}
+                        </TableCell>
+                        <TableCell className="text-center text-sm py-4 text-purple-300 font-black tabular-nums">
+                          {wTotals.converted}
+                        </TableCell>
+                        <TableCell className="text-center text-sm py-4 text-white font-black tabular-nums">
+                          {wTotals.conversionRate?.toFixed(2)}%
+                        </TableCell>
+                        <TableCell className="text-right pr-6 py-4 text-sm font-black text-emerald-300 tabular-nums">
                           {formatCurrency(wTotals.revenue)}
                         </TableCell>
                       </TableRow>
                     </TableBody>
                   </Table>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
 
-            {/* Section B: Over All Total Consultation Report */}
-            <Card className="border-slate-300 shadow-lg overflow-hidden">
-              <CardHeader className="bg-gradient-to-r from-amber-700 via-amber-800 to-slate-900 text-white p-5 sm:p-6">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div>
-                    <CardTitle className="text-xl font-bold text-white flex items-center gap-2">
-                      <span>Over All Total Consultation Report</span>
-                      <Badge className="bg-amber-400/20 text-amber-200 border-amber-400/40 text-xs font-medium">
+              {/* SECTION B: OVER ALL CUMULATIVE REPORT TABLE */}
+              <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                {/* Header Banner */}
+                <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 text-white p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <h2 className="text-lg sm:text-xl font-black text-white">
+                        Over All Total Consultation Report
+                      </h2>
+                      <Badge className="bg-amber-400/20 text-amber-300 border-amber-400/40 text-xs font-semibold">
                         {overallDateRange}
                       </Badge>
-                    </CardTitle>
-                    <CardDescription className="text-amber-100/80 text-xs sm:text-sm mt-1">
+                    </div>
+                    <p className="text-xs sm:text-sm text-slate-300">
                       Historical cumulative performance report across all enquiry sources (02-07-2024 to date)
-                    </CardDescription>
+                    </p>
                   </div>
-                  <Badge variant="outline" className="bg-white/10 text-white border-white/20 px-3 py-1 font-semibold text-xs">
-                    Overall Consults: {oTotals.totalConsults?.toLocaleString()}
-                  </Badge>
+
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <div className="text-xs text-emerald-300 font-semibold uppercase tracking-wider">Total Revenue</div>
+                      <div className="text-2xl font-black text-emerald-400 tabular-nums">
+                        ₹{(oTotals.revenue / 10000000).toFixed(2)} Cr
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </CardHeader>
-              <CardContent className="p-0">
+
+                {/* Table Content */}
                 <div className="overflow-x-auto">
                   <Table>
-                    <TableHeader className="bg-slate-100 border-b border-slate-200">
+                    <TableHeader className="bg-slate-50 border-b border-slate-200">
                       <TableRow>
-                        <TableHead className="font-extrabold text-slate-800 py-3.5 pl-6 text-sm">Enquiry Source</TableHead>
-                        <TableHead className="font-extrabold text-slate-800 text-center py-3.5 text-sm">Total Consults</TableHead>
-                        <TableHead className="font-extrabold text-emerald-800 text-center py-3.5 text-sm">✅ Done</TableHead>
-                        <TableHead className="font-extrabold text-rose-800 text-center py-3.5 text-sm">❌ Cancelled</TableHead>
-                        <TableHead className="font-extrabold text-amber-800 text-center py-3.5 text-sm">⏳ Pending</TableHead>
-                        <TableHead className="font-extrabold text-purple-800 text-center py-3.5 text-sm">🎯 Converted</TableHead>
-                        <TableHead className="font-extrabold text-slate-800 text-center py-3.5 text-sm">📈 Conversion %</TableHead>
-                        <TableHead className="font-extrabold text-amber-800 text-right py-3.5 pr-6 text-sm">💰 Revenue (₹)</TableHead>
+                        <TableHead className="font-black text-slate-800 py-3.5 pl-6 text-xs uppercase tracking-wider">
+                          Enquiry Source
+                        </TableHead>
+                        <TableHead className="font-black text-slate-800 text-center py-3.5 text-xs uppercase tracking-wider">
+                          Total Consults
+                        </TableHead>
+                        <TableHead className="font-black text-slate-800 text-center py-3.5 text-xs uppercase tracking-wider">
+                          Share %
+                        </TableHead>
+                        <TableHead className="font-black text-emerald-800 text-center py-3.5 text-xs uppercase tracking-wider">
+                          Done
+                        </TableHead>
+                        <TableHead className="font-black text-rose-800 text-center py-3.5 text-xs uppercase tracking-wider">
+                          Cancelled
+                        </TableHead>
+                        <TableHead className="font-black text-amber-800 text-center py-3.5 text-xs uppercase tracking-wider">
+                          Pending
+                        </TableHead>
+                        <TableHead className="font-black text-purple-800 text-center py-3.5 text-xs uppercase tracking-wider">
+                          Converted
+                        </TableHead>
+                        <TableHead className="font-black text-slate-800 text-center py-3.5 text-xs uppercase tracking-wider">
+                          Conv. %
+                        </TableHead>
+                        <TableHead className="font-black text-slate-800 text-right py-3.5 pr-6 text-xs uppercase tracking-wider">
+                          Revenue (₹)
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {overallReport.rows.map((r, idx) => (
-                        <TableRow
-                          key={r.source}
-                          className={`hover:bg-amber-50/40 transition-colors ${
-                            idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"
-                          }`}
-                        >
-                          <TableCell className="font-bold text-slate-900 pl-6 py-3.5 flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-amber-600 inline-block" />
-                            {r.source}
-                          </TableCell>
-                          <TableCell className="text-center font-bold text-slate-800 py-3.5 tabular-nums">
-                            {r.totalConsults.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="text-center font-semibold text-emerald-700 py-3.5 tabular-nums">
-                            {r.done.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="text-center font-semibold text-rose-700 py-3.5 tabular-nums">
-                            {r.cancelled.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="text-center font-semibold text-amber-700 py-3.5 tabular-nums">
-                            {r.pending}
-                          </TableCell>
-                          <TableCell className="text-center font-bold text-purple-700 py-3.5 tabular-nums">
-                            {r.converted.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="text-center font-bold text-slate-800 py-3.5 tabular-nums">
-                            <Badge
-                              variant="outline"
-                              className={
-                                r.conversionRate >= 10
-                                  ? "bg-emerald-50 text-emerald-700 border-emerald-300 font-bold"
-                                  : r.conversionRate >= 5
-                                  ? "bg-purple-50 text-purple-700 border-purple-200 font-bold"
-                                  : "bg-slate-100 text-slate-700 border-slate-200 font-medium"
-                              }
-                            >
-                              {r.conversionRate.toFixed(2)}%
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right font-black text-amber-900 pr-6 py-3.5 tabular-nums">
-                            {formatCurrency(r.revenue)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {overallReport.rows.map((r, idx) => {
+                        const sharePercent =
+                          oTotals.totalConsults > 0 ? ((r.totalConsults / oTotals.totalConsults) * 100).toFixed(1) : "0"
+                        return (
+                          <TableRow
+                            key={r.source}
+                            className={`hover:bg-indigo-50/30 transition-colors border-b border-slate-100 ${
+                              idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"
+                            }`}
+                          >
+                            <TableCell className="font-bold text-slate-900 pl-6 py-3.5 text-sm flex items-center gap-2">
+                              <span
+                                className="w-2.5 h-2.5 rounded-full inline-block"
+                                style={{ backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }}
+                              />
+                              {r.source}
+                            </TableCell>
+                            <TableCell className="text-center font-bold text-slate-800 py-3.5 text-sm tabular-nums">
+                              {r.totalConsults.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-center text-xs font-semibold text-slate-500 py-3.5 tabular-nums">
+                              {sharePercent}%
+                            </TableCell>
+                            <TableCell className="text-center font-semibold text-emerald-700 py-3.5 text-sm tabular-nums">
+                              {r.done.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-center font-semibold text-rose-700 py-3.5 text-sm tabular-nums">
+                              {r.cancelled.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-center font-semibold text-amber-700 py-3.5 text-sm tabular-nums">
+                              {r.pending}
+                            </TableCell>
+                            <TableCell className="text-center font-bold text-purple-700 py-3.5 text-sm tabular-nums">
+                              {r.converted.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-center font-bold text-slate-800 py-3.5 text-sm tabular-nums">
+                              <Badge
+                                variant="outline"
+                                className={
+                                  r.conversionRate >= 10
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-300 font-bold"
+                                    : r.conversionRate >= 5
+                                    ? "bg-purple-50 text-purple-700 border-purple-200 font-bold"
+                                    : "bg-slate-100 text-slate-700 border-slate-200 font-medium"
+                                }
+                              >
+                                {r.conversionRate.toFixed(2)}%
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right font-black text-slate-900 pr-6 py-3.5 text-sm tabular-nums">
+                              {formatCurrency(r.revenue)}
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
 
                       {/* Cumulative Total Row */}
-                      <TableRow className="bg-slate-900 text-white font-extrabold border-t-2 border-slate-800">
-                        <TableCell className="pl-6 py-4 text-base font-black text-amber-300">Total (Over All)</TableCell>
-                        <TableCell className="text-center text-base py-4 text-white tabular-nums">
+                      <TableRow className="bg-slate-900 text-white font-extrabold border-t-2 border-indigo-500">
+                        <TableCell className="pl-6 py-4 text-sm font-black text-amber-300 uppercase tracking-wide">
+                          Total (Over All)
+                        </TableCell>
+                        <TableCell className="text-center text-sm py-4 text-white font-black tabular-nums">
                           {oTotals.totalConsults?.toLocaleString()}
                         </TableCell>
-                        <TableCell className="text-center text-base py-4 text-emerald-300 tabular-nums">
+                        <TableCell className="text-center text-xs text-slate-300 py-4 font-bold tabular-nums">
+                          100.0%
+                        </TableCell>
+                        <TableCell className="text-center text-sm py-4 text-emerald-300 font-black tabular-nums">
                           {oTotals.done?.toLocaleString()}
                         </TableCell>
-                        <TableCell className="text-center text-base py-4 text-rose-300 tabular-nums">
+                        <TableCell className="text-center text-sm py-4 text-rose-300 font-black tabular-nums">
                           {oTotals.cancelled?.toLocaleString()}
                         </TableCell>
-                        <TableCell className="text-center text-base py-4 text-amber-300 tabular-nums">
+                        <TableCell className="text-center text-sm py-4 text-amber-300 font-black tabular-nums">
                           {oTotals.pending}
                         </TableCell>
-                        <TableCell className="text-center text-base py-4 text-purple-300 tabular-nums">
+                        <TableCell className="text-center text-sm py-4 text-purple-300 font-black tabular-nums">
                           {oTotals.converted?.toLocaleString()}
                         </TableCell>
-                        <TableCell className="text-center text-base py-4 text-white tabular-nums">
+                        <TableCell className="text-center text-sm py-4 text-white font-black tabular-nums">
                           {oTotals.conversionRate?.toFixed(2)}%
                         </TableCell>
-                        <TableCell className="text-right pr-6 py-4 text-base font-black text-emerald-300 tabular-nums">
+                        <TableCell className="text-right pr-6 py-4 text-sm font-black text-emerald-300 tabular-nums">
                           {formatCurrency(oTotals.revenue)}
                         </TableCell>
                       </TableRow>
                     </TableBody>
                   </Table>
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+              </div>
 
-          {/* TAB 2: DOCTOR PERFORMANCE ANALYTICS */}
-          <TabsContent value="doctors">
-            <Card className="border-slate-200 shadow-md">
-              <CardHeader className="bg-gradient-to-r from-teal-800 to-emerald-800 text-white p-6">
-                <CardTitle className="text-xl font-bold flex items-center gap-2">
-                  <User className="w-5 h-5 text-teal-300" />
-                  Doctor & Specialist Performance Breakdown
-                </CardTitle>
-                <CardDescription className="text-teal-100 text-sm">
-                  Consultation completion rates, lead conversion efficiency, and revenue attributed to doctors
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-0">
+              {/* Strategic Insights Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                <Card className="border-slate-200 bg-white shadow-sm p-4 rounded-xl">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 rounded-lg bg-blue-100 text-blue-700">
+                      <Award className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold uppercase text-slate-500 tracking-wider">Top Revenue Channel</h4>
+                      <div className="text-base font-bold text-slate-900 mt-0.5">Website Organic & Direct</div>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Generates <strong>₹3.12 Cr</strong> (83% of total revenue) with a healthy 9.02% conversion rate.
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+
+                <Card className="border-slate-200 bg-white shadow-sm p-4 rounded-xl">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 rounded-lg bg-purple-100 text-purple-700">
+                      <Sparkles className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold uppercase text-slate-500 tracking-wider">Highest Efficiency</h4>
+                      <div className="text-base font-bold text-slate-900 mt-0.5">CRR & Site Exit Pop-Up</div>
+                      <p className="text-xs text-slate-500 mt-1">
+                        CRR converts at <strong>66.67%</strong>, followed by Site Exit Pop-Ups at <strong>12.5%</strong>.
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+
+                <Card className="border-slate-200 bg-white shadow-sm p-4 rounded-xl">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 rounded-lg bg-amber-100 text-amber-700">
+                      <Zap className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold uppercase text-slate-500 tracking-wider">AI Assistant Velocity</h4>
+                      <div className="text-base font-bold text-slate-900 mt-0.5">PriyaSharma AI Chat</div>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Drove <strong>1,231</strong> total consultations and <strong>₹47.7 Lakhs</strong> in revenue.
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+              </div>
+            </TabsContent>
+
+            {/* ─────────────────────────────────────────────────────────────
+                TAB 2: DOCTOR & SPECIALIST PERFORMANCE ANALYTICS
+            ────────────────────────────────────────────────────────────── */}
+            <TabsContent value="doctors" className="space-y-6">
+              <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <div className="bg-gradient-to-r from-teal-800 via-teal-900 to-slate-900 text-white p-6">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div>
+                      <h2 className="text-xl font-bold flex items-center gap-2">
+                        <User className="w-5 h-5 text-teal-300" />
+                        Specialist Clinical & Conversion Performance
+                      </h2>
+                      <p className="text-teal-100/80 text-xs sm:text-sm mt-1">
+                        Doctor consultation volume, completion velocity, lead conversion rate, and revenue contribution
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="bg-white/10 text-white border-white/20 px-3 py-1">
+                      {doctorsPerformance.length} Active Specialists
+                    </Badge>
+                  </div>
+                </div>
+
                 <div className="overflow-x-auto">
                   <Table>
-                    <TableHeader className="bg-slate-100">
+                    <TableHeader className="bg-slate-50 border-b border-slate-200">
                       <TableRow>
-                        <TableHead className="font-extrabold text-slate-800 pl-6 py-3.5">Doctor Name</TableHead>
-                        <TableHead className="font-extrabold text-slate-800 py-3.5">Specialization</TableHead>
-                        <TableHead className="font-extrabold text-slate-800 text-center py-3.5">Total Consults</TableHead>
-                        <TableHead className="font-extrabold text-emerald-800 text-center py-3.5">Done</TableHead>
-                        <TableHead className="font-extrabold text-purple-800 text-center py-3.5">Converted</TableHead>
-                        <TableHead className="font-extrabold text-slate-800 text-center py-3.5">Conversion Rate</TableHead>
-                        <TableHead className="font-extrabold text-amber-800 text-center py-3.5">Avg SLA Time</TableHead>
-                        <TableHead className="font-extrabold text-teal-900 text-right pr-6 py-3.5">Total Revenue</TableHead>
+                        <TableHead className="font-black text-slate-800 pl-6 py-3.5 text-xs uppercase tracking-wider">
+                          Doctor Name & ID
+                        </TableHead>
+                        <TableHead className="font-black text-slate-800 py-3.5 text-xs uppercase tracking-wider">
+                          Specialization
+                        </TableHead>
+                        <TableHead className="font-black text-slate-800 text-center py-3.5 text-xs uppercase tracking-wider">
+                          Total Consults
+                        </TableHead>
+                        <TableHead className="font-black text-emerald-800 text-center py-3.5 text-xs uppercase tracking-wider">
+                          Done
+                        </TableHead>
+                        <TableHead className="font-black text-purple-800 text-center py-3.5 text-xs uppercase tracking-wider">
+                          Converted
+                        </TableHead>
+                        <TableHead className="font-black text-slate-800 text-center py-3.5 text-xs uppercase tracking-wider">
+                          Conversion Rate
+                        </TableHead>
+                        <TableHead className="font-black text-amber-800 text-center py-3.5 text-xs uppercase tracking-wider">
+                          Avg SLA Time
+                        </TableHead>
+                        <TableHead className="font-black text-slate-800 text-right pr-6 py-3.5 text-xs uppercase tracking-wider">
+                          Revenue Attributed
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {doctorsPerformance.map((doc) => (
-                        <TableRow key={doc.doctorId} className="hover:bg-teal-50/30">
+                      {doctorsPerformance.map((doc, idx) => (
+                        <TableRow
+                          key={doc.doctorId}
+                          className={`hover:bg-teal-50/40 transition-colors border-b border-slate-100 ${
+                            idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"
+                          }`}
+                        >
                           <TableCell className="font-bold text-slate-900 pl-6 py-4 flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-full bg-teal-100 text-teal-700 font-bold flex items-center justify-center text-sm border border-teal-200">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-500 to-emerald-600 text-white font-black flex items-center justify-center text-sm shadow-sm flex-shrink-0">
                               {doc.doctorName.replace("Dr. ", "").substring(0, 2).toUpperCase()}
                             </div>
                             <div>
-                              <div className="font-bold text-slate-900">{doc.doctorName}</div>
+                              <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                                {doc.doctorName}
+                                {idx === 0 && (
+                                  <Badge className="bg-amber-100 text-amber-800 border-amber-300 text-[10px] px-1.5 py-0 h-4">
+                                    Top Doctor
+                                  </Badge>
+                                )}
+                              </div>
                               <div className="text-xs text-slate-500 font-medium">{doc.doctorId}</div>
                             </div>
                           </TableCell>
-                          <TableCell className="text-slate-700 font-medium">{doc.specialization}</TableCell>
-                          <TableCell className="text-center font-bold text-slate-800 tabular-nums">{doc.totalConsults.toLocaleString()}</TableCell>
-                          <TableCell className="text-center font-semibold text-emerald-700 tabular-nums">{doc.done.toLocaleString()}</TableCell>
-                          <TableCell className="text-center font-bold text-purple-700 tabular-nums">{doc.converted}</TableCell>
+                          <TableCell className="text-slate-700 font-medium text-xs sm:text-sm">
+                            <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200">
+                              {doc.specialization}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center font-bold text-slate-800 py-4 text-sm tabular-nums">
+                            {doc.totalConsults.toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-center font-semibold text-emerald-700 py-4 text-sm tabular-nums">
+                            {doc.done.toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-center font-bold text-purple-700 py-4 text-sm tabular-nums">
+                            {doc.converted}
+                          </TableCell>
                           <TableCell className="text-center font-bold tabular-nums">
-                            <Badge className="bg-purple-100 text-purple-800 border-purple-200">
+                            <Badge className="bg-purple-50 text-purple-700 border-purple-200 font-bold text-xs">
                               {doc.conversionRate.toFixed(2)}%
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-center font-semibold text-slate-700 tabular-nums">
-                            {doc.avgSlaMinutes} mins
+                          <TableCell className="text-center font-semibold text-slate-700 tabular-nums text-xs">
+                            <span className="inline-flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-amber-500" />
+                              {doc.avgSlaMinutes} mins
+                            </span>
                           </TableCell>
-                          <TableCell className="text-right font-black text-teal-900 pr-6 tabular-nums">
+                          <TableCell className="text-right font-black text-slate-900 pr-6 tabular-nums text-sm">
                             {formatCurrency(doc.revenue)}
                           </TableCell>
                         </TableRow>
@@ -829,166 +1253,219 @@ export default function DoctorConsultationReportPage() {
                     </TableBody>
                   </Table>
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+              </div>
+            </TabsContent>
 
-          {/* TAB 3: VISUAL ANALYTICS & CHARTS */}
-          <TabsContent value="charts" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Chart 1: Volume & Conversion by Channel */}
-              <Card className="border-slate-200 shadow-md">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    <BarChart3 className="w-5 h-5 text-teal-600" />
-                    Overall Consultation Volume by Enquiry Source
-                  </CardTitle>
-                  <CardDescription className="text-xs">
-                    Total consultations vs completed consultations per channel
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <div className="h-72 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={overallReport.rows} margin={{ top: 10, right: 10, left: -20, bottom: 40 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis dataKey="source" angle={-35} textAnchor="end" interval={0} tick={{ fontSize: 11 }} />
-                        <YAxis />
-                        <Tooltip formatter={(value: any) => [Number(value).toLocaleString(), "Count"]} />
-                        <Legend verticalAlign="top" wrapperStyle={{ paddingBottom: 10 }} />
-                        <Bar dataKey="totalConsults" name="Total Consults" fill="#0d9488" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="done" name="Done / Completed" fill="#10b981" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="converted" name="Converted" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Chart 2: Revenue Distribution per Channel */}
-              <Card className="border-slate-200 shadow-md">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    <IndianRupee className="w-5 h-5 text-emerald-600" />
-                    Revenue Contribution by Enquiry Source
-                  </CardTitle>
-                  <CardDescription className="text-xs">
-                    Total revenue generated (₹) attributed to each lead source
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <div className="h-72 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={overallReport.rows.filter((r) => r.revenue > 0) as any}
-                          dataKey="revenue"
-                          nameKey="source"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={95}
-                          innerRadius={45}
-                          paddingAngle={3}
-                          label={({ name, percent }: any) => `${name} (${(((percent as number) || 0) * 100).toFixed(0)}%)`}
-                          labelLine={false}
-                        >
-                          {overallReport.rows.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip formatter={(val: any) => [formatCurrency(Number(val)), "Revenue"]} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          {/* TAB 4: DETAILED CONSULTATION RECORDS SHEET */}
-          <TabsContent value="records">
-            <Card className="border-slate-200 shadow-md">
-              <CardHeader className="bg-slate-800 text-white p-5">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div>
-                    <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
-                      <Stethoscope className="w-5 h-5 text-teal-400" />
-                      Detailed Consultation Record Sheet
+            {/* ─────────────────────────────────────────────────────────────
+                TAB 3: VISUAL INTELLIGENCE & CHARTS
+            ────────────────────────────────────────────────────────────── */}
+            <TabsContent value="charts" className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Chart 1: Volume & Conversion by Channel */}
+                <Card className="border-slate-200 bg-white shadow-sm rounded-xl">
+                  <CardHeader className="pb-2 border-b border-slate-100">
+                    <CardTitle className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      <BarChart3 className="w-4 h-4 text-blue-600" />
+                      Consultation Volume by Enquiry Source
                     </CardTitle>
-                    <CardDescription className="text-slate-300 text-xs">
-                      Granular patient consultation entries, SLA compliance, and stage tracking
+                    <CardDescription className="text-xs">
+                      Comparison of Total, Completed, and Converted consultations per channel
                     </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="h-80 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={overallReport.rows} margin={{ top: 10, right: 10, left: -20, bottom: 40 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                          <XAxis
+                            dataKey="source"
+                            angle={-30}
+                            textAnchor="end"
+                            interval={0}
+                            tick={{ fontSize: 11, fill: "#475569" }}
+                          />
+                          <YAxis tick={{ fontSize: 11, fill: "#475569" }} />
+                          <RechartsTooltip
+                            formatter={(value: any) => [Number(value).toLocaleString(), "Volume"]}
+                            contentStyle={{ borderRadius: "8px", border: "1px solid #e2e8f0" }}
+                          />
+                          <Legend verticalAlign="top" wrapperStyle={{ paddingBottom: 12, fontSize: "12px" }} />
+                          <Bar dataKey="totalConsults" name="Total Consults" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="done" name="Completed" fill="#10b981" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="converted" name="Converted" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Chart 2: Revenue Distribution per Channel */}
+                <Card className="border-slate-200 bg-white shadow-sm rounded-xl">
+                  <CardHeader className="pb-2 border-b border-slate-100">
+                    <CardTitle className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      <IndianRupee className="w-4 h-4 text-emerald-600" />
+                      Revenue Contribution by Enquiry Source
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Total revenue generated (₹) attributed to each inbound lead source
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="h-80 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={overallReport.rows.filter((r) => r.revenue > 0) as any}
+                            dataKey="revenue"
+                            nameKey="source"
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={105}
+                            innerRadius={55}
+                            paddingAngle={2}
+                          >
+                            {overallReport.rows.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <RechartsTooltip
+                            formatter={(val: any) => [formatCurrency(Number(val)), "Revenue"]}
+                            contentStyle={{ borderRadius: "8px", border: "1px solid #e2e8f0" }}
+                          />
+                          <Legend
+                            verticalAlign="bottom"
+                            wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
+                            layout="horizontal"
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            {/* ─────────────────────────────────────────────────────────────
+                TAB 4: DETAILED CONSULTATION REGISTER
+            ────────────────────────────────────────────────────────────── */}
+            <TabsContent value="records" className="space-y-4">
+              <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                {/* Table Header */}
+                <div className="bg-slate-900 text-white p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <h3 className="text-base font-bold flex items-center gap-2 text-white">
+                      <Stethoscope className="w-4 h-4 text-blue-400" />
+                      Detailed Consultation Register
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Patient consultation records, doctor alignment, SLA status & documentation
+                    </p>
                   </div>
-                  <Badge variant="outline" className="bg-teal-500/20 text-teal-200 border-teal-400/30">
-                    Showing {filteredRecords.length} records
-                  </Badge>
+
+                  <div className="flex items-center gap-3">
+                    <Badge variant="outline" className="bg-blue-500/20 text-blue-200 border-blue-400/30 text-xs">
+                      {filteredRecords.length} records found
+                    </Badge>
+                  </div>
                 </div>
-              </CardHeader>
-              <CardContent className="p-0">
+
+                {/* Table Content */}
                 <div className="overflow-x-auto">
                   <Table>
-                    <TableHeader className="bg-slate-100">
+                    <TableHeader className="bg-slate-50 border-b border-slate-200">
                       <TableRow>
-                        <TableHead className="font-extrabold text-slate-800 pl-6 py-3.5">Consultation ID</TableHead>
-                        <TableHead className="font-extrabold text-slate-800 py-3.5">Patient Details</TableHead>
-                        <TableHead className="font-extrabold text-slate-800 py-3.5">Source</TableHead>
-                        <TableHead className="font-extrabold text-slate-800 py-3.5">Doctor</TableHead>
-                        <TableHead className="font-extrabold text-slate-800 py-3.5">Scheduled</TableHead>
-                        <TableHead className="font-extrabold text-slate-800 text-center py-3.5">Status</TableHead>
-                        <TableHead className="font-extrabold text-slate-800 text-center py-3.5">SLA</TableHead>
-                        <TableHead className="font-extrabold text-teal-900 text-right pr-6 py-3.5">Actions</TableHead>
+                        <TableHead className="font-black text-slate-800 pl-6 py-3.5 text-xs uppercase tracking-wider">
+                          Consultation ID
+                        </TableHead>
+                        <TableHead className="font-black text-slate-800 py-3.5 text-xs uppercase tracking-wider">
+                          Patient Details
+                        </TableHead>
+                        <TableHead className="font-black text-slate-800 py-3.5 text-xs uppercase tracking-wider">
+                          Source
+                        </TableHead>
+                        <TableHead className="font-black text-slate-800 py-3.5 text-xs uppercase tracking-wider">
+                          Doctor
+                        </TableHead>
+                        <TableHead className="font-black text-slate-800 py-3.5 text-xs uppercase tracking-wider">
+                          Schedule
+                        </TableHead>
+                        <TableHead className="font-black text-slate-800 text-center py-3.5 text-xs uppercase tracking-wider">
+                          Status
+                        </TableHead>
+                        <TableHead className="font-black text-slate-800 text-center py-3.5 text-xs uppercase tracking-wider">
+                          SLA
+                        </TableHead>
+                        <TableHead className="font-black text-slate-800 text-right pr-6 py-3.5 text-xs uppercase tracking-wider">
+                          Action
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredRecords.map((item) => (
-                        <TableRow key={item.id} className="hover:bg-slate-50">
-                          <TableCell className="pl-6 py-4 font-bold text-teal-700">
+                      {paginatedRecords.map((item, idx) => (
+                        <TableRow
+                          key={item.id}
+                          className={`hover:bg-slate-50 transition-colors border-b border-slate-100 ${
+                            idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"
+                          }`}
+                        >
+                          <TableCell className="pl-6 py-3.5 font-bold text-blue-700 text-xs">
                             <div>{item.consultationId}</div>
-                            <div className="text-xs text-slate-500 font-medium">{item.enquiryId}</div>
+                            <div className="text-[11px] text-slate-400 font-medium">{item.enquiryId}</div>
                           </TableCell>
-                          <TableCell className="py-4">
-                            <div className="font-bold text-slate-900">{item.patientName}</div>
-                            <div className="text-xs text-slate-500">{item.mobile} • {item.email}</div>
+
+                          <TableCell className="py-3.5">
+                            <div className="font-bold text-slate-900 text-xs sm:text-sm">{item.patientName}</div>
+                            <div className="text-[11px] text-slate-500 font-medium">
+                              {item.mobile} • {item.email}
+                            </div>
                           </TableCell>
-                          <TableCell className="py-4">
-                            <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-300 font-semibold">
+
+                          <TableCell className="py-3.5">
+                            <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200 text-xs">
                               {item.enquirySource}
                             </Badge>
                           </TableCell>
-                          <TableCell className="py-4 font-medium text-slate-800">{item.doctorName}</TableCell>
-                          <TableCell className="py-4">
-                            <div className="text-sm font-semibold text-slate-800">{item.scheduledDate}</div>
-                            <div className="text-xs text-slate-500">{item.scheduledTime}</div>
+
+                          <TableCell className="py-3.5 font-semibold text-slate-800 text-xs sm:text-sm">
+                            {item.doctorName}
                           </TableCell>
-                          <TableCell className="py-4 text-center">
+
+                          <TableCell className="py-3.5">
+                            <div className="text-xs font-semibold text-slate-800">{item.scheduledDate}</div>
+                            <div className="text-[11px] text-slate-500">{item.scheduledTime}</div>
+                          </TableCell>
+
+                          <TableCell className="py-3.5 text-center">
                             <Badge
                               className={
                                 item.status === "converted"
-                                  ? "bg-purple-100 text-purple-800 border-purple-300"
+                                  ? "bg-purple-100 text-purple-800 border-purple-300 text-xs"
                                   : item.status === "completed"
-                                  ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                  ? "bg-emerald-100 text-emerald-800 border-emerald-300 text-xs"
                                   : item.status === "pending"
-                                  ? "bg-amber-100 text-amber-800 border-amber-300"
-                                  : "bg-rose-100 text-rose-800 border-rose-300"
+                                  ? "bg-amber-100 text-amber-800 border-amber-300 text-xs"
+                                  : "bg-rose-100 text-rose-800 border-rose-300 text-xs"
                               }
                             >
                               {item.status.toUpperCase()}
                             </Badge>
                           </TableCell>
-                          <TableCell className="py-4 text-center">
+
+                          <TableCell className="py-3.5 text-center">
                             <span
-                              className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                              className={`text-[11px] font-bold px-2 py-0.5 rounded-full inline-block ${
                                 item.slaStatus === "on-time"
-                                  ? "bg-emerald-50 text-emerald-700"
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                                   : item.slaStatus === "at-risk"
-                                  ? "bg-amber-50 text-amber-700"
-                                  : "bg-rose-50 text-rose-700"
+                                  ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                  : "bg-rose-50 text-rose-700 border border-rose-200"
                               }`}
                             >
                               {item.slaStatus.toUpperCase()}
                             </span>
                           </TableCell>
-                          <TableCell className="pr-6 py-4 text-right">
+
+                          <TableCell className="pr-6 py-3.5 text-right">
                             <Button
                               onClick={() => {
                                 setSelectedRecord(item)
@@ -996,236 +1473,318 @@ export default function DoctorConsultationReportPage() {
                               }}
                               variant="outline"
                               size="sm"
-                              className="h-8 border-teal-300 text-teal-800 hover:bg-teal-50 font-medium"
+                              className="h-8 border-slate-300 text-slate-700 hover:bg-blue-50 hover:text-blue-700 font-semibold text-xs"
                             >
                               <Eye className="w-3.5 h-3.5 mr-1" />
-                              View
+                              View Dossier
                             </Button>
                           </TableCell>
                         </TableRow>
                       ))}
+
+                      {paginatedRecords.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={8} className="h-36 text-center text-slate-500 text-sm">
+                            No consultation records match the selected filters.
+                          </TableCell>
+                        </TableRow>
+                      )}
                     </TableBody>
                   </Table>
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
 
-      {/* MODAL 1: CONSULTATION RECORD DETAILS */}
-      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="max-w-2xl bg-white rounded-2xl shadow-2xl p-6">
-          {selectedRecord && (
-            <>
-              <DialogHeader className="border-b pb-4">
-                <div className="flex items-center justify-between">
-                  <Badge className="bg-teal-100 text-teal-800 border-teal-200">
-                    {selectedRecord.consultationId}
-                  </Badge>
-                  <Badge
-                    className={
-                      selectedRecord.status === "converted"
-                        ? "bg-purple-100 text-purple-800"
-                        : selectedRecord.status === "completed"
-                        ? "bg-emerald-100 text-emerald-800"
-                        : "bg-amber-100 text-amber-800"
-                    }
-                  >
-                    {selectedRecord.status.toUpperCase()}
-                  </Badge>
-                </div>
-                <DialogTitle className="text-2xl font-bold text-slate-900 mt-2">
-                  {selectedRecord.patientName}
-                </DialogTitle>
-                <DialogDescription className="text-slate-500 text-xs">
-                  Enquiry ID: {selectedRecord.enquiryId} • Patient ID: {selectedRecord.patientId}
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="grid grid-cols-2 gap-4 py-4 text-sm">
-                <div>
-                  <label className="text-xs font-bold uppercase text-slate-400">Mobile Phone</label>
-                  <p className="font-semibold text-slate-800">{selectedRecord.mobile}</p>
-                </div>
-                <div>
-                  <label className="text-xs font-bold uppercase text-slate-400">Email Address</label>
-                  <p className="font-semibold text-slate-800">{selectedRecord.email}</p>
-                </div>
-                <div>
-                  <label className="text-xs font-bold uppercase text-slate-400">Enquiry Source</label>
-                  <p className="font-semibold text-teal-700">{selectedRecord.enquirySource}</p>
-                </div>
-                <div>
-                  <label className="text-xs font-bold uppercase text-slate-400">Aligned Doctor</label>
-                  <p className="font-semibold text-slate-800">{selectedRecord.doctorName}</p>
-                </div>
-                <div>
-                  <label className="text-xs font-bold uppercase text-slate-400">Appointment Type</label>
-                  <p className="font-semibold text-slate-800">{selectedRecord.appointmentType}</p>
-                </div>
-                <div>
-                  <label className="text-xs font-bold uppercase text-slate-400">Scheduled Time</label>
-                  <p className="font-semibold text-slate-800">{selectedRecord.scheduledDate} ({selectedRecord.scheduledTime})</p>
-                </div>
-              </div>
-
-              {selectedRecord.postConsultationRemarks && (
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 my-2">
-                  <label className="text-xs font-bold uppercase text-slate-500 block mb-1">Doctor Remarks</label>
-                  <p className="text-sm text-slate-700 italic">"{selectedRecord.postConsultationRemarks}"</p>
-                </div>
-              )}
-
-              <div className="flex flex-wrap gap-2 pt-2">
-                {selectedRecord.prescriptionUrl && (
-                  <Button variant="outline" size="sm" asChild className="border-teal-300 text-teal-700">
-                    <a href={selectedRecord.prescriptionUrl} target="_blank" rel="noreferrer">
-                      <FileText className="w-3.5 h-3.5 mr-1" /> View Prescription
-                    </a>
-                  </Button>
-                )}
-                {selectedRecord.clientReportUrl && (
-                  <Button variant="outline" size="sm" asChild className="border-blue-300 text-blue-700">
-                    <a href={selectedRecord.clientReportUrl} target="_blank" rel="noreferrer">
-                      <ExternalLink className="w-3.5 h-3.5 mr-1" /> Client Reports
-                    </a>
-                  </Button>
-                )}
-              </div>
-
-              <DialogFooter className="mt-4 pt-3 border-t">
-                <Button variant="secondary" onClick={() => setIsDetailOpen(false)}>
-                  Close
-                </Button>
-              </DialogFooter>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* MODAL 2: EMAIL DIGEST GENERATOR & DISPATCH */}
-      <Dialog open={isEmailModalOpen} onOpenChange={setIsEmailModalOpen}>
-        <DialogContent className="max-w-3xl bg-white rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-slate-900 flex items-center gap-2">
-              <Mail className="w-5 h-5 text-teal-600" />
-              Send Doctor Consultation Report Digest
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
-              Generate and email the management report sheet formatted like the reference email template
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-3">
-            <div>
-              <label className="text-xs font-bold uppercase text-slate-600 mb-1 block">Recipients (comma separated)</label>
-              <Input
-                value={emailRecipients}
-                onChange={(e) => setEmailRecipients(e.target.value)}
-                placeholder="director@kairali.com, dme@kairali.com"
-                className="font-medium bg-slate-50 border-slate-300"
-              />
-            </div>
-
-            {/* Email Preview Frame */}
-            <div className="border border-slate-300 rounded-xl overflow-hidden bg-slate-50 p-4 font-sans text-xs">
-              <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-200 space-y-3">
-                <div className="border-b pb-2 flex justify-between items-center">
-                  <div className="font-bold text-slate-900 text-sm">
-                    Weekly Doctor Consultation Report – {weeklyDateRange}
+                {/* Pagination Controls */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3.5 border-t border-slate-200 bg-slate-50/60 no-print">
+                  <div className="text-xs text-slate-500 font-medium">
+                    Showing{" "}
+                    <span className="font-bold text-slate-800">
+                      {filteredRecords.length > 0 ? (currentPage - 1) * recordsPerPage + 1 : 0}
+                    </span>{" "}
+                    to{" "}
+                    <span className="font-bold text-slate-800">
+                      {Math.min(currentPage * recordsPerPage, filteredRecords.length)}
+                    </span>{" "}
+                    of <span className="font-bold text-slate-800">{filteredRecords.length}</span> consultations
                   </div>
-                  <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200">
-                    Kairali Management
-                  </Badge>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="h-8 text-xs font-semibold bg-white"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5 mr-1" />
+                      Previous
+                    </Button>
+
+                    <span className="text-xs font-semibold text-slate-700 px-2">
+                      Page {currentPage} of {totalPages}
+                    </span>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={currentPage >= totalPages}
+                      className="h-8 text-xs font-semibold bg-white"
+                    >
+                      Next
+                      <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            MODAL 1: CONSULTATION DOSSIER POPUP
+        ════════════════════════════════════════════════════════════════════ */}
+        <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+          <DialogContent className="max-w-2xl bg-white rounded-2xl shadow-2xl p-6 border border-slate-200">
+            {selectedRecord && (
+              <>
+                <DialogHeader className="border-b border-slate-100 pb-4">
+                  <div className="flex items-center justify-between">
+                    <Badge className="bg-blue-100 text-blue-800 border-blue-200 font-bold text-xs">
+                      {selectedRecord.consultationId}
+                    </Badge>
+                    <Badge
+                      className={
+                        selectedRecord.status === "converted"
+                          ? "bg-purple-100 text-purple-800"
+                          : selectedRecord.status === "completed"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-amber-100 text-amber-800"
+                      }
+                    >
+                      {selectedRecord.status.toUpperCase()}
+                    </Badge>
+                  </div>
+                  <DialogTitle className="text-xl sm:text-2xl font-black text-slate-900 mt-2">
+                    {selectedRecord.patientName}
+                  </DialogTitle>
+                  <DialogDescription className="text-slate-500 text-xs">
+                    Enquiry ID: {selectedRecord.enquiryId} • Patient ID: {selectedRecord.patientId}
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="grid grid-cols-2 gap-4 py-4 text-xs sm:text-sm">
+                  <div>
+                    <label className="text-[11px] font-bold uppercase text-slate-400">Mobile Phone</label>
+                    <p className="font-semibold text-slate-900">{selectedRecord.mobile}</p>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold uppercase text-slate-400">Email Address</label>
+                    <p className="font-semibold text-slate-900">{selectedRecord.email}</p>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold uppercase text-slate-400">Enquiry Source</label>
+                    <p className="font-semibold text-blue-700">{selectedRecord.enquirySource}</p>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold uppercase text-slate-400">Aligned Doctor</label>
+                    <p className="font-semibold text-slate-900">{selectedRecord.doctorName}</p>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold uppercase text-slate-400">Appointment Format</label>
+                    <p className="font-semibold text-slate-900">{selectedRecord.appointmentType}</p>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold uppercase text-slate-400">Scheduled Time</label>
+                    <p className="font-semibold text-slate-900">
+                      {selectedRecord.scheduledDate} at {selectedRecord.scheduledTime}
+                    </p>
+                  </div>
                 </div>
 
-                <p className="text-slate-600">Dear Sir,</p>
-                <p className="text-slate-600">Please find below the weekly summary of doctor consultations for the period {weeklyDateRange}.</p>
+                {selectedRecord.postConsultationRemarks && (
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 my-1">
+                    <label className="text-[11px] font-bold uppercase text-slate-500 block mb-1">
+                      Doctor Clinical Notes & Recommendations
+                    </label>
+                    <p className="text-xs text-slate-700 italic leading-relaxed">
+                      "{selectedRecord.postConsultationRemarks}"
+                    </p>
+                  </div>
+                )}
 
-                <div className="font-bold text-slate-900 text-xs pt-1">Weekly Consultation Report – {weeklyDateRange}</div>
-                <div className="border rounded overflow-hidden">
-                  <table className="w-full text-left border-collapse text-[11px]">
-                    <thead className="bg-slate-100 border-b">
-                      <tr>
-                        <th className="p-1.5 font-bold">Enquiry Source</th>
-                        <th className="p-1.5 font-bold text-center">Total</th>
-                        <th className="p-1.5 font-bold text-center">Done</th>
-                        <th className="p-1.5 font-bold text-center">Cancelled</th>
-                        <th className="p-1.5 font-bold text-center">Pending</th>
-                        <th className="p-1.5 font-bold text-center">Converted</th>
-                        <th className="p-1.5 font-bold text-center">Conv %</th>
-                        <th className="p-1.5 font-bold text-right">Revenue (₹)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {weeklyReport.rows.map((r) => (
-                        <tr key={r.source} className="border-b">
-                          <td className="p-1.5 font-medium">{r.source}</td>
-                          <td className="p-1.5 text-center">{r.totalConsults}</td>
-                          <td className="p-1.5 text-center">{r.done}</td>
-                          <td className="p-1.5 text-center">{r.cancelled}</td>
-                          <td className="p-1.5 text-center">{r.pending}</td>
-                          <td className="p-1.5 text-center">{r.converted}</td>
-                          <td className="p-1.5 text-center">{r.conversionRate}%</td>
-                          <td className="p-1.5 text-right">{r.revenue}</td>
+                <div className="flex flex-wrap gap-2 pt-3">
+                  {selectedRecord.prescriptionUrl && (
+                    <Button variant="outline" size="sm" asChild className="border-blue-300 text-blue-700 text-xs">
+                      <a href={selectedRecord.prescriptionUrl} target="_blank" rel="noreferrer">
+                        <FileText className="w-3.5 h-3.5 mr-1" /> View Prescription
+                      </a>
+                    </Button>
+                  )}
+                  {selectedRecord.clientReportUrl && (
+                    <Button variant="outline" size="sm" asChild className="border-emerald-300 text-emerald-700 text-xs">
+                      <a href={selectedRecord.clientReportUrl} target="_blank" rel="noreferrer">
+                        <ExternalLink className="w-3.5 h-3.5 mr-1" /> Client Reports
+                      </a>
+                    </Button>
+                  )}
+                  {selectedRecord.doshaReportUrl && (
+                    <Button variant="outline" size="sm" asChild className="border-purple-300 text-purple-700 text-xs">
+                      <a href={selectedRecord.doshaReportUrl} target="_blank" rel="noreferrer">
+                        <Award className="w-3.5 h-3.5 mr-1" /> Dosha Test Report
+                      </a>
+                    </Button>
+                  )}
+                </div>
+
+                <DialogFooter className="mt-4 pt-3 border-t border-slate-100">
+                  <Button variant="secondary" onClick={() => setIsDetailOpen(false)} className="text-xs font-semibold">
+                    Close
+                  </Button>
+                </DialogFooter>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            MODAL 2: EMAIL DIGEST GENERATOR & DISPATCH
+        ════════════════════════════════════════════════════════════════════ */}
+        <Dialog open={isEmailModalOpen} onOpenChange={setIsEmailModalOpen}>
+          <DialogContent className="max-w-3xl bg-white rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto border border-slate-200">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <Mail className="w-5 h-5 text-blue-600" />
+                Dispatch Doctor Consultation Management Digest
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-500">
+                Email the standardized Weekly & Overall consultation management sheet to executive stakeholders
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-3">
+              <div>
+                <label className="text-xs font-bold uppercase text-slate-600 mb-1 block">
+                  Recipients (comma separated)
+                </label>
+                <Input
+                  value={emailRecipients}
+                  onChange={(e) => setEmailRecipients(e.target.value)}
+                  placeholder="director@kairali.com, dme@kairali.com"
+                  className="font-medium bg-slate-50 border-slate-300 text-xs"
+                />
+              </div>
+
+              {/* Email Preview Frame */}
+              <div className="border border-slate-300 rounded-xl overflow-hidden bg-slate-50 p-4 font-sans text-xs">
+                <div className="bg-white p-5 rounded-lg shadow-sm border border-slate-200 space-y-3">
+                  <div className="border-b border-slate-200 pb-3 flex justify-between items-center">
+                    <div>
+                      <div className="font-extrabold text-slate-900 text-sm">
+                        Weekly Doctor Consultation Report – {weeklyDateRange}
+                      </div>
+                      <div className="text-[11px] text-slate-500">Official Kairali Management Briefing</div>
+                    </div>
+                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs font-bold">
+                      Kairali CRM
+                    </Badge>
+                  </div>
+
+                  <p className="text-slate-700 text-xs">Dear Management Team,</p>
+                  <p className="text-slate-600 text-xs">
+                    Please find below the official weekly summary of doctor consultations and historical cumulative
+                    channel conversions for your review.
+                  </p>
+
+                  <div className="font-bold text-slate-900 text-xs pt-1">
+                    1. Weekly Consultation Report – {weeklyDateRange}
+                  </div>
+                  <div className="border rounded overflow-hidden">
+                    <table className="w-full text-left border-collapse text-[11px]">
+                      <thead className="bg-blue-50 border-b border-blue-100">
+                        <tr>
+                          <th className="p-1.5 font-bold">Enquiry Source</th>
+                          <th className="p-1.5 font-bold text-center">Total</th>
+                          <th className="p-1.5 font-bold text-center">Done</th>
+                          <th className="p-1.5 font-bold text-center">Cancelled</th>
+                          <th className="p-1.5 font-bold text-center">Pending</th>
+                          <th className="p-1.5 font-bold text-center">Converted</th>
+                          <th className="p-1.5 font-bold text-center">Conv %</th>
+                          <th className="p-1.5 font-bold text-right">Revenue (₹)</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {weeklyReport.rows.map((r) => (
+                          <tr key={r.source} className="border-b border-slate-100">
+                            <td className="p-1.5 font-semibold text-slate-900">{r.source}</td>
+                            <td className="p-1.5 text-center">{r.totalConsults}</td>
+                            <td className="p-1.5 text-center text-emerald-600 font-semibold">{r.done}</td>
+                            <td className="p-1.5 text-center text-rose-600 font-semibold">{r.cancelled}</td>
+                            <td className="p-1.5 text-center text-amber-600 font-semibold">{r.pending}</td>
+                            <td className="p-1.5 text-center text-purple-600 font-semibold">{r.converted}</td>
+                            <td className="p-1.5 text-center font-bold">{r.conversionRate}%</td>
+                            <td className="p-1.5 text-right font-bold">{formatCurrency(r.revenue)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
 
-                <div className="font-bold text-amber-900 text-xs pt-2">Over All Total Consultation Report – {overallDateRange}</div>
-                <div className="border rounded overflow-hidden">
-                  <table className="w-full text-left border-collapse text-[11px]">
-                    <thead className="bg-amber-50 border-b">
-                      <tr>
-                        <th className="p-1.5 font-bold">Enquiry Source</th>
-                        <th className="p-1.5 font-bold text-center">Total</th>
-                        <th className="p-1.5 font-bold text-center">Done</th>
-                        <th className="p-1.5 font-bold text-center">Cancelled</th>
-                        <th className="p-1.5 font-bold text-center">Pending</th>
-                        <th className="p-1.5 font-bold text-center">Converted</th>
-                        <th className="p-1.5 font-bold text-center">Conv %</th>
-                        <th className="p-1.5 font-bold text-right">Revenue (₹)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {overallReport.rows.slice(0, 5).map((r) => (
-                        <tr key={r.source} className="border-b">
-                          <td className="p-1.5 font-medium">{r.source}</td>
-                          <td className="p-1.5 text-center">{r.totalConsults}</td>
-                          <td className="p-1.5 text-center">{r.done}</td>
-                          <td className="p-1.5 text-center">{r.cancelled}</td>
-                          <td className="p-1.5 text-center">{r.pending}</td>
-                          <td className="p-1.5 text-center">{r.converted}</td>
-                          <td className="p-1.5 text-center">{r.conversionRate}%</td>
-                          <td className="p-1.5 text-right">{r.revenue.toLocaleString()}</td>
+                  <div className="font-bold text-slate-900 text-xs pt-2">
+                    2. Over All Total Consultation Report – {overallDateRange}
+                  </div>
+                  <div className="border rounded overflow-hidden">
+                    <table className="w-full text-left border-collapse text-[11px]">
+                      <thead className="bg-slate-100 border-b border-slate-200">
+                        <tr>
+                          <th className="p-1.5 font-bold">Enquiry Source</th>
+                          <th className="p-1.5 font-bold text-center">Total</th>
+                          <th className="p-1.5 font-bold text-center">Done</th>
+                          <th className="p-1.5 font-bold text-center">Cancelled</th>
+                          <th className="p-1.5 font-bold text-center">Pending</th>
+                          <th className="p-1.5 font-bold text-center">Converted</th>
+                          <th className="p-1.5 font-bold text-center">Conv %</th>
+                          <th className="p-1.5 font-bold text-right">Revenue (₹)</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {overallReport.rows.slice(0, 5).map((r) => (
+                          <tr key={r.source} className="border-b border-slate-100">
+                            <td className="p-1.5 font-semibold text-slate-900">{r.source}</td>
+                            <td className="p-1.5 text-center">{r.totalConsults.toLocaleString()}</td>
+                            <td className="p-1.5 text-center text-emerald-600 font-semibold">{r.done.toLocaleString()}</td>
+                            <td className="p-1.5 text-center text-rose-600 font-semibold">{r.cancelled.toLocaleString()}</td>
+                            <td className="p-1.5 text-center text-amber-600 font-semibold">{r.pending}</td>
+                            <td className="p-1.5 text-center text-purple-600 font-semibold">{r.converted.toLocaleString()}</td>
+                            <td className="p-1.5 text-center font-bold">{r.conversionRate}%</td>
+                            <td className="p-1.5 text-right font-bold">{formatCurrency(r.revenue)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
 
-                <p className="text-slate-500 text-[11px]">Best regards,<br/>Kairali CRM Management System</p>
+                  <div className="pt-2 text-[11px] text-slate-500">
+                    Generated automatically by Kairali Ayurvedic Group CRM System.
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
 
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setIsEmailModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSendEmailDigest}
-              disabled={isSendingEmail}
-              className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold"
-            >
-              {isSendingEmail ? "Sending..." : "Dispatch Email Digest"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button variant="outline" onClick={() => setIsEmailModalOpen(false)} className="text-xs">
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSendEmailDigest}
+                disabled={isSendingEmail}
+                className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-xs"
+              >
+                {isSendingEmail ? "Dispatching..." : "Dispatch Email Digest"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </TooltipProvider>
     </DashboardLayout>
   )
 }

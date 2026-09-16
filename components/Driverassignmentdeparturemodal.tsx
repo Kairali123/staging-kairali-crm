@@ -81,6 +81,8 @@ export default function DriverAssignmentDepartureModal({ open = true, onClose = 
     } : LOCKED_DETAILS;
 
     const saved = guest?.driverAssignmentDeparture;
+    const isComplete = guest?.stageStatus?.[9] === "Complete";
+    const isProcessing = guest?.stageStatus?.[9] === "Processing";
 
     const [dropRequired, setDropRequired] = useState(saved?.dropRequired || "");
     const [driverName, setDriverName] = useState(saved?.driverName || "");
@@ -186,24 +188,62 @@ export default function DriverAssignmentDepartureModal({ open = true, onClose = 
                                 <p style={{ color: "#fff", fontWeight: 700, fontSize: 17, margin: 0 }}>
                                     Driver Assignment – Departure Drop
                                 </p>
-                                <span style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: 5,
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                    background: "rgba(245, 158, 11, 0.25)",
-                                    color: "#fef3c7",
-                                    border: "1px solid rgba(251, 191, 36, 0.4)",
-                                    padding: "2px 8px",
-                                    borderRadius: 9999,
-                                }}>
-                                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#fbbf24" }} />
-                                    Action Required
-                                </span>
+                                {isComplete ? (
+                                    <span style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: 5,
+                                        fontSize: 11,
+                                        fontWeight: 700,
+                                        background: "rgba(16, 185, 129, 0.25)",
+                                        color: "#d1fae5",
+                                        border: "1px solid rgba(52, 211, 153, 0.4)",
+                                        padding: "2px 8px",
+                                        borderRadius: 9999,
+                                    }}>
+                                        <Check size={12} color="#34d399" />
+                                        Complete
+                                    </span>
+                                ) : isProcessing ? (
+                                    <span style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: 5,
+                                        fontSize: 11,
+                                        fontWeight: 700,
+                                        background: "rgba(245, 158, 11, 0.25)",
+                                        color: "#fef3c7",
+                                        border: "1px solid rgba(251, 191, 36, 0.4)",
+                                        padding: "2px 8px",
+                                        borderRadius: 9999,
+                                    }}>
+                                        <Loader2 size={12} className="animate-spin" color="#fbbf24" />
+                                        Processing
+                                    </span>
+                                ) : (
+                                    <span style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: 5,
+                                        fontSize: 11,
+                                        fontWeight: 700,
+                                        background: "rgba(245, 158, 11, 0.25)",
+                                        color: "#fef3c7",
+                                        border: "1px solid rgba(251, 191, 36, 0.4)",
+                                        padding: "2px 8px",
+                                        borderRadius: 9999,
+                                    }}>
+                                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#fbbf24" }} />
+                                        Action Required
+                                    </span>
+                                )}
                             </div>
                             <p style={{ color: "rgba(255,255,255,0.9)", fontSize: 12, margin: "3px 0 0", fontWeight: 500 }}>
-                                Complete the required details below and submit this stage.
+                                {isComplete
+                                    ? "This stage is marked complete."
+                                    : isProcessing
+                                    ? "Submission is currently under review."
+                                    : "Complete the required details below and submit this stage."}
                             </p>
                         </div>
                     </div>
@@ -228,6 +268,42 @@ export default function DriverAssignmentDepartureModal({ open = true, onClose = 
                 </div>
 
                 <div style={{ padding: "20px 24px 24px", overflowY: "auto", flex: 1 }}>
+                    {isProcessing && (
+                        <div style={{
+                            marginBottom: 16,
+                            padding: "10px 14px",
+                            borderRadius: 10,
+                            background: "#fffbeb",
+                            border: "1px solid #fcd34d",
+                            color: "#92400e",
+                            fontSize: 13,
+                            fontWeight: 600,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                        }}>
+                            <Loader2 size={16} className="animate-spin" />
+                            Processing — your submission is being verified. This stage will be marked complete once confirmed.
+                        </div>
+                    )}
+                    {isComplete && (
+                        <div style={{
+                            marginBottom: 16,
+                            padding: "10px 14px",
+                            borderRadius: 10,
+                            background: "#f0fdf4",
+                            border: "1px solid #bbf7d0",
+                            color: "#166534",
+                            fontSize: 13,
+                            fontWeight: 600,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                        }}>
+                            <Check size={16} color="#16a34a" />
+                            Stage 10 is complete. Showing saved data in read-only mode.
+                        </div>
+                    )}
                     {/* Locked Guest & Booking Details - always grey, never editable */}
                     <div
                         style={{

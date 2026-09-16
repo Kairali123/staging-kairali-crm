@@ -141,13 +141,13 @@ function mapRow(row: GasBookingRow): Guest {
     // timestamp) is non-empty on the stage's own row — GAS resolves the
     // correct CrrCalling row per stage via UID + Call Purpose keyword.
     // currentStage = first not-completed stage (1-indexed); 9 if all 8 are complete.
-    // Stages that use the two-phase to_show model (KTAHV_CRR_Calling_FMS.to_show)
-    const TO_SHOW_STAGES = new Set([1, 5, 6, 7]);
+    // Stages that use the two-phase to_show model (KTAHV_CRR_Calling_FMS.to_show, ktahv_guest_tracker_part2.stage9_to_show, stage10_to_show, ktahv_guest_tracker.stage11_to_show)
+    const TO_SHOW_STAGES = new Set([1, 5, 6, 7, 9, 10, 11]);
 
     const stageStatus: StageStatus[] = Array.from({ length: 11 }, (_, i) => {
         const info = stageOf(stages, i + 1);
         if (info?.completed) return "Complete";
-        // Two-phase stages (1, 5, 6, 7): if submitted/saved data exists but to_show is false -> "Processing"
+        // Two-phase stages (1, 5, 6, 7, 9, 10, 11): if submitted/saved data exists but to_show is false -> "Processing"
         const hasSavedContent = hasActualSavedContent(info?.savedData);
         if (TO_SHOW_STAGES.has(i + 1) && (info?.submitted || info?.actualDate || hasSavedContent) && !info?.toShow) {
             return "Processing";
