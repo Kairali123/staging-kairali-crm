@@ -8,6 +8,7 @@ import {reportTemplates} from '@/lib/whatsapp-triggers/schema'
 import {workerReady,nextDailyRun} from '@/lib/whatsapp-triggers/schedule'
 export const runtime='nodejs'
 export const dynamic='force-dynamic'
+export const maxDuration = 60
 export async function GET(req:NextRequest){
  if(!authorized(req))return NextResponse.json({error:'Super administrator access required'},{status:403,headers})
  try{const state=await readState();return NextResponse.json({...state,providerReady:configured(),schedulerReady:workerReady(state)},{headers})}catch{return NextResponse.json({error:'Persistent WhatsApp storage unavailable on this server'},{status:503,headers})}

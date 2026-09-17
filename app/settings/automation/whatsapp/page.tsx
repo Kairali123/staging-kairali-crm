@@ -14,7 +14,26 @@ import {reportJPG,saveReportFile} from '@/lib/marketing-report-browser'
 const field='mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600'
 const button='inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium disabled:opacity-40'
 function initial(reportId:ConfigInput['reportId']='daily-sales-report'):ConfigInput{return {name:reportTemplates[reportId].title,reportId,company:'ALL',recipients:[],consent:false,status:'Draft',time:'09:00',timezone:'Asia/Kolkata',period:'Yesterday',start:new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'}),details:true}}
-async function json(url:string,options?:RequestInit){const r=await fetch(url,{cache:'no-store',...options});const data=await r.json();if(!r.ok)throw Error(data.error||'Request failed');return data}
+async function json(url:string,options?:RequestInit){
+ const r=await fetch(url,{cache:'no-store',...options})
+ const contentType=r.headers?.get?.('content-type')||''
+ let data: any=null
+ if(!contentType||contentType.includes('application/json')){
+  try{data=await r.json()}catch{}
+ }
+ if(!r.ok){
+  if(data?.error)throw Error(data.error)
+  if(r.status===504)throw Error('Server timeout (HTTP 504): The report query timed out. Please retry.')
+  if(r.status===502||r.status===503)throw Error(`Server unavailable (HTTP ${r.status}). Please retry shortly.`)
+  if(r.status===500)throw Error('Server error (HTTP 500). Please check application logs.')
+  if(r.status===401||r.status===403)throw Error('Session expired or access denied. Please re-login.')
+  throw Error(`Request failed (HTTP ${r.status})`)
+ }
+ if(data===null){
+  throw Error('Server returned an unexpected non-JSON response.')
+ }
+ return data
+}
 export default function WhatsAppTriggers(){
  const {user,isLoading}=useAuth(),router=useRouter()
  const admin=['super_admin','super admin'].includes(String(user?.role||'').trim().toLowerCase())
