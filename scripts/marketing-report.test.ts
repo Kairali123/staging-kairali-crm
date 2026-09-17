@@ -52,3 +52,46 @@ test('CAC uses lead denominator consistently even with no verified conversions',
  assert(!html.includes('spend/c.conversions'))
  assert(!html.includes('Infinity'))
 })
+
+test('shows all sources for company even when they have 0 leads, spend, traffic and sales',()=>{
+ const allSources = [
+   { company: 'KTAHV', source: 'Google' },
+   { company: 'KTAHV', source: 'Facebook' },
+   { company: 'KTAHV', source: 'Management' },
+   { company: 'KTAHV', source: 'Online Booking Engine' },
+ ]
+ const report = combineReport(
+   '2026-09-10',
+   [],
+   [{ company: 'KTAHV', source: 'Google', records: 1, spend: 100 }],
+   [],
+   0,
+   [{ company: 'KTAHV', source: 'Google', records: 2, leads: 2, high: 1, medium: 1, low: 0, unclassified: 0 }],
+   allSources
+ )
+ const ktahv = report.companies[0]
+ assert.deepEqual(ktahv.sources, ['Facebook', 'Google', 'Management', 'Online Booking Engine'])
+ // Google has activity
+ const googleIdx = ktahv.sources.indexOf('Google')
+ assert.equal(ktahv.leads[googleIdx], 2)
+ assert.equal(ktahv.spend[googleIdx], 100 * 1.18)
+ // Facebook and Management have 0 values
+ const fbIdx = ktahv.sources.indexOf('Facebook')
+ assert.equal(ktahv.leads[fbIdx], 0)
+ assert.equal(ktahv.high[fbIdx], 0)
+ assert.equal(ktahv.spend[fbIdx], 0)
+ const mgmtIdx = ktahv.sources.indexOf('Management')
+ assert.equal(ktahv.leads[mgmtIdx], 0)
+ assert.equal(ktahv.spend[mgmtIdx], 0)
+
+ // Render to HTML and check table rows exist
+ const html = reportHTML(report.date, report)
+ assert(html.includes('Management'))
+ assert(html.includes('Online Booking Engine'))
+ assert(html.includes('Facebook'))
+ assert(html.includes('Google'))
+ const exportHtml = reportExportHTML(report.date, report, { scope: 'KTAHV', expanded: ['KTAHV-leads', 'KTAHV-sales'] })
+ assert(exportHtml.includes('Management'))
+ assert(exportHtml.includes('Online Booking Engine'))
+})
+

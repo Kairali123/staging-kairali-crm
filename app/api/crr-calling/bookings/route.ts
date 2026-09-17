@@ -267,7 +267,19 @@ export async function GET(req: NextRequest) {
                 : Promise.resolve([[]] as any),
             bookingIds.length > 0
                 ? pool.query<any[]>(
-                    `SELECT id, booking_id, stage9_to_show, stage10_to_show
+                    `SELECT id, booking_id,
+                            stage5_planned, stage5_actual, stage5_time_delay, stage5_doer_name,
+                            stage5_pickup_assigned_to_driver_link_arrival, stage5_assign_status,
+                            stage5_assign_remarks, stage5_counts_st4, stage5_arrival_flight_details,
+                            stage5_pickup_driver_name, stage5_pickup_driver_contact, stage5_pickup_location,
+                            stage5_pickup_date, stage5_pickup_time, stage5_remarks_for_driver,
+                            stage10_to_show,
+                            stage9_planned, stage9_actual, stage9_time_delay, stage9_doer_name,
+                            stage9_assigned_to_driver_link_departure, stage9_departure_assign_status,
+                            stage9_departure_assign_remarks, stage9_departure_flight_details,
+                            stage9_driver_name, stage9_driver_mobile, stage9_dropping_location,
+                            stage9_dropping_date, stage9_dropping_time, stage9_remarks_for_driver,
+                            stage9_to_show
                      FROM ktahv_guest_tracker_part2
                      WHERE booking_id IN (?)
                      ORDER BY id ASC`,
@@ -633,40 +645,104 @@ export async function GET(req: NextRequest) {
 
             const tracker2 = trackerPart2Map.get(bookingId) || trackerPart2Map.get(bookingId.toLowerCase());
 
-            // Stage 9: Driver Assignment – Arrival Pickup (Guest Tracker & Tracker Part 2)
-            const s9Planned = tracker?.arrival_planned || row.stage1_call_date_planned || null;
-            const s9Actual = tracker?.arrival_actual || null;
-            const s9DriverName = tracker?.arrival_doer_name && tracker.arrival_doer_name !== bookingTakenBy ? tracker.arrival_doer_name : "";
-            const s9ToShow = parseToShow(tracker2?.stage9_to_show ?? tracker?.stage9_to_show);
-            const hasS9Data = Boolean(s9Actual || s9DriverName || tracker?.client_arrival_data_upload_remarks);
-            const s9Saved = tracker ? {
-                pickupRequired: tracker.arrival_planned || s9DriverName ? "Yes" : "",
+            // Stage 9: Driver Assignment – Arrival Pickup (ktahv_guest_tracker_part2 stage5_* columns)
+            const s9Planned = tracker2?.stage5_planned || null;
+            const s9Actual = tracker2?.stage5_actual || null;
+            const s9DriverName = tracker2?.stage5_pickup_driver_name && tracker2.stage5_pickup_driver_name !== bookingTakenBy ? tracker2.stage5_pickup_driver_name : "";
+            const s9DriverContact = tracker2?.stage5_pickup_driver_contact || "";
+            const s9PickupLocation = tracker2?.stage5_pickup_location || "";
+            const s9PickupDate = tracker2?.stage5_pickup_date ? formatDMYDate(tracker2.stage5_pickup_date) : "";
+            const s9PickupTime = tracker2?.stage5_pickup_time ? String(tracker2.stage5_pickup_time) : "";
+            const s9Remarks = tracker2?.stage5_remarks_for_driver || "";
+            const s9FlightDetails = tracker2?.stage5_arrival_flight_details || "";
+            const s9AssignStatus = tracker2?.stage5_assign_status || "";
+            const s9AssignRemarks = tracker2?.stage5_assign_remarks || "";
+            const s9DriverLink = tracker2?.stage5_pickup_assigned_to_driver_link_arrival || "";
+            const s9TimeDelay = tracker2?.stage5_time_delay || "";
+            const s9DoerName = tracker2?.stage5_doer_name || "";
+            const s9ToShow = parseToShow(tracker2?.stage10_to_show ?? tracker2?.stage9_to_show);
+
+            const hasS9Data = Boolean(
+                s9Actual ||
+                s9DriverName ||
+                s9DriverContact ||
+                s9PickupLocation ||
+                s9PickupDate ||
+                s9PickupTime ||
+                s9Remarks ||
+                s9FlightDetails ||
+                s9AssignStatus ||
+                s9AssignRemarks ||
+                s9DriverLink
+            );
+
+            const pickupReq = (s9PickupDate || s9DriverName || s9PickupLocation || s9Planned) ? "Yes" : "";
+
+            const s9Saved = (tracker2 && (hasS9Data || pickupReq)) ? {
+                pickupRequired: pickupReq,
                 driverName: s9DriverName,
-                driverContact: "",
-                pickupFrom: "",
-                pickupDate: tracker.arrival_planned ? formatDMYDate(tracker.arrival_planned) : "",
-                pickupTime: "",
-                remarks: tracker.client_arrival_data_upload_remarks || "",
-                assignedBy: s9DriverName,
+                driverContact: s9DriverContact,
+                pickupFrom: s9PickupLocation,
+                pickupDate: s9PickupDate,
+                pickupTime: s9PickupTime,
+                remarks: s9Remarks,
+                assignedBy: s9DoerName || s9DriverName,
+                arrivalFlightDetails: s9FlightDetails,
+                assignStatus: s9AssignStatus,
+                assignRemarks: s9AssignRemarks,
+                driverLink: s9DriverLink,
+                timeDelay: s9TimeDelay,
                 doer: "", // FO stage: doer is FO (Shoukath Ali Moosa / assigned FO), not salesperson or driver
                 stageKey: uid ? `${uid}_Stage9` : null,
             } : null;
 
-            // Stage 10: Driver Assignment – Departure Drop (Guest Tracker & Tracker Part 2)
-            const s10Planned = tracker?.departure_planned || row.stage6_call_date_planned || null;
-            const s10Actual = tracker?.departure_actual || null;
-            const s10DriverName = tracker?.departure_doer_name && tracker.departure_doer_name !== bookingTakenBy ? tracker.departure_doer_name : "";
-            const s10ToShow = parseToShow(tracker2?.stage10_to_show ?? tracker?.stage10_to_show);
-            const hasS10Data = Boolean(s10Actual || s10DriverName || tracker?.client_departure_data_upload_remarks);
-            const s10Saved = tracker ? {
-                dropRequired: tracker.departure_planned || s10DriverName ? "Yes" : "",
+            // Stage 10: Driver Assignment – Departure Drop (ktahv_guest_tracker_part2 stage9_* columns)
+            const s10Planned = tracker2?.stage9_planned || null;
+            const s10Actual = tracker2?.stage9_actual || null;
+            const s10DriverName = tracker2?.stage9_driver_name && tracker2.stage9_driver_name !== bookingTakenBy ? tracker2.stage9_driver_name : "";
+            const s10DriverContact = tracker2?.stage9_driver_mobile || "";
+            const s10DropLocation = tracker2?.stage9_dropping_location || "";
+            const s10DropDate = tracker2?.stage9_dropping_date ? formatDMYDate(tracker2.stage9_dropping_date) : "";
+            const s10DropTime = tracker2?.stage9_dropping_time ? String(tracker2.stage9_dropping_time) : "";
+            const s10Remarks = tracker2?.stage9_remarks_for_driver || "";
+            const s10FlightDetails = tracker2?.stage9_departure_flight_details || "";
+            const s10AssignStatus = tracker2?.stage9_departure_assign_status || "";
+            const s10AssignRemarks = tracker2?.stage9_departure_assign_remarks || "";
+            const s10DriverLink = tracker2?.stage9_assigned_to_driver_link_departure || "";
+            const s10TimeDelay = tracker2?.stage9_time_delay || "";
+            const s10DoerName = tracker2?.stage9_doer_name || "";
+            const s10ToShow = parseToShow(tracker2?.stage9_to_show);
+
+            const hasS10Data = Boolean(
+                s10Actual ||
+                s10DriverName ||
+                s10DriverContact ||
+                s10DropLocation ||
+                s10DropDate ||
+                s10DropTime ||
+                s10Remarks ||
+                s10FlightDetails ||
+                s10AssignStatus ||
+                s10AssignRemarks ||
+                s10DriverLink
+            );
+
+            const dropReq = (s10DropDate || s10DriverName || s10DropLocation || s10Planned) ? "Yes" : "";
+
+            const s10Saved = (tracker2 && (hasS10Data || dropReq)) ? {
+                dropRequired: dropReq,
                 driverName: s10DriverName,
-                driverContact: "",
-                dropTo: "",
-                dropDate: tracker.departure_planned ? formatDMYDate(tracker.departure_planned) : "",
-                dropTime: "",
-                remarks: tracker.client_departure_data_upload_remarks || "",
-                assignedBy: s10DriverName,
+                driverContact: s10DriverContact,
+                dropTo: s10DropLocation,
+                dropDate: s10DropDate,
+                dropTime: s10DropTime,
+                remarks: s10Remarks,
+                assignedBy: s10DoerName || s10DriverName,
+                departureFlightDetails: s10FlightDetails,
+                departureAssignStatus: s10AssignStatus,
+                departureAssignRemarks: s10AssignRemarks,
+                driverLink: s10DriverLink,
+                timeDelay: s10TimeDelay,
                 doer: "", // FO stage: doer is FO (Shoukath Ali Moosa / assigned FO), not salesperson or driver
                 stageKey: uid ? `${uid}_Stage10` : null,
             } : null;
@@ -852,6 +928,77 @@ export async function POST(req: NextRequest) {
             );
         }
 
+        // Stage 3 specific validation: Next visit date cannot be in the past and must be after checkout
+        if (stage === 3 && fields?.nextVisitDate) {
+            const rawDate = String(fields.nextVisitDate).trim();
+            if (rawDate) {
+                const parseDateVal = (valStr: string) => {
+                    const s = valStr.trim().split(" ")[0];
+                    if (s.includes("/")) {
+                        const [m, d, y] = s.split("/").map(Number);
+                        return new Date(y, (m || 1) - 1, d || 1);
+                    }
+                    if (s.includes("-")) {
+                        const parts = s.split("-");
+                        if (parts.length === 3) {
+                            if (parts[0].length === 4 || Number(parts[0]) > 1000) {
+                                return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+                            }
+                            const mNum = Number(parts[1]);
+                            if (!isNaN(mNum)) return new Date(Number(parts[2]), mNum - 1, Number(parts[0]));
+                            const named = new Date(`${parts[0]} ${parts[1]} ${parts[2]}`);
+                            if (!isNaN(named.getTime())) return named;
+                        }
+                    }
+                    return new Date(s);
+                };
+
+                const nvDate = parseDateVal(rawDate);
+                if (isNaN(nvDate.getTime())) {
+                    return NextResponse.json(
+                        { success: false, error: "Invalid next visit date format" },
+                        { status: 400 }
+                    );
+                }
+
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                nvDate.setHours(0, 0, 0, 0);
+
+                if (nvDate < today) {
+                    return NextResponse.json(
+                        { success: false, error: "Next visit date cannot be in the past" },
+                        { status: 400 }
+                    );
+                }
+
+                try {
+                    const pool = await getPool();
+                    const [checkRows] = await pool.query<any[]>(
+                        `SELECT check_out_date FROM KTAHV_CRR_Process_FMS WHERE uid = ? OR booking_id = ? LIMIT 1`,
+                        [bookingId, bookingId]
+                    );
+                    if (checkRows && checkRows.length > 0 && checkRows[0].check_out_date) {
+                        const coDate = parseDateVal(String(checkRows[0].check_out_date));
+                        if (!isNaN(coDate.getTime())) {
+                            coDate.setHours(0, 0, 0, 0);
+                            if (nvDate <= coDate) {
+                                return NextResponse.json(
+                                    {
+                                        success: false,
+                                        error: `Next visit date must be after check-out date (${formatDMYDate(checkRows[0].check_out_date)})`,
+                                    },
+                                    { status: 400 }
+                                );
+                            }
+                        }
+                    }
+                } catch (dbErr) {
+                    console.warn("[crr-calling/bookings] Check-out date lookup skipped:", dbErr);
+                }
+            }
+        }
+
         console.log("[crr-calling/bookings] POST incoming request:", {
             bookingId,
             stage,
@@ -875,11 +1022,27 @@ export async function POST(req: NextRequest) {
             sanitizedFields[key] = value;
         }
 
+        let resolvedBookingId = bookingId;
+        if ([2, 4, 8, 9, 10, 11].includes(stage)) {
+            try {
+                const pool = await getPool();
+                const [procRows] = await pool.query<any[]>(
+                    `SELECT booking_id FROM KTAHV_CRR_Process_FMS WHERE uid = ? LIMIT 1`,
+                    [bookingId]
+                );
+                if (procRows && procRows.length > 0 && procRows[0].booking_id) {
+                    resolvedBookingId = String(procRows[0].booking_id).trim();
+                }
+            } catch (resolveErr) {
+                console.warn("[crr-calling/bookings] Could not resolve booking_id from uid:", resolveErr);
+            }
+        }
+
         const res = await fetch(GAS_BOOKINGS_URL, {
             method: "POST",
             headers: { "Content-Type": "text/plain;charset=utf-8" },
             body: JSON.stringify({
-                bookingId,
+                bookingId: resolvedBookingId,
                 stage,
                 fields: sanitizedFields,
                 adminOverride: isAdminRole,

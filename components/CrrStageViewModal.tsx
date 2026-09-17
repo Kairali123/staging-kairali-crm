@@ -469,6 +469,11 @@ export default function CrrStageViewModal({
                                     <FieldBox label="Pickup Location" value={s?.pickupFrom || (savedData.pickupFrom as string)} />
                                     <FieldBox label="Pickup Date" value={s?.pickupDate || (savedData.pickupDate as string)} />
                                     <FieldBox label="Pickup Time" value={s?.pickupTime || (savedData.pickupTime as string)} />
+                                    <FieldBox label="Flight Details" value={s?.arrivalFlightDetails || (savedData.arrivalFlightDetails as string)} />
+                                    <FieldBox label="Assign Status" value={s?.assignStatus || (savedData.assignStatus as string)} />
+                                    <FieldBox label="Assign Remarks" value={s?.assignRemarks || (savedData.assignRemarks as string)} />
+                                    <FieldBox label="Driver Link" value={s?.driverLink || (savedData.driverLink as string)} isLink fullWidth />
+                                    <FieldBox label="Time Delay" value={s?.timeDelay || (savedData.timeDelay as string)} />
                                     <FieldBox label="Assigned By" value={s?.assignedBy || (savedData.assignedBy as string)} />
                                     <FieldBox label="Remarks For Driver" value={s?.remarks || (savedData.remarks as string)} fullWidth />
                                 </>
@@ -492,6 +497,11 @@ export default function CrrStageViewModal({
                                     <FieldBox label="Drop Location" value={s?.dropTo || (savedData.dropTo as string)} />
                                     <FieldBox label="Drop Date" value={s?.dropDate || (savedData.dropDate as string)} />
                                     <FieldBox label="Drop Time" value={s?.dropTime || (savedData.dropTime as string)} />
+                                    <FieldBox label="Flight Details" value={s?.departureFlightDetails || (savedData.departureFlightDetails as string)} />
+                                    <FieldBox label="Assign Status" value={s?.departureAssignStatus || (savedData.departureAssignStatus as string)} />
+                                    <FieldBox label="Assign Remarks" value={s?.departureAssignRemarks || (savedData.departureAssignRemarks as string)} />
+                                    <FieldBox label="Driver Link" value={s?.driverLink || (savedData.driverLink as string)} isLink fullWidth />
+                                    <FieldBox label="Time Delay" value={s?.timeDelay || (savedData.timeDelay as string)} />
                                     <FieldBox label="Assigned By" value={s?.assignedBy || (savedData.assignedBy as string)} />
                                     <FieldBox label="Remarks For Driver" value={s?.remarks || (savedData.remarks as string)} fullWidth />
                                 </>

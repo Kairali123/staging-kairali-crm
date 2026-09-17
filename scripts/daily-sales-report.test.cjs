@@ -39,7 +39,7 @@ test('sales quantity reflects contributing record count and grand total equals a
  assert.equal(kappl.reduce((n,r)=>n+r.quantity,0),5);
 
  const html=model.exportSalesHTML(report,'ALL');
- assert(html.includes('<th>Agent Name</th><th>Sales Quantity</th><th>Sales Value</th><th>Cancelled Qty</th><th>Cancelled Value</th>'));
+ assert(html.includes('<th>Agent Name</th><th>Sales Quantity</th><th>UnVerified Sales Value</th><th>Collection Amount</th><th>Cancelled Qty</th><th>Cancelled Value</th>'));
 });
 test('salesDetails attach to agent rows and export renders clean sales quantity without PI badge',()=>{
  const sales=[
@@ -67,4 +67,53 @@ test('salesDetails attach to agent rows and export renders clean sales quantity 
  assert(html.includes('<td>1</td>'));
  assert(html.includes('<td>2</td>'));
 });
+test('collections aggregate by agent and company and sort correctly',()=>{
+ const sales=[{company:'KTAHV',agent:'Pawan',verified:100000,conversions:1}];
+ const collections=[
+   {company:'KTAHV',agent:'Pawan',received_amount:50000,count:1,collectionDetails:[{id:'COL-1',bookingId:'RES-1',amount:50000,clientName:'John',date:'2026-09-15 10:00',agent:'Pawan',company:'KTAHV'}]},
+   {company:'KTAHV',agent:'Roshni',received_amount:75000,count:1,collectionDetails:[{id:'COL-2',bookingId:'RES-2',amount:75000,clientName:'Jane',date:'2026-09-15 11:00',agent:'Roshni',company:'KTAHV'}]}
+ ];
+ const report=model.combineSales('2026-09-15',sales,[],collections);
+ const ktahv=model.scopedRows(report,'KTAHV');
+ const pawan=ktahv.find(r=>r.agent==='Pawan');
+ assert.equal(pawan.sales,100000);
+ assert.equal(pawan.collection,50000);
+ assert.equal(pawan.collectionCount,1);
+ const roshni=ktahv.find(r=>r.agent==='Roshni');
+ assert.equal(roshni.sales,0);
+ assert.equal(roshni.collection,75000);
+ assert.equal(roshni.collectionCount,1);
+ const html=model.exportSalesHTML(report,'KTAHV');
+ assert(html.includes('Collection Amount'));
+});
+test('salesContributors aggregates by agent and exportSalesHTML includes Sales by contributor section and chart',()=>{
+ const sales=[
+   {company:'KTAHV',agent:'Pawan',verified:150000,conversions:2},
+   {company:'VILLARAAG',agent:'pawan',verified:50000,conversions:1},
+   {company:'KAPPL',agent:'Zaid',verified:100000,conversions:1},
+   {company:'KTAHV',agent:'Sanjay',verified:0,conversions:0}
+ ];
+ const report=model.combineSales('2026-09-15',sales,[]);
+ const rows=model.scopedRows(report,'ALL');
+ const contributors=model.salesContributors(rows);
+ assert.equal(contributors.length,2);
+ assert.equal(contributors[0].agent.toLowerCase(),'pawan');
+ assert.equal(contributors[0].sales,200000);
+ assert.equal(contributors[1].agent,'Zaid');
+ assert.equal(contributors[1].sales,100000);
+
+ const html=model.exportSalesHTML(report,'ALL');
+ assert(html.includes('Sales by contributor'));
+ assert(html.includes('SALES CONTRIBUTION'));
+ assert(html.includes('Sales contributors 2'));
+ assert(html.includes('ALL CONTRIBUTORS'));
+ assert(html.includes('Pawan'));
+ assert(html.includes('Zaid'));
+ const contributorSection=html.slice(html.indexOf('<section class="contributors">'), html.indexOf('</section>', html.indexOf('<section class="contributors">')));
+ assert(!contributorSection.includes('Sanjay'));
+ assert(html.includes('66.7%'));
+ assert(html.includes('33.3%'));
+});
 module.exports={load};
+
+

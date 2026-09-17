@@ -4,7 +4,8 @@ const root=new URL('../.local/whatsapp-triggers/',import.meta.url)
 await mkdir(root,{recursive:true,mode:0o700})
 let secret
 try{secret=await readFile(new URL('worker.key',root),'utf8')}catch(e){if(e.code!=='ENOENT')throw e;secret=randomBytes(32).toString('hex');await writeFile(new URL('worker.key',root),secret,{mode:0o600,flag:'wx'})}
-const url=new URL('/api/cron/whatsapp-triggers',process.env.WHATSAPP_WORKER_ORIGIN||'http://localhost:3011')
+const origin=process.env.WHATSAPP_WORKER_ORIGIN||process.env.NEXT_PUBLIC_APP_URL||'http://localhost:3000'
+const url=new URL('/api/cron/whatsapp-triggers',origin)
 if(!['localhost','127.0.0.1','[::1]'].includes(url.hostname)||url.protocol!=='http:')throw Error('Local worker only supports loopback HTTP')
 let stop=false;process.on('SIGINT',()=>{stop=true});process.on('SIGTERM',()=>{stop=true})
 console.log('WhatsApp worker started. Draft and Paused configurations never send.')

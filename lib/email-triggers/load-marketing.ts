@@ -14,7 +14,7 @@ export async function loadScheduledMarketing(date:string){
       results[key]=rows as unknown[]
     }
     await connection.rollback()
-    const report=combineReport(date,results.traffic as AggregateRow[],results.spend as AggregateRow[],results.sales as AggregateRow[],Number((results.duplicates[0] as {duplicates:number}).duplicates),results.leads as AggregateRow[])
+    const report=combineReport(date,results.traffic as AggregateRow[],results.spend as AggregateRow[],results.sales as AggregateRow[],Number((results.duplicates[0] as {duplicates:number}).duplicates),results.leads as AggregateRow[],results.allSources as {company:string;source:string}[])
     return report
   } catch {
     if(connection) { try {await connection.rollback()} catch {} }

@@ -795,8 +795,14 @@ test('CRR Query Boundary & Security Contract Suite', async (t) => {
         }];
         mockTrackerPart2Rows = [{
             booking_id: 'BK-999',
-            stage9_to_show: 'false',
+            stage5_planned: '2026-09-05',
+            stage5_actual: '2026-09-05',
+            stage5_pickup_driver_name: 'Driver 1',
             stage10_to_show: 'false',
+            stage9_planned: '2026-09-10',
+            stage9_actual: '2026-09-10',
+            stage9_driver_name: 'Driver 2',
+            stage9_to_show: 'false',
         }];
 
         const reqA = createMockRequest('http://localhost:3000/api/crr-calling/bookings', 'valid');
@@ -836,8 +842,14 @@ test('CRR Query Boundary & Security Contract Suite', async (t) => {
         }];
         mockTrackerPart2Rows = [{
             booking_id: 'BK-999',
-            stage9_to_show: 'true',
+            stage5_planned: '2026-09-05',
+            stage5_actual: '2026-09-05',
+            stage5_pickup_driver_name: 'Driver 1',
             stage10_to_show: 'true',
+            stage9_planned: '2026-09-10',
+            stage9_actual: '2026-09-10',
+            stage9_driver_name: 'Driver 2',
+            stage9_to_show: 'true',
         }];
 
         const reqB = createMockRequest('http://localhost:3000/api/crr-calling/bookings', 'valid');
@@ -857,5 +869,114 @@ test('CRR Query Boundary & Security Contract Suite', async (t) => {
         const s11B = guestB.stages.find(s => s.stage === 11);
         assert.equal(s11B.toShow, true);
         assert.equal(s11B.completed, true);
+    });
+
+    await t.test('22. Stage 3 validation: rejects past next visit date or next visit date <= checkout date', async () => {
+        mockProcessRows = [{
+            id: 1,
+            uid: 'UID-301',
+            booking_id: 'BK-301',
+            check_out_date: '2026-11-20',
+        }];
+
+        const req = createMockRequest('http://localhost:3000/api/crr-calling/bookings', 'valid', 'admin', ['all']);
+
+        // A. Past date rejection
+        const pastReq = new NextRequest(new URL('http://localhost:3000/api/crr-calling/bookings'), {
+            method: 'POST',
+            headers: {
+                cookie: req.headers.get('cookie'),
+                'content-type': 'application/json',
+            },
+            body: JSON.stringify({
+                bookingId: 'BK-301',
+                stage: 3,
+                fields: {
+                    nextVisitDate: '2020-01-01',
+                    remarks: 'Planning visit',
+                },
+            }),
+        });
+        const resPast = await POST(pastReq);
+        assert.equal(resPast.status, 400);
+        const jsonPast = await resPast.json();
+        assert.equal(jsonPast.success, false);
+        assert.match(jsonPast.error, /past/i);
+
+        // B. Date on or before checkout rejection (checkout is 2026-11-20, next visit 2026-11-15 in the future relative to today, but before checkout)
+        const preCheckoutReq = new NextRequest(new URL('http://localhost:3000/api/crr-calling/bookings'), {
+            method: 'POST',
+            headers: {
+                cookie: req.headers.get('cookie'),
+                'content-type': 'application/json',
+            },
+            body: JSON.stringify({
+                bookingId: 'BK-301',
+                stage: 3,
+                fields: {
+                    nextVisitDate: '2026-11-15',
+                    remarks: 'Planning visit',
+                },
+            }),
+        });
+        const resPre = await POST(preCheckoutReq);
+        assert.equal(resPre.status, 400);
+        const jsonPre = await resPre.json();
+        assert.equal(jsonPre.success, false);
+        assert.match(jsonPre.error, /check-out/i);
+    });
+
+    await t.test('23. Stage 4 POST resolves bookingId from uid for checkin master save and passes doerRemarks', async () => {
+        mockProcessRows = [{
+            id: 1,
+            uid: 'UID-401',
+            booking_id: 'KTAHV-PMS-9576',
+            check_out_date: '2026-09-10',
+        }];
+
+        const originalFetch = global.fetch;
+        let interceptedBody = null;
+        global.fetch = async (url, opts) => {
+            if (typeof url === 'string' && url.includes('script.google.com')) {
+                interceptedBody = JSON.parse(opts.body);
+                return {
+                    ok: true,
+                    status: 200,
+                    text: async () => JSON.stringify({ success: true, message: 'Stage 4 saved' }),
+                    json: async () => ({ success: true, message: 'Stage 4 saved' }),
+                };
+            }
+            return originalFetch(url, opts);
+        };
+
+        try {
+            const req = createMockRequest('http://localhost:3000/api/crr-calling/bookings', 'valid', 'admin', ['all']);
+            const postReq = new NextRequest(new URL('http://localhost:3000/api/crr-calling/bookings'), {
+                method: 'POST',
+                headers: {
+                    cookie: req.headers.get('cookie'),
+                    'content-type': 'application/json',
+                },
+                body: JSON.stringify({
+                    bookingId: 'UID-401',
+                    stage: 4,
+                    fields: {
+                        doerRemarks: 'Guest had a great stay, requested detox package again next year.',
+                    },
+                }),
+            });
+
+            const res = await POST(postReq);
+            assert.equal(res.status, 200);
+            const json = await res.json();
+            assert.equal(json.success, true);
+            assert.ok(interceptedBody, 'GAS request must be dispatched');
+            // Must have resolved UID-401 to KTAHV-PMS-9576 for checkin master
+            assert.equal(interceptedBody.bookingId, 'KTAHV-PMS-9576');
+            assert.equal(interceptedBody.stage, 4);
+            assert.equal(interceptedBody.fields.doerRemarks, 'Guest had a great stay, requested detox package again next year.');
+        } finally {
+            global.fetch = originalFetch;
+        }
     });
 });

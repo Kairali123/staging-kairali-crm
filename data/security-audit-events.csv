@@ -142,3 +142,6 @@ eventId,timestamp,action,outcome,actor,target,sourceIp,correlationId,context
 "2ea549cd-222a-4f7c-b882-55e5f68d5768","2026-09-16T05:55:25.892Z","page.access_denied","denied","","/doctor-consultation/report","::1","fffb1ae5-a7b9-4ab9-abad-43acd70cfb0d","{""reason"":""missing_session""}"
 "87b1842d-f4be-4046-bf01-973854e0598d","2026-09-16T05:56:18.048Z","page.access_denied","denied","","/doctor-consultation/report","::1","a7e48a12-68de-404c-bf4d-600fea509bc0","{""reason"":""missing_session""}"
 "d3f7ebde-0fb2-448d-ae6c-ecb68b7c073f","2026-09-16T05:56:26.318Z","page.access_denied","denied","","/doctor-consultation/report","::1","f092152a-e8f8-4b0d-a142-81e28a5305f3","{""reason"":""missing_session""}"
+"5b14f9e2-3a5a-4b76-8b55-35367cc7c7fa","2026-09-17T06:03:32.487Z","api.access_denied","denied","","/api/cron/other-unexempt-endpoint","unknown","3dd103bb-6dc3-4585-9f68-57096dc9c4f4","{""reason"":""missing_session""}"
+"7faf2f0f-7b88-4ba8-bdda-61e248c783fc","2026-09-17T07:33:51.643Z","api.access_denied","denied","","/api/daily-sales-report-alert","::1","1e6cecd5-757a-4e80-bf05-45dc2a6d992c","{""reason"":""missing_session""}"
+"375b5f5a-3e42-49c3-9e62-6d84ef929b31","2026-09-17T07:34:18.094Z","api.access_denied","denied","","/api/daily-sales-report-alert","::1","6912f1c8-6525-492d-8d50-1157d5a296f3","{""reason"":""missing_session""}"

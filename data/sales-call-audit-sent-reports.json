@@ -24,8 +24,14 @@
     "messageId": "<msg-id-sales-audit@kairali.com>"
   },
   {
+    "date": "2026-09-17",
+    "sentAt": "2026-09-17T06:03:29.573Z",
+    "recipient": "ho.hr@kairali.com",
+    "messageId": "<msg-id-sales-audit@kairali.com>"
+  },
+  {
     "date": "2026-09-02",
-    "sentAt": "2026-09-08T06:16:23.787Z",
+    "sentAt": "2026-09-17T06:03:32.484Z",
     "recipient": "ho.hr@kairali.com"
   }
 ]
