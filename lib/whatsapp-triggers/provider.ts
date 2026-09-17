@@ -5,7 +5,13 @@ async function request(endpoint:string,body:unknown){
  const key=process.env.REDLAVA_API_KEY?.trim();if(!key)throw Error('Redlava API key is not configured on this server')
  const response=await fetch(base+endpoint,{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,...(process.env.REDLAVA_PHONE_ID?{'x-phone-id':process.env.REDLAVA_PHONE_ID}:{})},body:JSON.stringify(body),cache:'no-store',redirect:'error',signal:AbortSignal.timeout(30000)})
  if(!response.ok)throw Error('Redlava request failed (HTTP '+response.status+'). Check provider access and account status.')
- const data=await response.json();if(data.error)throw Error('Redlava rejected the request. Check the provider message log.');return data
+ const contentType=response.headers?.get?.('content-type')||''
+ if(contentType&&!contentType.includes('application/json')){
+  throw Error('Redlava returned an unexpected non-JSON response. Check provider service status.')
+ }
+ let data: any
+ try{data=await response.json()}catch{throw Error('Could not parse response from Redlava as JSON')}
+ if(data?.error)throw Error('Redlava rejected the request. Check the provider message log.');return data
 }
 export async function templates(){
  const all=[]

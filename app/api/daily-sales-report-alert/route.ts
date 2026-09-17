@@ -7,6 +7,7 @@ import { bookingSQL, cancellationSQL, cancellationDates, bookingAmounts, type Bo
 import { loadCalling } from '@/lib/daily-sales-calling-server'
 export const dynamic='force-dynamic'
 export const runtime='nodejs'
+export const maxDuration = 60
 const headers={'Cache-Control':'private, no-store, max-age=0'}
 export async function GET(req:NextRequest){
  const user=getSessionUser(req)
