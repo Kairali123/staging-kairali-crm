@@ -6,8 +6,9 @@ node_modules
 docs
 scripts
 *.md
-scratch*
-temp*
+scratch/
+temp/
+*.tmp
 check*.js
 
 !data/daily-sales-report/*.json
