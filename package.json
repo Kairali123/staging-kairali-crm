@@ -30,7 +30,8 @@
     "typecheck": "tsc --noEmit --incremental false",
     "start": "next start",
     "email-trigger:worker": "node scripts/email-trigger-worker.mjs",
-    "whatsapp-trigger:worker": "node scripts/whatsapp-trigger-worker.mjs"
+    "whatsapp-trigger:worker": "node scripts/whatsapp-trigger-worker.mjs",
+    "whatsapp:create-templates": "node scripts/whatsapp-create-templates.mjs"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.10",
