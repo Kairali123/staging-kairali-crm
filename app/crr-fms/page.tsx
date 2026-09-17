@@ -172,6 +172,13 @@ function parseDMY(dateStr: string): Date {
     if (s.includes("-")) {
         const parts = s.split("-");
         if (parts.length === 3) {
+            // Check if YYYY-MM-DD format
+            if (parts[0].length === 4 || Number(parts[0]) > 1000) {
+                const y = Number(parts[0]);
+                const m = Number(parts[1]);
+                const d = Number(parts[2]);
+                return new Date(y, (m || 1) - 1, d || 1);
+            }
             const mNum = Number(parts[1]);
             if (!isNaN(mNum)) return new Date(Number(parts[2]), mNum - 1, Number(parts[0]));
             const named = new Date(`${parts[0]} ${parts[1]} ${parts[2]}`); // "26 May 2026"
@@ -582,6 +589,50 @@ export default function CRRCallingProcessPage() {
     // currentStage (which could be a different stage entirely and would show the wrong name).
     const activeStage = activeGuest ? STAGES.find((s) => s.no === 3) ?? null : null;
 
+    // Stage 3: Next Visit Planning date constraints
+    // Next visit date must NOT be in the past (>= today) AND must be strictly after checkout (> checkout).
+    const { minNextVisitDate, minNextVisitFormatted, checkoutFormatted } = useMemo(() => {
+        if (!activeGuest) return { minNextVisitDate: "", minNextVisitFormatted: "", checkoutFormatted: "" };
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        let checkoutDate: Date | null = null;
+        if (activeGuest.checkout) {
+            const d = parseDMY(activeGuest.checkout);
+            if (!isNaN(d.getTime())) {
+                d.setHours(0, 0, 0, 0);
+                checkoutDate = d;
+            }
+        }
+
+        let earliest = new Date(today);
+        if (checkoutDate) {
+            const dayAfterCheckout = new Date(checkoutDate);
+            dayAfterCheckout.setDate(dayAfterCheckout.getDate() + 1);
+            if (dayAfterCheckout > earliest) {
+                earliest = dayAfterCheckout;
+            }
+        }
+
+        const yyyy = earliest.getFullYear();
+        const mm = String(earliest.getMonth() + 1).padStart(2, "0");
+        const dd = String(earliest.getDate()).padStart(2, "0");
+        const minDateStr = `${yyyy}-${mm}-${dd}`;
+
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const minFormatted = `${dd}-${monthNames[earliest.getMonth()]}-${yyyy}`;
+        const coFormatted = checkoutDate
+            ? `${String(checkoutDate.getDate()).padStart(2, "0")}-${monthNames[checkoutDate.getMonth()]}-${checkoutDate.getFullYear()}`
+            : (activeGuest.checkout || "");
+
+        return { minNextVisitDate: minDateStr, minNextVisitFormatted: minFormatted, checkoutFormatted: coFormatted };
+    }, [activeGuest]);
+
+    const isNextVisitDateInvalid = Boolean(
+        modalDate && minNextVisitDate && modalDate < minNextVisitDate
+    );
+
     // "Guest Request & Complaint Mgmt (QR Scan)" modal — Stage 2
     const [activeCallGuestId, setActiveCallGuestId] = useState<number | null>(null);
     const [qrCodeViewed, setQrCodeViewed] = useState(false);
@@ -719,7 +770,7 @@ export default function CRRCallingProcessPage() {
     const isWelcomeDisabled = !activeWelcomeGuest || s1Lock.isLocked || isStage1Complete || isStage1Processing;
     const isCallDisabled = !activeCallGuest || s2Lock.isLocked || isStage2Complete;
     const isGuestDisabled = !activeGuest || s3Lock.isLocked || isStage3Complete || activeGuest.allComplete;
-    const isFeedbackDisabled = !activeFeedbackGuest || s4Lock.isLocked || isStage4Complete;
+    const isFeedbackDisabled = !activeFeedbackGuest || s4Lock.isLocked;
     const isRatingDisabled = !activeRatingGuest || s5Lock.isLocked || isStage5Complete || isStage5Processing;
     const isSafeReturnDisabled = !activeSafeReturnGuest || s6Lock.isLocked || isStage6Complete || isStage6Processing;
     const isResultDisabled = !activeResultProgressGuest || s7Lock.isLocked || isStage7Complete || isStage7Processing;
@@ -1338,7 +1389,9 @@ export default function CRRCallingProcessPage() {
     }
 
     function isModalFormComplete() {
-        return modalDate.trim() !== "" && modalRemark.trim() !== "";
+        if (modalDate.trim() === "" || modalRemark.trim() === "") return false;
+        if (minNextVisitDate && modalDate < minNextVisitDate) return false;
+        return true;
     }
 
     async function saveModal() {
@@ -1348,6 +1401,15 @@ export default function CRRCallingProcessPage() {
         if (!isAdminRole && s3Lock.isLocked) return;
         if (isStage3Complete) return; // completed stage is read-only
         if (!isModalFormComplete() || modalSaved) return;
+
+        if (minNextVisitDate && modalDate < minNextVisitDate) {
+            toast.error(
+                checkoutFormatted
+                    ? `Next visit date must be after check-out (${checkoutFormatted}) and cannot be in the past.`
+                    : "Next visit date cannot be in the past."
+            );
+            return;
+        }
 
         const guestId = activeGuest.id;
         const targetId = activeGuest.uid || activeGuest.bookingId;
@@ -1748,10 +1810,6 @@ export default function CRRCallingProcessPage() {
             setFeedbackFormError(s4Lock.message || "This stage is locked.");
             return;
         }
-        if (isStage4Complete) {
-            setFeedbackFormError("Stage 4 is already completed — saved data is read-only.");
-            return;
-        }
         if (!isFeedbackFormComplete() || feedbackSaved) {
             if (!isFeedbackFormComplete()) {
                 setFeedbackFormError("Doer Remarks is compulsory. Please fill it in before saving.");
@@ -1762,7 +1820,7 @@ export default function CRRCallingProcessPage() {
         setFeedbackSaved(true);
 
         const guestId = activeFeedbackGuest.id;
-        const targetId = activeFeedbackGuest.uid || activeFeedbackGuest.bookingId;
+        const targetId = activeFeedbackGuest.bookingId || activeFeedbackGuest.uid;
         const data = {
             doerRemarks: feedbackDoerRemarks,
         };
@@ -1826,7 +1884,7 @@ export default function CRRCallingProcessPage() {
         setReferralSaved(true);
 
         const guestId = activeReferralGuest.id;
-        const targetId = activeReferralGuest.uid || activeReferralGuest.bookingId;
+        const targetId = activeReferralGuest.bookingId || activeReferralGuest.uid;
         const data = {
             doerStatus: referralTakenStatus,
             doerRemarks: referralDoerRemarks,
@@ -2044,6 +2102,8 @@ export default function CRRCallingProcessPage() {
             ["Booking ID", activeGuest.bookingId],
             ["Name of Client", activeGuest.name],
             ["Mobile", activeGuest.mobile],
+            ["Check-In", activeGuest.checkin || "—"],
+            ["Check-Out", activeGuest.checkout || "—"],
             ["PI Link", activeGuest.piLink],
             ["Programme / Package", activeGuest.programme],
         ]
@@ -3616,27 +3676,29 @@ export default function CRRCallingProcessPage() {
                                     <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">Booking &amp; Guest Details</h4>
                                     <span className="ml-auto text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">Read Only</span>
                                 </div>
-                                {/* Proportional cols: ID narrow | Name medium | Mobile narrow | Package fills remaining */}
-                                <div className="grid gap-3" style={{ gridTemplateColumns: "160px 200px 150px 220px 1fr" }}>
-                                    {readonlyFields.map(([label, val]) => (
-                                        <div className="space-y-1 min-w-0" key={label}>
-                                            <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</Label>
-                                            <div className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-xs font-medium text-slate-500 break-words" title={String(val)}>
-                                                {label === "PI Link" && val ? (
-                                                    <a
-                                                        href={String(val)}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-blue-600 hover:text-blue-800 font-semibold underline underline-offset-2"
-                                                    >
-                                                        View PI
-                                                    </a>
-                                                ) : (
-                                                    val || "—"
-                                                )}
+                                {/* Proportional cols */}
+                                <div className="overflow-x-auto pb-1">
+                                    <div className="grid gap-3 min-w-[700px]" style={{ gridTemplateColumns: "130px 180px 120px 110px 110px 100px 1fr" }}>
+                                        {readonlyFields.map(([label, val]) => (
+                                            <div className="space-y-1 min-w-0" key={label}>
+                                                <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</Label>
+                                                <div className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-xs font-medium text-slate-500 break-words" title={String(val)}>
+                                                    {label === "PI Link" && val ? (
+                                                        <a
+                                                            href={String(val)}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-blue-600 hover:text-blue-800 font-semibold underline underline-offset-2"
+                                                        >
+                                                            View PI
+                                                        </a>
+                                                    ) : (
+                                                        val || "—"
+                                                    )}
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
 
@@ -3663,17 +3725,29 @@ export default function CRRCallingProcessPage() {
                                 )}
                                 <div className="flex gap-4 items-start">
                                     {/* Date — fixed narrow width so it doesn't stretch */}
-                                    <div className="space-y-2 w-48 shrink-0">
+                                    <div className="space-y-2 w-64 shrink-0">
                                         <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
                                             {activeStage.dateLabel} <span className="text-red-500">*</span>
                                         </Label>
                                         <Input
                                             type="date"
+                                            min={minNextVisitDate || undefined}
                                             value={modalDate}
                                             disabled={isGuestDisabled}
                                             onChange={(e) => { setModalDate(e.target.value); setModalSaved(false); }}
-                                            className="h-10 border-blue-200 focus:border-blue-500 bg-white w-full"
+                                            className={`h-10 border-blue-200 focus:border-blue-500 bg-white w-full ${isNextVisitDateInvalid ? "border-red-500 focus:border-red-500 ring-1 ring-red-500" : ""}`}
                                         />
+                                        {isNextVisitDateInvalid && (
+                                            <p className="text-[11px] font-semibold text-red-600 flex items-start gap-1 mt-1 leading-tight">
+                                                <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+                                                <span>Must be after check-out ({checkoutFormatted || "checkout"}) and not in the past</span>
+                                            </p>
+                                        )}
+                                        {!isNextVisitDateInvalid && minNextVisitFormatted && !isGuestDisabled && (
+                                            <p className="text-[10px] text-slate-500 mt-1 leading-tight">
+                                                Earliest: <span className="font-semibold text-slate-700">{minNextVisitFormatted}</span> {checkoutFormatted ? `(after check-out ${checkoutFormatted})` : ""}
+                                            </p>
+                                        )}
                                     </div>
                                     {/* Remarks — takes remaining width */}
                                     <div className="space-y-2 flex-1">
@@ -4291,88 +4365,71 @@ export default function CRRCallingProcessPage() {
                                 </div>
                             </div>
 
-                            {/* Feedback details card — non-edited if data exists, editable if pending */}
-                            {(() => {
-                                // hasData must reflect only server-persisted data — NOT the live typing state
-                                // (feedbackDoerRemarks). Using feedbackDoerRemarks here caused the Textarea to
-                                // vanish after the first keystroke: typing one char made hasData true, which
-                                // swapped the editable Textarea for the read-only div, losing focus each time.
-                                const hasData = Boolean(isStage4Complete || activeFeedbackGuest?.guestFeedback?.doerRemarks?.trim());
-                                return (
-                                    <div className="rounded-xl border-2 border-amber-300 bg-amber-50/60 p-5 space-y-4 shadow-sm">
-                                        <div className="flex items-center gap-2 pb-2 border-b border-amber-200">
-                                            <Star className="h-4 w-4 text-amber-500" />
-                                            <h4 className="text-xs font-bold uppercase tracking-wider text-amber-600">Feedback &amp; Outcome Details</h4>
-                                            <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${hasData ? 'text-slate-500 bg-slate-100' : 'text-amber-600 bg-amber-100'}`}>
-                                                {hasData ? "Read Only" : "Fill in below"}
-                                            </span>
-                                        </div>
-                                        {activeFeedbackGuest && s4Lock.isLocked && !isStage4Complete && (
-                                            <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-                                                <Clock className="h-4 w-4 shrink-0" />
-                                                {s4Lock.message}
-                                            </div>
-                                        )}
-                                        <div className="grid grid-cols-1 gap-4">
-                                            {/* Row 1: Feedback Taking URL — only shown when pending / no data */}
-                                            {!hasData && (
-                                                <div className="space-y-2">
-                                                    <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                                        Feedback Taking URL
-                                                    </Label>
-                                                    <div className="flex items-center gap-2 flex-wrap">
-                                                        <a
-                                                            href={buildFeedbackFormUrl(activeFeedbackGuest.bookingId)}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-md px-3 py-2 shadow-sm transition-colors"
-                                                        >
-                                                            <Send className="h-3.5 w-3.5" />
-                                                            Open Feedback Form for {activeFeedbackGuest.bookingId}
-                                                        </a>
-                                                    </div>
-                                                    <p className="text-[11px] text-slate-500 break-all">
-                                                        {buildFeedbackFormUrl(activeFeedbackGuest.bookingId)}
-                                                    </p>
-                                                </div>
-                                            )}
-
-                                            {/* Row 2: Doer Remarks — non-edited box if data exists, editable textarea if empty */}
-                                            <div className="space-y-2">
-                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                                    Doer Remarks {!hasData && <span className="text-red-500">*</span>}
-                                                </Label>
-                                                {hasData ? (
-                                                    <div className="bg-white border border-amber-200 rounded-md p-3.5 text-xs font-medium text-slate-700 leading-relaxed whitespace-pre-wrap min-h-[60px]">
-                                                        {feedbackDoerRemarks || "No remarks entered"}
-                                                    </div>
-                                                ) : (
-                                                    <Textarea
-                                                        value={feedbackDoerRemarks}
-                                                        disabled={isFeedbackDisabled}
-                                                        onChange={(e) => { setFeedbackDoerRemarks(e.target.value); setFeedbackSaved(false); }}
-                                                        placeholder="Remarks from the doer regarding the feedback / outcome..."
-                                                        className="min-h-[90px] border-amber-200 focus:border-amber-500 bg-white"
-                                                    />
-                                                )}
-                                            </div>
-                                        </div>
-                                        {feedbackFormError && (
-                                            <div className="flex items-center gap-2 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
-                                                <AlertTriangle className="h-4 w-4 shrink-0" />
-                                                {feedbackFormError}
-                                            </div>
-                                        )}
+                            {/* Feedback details card — editable with prefilled remarks from backend */}
+                            <div className="rounded-xl border-2 border-amber-300 bg-amber-50/60 p-5 space-y-4 shadow-sm">
+                                <div className="flex items-center gap-2 pb-2 border-b border-amber-200">
+                                    <Star className="h-4 w-4 text-amber-500" />
+                                    <h4 className="text-xs font-bold uppercase tracking-wider text-amber-600">Feedback &amp; Outcome Details</h4>
+                                    <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${isFeedbackDisabled ? 'text-slate-500 bg-slate-100' : 'text-amber-600 bg-amber-100'}`}>
+                                        {isFeedbackDisabled ? "Read Only" : "Fill in below"}
+                                    </span>
+                                </div>
+                                {activeFeedbackGuest && s4Lock.isLocked && (
+                                    <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                                        <Clock className="h-4 w-4 shrink-0" />
+                                        {s4Lock.message}
                                     </div>
-                                );
-                            })()}
+                                )}
+                                <div className="grid grid-cols-1 gap-4">
+                                    {/* Row 1: Feedback Taking URL */}
+                                    <div className="space-y-2">
+                                        <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                                            Feedback Taking URL
+                                        </Label>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <a
+                                                href={buildFeedbackFormUrl(activeFeedbackGuest.bookingId)}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-md px-3 py-2 shadow-sm transition-colors"
+                                            >
+                                                <Send className="h-3.5 w-3.5" />
+                                                Open Feedback Form for {activeFeedbackGuest.bookingId}
+                                            </a>
+                                        </div>
+                                        <p className="text-[11px] text-slate-500 break-all">
+                                            {buildFeedbackFormUrl(activeFeedbackGuest.bookingId)}
+                                        </p>
+                                    </div>
+
+                                    {/* Row 2: Doer Remarks — editable textarea prefilled with backend/saved remarks */}
+                                    <div className="space-y-2">
+                                        <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                                            Doer Remarks <span className="text-red-500">*</span>
+                                        </Label>
+                                        <Textarea
+                                            value={feedbackDoerRemarks}
+                                            disabled={isFeedbackDisabled}
+                                            onChange={(e) => { setFeedbackDoerRemarks(e.target.value); setFeedbackSaved(false); }}
+                                            placeholder="Remarks from the doer regarding the feedback / outcome..."
+                                            className="min-h-[90px] border-amber-200 focus:border-amber-500 bg-white"
+                                        />
+                                    </div>
+                                </div>
+                                {feedbackFormError && (
+                                    <div className="flex items-center gap-2 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+                                        <AlertTriangle className="h-4 w-4 shrink-0" />
+                                        {feedbackFormError}
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         <DialogFooter className="bg-slate-50 border-t border-slate-200 px-6 py-4 flex justify-end gap-2 sticky bottom-0 z-10">
                             <Button variant="outline" size="sm" onClick={closeFeedbackModal} disabled={feedbackSaved} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
                                 Close
                             </Button>
-                            {!isStage4Complete && !feedbackDoerRemarks.trim() && (
+                            {!isFeedbackDisabled && (
                                 <Button
                                     size="sm"
                                     onClick={saveFeedbackModal}
@@ -4548,7 +4605,7 @@ export default function CRRCallingProcessPage() {
                             <Button variant="outline" size="sm" onClick={closeReferralModal} disabled={referralSaved} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
                                 Close
                             </Button>
-                            {!isStage8Complete && !referralDoerRemarks.trim() && !referralTakenStatus.trim() && (
+                            {!isStage8Complete && (
                                 <Button
                                     size="sm"
                                     onClick={saveReferralModal}

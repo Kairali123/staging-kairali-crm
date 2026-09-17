@@ -52,11 +52,31 @@ export const reportQueries = {
   duplicates: `SELECT COUNT(*) AS duplicates FROM (SELECT company, booking_order_id, COALESCE(return_id,'')
     FROM conversion_updates_employeewise WHERE date_and_time >= ? AND date_and_time < ?
     GROUP BY company, booking_order_id, COALESCE(return_id,'') HAVING COUNT(*) > 1 OR booking_order_id IS NULL OR TRIM(booking_order_id) = '') d`,
+  allSources: `SELECT DISTINCT company, TRIM(source) AS source FROM expense_performance WHERE source IS NOT NULL AND TRIM(source) != ''`,
+}
+export const COMPANY_SOURCES: Record<string, string[]> = {
+  KTAHV: [
+    'CRR', 'Facebook', 'Google', 'IVR', 'Management', 'Online Booking Engine', 'OTA', 'Others',
+    'PriyaSharma AI Chat', 'PriyaSharma AI-Facebook', 'PriyaSharma AI-Instagram', 'PriyaSharma AI-Web',
+    'PriyaSharma AI-WhatsApp', 'Reference', 'Referral', 'Site Exit Pop-Up', 'Travel Agent', 'Website', 'Zopim',
+  ],
+  VILLARAAG: [
+    'Anjali AI-Facebook', 'Anjali AI-Instagram', 'Anjali AI-Web', 'Anjali AI-WhatsApp', 'CRR', 'Facebook',
+    'Google', 'IVR', 'Management', 'Online Booking Engine', 'OTA', 'Others', 'Reference', 'Referral',
+    'Site Exit Pop-Up', 'Travel Agent', 'Website', 'Zopim',
+  ],
+  KAPPL: [
+    'Aarika AI-Facebook', 'Aarika AI-Instagram', 'Aarika AI-Web', 'Aarika AI-WhatsApp', 'CRR', 'Facebook',
+    'Google', 'IVR', 'Magento Failure Order', 'Management', 'Online Booking Engine', 'Online Order',
+    'Others', 'PriyaSharma AI Chat', 'PriyaSharma AI-Facebook', 'PriyaSharma AI-Instagram',
+    'PriyaSharma AI-Web', 'PriyaSharma AI-WhatsApp', 'Reference', 'Referral', 'Site Exit Pop-Up', 'Website', 'Zopim',
+  ],
 }
 export interface AggregateRow { company: string; source: string; records: number | string; traffic?: number | string; spend?: number | string; conversions?: number | string; verified?: number | string; unverified?: number | string; cancelled?: number | string; invalid?: number | string; leads?: number | string; high?: number | string; medium?: number | string; low?: number | string; unclassified?: number | string }
-export function combineReport(date: string, traffic: AggregateRow[], spend: AggregateRow[], sales: AggregateRow[], duplicates: number, leads?: AggregateRow[]) {
+export function combineReport(date: string, traffic: AggregateRow[], spend: AggregateRow[], sales: AggregateRow[], duplicates: number, leads?: AggregateRow[], allSources?: { company?: string; source?: string }[]) {
   const normalize=(rows:AggregateRow[])=>rows.map(r=>({...r,source:normalizeVSrcKey(r.source)}))
   traffic=normalize(traffic);spend=normalize(spend).map(r=>({...r,spend:Number(r.spend??0)*(['GOOGLE','FACEBOOK'].includes(r.source)?1.18:1)}));sales=normalize(sales);leads=leads===undefined?undefined:normalize(leads)
+  const normalizedAllSources = allSources ? normalize(allSources as AggregateRow[]) : []
   const warnings = ['Metrics follow Leads / Assign. Its production IST date correction must be deployed before lead totals can reconcile.']
   if(leads===undefined)warnings.push('Lead quality feed is unavailable.')
   if(leads?.some(r=>Number(r.unclassified)>0))warnings.push('Some leads have blank or unrecognized Intent; they are included in total leads but not reclassified as low quality.')
@@ -66,7 +86,10 @@ export function combineReport(date: string, traffic: AggregateRow[], spend: Aggr
   const companies = COMPANY_CODES.map(code=>{
     const t=traffic.filter(r=>r.company===code), e=spend.filter(r=>r.company===code), s=sales.filter(r=>r.company===code)
     const l=(leads??[]).filter(r=>r.company===code)
-    const sources=[...new Set([...e,...s,...t,...l].map(r=>r.source))].sort()
+    const dbKnown = normalizedAllSources.filter(r=>r.company===code || (r.company==='VILARAAG' && code==='VILLARAAG'))
+    const defaultKnown = (COMPANY_SOURCES[code] ?? []).map(src => ({ source: normalizeVSrcKey(src) }))
+    const baseSources = allSources !== undefined ? (dbKnown.length > 0 ? dbKnown : defaultKnown) : []
+    const sources=[...new Set([...baseSources,...e,...s,...t,...l].map(r=>r.source))].sort()
     const num=(rows:AggregateRow[],field:keyof AggregateRow,source?:string)=>rows.filter(r=>source===undefined||r.source===source).reduce((n,r)=>n+Number(r[field]??0),0)
     const totalSpend=num(e,'spend'), sale=num(s,'verified'), bookings=num(s,'conversions')
     if(sources.some(source=>num(l,'leads',source)>num(t,'traffic',source)&&num(t,'traffic',source)>0)) warnings.push(`${code}: some source lead counts exceed recorded website traffic. Leads/traffic is not a matched visitor-conversion rate.`)

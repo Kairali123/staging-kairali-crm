@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
       results[key]=rows as unknown[]
     }
     await connection.rollback()
-    const report=combineReport(date,results.traffic as AggregateRow[],results.spend as AggregateRow[],results.sales as AggregateRow[],Number((results.duplicates[0] as {duplicates:number}).duplicates),results.leads as AggregateRow[])
+    const report=combineReport(date,results.traffic as AggregateRow[],results.spend as AggregateRow[],results.sales as AggregateRow[],Number((results.duplicates[0] as {duplicates:number}).duplicates),results.leads as AggregateRow[],results.allSources as {company:string;source:string}[])
     return NextResponse.json({...report, snapshot:signReportSnapshot(report,req.cookies.get('kairali_user')?.value||''), emailEnabled:marketingMailConfig().configured && isSuperAdmin},{headers})
   } catch {
     if(connection) { try {await connection.rollback()} catch {} }

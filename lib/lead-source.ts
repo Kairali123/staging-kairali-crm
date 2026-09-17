@@ -7,7 +7,12 @@ export const titleCaseWords = (value: string): string =>
   value
     .split(" ")
     .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .map((w) =>
+      w
+        .split("-")
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+        .join("-")
+    )
     .join(" ")
 
 // All values that should merge into the "Others" bucket (blank vSrc, DB nulls, placeholder strings)

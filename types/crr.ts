@@ -131,6 +131,11 @@ export interface Guest {
         pickupTime: string;
         remarks: string;
         assignedBy: string;
+        arrivalFlightDetails?: string;
+        assignStatus?: string;
+        assignRemarks?: string;
+        driverLink?: string;
+        timeDelay?: string;
     };
     driverAssignmentDeparture?: {
         dropRequired: string;
@@ -141,6 +146,11 @@ export interface Guest {
         dropTime: string;
         remarks: string;
         assignedBy: string;
+        departureFlightDetails?: string;
+        departureAssignStatus?: string;
+        departureAssignRemarks?: string;
+        driverLink?: string;
+        timeDelay?: string;
     };
     guestRequirementVerification?: {
         doctorAssignedToClient: string;

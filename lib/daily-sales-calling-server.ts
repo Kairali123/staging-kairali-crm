@@ -7,15 +7,15 @@ const liveURL = 'https://script.google.com/macros/s/AKfycbz1wmE_4sczF7XrozAB-EYa
 const FMS_PENDING_URL = 'https://script.google.com/macros/s/AKfycbz3TmE2vjHfMLhrjPlhQm5diRug-s1mZZhxSXFA3pX1-PS5dRKi3vR2QrR9j0tSmDyCdw/exec'
 
 const DEFAULT_PENDING_SNAPSHOT = {
-  capturedAt: '2026-09-14T11:00:00.000Z',
+  capturedAt: '2026-09-17T12:54:20.000Z',
   rows: [
     ['COUNT', '', '', 'KTAHV', 'VILLARAAG', 'KAPPL'],
     [], [], [], [],
-    ['TOTAL', '', '', 75, 160, 128],
+    ['TOTAL', '', '', 348, 166, 199],
     [], [], [], [],
-    ['TOTAL', '', '', 21, 24, 618],
+    ['TOTAL', '', '', 8, 53, 647],
     [], [], [], [],
-    ['TOTAL', '', '', 79, 0, 90]
+    ['TOTAL', '', '', 128, 0, 75]
   ]
 }
 

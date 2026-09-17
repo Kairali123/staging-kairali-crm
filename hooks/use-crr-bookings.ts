@@ -266,6 +266,11 @@ function mapRow(row: GasBookingRow): Guest {
             pickupTime: s9!.pickupTime,
             remarks: s9!.remarks,
             assignedBy: (s9!.assignedBy && s9!.assignedBy !== row.bookingTakenBy) ? s9!.assignedBy : "",
+            arrivalFlightDetails: s9!.arrivalFlightDetails,
+            assignStatus: s9!.assignStatus,
+            assignRemarks: s9!.assignRemarks,
+            driverLink: s9!.driverLink,
+            timeDelay: s9!.timeDelay,
         } as Guest["driverAssignmentArrival"])
         : undefined;
 
@@ -279,6 +284,11 @@ function mapRow(row: GasBookingRow): Guest {
             dropTime: s10!.dropTime,
             remarks: s10!.remarks,
             assignedBy: (s10!.assignedBy && s10!.assignedBy !== row.bookingTakenBy) ? s10!.assignedBy : "",
+            departureFlightDetails: s10!.departureFlightDetails,
+            departureAssignStatus: s10!.departureAssignStatus,
+            departureAssignRemarks: s10!.departureAssignRemarks,
+            driverLink: s10!.driverLink,
+            timeDelay: s10!.timeDelay,
         } as Guest["driverAssignmentDeparture"])
         : undefined;
 

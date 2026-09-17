@@ -52,7 +52,7 @@ export async function dispatchDue(now=Date.now(),io=deps){
     if(!allowed){status='Skipped';detail='Configuration changed or paused before delivery'}
     else{sending=true;const result=await io.send(t,email);status=result.rejected?'Partial':result.accepted?'Accepted':'Failed';detail=result.rejected?'Some recipients rejected; inspect mailbox before retrying':result.accepted?'Accepted by email provider (not delivery confirmation)':'Provider accepted no recipients'}
    }
-  }catch{if(sending){status='Unknown';detail='Delivery outcome uncertain. Verify mailbox before resuming.'}}
+  }catch(err:any){if(sending){status='Unknown';detail='Delivery outcome uncertain. Verify mailbox before resuming.'}else{console.error('[email-trigger dispatch error]', err);detail=err?.message?`Report generation failed: ${err.message}. No email sent.`:'Report generation failed. No email sent.'}}
   await transaction(s=>{const r=s.runs.find(x=>x.id===run.id)!;Object.assign(r,{status,detail,finishedAt:new Date().toISOString()});const current=s.triggers.find(x=>x.id===t.id);if(current){current.lastResult=status;if(['Unknown','Partial'].includes(status)){current.status='Paused';current.nextRun=null}}})
  }
  return {processed:claims.length,workerId:randomUUID()}
