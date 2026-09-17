@@ -48,6 +48,7 @@ const eslintConfig = defineConfig([
     files: ['scripts/**/*.js', 'scripts/**/*.cjs'],
     rules: {
       '@typescript-eslint/no-require-imports': 'off',
+      '@next/next/no-assign-module-variable': 'off',
     },
   },
 ])

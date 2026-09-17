@@ -11,6 +11,10 @@ export const dynamic='force-dynamic'
 export const maxDuration = 60
 export async function GET(req:NextRequest){
  if(!authorized(req))return NextResponse.json({error:'Super administrator access required'},{status:403,headers})
+ const action=req.nextUrl.searchParams.get('action')
+ if(action==='templates'){
+  try{return NextResponse.json({templates:await templates(),checkedAt:new Date().toISOString()},{headers})}catch(e){return NextResponse.json({error:e instanceof Error?e.message:'Template verification unavailable'},{status:503,headers})}
+ }
  try{const state=await readState();return NextResponse.json({...state,providerReady:configured(),schedulerReady:workerReady(state)},{headers})}catch{return NextResponse.json({error:'Persistent WhatsApp storage unavailable on this server'},{status:503,headers})}
 }
 export async function POST(req:NextRequest){
