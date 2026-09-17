@@ -296,6 +296,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   if (isSuperAdmin) {
     searchableItems.push({ name: "Automation Settings", href: "/settings/automation", description: "Automation settings and modules hub", icon: Cpu })
     searchableItems.push({ name: "Email Triggers", href: "/settings/automation/email-triggers", description: "Scheduled email trigger configuration", icon: Mail })
+    searchableItems.push({ name: "WhatsApp Triggers", href: "/settings/automation/whatsapp", description: "WhatsApp report image trigger configuration", icon: Mail })
   }
 
   const searchResults = debouncedQuery.length > 0
@@ -645,6 +646,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     >
                       <Mail className="mr-2 h-3.5 w-3.5 text-indigo-600" />
                       Email Triggers
+                    </Link>
+                    <Link href="/settings/automation/whatsapp" className={`group flex items-center px-2.5 py-1.5 text-xs font-medium rounded-md ${pathname === '/settings/automation/whatsapp' ? 'bg-emerald-100 text-emerald-800' : 'text-gray-600 hover:bg-gray-100'}`} onClick={() => isMobile && setSidebarOpen(false)}>
+                      <Mail className="mr-2 h-3.5 w-3.5 text-emerald-700" />WhatsApp Triggers
                     </Link>
                     <Link
                       href="/settings/automation"

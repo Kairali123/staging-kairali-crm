@@ -55,6 +55,7 @@ const pagePermissions: Record<string, string> = {
   '/settings': 'sales_report.view',
   '/settings/automation': 'sales_report.view',
   '/settings/automation/email-triggers': 'sales_report.view',
+  '/settings/automation/whatsapp': 'sales_report.view',
   // `sales_call_audit.view` is page access only — the data itself is gated
   // server-side by `viewSelf`/`viewAll`, so this key deliberately does not name a
   // scope. The email template is a whole-team artifact, so it names `viewAll`.
@@ -162,6 +163,7 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
       '/settings',
       '/settings/automation',
       '/settings/automation/email-triggers',
+      '/settings/automation/whatsapp',
       '/sales/reports/email-trigger-config',
     ]
     if (
