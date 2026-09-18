@@ -23,11 +23,34 @@ export async function templates(){
  }
  throw Error('Template inventory exceeds supported limit; provider verification incomplete')
 }
+export function getReportUrl(config: { reportId: string; company?: string }, date: string): string {
+ const base = (
+  process.env.WHATSAPP_REPORT_BASE_URL ||
+  process.env.NEXT_PUBLIC_APP_URL ||
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : undefined) ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined) ||
+  'https://kairali-group-crm.vercel.app'
+ ).trim().replace(/\/+$/, '')
+ const normalizedBase = base.startsWith('http://') || base.startsWith('https://') ? base : `https://${base}`
+ if (config.reportId === 'marketing-daily-report') {
+  return `${normalizedBase}/marketing-daily-report?date=${encodeURIComponent(date)}`
+ }
+ const company = config.company || 'ALL'
+ return `${normalizedBase}/sales/reports/daily-alert?date=${encodeURIComponent(date)}&company=${encodeURIComponent(company)}`
+}
+
+export function formatReportScopeVariable(config: ConfigInput, date: string): string {
+ const companyLabel = config.company === 'ALL' ? 'All companies' : config.company === 'VILLARAAG' ? 'VILARAAG' : config.company
+ const url = getReportUrl(config, date)
+ return `${companyLabel} (View / PDF: ${url})`
+}
+
 export async function sendReport(config:ConfigInput,to:string,date:string,image:Buffer){
  const name=reportTemplates[config.reportId].template
  const template=(await templates()).find(t=>t.name===name&&t.compatible)
  if(!template)throw Error('Sending blocked: the mapped template must be APPROVED with an IMAGE header and the expected variables')
- const data=await request('/api/v1/whatsapp/sendMessage',{templateName:name,language:'en',to:to.slice(1),base64File:{name:config.reportId+'-'+date+'.jpg',body:image.toString('base64')},templateVariables:[date,config.company==='ALL'?'All companies':config.company==='VILLARAAG'?'VILARAAG':config.company]})
+ const scopeVariable = formatReportScopeVariable(config, date)
+ const data=await request('/api/v1/whatsapp/sendMessage',{templateName:name,language:'en',to:to.slice(1),base64File:{name:config.reportId+'-'+date+'.jpg',body:image.toString('base64')},templateVariables:[date,scopeVariable]})
  if(typeof data.waMessageId!=='string'||!data.waMessageId)throw Error('Provider acceptance could not be confirmed; check Redlava before retrying')
  return data.waMessageId as string
 }

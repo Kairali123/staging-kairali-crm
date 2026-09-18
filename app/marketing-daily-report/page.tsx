@@ -1,5 +1,6 @@
 'use client'
-import { useEffect, useRef, useState, useMemo } from 'react'
+import { Suspense, useEffect, useRef, useState, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { reportHTML, reportExportHTML, yesterdayIST, displayDate, scopeLabel, validateReportView, type ReportData, type ReportView } from '@/lib/marketing-daily-report'
 import { reportJPG, printReport, saveReportFile, copyReportHTML } from '@/lib/marketing-report-browser'
 
@@ -23,8 +24,10 @@ type ConversionDetail = {
   company: string
 }
 
-export default function MarketingDailyReport() {
-  const [date, setDate] = useState(yesterdayIST)
+function MarketingDailyReportContent() {
+  const searchParams = useSearchParams()
+  const qDate = searchParams?.get('date')
+  const [date, setDate] = useState(() => (qDate && /^\d{4}-\d{2}-\d{2}$/.test(qDate) ? qDate : yesterdayIST()))
   const [report, setReport] = useState<LiveReport | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -637,5 +640,13 @@ export default function MarketingDailyReport() {
         </div>
       )}
     </>
+  )
+}
+
+export default function MarketingDailyReport() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-gray-500">Loading daily report…</div>}>
+      <MarketingDailyReportContent />
+    </Suspense>
   )
 }

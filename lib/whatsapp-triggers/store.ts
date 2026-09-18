@@ -6,11 +6,14 @@ import type { Config } from './schema'
 export type Run = {
   id: string
   triggerId: string
+  triggerName?: string
   startedAt: string
   status: 'Preparing' | 'Sending' | 'Accepted' | 'Failed' | 'Unknown' | 'Skipped' | 'Partial'
   messageId?: string
   scheduledAt?: string
   detail?: string
+  templateName?: string
+  templateLink?: string
   recipients?: {
     to: string
     status: 'Pending' | 'Sending' | 'Accepted' | 'Unknown' | 'Skipped'

@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { DashboardLayout } from '@/components/dashboard-layout'
@@ -19,6 +19,7 @@ export default function EmailConfigBridge({ document: documentHtml }: { document
     }
   }, [isLoading, isSuperAdmin, router])
 
+  const [frameHeight, setFrameHeight] = useState<number>(850)
   const frame = useRef<HTMLIFrameElement>(null)
   useEffect(() => {
     let request: AbortController | undefined
@@ -28,6 +29,11 @@ export default function EmailConfigBridge({ document: documentHtml }: { document
       if (event.source !== frame.current?.contentWindow) return
       if (event.origin !== 'null' && event.origin !== window.location.origin && event.origin !== '') return
       const message = event.data
+      if (message?.type === 'email-config-resize' && typeof message.height === 'number') {
+        const next = Math.max(message.height, 650)
+        setFrameHeight((prev) => (Math.abs(prev - next) >= 4 ? next : prev))
+        return
+      }
       if (message?.type === 'email-config-ready') {
         if (initializing) return
         initializing = true
@@ -105,7 +111,15 @@ export default function EmailConfigBridge({ document: documentHtml }: { document
         srcDoc={documentHtml}
         title="Email Triggering Config"
         sandbox="allow-scripts allow-forms"
-        style={{ width: '100%', height: 'calc(100vh - 90px)', minHeight: 700, border: 0 }}
+        scrolling="no"
+        style={{
+          width: '100%',
+          height: `${frameHeight}px`,
+          minHeight: 650,
+          border: 0,
+          overflow: 'hidden',
+          display: 'block',
+        }}
       />
     </DashboardLayout>
   )
