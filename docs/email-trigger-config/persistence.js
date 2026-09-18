@@ -15,6 +15,7 @@ draw=function(){beforePersistentDraw();if(!linkedHost)return;normalizeDraft();co
  if(step===2)document.querySelectorAll('.scheduleCard p').forEach(p=>p.textContent='Schedule is stored on the server. Active configurations send while the background worker is online.');
  const cards=document.querySelectorAll('#details .scheduleCard');if(step===1)cards.forEach(c=>{c.innerHTML='<strong>Fresh report generated at every run</strong><p>Choose Today or Yesterday for a rolling report. Selected date stays fixed. Add recipients, set the schedule, then save as Active to begin sending.</p>'});
  const submit=$('#triggerForm button[type="submit"]');submit.textContent=savePending?'Saving…':draft.status==='Active'?'Save & activate':'Save configuration';submit.disabled=savePending||!storageReady;
+ window.postHeight?.();
 };
 $('#triggerForm').onsubmit=e=>{if(!linkedHost)return beforePersistentSubmit(e);e.preventDefault();if(savePending)return;collect();normalizeDraft();if(!storageReady){toast('Storage unavailable. Configuration has not been saved.');return}
  if(!draft.name?.trim()||!draft.template?.trim()||(draft.status==='Active'&&!draft.to?.trim())){step=0;draw();toast('Please add a trigger name, template name and To recipient.');return}
@@ -39,6 +40,6 @@ window.addEventListener('message',event=>{if(event.source!==window.parent||windo
 $('#rows').onclick=e=>{const b=e.target.closest('[data-edit]');if(!b)return;const id=linkedHost?b.dataset.edit:+b.dataset.edit;openEditor(id)};
 
 const beforePersistentRender=render;
-render=function(){beforePersistentRender();if(!linkedHost)return;document.querySelectorAll('#rows tr').forEach(row=>{const id=row.querySelector('[data-edit]')?.dataset.edit,t=triggers.find(x=>x.id===id);if(t&&row.cells[2])row.cells[2].insertAdjacentHTML('beforeend','<small>'+(t.nextRun?'Next: '+esc(new Date(t.nextRun).toLocaleString()):'No scheduled send')+'</small>')});};
+render=function(){beforePersistentRender();if(!linkedHost)return;document.querySelectorAll('#rows tr').forEach(row=>{const id=row.querySelector('[data-edit]')?.dataset.edit,t=triggers.find(x=>x.id===id);if(t&&row.cells[2])row.cells[2].insertAdjacentHTML('beforeend','<small>'+(t.nextRun?'Next: '+esc(new Date(t.nextRun).toLocaleString()):'No scheduled send')+'</small>')});window.postHeight?.();};
 window.addEventListener('message',event=>{if(event.source!==window.parent||window.parent===window||event.data?.type!=='email-config-state')return;const m=event.data;if(!m.state){showServiceStatus(m.error);return}smtpReady=m.state.smtpReady;workerReady=m.state.workerReady;savedRuns=m.state.runs;triggers=m.state.triggers.map(t=>({...t,result:t.lastResult}));render();renderRuns();showServiceStatus()});
 const refreshState=setInterval(()=>{if(linkedHost&&!savePending)window.parent.postMessage({type:'email-config-refresh'},'*')},30000);

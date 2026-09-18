@@ -1,7 +1,7 @@
 import {randomUUID} from 'node:crypto'
 import {transaction} from './store'
 import {nextDailyRun,reportDate} from './schedule'
-import type {Config} from './schema'
+import {reportTemplates, type Config} from './schema'
 type IO={build:(config:Config,date:string)=>Promise<Buffer>;send:(config:Config,to:string,date:string,image:Buffer)=>Promise<string>}
 export async function dispatchDue(now=Date.now(),io:IO){
  // Reservations are durable before any report preparation or provider request.
@@ -15,7 +15,8 @@ export async function dispatchDue(now=Date.now(),io:IO){
    const scheduledAt=c.nextRun!,slot=Date.parse(scheduledAt);c.nextRun=nextDailyRun(c,now)
    if(s.runs.some(r=>r.triggerId===c.id&&r.scheduledAt===scheduledAt))continue
    const missed=now-slot>5*60000,id=randomUUID()
-   s.runs.push({id,triggerId:c.id,scheduledAt,startedAt:new Date(now).toISOString(),status:missed?'Skipped':'Preparing',detail:missed?'Missed run skipped':'Preparing report image',recipients:c.recipients.map(to=>({to,status:'Pending'}))})
+   const templateName=reportTemplates[c.reportId]?.template||'crm_daily_sales_report_image'
+   s.runs.push({id,triggerId:c.id,triggerName:c.name,scheduledAt,startedAt:new Date(now).toISOString(),status:missed?'Skipped':'Preparing',detail:missed?'Missed run skipped':'Preparing report image',templateName,templateLink:'https://wa.redlava.in/ListTemplate',recipients:c.recipients.map(to=>({to,status:'Pending'}))})
    if(!missed)jobs.push({config:{...c},runId:id,date:reportDate(slot)})
   }
   return jobs

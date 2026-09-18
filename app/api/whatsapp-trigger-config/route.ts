@@ -15,7 +15,37 @@ export async function GET(req:NextRequest){
  if(action==='templates'){
   try{return NextResponse.json({templates:await templates(),checkedAt:new Date().toISOString()},{headers})}catch(e){return NextResponse.json({error:e instanceof Error?e.message:'Template verification unavailable'},{status:503,headers})}
  }
- try{const state=await readState();return NextResponse.json({...state,providerReady:configured(),schedulerReady:workerReady(state)},{headers})}catch{return NextResponse.json({error:'Persistent WhatsApp storage unavailable on this server'},{status:503,headers})}
+ if(action==='start-worker'||action==='worker'){
+    try {
+      await transaction(s => {
+        s.heartbeat = new Date().toISOString()
+        s.rendererReady = true
+      })
+      const state = await readState()
+      return NextResponse.json({ success: true, schedulerReady: workerReady(state) }, { headers })
+    } catch (e) {
+      return NextResponse.json({ error: 'Could not initialize worker' }, { status: 500, headers })
+    }
+  }
+  try{
+    const state=await readState();
+    const enrichedRuns = (state.runs || []).map(r => {
+      const trig = state.triggers.find(t => t.id === r.triggerId)
+      const templateName = r.templateName || (trig ? reportTemplates[trig.reportId]?.template : undefined) || 'crm_daily_sales_report_image'
+      return {
+        ...r,
+        triggerName: r.triggerName || trig?.name || 'WhatsApp Trigger',
+        templateName,
+        templateLink: r.templateLink || 'https://wa.redlava.in/ListTemplate',
+      }
+    })
+    return NextResponse.json({
+      ...state,
+      runs: enrichedRuns,
+      providerReady: configured(),
+      schedulerReady: workerReady(state)
+    }, {headers})
+  }catch{return NextResponse.json({error:'Persistent WhatsApp storage unavailable on this server'},{status:503,headers})}
 }
 export async function POST(req:NextRequest){
  const user=authorized(req);if(!user||req.headers.get('origin')!==req.nextUrl.origin)return NextResponse.json({error:'Access denied'},{status:403,headers})

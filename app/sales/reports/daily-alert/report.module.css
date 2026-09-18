@@ -58,3 +58,5 @@
 .piActionBtn:hover{background:#1d4ed8}
 .collectionLink{display:inline-flex;align-items:center;justify-content:center;background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s ease-in-out;font-variant-numeric:tabular-nums}
 .collectionLink:hover{background:#059669;color:white;border-color:#047857;box-shadow:0 2px 8px #05966933;transform:translateY(-1px)}
+.pdfButton{display:flex;align-items:center;gap:6px;background:#ffffff;border:1px solid #dce2f0;color:#1e3a8a;height:41px;padding:10px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap}
+.pdfButton:hover{background:#eff6ff;border-color:#bfdbfe}
