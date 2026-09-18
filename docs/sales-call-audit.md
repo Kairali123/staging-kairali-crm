@@ -10,6 +10,27 @@ The KPI cards, charts, date totals, and monthly table are derived from the same 
 fixture rows so the displayed totals reconcile after filters are applied. The Listen
 control generates a short synthetic browser tone; it is not a production call recording.
 
+## Data sources (issue #159)
+
+| Table | Written by | Used for |
+|---|---|---|
+| `daily_sales_reports_log_fms` | Live pilot `dailyfailreport` + sheet formulas | Page table, KPIs, email report |
+| `sales_call_audit_live_pilot_calls` | Live pilot Calls sheet (current + archived calls) | Call popup |
+
+- Per call, `overall_performance` is Good, Needs Improvement, Bad, Neutral or Not Rated
+  (mapped from `sales_job_assessment`). A call counts as audited when
+  `processing_status = 'Completed'`.
+- Daily row: `bad_calls` = Needs Improvement + Bad; `not_related` holds the **Not Rated**
+  count; zero counts are stored as NULL and read as 0. `overall_performance` follows the
+  pilot rule (Good when Good > Bad).
+- `daily_fail_pass`, `designation` and `mid` come from sheet formulas and are read-only
+  here. The HR half-day decision is not derived by the CRM.
+- Good-call rate = Good ÷ (Good + Bad); Neutral and Not Rated are excluded.
+- The popup takes only `record_id`. It reads calls where `TRIM(salesperson)` equals the
+  daily row's `name` and `call_datetime` falls on the row's IST day. `call_datetime` is
+  stored in IST; bounds are passed as `YYYY-MM-DD 00:00:00` strings, so the server
+  timezone (UTC on Vercel) does not matter.
+
 ## Access control
 
 Owner ruling, 2026-09-01: four **composable** permissions, not a ladder. A user may hold

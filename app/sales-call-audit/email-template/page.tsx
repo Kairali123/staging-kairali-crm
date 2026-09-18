@@ -108,8 +108,9 @@ export default function SalesCallAuditEmailTemplatePage() {
     verified: 0,
     mismatch: 0,
     wrongOutcomesPercentage: 0,
-    teamAverageScore: 0,
-    teamPerformancePercentage: 0,
+    goodCallRate: 0,
+    totalNeutral: 0,
+    totalNotRated: 0,
     failedEmployeesCount: 0,
   }
 
@@ -309,11 +310,11 @@ export default function SalesCallAuditEmailTemplatePage() {
                 <div className="mt-1 text-2xl font-extrabold text-slate-900">{metrics.auditedLeads}</div>
               </div>
               <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3.5 text-center">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Verified Good</div>
+                <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Good Calls</div>
                 <div className="mt-1 text-2xl font-extrabold text-emerald-800">{metrics.verified}</div>
               </div>
               <div className="rounded-xl border border-rose-200 bg-rose-50/60 p-3.5 text-center">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-rose-700">Mismatch Bad</div>
+                <div className="text-[11px] font-bold uppercase tracking-wider text-rose-700">Bad Calls</div>
                 <div className="mt-1 text-2xl font-extrabold text-rose-800">{metrics.mismatch}</div>
               </div>
               <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3.5 text-center">
@@ -325,12 +326,16 @@ export default function SalesCallAuditEmailTemplatePage() {
             {/* Secondary KPIs */}
             <div className="flex flex-wrap gap-4 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl p-3">
               <div className="flex items-center gap-1.5">
-                <span className="text-slate-500">Team average:</span>
-                <span className="text-slate-900 font-bold">{metrics.teamAverageScore} / 5</span>
+                <span className="text-slate-500">Good-call rate:</span>
+                <span className="text-emerald-700 font-bold">{metrics.goodCallRate}%</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-slate-500">Team performance:</span>
-                <span className="text-emerald-700 font-bold">{metrics.teamPerformancePercentage}%</span>
+                <span className="text-slate-500">Neutral:</span>
+                <span className="text-slate-900 font-bold">{metrics.totalNeutral}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-500">Not Rated:</span>
+                <span className="text-slate-900 font-bold">{metrics.totalNotRated}</span>
               </div>
             </div>
 
@@ -349,7 +354,8 @@ export default function SalesCallAuditEmailTemplatePage() {
                     <th className="p-3">Employee</th>
                     <th className="p-3 text-center">Calls</th>
                     <th className="p-3 text-center">Good / Bad</th>
-                    <th className="p-3 text-center">Score</th>
+                    <th className="p-3 text-center">Neutral / Not Rated</th>
+                    <th className="p-3 text-center">Overall</th>
                     <th className="p-3 text-center">Result</th>
                     <th className="p-3 text-right">Report</th>
                   </tr>
@@ -357,7 +363,7 @@ export default function SalesCallAuditEmailTemplatePage() {
                 <tbody>
                   {employees.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="p-6 text-center text-slate-400 font-medium">
+                      <td colSpan={7} className="p-6 text-center text-slate-400 font-medium">
                         No audit records found for this date.
                       </td>
                     </tr>
@@ -373,7 +379,10 @@ export default function SalesCallAuditEmailTemplatePage() {
                           <span className="text-emerald-700 font-semibold">{employee.good}</span> /{" "}
                           <span className="text-rose-700 font-semibold">{employee.bad}</span>
                         </td>
-                        <td className="p-3 text-center font-semibold text-slate-800">{employee.score.toFixed(2)}</td>
+                        <td className="p-3 text-center text-slate-600">
+                          {employee.neutral} / {employee.notRated}
+                        </td>
+                        <td className="p-3 text-center font-semibold text-slate-800">{employee.overallPerformance || "—"}</td>
                         <td className="p-3 text-center">
                           {employee.result === "FAIL" ? (
                             <Badge className="border-red-200 bg-red-50 text-red-700 hover:bg-red-50 font-bold">

@@ -58,6 +58,21 @@ function createRequest(url: string, options: { method?: string; body?: any; cook
 
 test('Executable Route Handlers Suite (Sales Call Audit)', async (t) => {
   let dbShouldFail = false
+  let lastCallsQuery: { sql: string; params: any[] } | null = null
+
+  // Never reach the live HR-action Apps Script from tests.
+  const gasPosts: any[] = []
+  const originalFetch = global.fetch
+  global.fetch = (async (url: any, init?: any) => {
+    if (String(url).includes('script.google.com')) {
+      gasPosts.push(JSON.parse(init?.body || '{}'))
+      return new Response(JSON.stringify({ success: true }), { status: 200 })
+    }
+    return originalFetch(url, init)
+  }) as typeof fetch
+  t.after(() => {
+    global.fetch = originalFetch
+  })
   let dbReturnEmpty = false
 
   const mockDbPool = {
@@ -79,179 +94,60 @@ test('Executable Route Handlers Suite (Sales Call Audit)', async (t) => {
               emp_id: 'K473',
               name: 'Zaki Ahmed',
               designation: 'SALES MANAGER',
-              time_stamp: '2026-09-02 06:04:56',
+              // 00:15 IST on 2 Sep = 18:45 UTC on 1 Sep: the day must be read in IST, not server time
+              time_stamp: new Date('2026-09-01T18:45:00Z'),
               created_at: '2026-09-03 00:44:43',
-              total_calls_audited: 34,
-              good_calls: 3,
-              bad_calls: 31,
-              avg_score: '0.57',
+              total_calls_audited: 6,
+              good_calls: 2,
+              bad_calls: 2,
+              neutral: 1,
+              not_related: 1,
+              overall_performance: 'Bad',
               daily_fail_pass: 'FAIL',
               hr_name: 'Rupantar Rana',
-              product_knowledge: 0.62,
-              customer_understanding: 0.56,
-              communication_skills: 0.71,
-              objection_handling: 0.44,
-              closing_skills: 0.32,
-              tone_volume: 0.76,
             },
           ],
           [],
         ]
       }
 
-      if (sqlTrim.includes('kairali_sales_metric_bot_for_ho')) {
+      if (sqlTrim.includes('sales_call_audit_live_pilot_calls')) {
+        lastCallsQuery = { sql: sqlTrim, params }
+        const call = (id: number, overall: string | null, assessment: string, extra: Record<string, any> = {}) => ({
+          id,
+          call_id: `KA-20260902-${id}`,
+          lead_id: `LEAD-${id}`,
+          call_datetime: '2026-09-02 10:15:00',
+          client: `Synthetic Client ${id}`,
+          business_unit: 'KTAHV / Healing Village',
+          call_stage: 'Follow-up',
+          recording_drive_url: `https://drive.google.com/file/d/synthetic${id}/view`,
+          crm_outcome: 'Follow-up',
+          crm_notes: 'Synthetic note',
+          sales_job_assessment: assessment,
+          overall_performance: overall,
+          overall_performance_remarks: `${overall ?? 'Not Rated'} — synthetic remark`,
+          recommended_action: null,
+          action_mode: null,
+          followup_owner: null,
+          followup_due: null,
+          target_team: null,
+          escalation_reason: null,
+          cold_reason: null,
+          remarks: null,
+          what_went_wrong: null,
+          suggested_solution: null,
+          ...extra,
+        })
         return [
           [
-            {
-              id: 37476,
-              timestamp: '2026-09-02 18:02:36',
-              sales_person_id: 'K473',
-              sales_person_name: 'Zaki Ahmed',
-              lead_id: 'MID_020926180237_36_52168',
-              buffer_lead_id: null,
-              client_name: null,
-              call_count: null,
-              call_type: 'Regular',
-              quality_status: 'Good',
-              avg_score: '3.20',
-              overall_score: '3',
-              lead_outcome_by_agent: 'Information Seeker',
-              conversion_outcome: 'Information Seeker',
-              lead_outcome_verify_status: 'No',
-              product_knowledge: 3.5,
-              customer_understanding: 3.0,
-              communication_skills: 3.5,
-              objection_handling: 3.0,
-              closing_skills: 3.0,
-              tone_and_volume: 3.5,
-              explanation: 'Comprehensive explanation given to client',
-              what_went_wrong_by_sales_team_senior_verifier: null,
-              complete_explanation: 'Comprehensive explanation given to client',
-              remarks: 'Good explanation',
-              reason: 'Valid discussion',
-              audio_url: 'https://drive.google.com/file/d/test1/view',
-              is_auditable: '1',
-            },
-            {
-              id: 37384,
-              timestamp: '2026-09-02 16:04:21',
-              sales_person_id: 'K473',
-              sales_person_name: 'Zaki Ahmed',
-              lead_id: 'MID_020926160421_36_52073',
-              buffer_lead_id: null,
-              client_name: null,
-              call_count: null,
-              call_type: 'Regular',
-              quality_status: 'Bad',
-              avg_score: '3.00',
-              overall_score: '3',
-              lead_outcome_by_agent: 'Meeting-Followup-Negotiation',
-              conversion_outcome: 'Not Interested',
-              lead_outcome_verify_status: 'No',
-              product_knowledge: 3.0,
-              customer_understanding: 3.0,
-              communication_skills: 3.0,
-              objection_handling: 3.0,
-              closing_skills: 3.0,
-              tone_and_volume: 3.0,
-              explanation: 'Call disconnected abruptly',
-              what_went_wrong_by_sales_team_senior_verifier: 'Did not address hesitation',
-              complete_explanation: 'Call disconnected abruptly',
-              remarks: 'Bad call',
-              reason: 'Did not close',
-              audio_url: 'https://drive.google.com/file/d/test2/view',
-              is_auditable: '1',
-            },
-            {
-              id: 37399,
-              timestamp: '2026-09-02 17:00:00',
-              sales_person_id: 'K473',
-              sales_person_name: 'Zaki Ahmed',
-              lead_id: 'MID_020926170000_36_52099',
-              buffer_lead_id: null,
-              client_name: null,
-              call_count: null,
-              call_type: 'Voicemail',
-              quality_status: 'Bad',
-              avg_score: '0.00',
-              overall_score: '0',
-              lead_outcome_by_agent: 'Not Connected',
-              conversion_outcome: 'No Answer',
-              lead_outcome_verify_status: 'No',
-              product_knowledge: null,
-              customer_understanding: null,
-              communication_skills: null,
-              objection_handling: null,
-              closing_skills: null,
-              tone_and_volume: null,
-              explanation: 'Voicemail detected',
-              what_went_wrong_by_sales_team_senior_verifier: null,
-              complete_explanation: 'Voicemail detected',
-              remarks: 'Voicemail',
-              reason: 'No Answer',
-              audio_url: null,
-              is_auditable: '0',
-            },
-            {
-              id: 37400,
-              timestamp: '2026-09-02 17:10:00',
-              sales_person_id: 'K473',
-              sales_person_name: 'Zaki Ahmed',
-              lead_id: 'MID_020926171000_36_52100',
-              buffer_lead_id: null,
-              client_name: null,
-              call_count: null,
-              call_type: 'Silence/Empty Recording',
-              quality_status: 'Bad',
-              avg_score: '0.00',
-              overall_score: '0',
-              lead_outcome_by_agent: null,
-              conversion_outcome: null,
-              lead_outcome_verify_status: null,
-              product_knowledge: null,
-              customer_understanding: null,
-              communication_skills: null,
-              objection_handling: null,
-              closing_skills: null,
-              tone_and_volume: null,
-              explanation: 'Silence',
-              what_went_wrong_by_sales_team_senior_verifier: null,
-              complete_explanation: 'Silence',
-              remarks: null,
-              reason: null,
-              audio_url: null,
-              is_auditable: '0',
-            },
-            {
-              id: 37401,
-              timestamp: '2026-09-02 17:15:00',
-              sales_person_id: 'K473',
-              sales_person_name: 'Zaki Ahmed',
-              lead_id: 'MID_020926171500_36_52101',
-              buffer_lead_id: null,
-              client_name: null,
-              call_count: null,
-              call_type: 'Regular',
-              quality_status: 'Bad',
-              avg_score: '0.00',
-              overall_score: '0',
-              lead_outcome_by_agent: null,
-              conversion_outcome: null,
-              lead_outcome_verify_status: null,
-              product_knowledge: null,
-              customer_understanding: null,
-              communication_skills: null,
-              objection_handling: null,
-              closing_skills: null,
-              tone_and_volume: null,
-              explanation: 'Zero score',
-              what_went_wrong_by_sales_team_senior_verifier: null,
-              complete_explanation: 'Zero score',
-              remarks: null,
-              reason: null,
-              audio_url: null,
-              is_auditable: '1',
-            },
+            call(1, 'Good', 'done_correctly'),
+            call(2, 'Good', 'done_correctly'),
+            call(3, 'Needs Improvement', 'partially_done'),
+            call(4, 'Bad', 'not_done_correctly', { crm_outcome: 'Cold', recommended_action: 'Reopen', cold_reason: 'No Incoming Response' }),
+            call(5, 'Neutral', 'neutral'),
+            // Blank overall label falls back to the assessment mapping
+            call(6, null, 'cannot_assess'),
           ],
           [],
         ]
@@ -408,42 +304,48 @@ test('Executable Route Handlers Suite (Sales Call Audit)', async (t) => {
     smtpShouldFail = false
   })
 
-  await t.test('6. Calls route enforces hard limit <= 100, minimal fields, and zero synthetic fallbacks', async () => {
+  await t.test('6. Calls popup reads sales_call_audit_live_pilot_calls by exact salesperson and IST day of the daily record', async () => {
     const adminCookie = makeSignedSessionCookie({ role: 'super_admin', permissions: ['all'] })
-    const req = createRequest('http://localhost:3000/api/sales-call-audit/calls?record_id=9&date=02-09-2026', { cookie: adminCookie })
+
+    // record_id is required; client-supplied name/date are ignored
+    const resMissing = await getCalls(createRequest('http://localhost:3000/api/sales-call-audit/calls?name=Other', { cookie: adminCookie }))
+    assert.equal(resMissing.status, 400)
+
+    lastCallsQuery = null
+    const req = createRequest('http://localhost:3000/api/sales-call-audit/calls?record_id=9&name=Someone%20Else&date=01-01-2020', { cookie: adminCookie })
     const res = await getCalls(req)
     assert.equal(res.status, 200)
     const json = await res.json()
     assert.equal(json.success, true)
-    assert.ok(Array.isArray(json.calls))
 
-    // Verify Bad Quality is strictly Bad (not promoted to Good by score)
-    const badCall = json.calls.find((c: any) => c.callId === 'CALL-37384')
-    assert.ok(badCall, 'Bad call record should be found')
-    assert.equal(badCall.qualityType, 'bad', 'Explicit Bad quality must stay bad')
+    // Exact salesperson match, stored-IST day bounds, audited calls only, bounded
+    // Set inside the mock pool, which TypeScript's narrowing cannot see
+    const q = lastCallsQuery as { sql: string; params: any[] } | null
+    assert.ok(q, 'calls table must be queried')
+    assert.match(q.sql, /TRIM\(salesperson\) = \?/)
+    assert.doesNotMatch(q.sql, /LIKE/i)
+    assert.match(q.sql, /processing_status = 'Completed'/)
+    assert.deepEqual(q.params, ['Zaki Ahmed', '2026-09-02 00:00:00', '2026-09-03 00:00:00', 100])
 
-    // Verify Good Quality is Good
-    const goodCall = json.calls.find((c: any) => c.callId === 'CALL-37476')
-    assert.ok(goodCall, 'Good call record should be found')
-    assert.equal(goodCall.qualityType, 'good', 'Explicit Good quality must stay good')
+    // Per-call labels and tab groups (Needs Improvement groups with Bad)
+    const byId = Object.fromEntries(json.calls.map((c: any) => [c.callId, c]))
+    assert.equal(byId['KA-20260902-1'].group, 'good')
+    assert.equal(byId['KA-20260902-3'].performance, 'Needs Improvement')
+    assert.equal(byId['KA-20260902-3'].group, 'bad')
+    assert.equal(byId['KA-20260902-4'].group, 'bad')
+    assert.equal(byId['KA-20260902-5'].group, 'neutral')
+    assert.equal(byId['KA-20260902-6'].performance, 'Not Rated')
+    assert.equal(byId['KA-20260902-6'].group, 'not_rated')
+    assert.equal(byId['KA-20260902-4'].coldReason, 'No Incoming Response')
+    assert.match(byId['KA-20260902-1'].callTime, /^02 Sept? 2026, 10:15 am$/i)
 
-    // Verify Voicemail calls are ignored (not counted as good or bad)
-    const voicemailCall = json.calls.find((c: any) => c.callId === 'CALL-37399')
-    assert.equal(voicemailCall, undefined, 'Voicemail calls must be ignored and excluded from good/bad call breakdown')
-
-    // Verify Inaudible calls (is_auditable != '1') are excluded
-    const inaudibleCall = json.calls.find((c: any) => c.callId === 'CALL-37400')
-    assert.equal(inaudibleCall, undefined, 'Inaudible calls must be excluded')
-
-    // Verify 0 avg_score calls are excluded
-    const zeroScoreCall = json.calls.find((c: any) => c.callId === 'CALL-37401')
-    assert.equal(zeroScoreCall, undefined, 'Calls with avg_score <= 0 must be excluded')
-
-    // Verify consistent actual counts from kairali_sales_metric_bot_for_ho: 1 good + 1 bad = 2 total
-    assert.equal(json.calls.length, 2, 'Only the 2 valid audible positive-score calls must be returned')
-    assert.equal(json.agent.totalCalls, 2, 'Total calls must match valid calls count (2)')
-    assert.equal(json.agent.goodCalls, 1, 'Good calls must be 1')
-    assert.equal(json.agent.badCalls, 1, 'Bad calls must be 1')
+    // Header counts come from the daily record (NULL-safe), not recomputed
+    assert.deepEqual(
+      [json.agent.totalCalls, json.agent.goodCalls, json.agent.badCalls, json.agent.neutralCalls, json.agent.notRatedCalls],
+      [6, 2, 2, 1, 1]
+    )
+    assert.equal(json.agent.overallPerformance, 'Bad')
+    assert.equal(json.agent.date, '2026-09-02')
   })
 
   await t.test('7. ViewSelf enforces SQL employee isolation and blocks cross-employee actions', async () => {
@@ -462,6 +364,8 @@ test('Executable Route Handlers Suite (Sales Call Audit)', async (t) => {
     })
     const resAllowed = await postAudit(reqAllowed)
     assert.equal(resAllowed.status, 200)
+    assert.equal(gasPosts.length, 1, 'HR action posts to the (stubbed) Apps Script once')
+    assert.equal('avg_score' in gasPosts[0], false, 'avg_score is no longer sent')
 
     // User K999 attempting to act on K473 row -> 403
     const userK999Cookie = makeSignedSessionCookie({
