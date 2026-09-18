@@ -322,6 +322,8 @@ test('CRR Query Boundary & Security Contract Suite', async (t) => {
     });
 
     await t.test('14. POST sanitizes fields and strips stageKey before forwarding to GAS', async () => {
+        // Stage 1 is scheduled and open (check-in - 1 day is in the past)
+        mockProcessRows = [{ id: 1, uid: 'UID-1001', booking_id: 'BK-1001', check_in_date: '2026-01-05', check_out_date: '2026-01-10', stage1_call_date_planned: '2026-01-04', booking_status: 'Confirmed' }];
         const originalFetch = global.fetch;
         let interceptedBody = null;
         global.fetch = async (url, options) => {
@@ -931,8 +933,11 @@ test('CRR Query Boundary & Security Contract Suite', async (t) => {
             id: 1,
             uid: 'UID-401',
             booking_id: 'KTAHV-PMS-9576',
+            check_in_date: '2026-01-05',
             check_out_date: '2026-09-10',
         }];
+        // Stage 4 is scheduled and open (opens on check-in date)
+        mockCheckinRows = [{ id: 1, reservation_id: 'KTAHV-PMS-9576', stage4_planned: '2026-01-05' }];
 
         const originalFetch = global.fetch;
         let interceptedBody = null;
@@ -979,4 +984,62 @@ test('CRR Query Boundary & Security Contract Suite', async (t) => {
             global.fetch = originalFetch;
         }
     });
-});
+
+    await t.test('24. POST refuses stages that are not open, cancelled or already submitted — admins included (issue #157)', async () => {
+        const originalFetch = global.fetch;
+        let dispatched = 0;
+        global.fetch = async () => {
+            dispatched++;
+            return new Response(JSON.stringify({ success: true }), { status: 200 });
+        };
+        const post = async (body) => {
+            const req = createMockRequest('http://localhost:3000/api/crr-calling/bookings', 'valid', 'admin', ['all']);
+            const res = await POST(new NextRequest(req.url, {
+                method: 'POST',
+                headers: { cookie: req.headers.get('cookie'), 'content-type': 'application/json' },
+                body: JSON.stringify(body),
+            }));
+            return { status: res.status, json: await res.json() };
+        };
+        try {
+            // A. Check-in far in the future: stage 1 (check-in - 1) is not open yet
+            mockProcessRows = [{ id: 1, uid: 'UID-A', booking_id: 'BK-A', check_in_date: '2099-01-10', check_out_date: '2099-01-15', stage1_call_date_planned: '2099-01-09', booking_status: 'Confirmed' }];
+            let r = await post({ bookingId: 'UID-A', stage: 1, fields: { status: 'Done' } });
+            assert.equal(r.status, 409);
+            assert.match(r.json.error, /opens on 09-Jan-2099/);
+
+            // B. Same booking, stage 9 has a planned date and no date gate → allowed
+            mockTrackerPart2Rows = [{ id: 1, booking_id: 'BK-A', stage5_planned: '2099-01-08' }];
+            r = await post({ bookingId: 'UID-A', stage: 9, fields: { pickupRequired: 'No' } });
+            assert.equal(r.status, 200);
+
+            // C. No planned date → refused even for admin
+            mockTrackerPart2Rows = [];
+            r = await post({ bookingId: 'UID-A', stage: 9, fields: { pickupRequired: 'No' } });
+            assert.equal(r.status, 409);
+            assert.match(r.json.error, /Planned date is not scheduled/);
+
+            // D. Cancelled booking → refused
+            mockProcessRows = [{ id: 1, uid: 'UID-A', booking_id: 'BK-A', check_in_date: '2026-01-10', check_out_date: '2026-01-15', stage1_call_date_planned: '2026-01-09', booking_status: 'Cancelled' }];
+            r = await post({ bookingId: 'UID-A', stage: 1, fields: { status: 'Done' } });
+            assert.equal(r.status, 409);
+            assert.match(r.json.error, /cancelled/);
+
+            // E. Submitted but to_show still false → Processing → refused
+            mockProcessRows[0].booking_status = 'Confirmed';
+            mockCallingRows = [{ id: 1, uid: 'UID-A', stage_key: 'UID-A_Stage1', planned: '2026-01-09', status: 'Done', to_show: 0 }];
+            r = await post({ bookingId: 'UID-A', stage: 1, fields: { status: 'Done' } });
+            assert.equal(r.status, 409);
+            assert.match(r.json.error, /already submitted/);
+
+            // F. Unknown booking → 404
+            mockProcessRows = [];
+            r = await post({ bookingId: 'UID-X', stage: 1, fields: {} });
+            assert.equal(r.status, 404);
+
+            assert.equal(dispatched, 1, 'only the allowed save (B) may reach GAS');
+        } finally {
+            global.fetch = originalFetch;
+        }
+    });
+});
