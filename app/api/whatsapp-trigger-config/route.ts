@@ -19,10 +19,10 @@ export async function GET(req:NextRequest){
    try{return NextResponse.json({templates:await templates(),checkedAt:new Date().toISOString()},{headers})}catch(e){return NextResponse.json({error:e instanceof Error?e.message:'Template verification unavailable'},{status:503,headers})}
   }
   if(action==='start-worker'||action==='worker'||action==='tick'){
-     if(process.env.VERCEL){
-       const state=await readState().catch(()=>({version:1 as const,triggers:[],runs:[]}))
-       return NextResponse.json({success:true,schedulerReady:workerReady(state),message:'On Vercel, automated dispatch runs via Vercel Cron.'},{headers})
-     }
+      if(process.env.VERCEL){
+        const state=await readState().catch(()=>({version:1 as const,triggers:[],runs:[],heartbeat:undefined,rendererReady:false}))
+        return NextResponse.json({success:true,schedulerReady:workerReady(state),message:'On Vercel, automated dispatch runs via Vercel Cron.'},{headers})
+      }
      let rendererOk=false,renderError=''
      try{
        const {renderJPEG}=await import('@/lib/whatsapp-triggers/render')

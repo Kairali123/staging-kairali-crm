@@ -38,7 +38,7 @@ export async function renderJPEG(html:string){
  const browser=await launchBrowser()
  try{
   const context=await browser.newContext({viewport:{width:1400,height:1000},deviceScaleFactor:1,javaScriptEnabled:false,serviceWorkers:'block'})
-  await context.route('**/*',route=>route.abort())
+  await context.route('**/*',(route: any)=>route.abort())
   const page=await context.newPage();await page.setContent(html,{waitUntil:'load',timeout:15000})
   const bounds=await page.locator('body').boundingBox()
   if(!bounds||bounds.height>16000)throw Error('Report is too long for one image; select one company or fewer details')
