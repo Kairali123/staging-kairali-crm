@@ -245,10 +245,318 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  if (action === 'findBuyer') {
+    try {
+      const payloadObj = body.payload && typeof body.payload === 'object' ? (body.payload as Record<string, unknown>) : null
+      const rawMobile = String(body.mobile || payloadObj?.mobile || '').trim()
+      const rawEmail = String(body.email || payloadObj?.email || '').trim().toLowerCase()
+      const cleanMobile = rawMobile.replace(/\D/g, '').slice(-10)
+
+      if (!cleanMobile && !rawEmail) {
+        return json({ ok: true, data: { found: false, buyer: null }, correlationId }, 200)
+      }
+
+      const pool = await getPool()
+      let rows: unknown[] = []
+
+      if (cleanMobile && rawEmail) {
+        const [mRows] = await pool.query(
+          `SELECT id, buyer_id, order_id, name_of_client, mobile, email, 
+                  client_category, client_category_updated, billing_address, 
+                  shipping_address, others
+           FROM master_conversion_sheet_kappl_ktahv
+           WHERE (mobile LIKE ? OR LOWER(TRIM(email)) = ?)
+           ORDER BY id DESC
+           LIMIT 1`,
+          [`%${cleanMobile}%`, rawEmail]
+        )
+        rows = Array.isArray(mRows) ? mRows : []
+      } else if (cleanMobile) {
+        const [mRows] = await pool.query(
+          `SELECT id, buyer_id, order_id, name_of_client, mobile, email, 
+                  client_category, client_category_updated, billing_address, 
+                  shipping_address, others
+           FROM master_conversion_sheet_kappl_ktahv
+           WHERE mobile LIKE ?
+           ORDER BY id DESC
+           LIMIT 1`,
+          [`%${cleanMobile}%`]
+        )
+        rows = Array.isArray(mRows) ? mRows : []
+      } else if (rawEmail) {
+        const [mRows] = await pool.query(
+          `SELECT id, buyer_id, order_id, name_of_client, mobile, email, 
+                  client_category, client_category_updated, billing_address, 
+                  shipping_address, others
+           FROM master_conversion_sheet_kappl_ktahv
+           WHERE LOWER(TRIM(email)) = ?
+           ORDER BY id DESC
+           LIMIT 1`,
+          [rawEmail]
+        )
+        rows = Array.isArray(mRows) ? mRows : []
+      }
+
+      if (rows.length === 0) {
+        await auditOrderFormAction({
+          req,
+          user,
+          action,
+          outcome: 'success',
+          correlationId,
+          targetId: targetId(body),
+          durationMs: Date.now() - startedAt,
+        })
+        return json({ ok: true, data: { found: false, buyer: null }, correlationId }, 200)
+      }
+
+      const row = rows[0] as Record<string, unknown>
+      const name = String(row.name_of_client || '').trim()
+      const clientType = String(row.client_category_updated || row.client_category || '').trim()
+      const billingAddress = String(row.billing_address || '').trim()
+      const shippingAddress = String(row.shipping_address || billingAddress).trim()
+      const clientId = String(row.buyer_id || row.order_id || '').trim()
+      const mobileFound = String(row.mobile || cleanMobile || rawMobile).trim()
+      const emailFound = String(row.email || rawEmail).trim()
+
+      let pinCode = ''
+      const tokens = `${billingAddress} ${shippingAddress}`.split(/[\s,\r\n]+/)
+      for (const token of tokens) {
+        if (/^[1-9][0-9]{5}$/.test(token)) {
+          pinCode = token
+        }
+      }
+
+      let pan = ''
+      for (const token of tokens) {
+        const upper = token.toUpperCase()
+        if (/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(upper)) {
+          pan = upper
+          break
+        }
+      }
+
+      const buyer = {
+        clientId,
+        name,
+        mobile: cleanMobile || mobileFound,
+        email: emailFound,
+        clientType,
+        gst: '',
+        pan,
+        pinCode,
+        billingAddress,
+        shippingAddress,
+      }
+
+      await auditOrderFormAction({
+        req,
+        user,
+        action,
+        outcome: 'success',
+        correlationId,
+        targetId: targetId(body),
+        durationMs: Date.now() - startedAt,
+      })
+
+      return json(
+        {
+          ok: true,
+          data: {
+            found: true,
+            buyer,
+          },
+          correlationId,
+        },
+        200
+      )
+    } catch {
+      await auditOrderFormAction({
+        req,
+        user,
+        action,
+        outcome: 'failure',
+        correlationId,
+        targetId: targetId(body),
+        durationMs: Date.now() - startedAt,
+        errorCode: 'DATABASE_ERROR',
+      })
+      return error(500, 'DATABASE_ERROR', 'Failed to search buyer in database.', correlationId)
+    }
+  }
+
+  if (action === 'getOrder') {
+    try {
+      const payloadObj = body.payload && typeof body.payload === 'object' ? (body.payload as Record<string, unknown>) : null
+      const orderId = String(body.orderId || payloadObj?.orderId || '').trim()
+      if (!orderId) {
+        return error(400, 'BAD_REQUEST', 'Order ID is required.', correlationId)
+      }
+
+      const pool = await getPool()
+      let rows: unknown[] = []
+
+      // 1. Check master_conversion_sheet_kappl_ktahv
+      const [mRows] = await pool.query(
+        `SELECT id, buyer_id, order_id, name_of_client, mobile, email, 
+                client_category, client_category_updated, billing_address, 
+                shipping_address, order_type, payment_terms, payment_collection_date,
+                order_taken_by, invoice_amount, total_amount_before_discount, 
+                uploaded_image_link, invoice_link, others
+         FROM master_conversion_sheet_kappl_ktahv
+         WHERE order_id = ?
+         ORDER BY id DESC
+         LIMIT 1`,
+        [orderId]
+      )
+      rows = Array.isArray(mRows) ? mRows : []
+
+      // 2. Fallback to orders_fms if not in master conversion sheet
+      if (rows.length === 0) {
+        const [fmsRows] = await pool.query(
+          `SELECT id, buyer_id, order_id, client_name AS name_of_client, mobile, email, 
+                  billing_type AS client_category, billing_type AS client_category_updated, 
+                  billing_address, shipping_address, order_type, payment_terms, 
+                  payment_collection_date, order_taken_by, invoice_amount, 
+                  total_amount_before_discount, uploaded_image_link, remarks AS others
+           FROM orders_fms
+           WHERE order_id = ?
+           ORDER BY id DESC
+           LIMIT 1`,
+          [orderId]
+        )
+        rows = Array.isArray(fmsRows) ? fmsRows : []
+      }
+
+      if (rows.length > 0) {
+        const row = rows[0] as Record<string, unknown>
+        const name = String(row.name_of_client || '').trim()
+        const clientType = String(row.client_category_updated || row.client_category || '').trim()
+        const billingAddress = String(row.billing_address || '').trim()
+        const shippingAddress = String(row.shipping_address || billingAddress).trim()
+        const clientId = String(row.buyer_id || row.order_id || '').trim()
+        const mobile = String(row.mobile || '').trim()
+        const email = String(row.email || '').trim()
+
+        let pinCode = ''
+        const tokens = `${billingAddress} ${shippingAddress}`.split(/[\s,\r\n]+/)
+        for (const token of tokens) {
+          if (/^[1-9][0-9]{5}$/.test(token)) {
+            pinCode = token
+          }
+        }
+
+        let gst = ''
+        let pan = ''
+        for (const token of tokens) {
+          const upper = token.toUpperCase()
+          if (/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(upper)) {
+            gst = upper
+            const cand = upper.substring(2, 12)
+            if (/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(cand)) {
+              pan = cand
+            }
+          } else if (!pan && /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(upper)) {
+            pan = upper
+          }
+        }
+
+        const paymentDate = row.payment_collection_date
+          ? new Date(row.payment_collection_date as string).toISOString().slice(0, 10)
+          : ''
+
+        const orderData = {
+          mode: 'edit',
+          orderId: String(row.order_id || orderId),
+          buyer: {
+            clientId,
+            name,
+            mobile,
+            email,
+            clientType,
+            gst,
+            pan,
+            pinCode,
+            billingAddress,
+            shippingAddress,
+          },
+          orderType: String(row.order_type || 'New Order'),
+          paymentTerms: String(row.payment_terms || 'Credit'),
+          orderPlacedBy: String(row.order_taken_by || user.name || ''),
+          attachment: String(row.uploaded_image_link || row.invoice_link || ''),
+          shipping: 0,
+          shippingTaxRate: 18,
+          shippingRemarks: '',
+          shippingTaxRemarks: '',
+          paymentDates: [paymentDate, '', '', '', ''],
+          dispatchDate: '',
+          dispatchTime: '',
+          salesRemarks: String(row.others || ''),
+          invoiceRemarks: '',
+          warehouseRemarks: '',
+          nextOrderDate: '',
+          recurrence: '',
+          recurrenceEndDate: '',
+          rocketClient: false,
+          products: [
+            {
+              lineId: crypto.randomUUID(),
+              productId: '',
+              quantity: 1,
+              discountType: 'percentage',
+              discount: 0,
+              cgstType: 'percentage',
+              cgst: 0,
+              sgstType: 'percentage',
+              sgst: 0,
+              igstType: 'percentage',
+              igst: 0,
+            },
+          ],
+        }
+
+        await auditOrderFormAction({
+          req,
+          user,
+          action,
+          outcome: 'success',
+          correlationId,
+          targetId: orderId,
+          durationMs: Date.now() - startedAt,
+        })
+
+        return json({ ok: true, data: orderData, correlationId }, 200)
+      }
+    } catch {
+      // Fall through to upstream Apps Script
+    }
+  }
+
   const appsScript = resolveAppsScriptConfig()
   if (!appsScript) {
     await auditOrderFormAction({ req, user, action, outcome: 'failure', correlationId, targetId: targetId(body), errorCode: 'NOT_CONFIGURED' })
     return error(503, 'NOT_CONFIGURED', 'Order service is not configured.', correlationId)
+  }
+
+  // Server-side enforcement: Lock orderPlacedBy to authenticated session user and ensure quantities are integers
+  if (action === 'submit' && body.payload && typeof body.payload === 'object') {
+    const payload = body.payload as Record<string, unknown>
+    if (payload.form && typeof payload.form === 'object') {
+      const form = payload.form as Record<string, unknown>
+      if (user?.name) {
+        form.orderPlacedBy = user.name
+      }
+    }
+    if (Array.isArray(payload.products)) {
+      payload.products = payload.products.map((p) => {
+        if (p && typeof p === 'object') {
+          const prod = p as Record<string, unknown>
+          const qty = Math.max(1, Math.floor(Number(prod.quantity) || 1))
+          return { ...prod, quantity: qty }
+        }
+        return p
+      })
+    }
   }
 
   try {
@@ -272,23 +580,6 @@ export async function POST(req: NextRequest) {
       const safe = publicUpstreamError(action, upstream)
       await auditOrderFormAction({ req, user, action, outcome: 'failure', correlationId, targetId: targetId(body), durationMs: Date.now() - startedAt, errorCode: safe.code })
       return error(upstreamResponse.ok ? 422 : 502, safe.code, safe.message, correlationId)
-    }
-
-    if (action === 'findBuyer' && upstream.data && typeof upstream.data === 'object') {
-      const data = upstream.data as Record<string, unknown>
-      if (data.found && data.buyer && typeof data.buyer === 'object') {
-        const buyer = data.buyer as Record<string, unknown>
-        // Validate pincode if present (strict 6-digit PIN code, no heuristic string derivation)
-        if (buyer.pinCode !== undefined && buyer.pinCode !== null) {
-          const pin = String(buyer.pinCode).trim()
-          buyer.pinCode = /^[1-9][0-9]{5}$/.test(pin) ? pin : ''
-        }
-        // Validate PAN if present (strict 10-character format, no heuristic substring derivation)
-        if (buyer.pan !== undefined && buyer.pan !== null) {
-          const pan = String(buyer.pan).trim().toUpperCase()
-          buyer.pan = /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan) ? pan : ''
-        }
-      }
     }
 
     await auditOrderFormAction({ req, user, action, outcome: 'success', correlationId, targetId: targetId(body), durationMs: Date.now() - startedAt })
