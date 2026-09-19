@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useAuth, type UserRole } from "@/hooks/use-auth";
-import { useCrrBookings, getStagePlannedDate, getStageActualDate, getStageSavedData, getStageDoer, isBookingCancelled, saveStage, DEFAULT_STAGE_USERS } from "@/hooks/use-crr-bookings";
+import { useCrrBookings, hasStageNoPlannedDate, getStagePlannedDate, getStageActualDate, getStageSavedData, getStageDoer, isBookingCancelled, saveStage, DEFAULT_STAGE_USERS } from "@/hooks/use-crr-bookings";
 import type {
     Role,
     Resp,
@@ -14,7 +14,8 @@ import type {
     Stage,
     Guest,
 } from "@/types/crr";
-import { stageBlockReason, stageDateLock } from "@/lib/crr-stage-rules";
+import { MAX_PROOF_FILE_BYTES, PROOF_FILE_LIMIT_LABEL, isAllowedProofType, stageBlockReason, stageDateLock } from "@/lib/crr-stage-rules";
+import { compressImage } from "@/lib/image-compress";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
@@ -410,8 +411,8 @@ export default function CRRCallingProcessPage() {
 
     // All stage saves go through this wrapper so GAS receives the admin
     // override flag and skips its server-side lock check for admin-tier users.
-    const saveStageWithRole = (bookingId: string, stage: number, fields: Record<string, any>) =>
-        saveStage(bookingId, stage, fields, isAdminRole);
+    const saveStageWithRole = (bookingId: string, stage: number, fields: Record<string, any>, file?: File | null) =>
+        saveStage(bookingId, stage, fields, isAdminRole, file);
 
     /* ---------- PER-STAGE EDIT PERMISSIONS ----------
        Admin-tier users (super_admin / admin / "all" / "fms.admin") edit
@@ -1937,7 +1938,18 @@ export default function CRRCallingProcessPage() {
         }
         setRatingFormError("");
         setRatingSaved(true);
-        const proofFileName = ratingProofFile ? ratingProofFile.name : ratingExistingProofFileName;
+
+        // New proof file (only when rating is Given): photos are compressed, then size-checked
+        let proofUpload: File | null = null;
+        if (ratingStatus === "Given" && ratingProofFile) {
+            proofUpload = await compressImage(ratingProofFile);
+            if (proofUpload.size > MAX_PROOF_FILE_BYTES) {
+                setRatingFormError(`File is too large. Please upload a file below ${PROOF_FILE_LIMIT_LABEL}.`);
+                setRatingSaved(false);
+                return;
+            }
+        }
+        const proofFileName = proofUpload ? proofUpload.name : ratingExistingProofFileName;
 
         const guestId = activeRatingGuest.id;
         const targetId = activeRatingGuest.uid || activeRatingGuest.bookingId;
@@ -1957,7 +1969,7 @@ export default function CRRCallingProcessPage() {
         const toastId = toast.loading("Saving Online Rating & Review Request...");
 
         try {
-            await saveStageWithRole(targetId, 5, data);
+            await saveStageWithRole(targetId, 5, data, proofUpload);
             toast.success("Online Rating & Review Request saved successfully! Submission is recorded.", { id: toastId });
             refetchGuests();
         } catch (err) {
@@ -4916,7 +4928,8 @@ export default function CRRCallingProcessPage() {
                                         </div>
                                     )}
 
-                                    {/* KTAHV QR leaflet — visible when pending */}
+                                    {/* KTAHV QR leaflet — shown only once Stage 2 has a planned date */}
+                                    {activeCallGuest && !hasStageNoPlannedDate(activeCallGuest, 2) && (
                                     <div className="mt-3 pt-3 border-t border-indigo-200 rounded-lg bg-white p-3 space-y-3">
                                         <img
                                             src="/KTAHV%20leaflet%20A$%20landscape_V1.jpg.jpeg"
@@ -4931,6 +4944,7 @@ export default function CRRCallingProcessPage() {
                                             <code className="bg-amber-100 border border-amber-200 rounded px-1.5 py-0.5 text-[11px] font-semibold">#RoomNo:-205 #GuestName:-RahulSharma</code>
                                         </div>
                                     </div>
+                                    )}
 
                                     {callFormError && (
                                         <div className="flex items-center gap-2 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2 mt-3">

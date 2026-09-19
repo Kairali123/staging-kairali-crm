@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Guest, StageInfo, StageStatus } from "@/types/crr";
-import { METADATA_KEYS, isCancelledStatus, stageStatusOf } from "@/lib/crr-stage-rules";
+import { METADATA_KEYS, PROOF_FILE_LIMIT_LABEL, isCancelledStatus, stageStatusOf } from "@/lib/crr-stage-rules";
 
 /* =========================================================
    REQUIRED TYPE UPDATE — @/types/crr
@@ -547,16 +547,30 @@ export async function saveStage(
     // Admin-tier users (super_admin / admin / "all" / "fms.admin") bypass the
     // server-side lock check in GAS — locked/completed stages stay editable
     // for them. GAS must include the matching `body.adminOverride` check.
-    adminOverride: boolean = false
+    adminOverride: boolean = false,
+    // Stage 5 proof file: sent as multipart; the server base64-encodes it for GAS
+    file?: File | null
 ): Promise<{ success: boolean; error?: string }> {
-    const res = await fetch("/api/crr-calling/bookings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bookingId, stage, fields, adminOverride }),
-    });
-    const json = await res.json();
-    if (!json.success) {
-        throw new Error(json.error || "Save failed");
+    let body: BodyInit;
+    const headers: HeadersInit = {};
+    if (file) {
+        const form = new FormData();
+        form.set("bookingId", bookingId);
+        form.set("stage", String(stage));
+        form.set("fields", JSON.stringify(fields));
+        form.set("file", file, file.name);
+        body = form;
+    } else {
+        headers["Content-Type"] = "application/json";
+        body = JSON.stringify({ bookingId, stage, fields, adminOverride });
+    }
+    const res = await fetch("/api/crr-calling/bookings", { method: "POST", headers, body });
+    // Vercel answers an oversized body with a non-JSON 413
+    const json = await res.json().catch(() => null);
+    if (!json?.success) {
+        throw new Error(
+            json?.error || (res.status === 413 ? `File is too large. Please upload a file below ${PROOF_FILE_LIMIT_LABEL}.` : "Save failed")
+        );
     }
     return json;
 }
