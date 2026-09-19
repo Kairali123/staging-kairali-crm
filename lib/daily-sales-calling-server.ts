@@ -40,6 +40,29 @@ export async function loadCalling(connection?: any, date?: string): Promise<Call
 
   await Promise.all([
     (async () => {
+      // 0. Try DB snapshot first (pushed by local worker — always reachable from Vercel)
+      if (connection) {
+        try {
+          const [tables] = await connection.query("SHOW TABLES LIKE 'calling_employee_snapshot'") as any[]
+          if (Array.isArray(tables) && tables.length > 0) {
+            const [rows] = await connection.query(
+              "SELECT employees, captured_at FROM calling_employee_snapshot WHERE id = 1 AND captured_at >= NOW() - INTERVAL 2 HOUR LIMIT 1"
+            ) as any[]
+            if (Array.isArray(rows) && rows.length > 0) {
+              const parsed = JSON.parse(rows[0].employees)
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                result.employees = parsed
+                result.warnings.push(`Employee calling data served from local snapshot (captured ${new Date(rows[0].captured_at).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' })} IST).`)
+                return
+              }
+            }
+          }
+        } catch (dbErr) {
+          console.warn('[loadCalling] DB employee snapshot check failed:', dbErr)
+        }
+      }
+
+      // 1. Live fetch (works locally; may timeout on Vercel)
       const attemptFetch = async () => {
         const r = await fetch(liveURL, { cache: 'no-store', signal: AbortSignal.timeout(20000) })
         if (!r.ok) throw Error(`HTTP ${r.status}`)
@@ -51,7 +74,6 @@ export async function loadCalling(connection?: any, date?: string): Promise<Call
         result.employees = await attemptFetch()
       } catch (err1) {
         console.warn('[loadCalling] Employee feed attempt 1 failed:', err1)
-        // Retry once after a short delay before giving up
         await new Promise(res => setTimeout(res, 5000))
         try {
           result.employees = await attemptFetch()
