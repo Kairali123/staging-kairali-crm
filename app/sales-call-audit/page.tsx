@@ -1,6 +1,7 @@
 "use client"
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import type { AuditedCallDetail } from "@/app/api/sales-call-audit/calls/route"
 import Link from "next/link"
 import {
   Area,
@@ -100,14 +101,10 @@ export type SalesCallAuditDbRow = {
   total_calls_audited: number | null
   good_calls: number | null
   bad_calls: number | null
-  product_knowledge: number | null
-  customer_understanding: number | null
-  communication_skills: number | null
-  objection_handling: number | null
-  closing_skills: number | null
-  tone_volume: number | null
-  avg_score: number | null
-  planned_management: string | null
+  neutral: number | null
+  not_rated: number | null
+  overall_performance: string | null
+  planned_hr: string | null
   actual_hr: string | null
   time_delay_hr: string | null
   hr_name: string | null
@@ -130,17 +127,14 @@ export type AgentAudit = {
   initials: string
   calls: number
   good: number
+  // Needs Improvement + Bad (live pilot daily report)
   bad: number
-  score: number
+  neutral: number
+  notRated: number
+  overallPerformance: string
   result: AuditResult
   disposition: string
   emailStatus: EmailStatus
-  productKnowledge: number | null
-  customerUnderstanding: number | null
-  communicationSkills: number | null
-  objectionHandling: number | null
-  closingSkills: number | null
-  toneVolume: number | null
   timeDelayHr: string | null
   hrName: string | null
   hrVerifyStatus: string | null
@@ -160,6 +154,36 @@ export type AuditDay = {
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+// Live pilot rule (dailyOverallPerformance_): Good when Good calls outnumber Bad
+// (Bad includes Needs Improvement); with nothing rated, Neutral if any, else Not Rated.
+function overallOf(good: number, bad: number, neutral: number): string {
+  if (good + bad === 0) return neutral > 0 ? "Neutral" : "Not Rated"
+  return good > bad ? "Good" : "Bad"
+}
+
+// Good ÷ (Good + Bad) as a percentage; Neutral and Not Rated calls are not rated.
+function goodRateOf(good: number, bad: number): number | null {
+  return good + bad > 0 ? Math.round((good / (good + bad)) * 100) : null
+}
+
+type CallGroupKey = "good" | "bad" | "neutral" | "not_rated"
+
+// Popup tabs / table counts. "bad" = Needs Improvement + Bad, matching bad_calls.
+const CALL_GROUPS: { key: CallGroupKey; label: string; countKey: "good" | "bad" | "neutral" | "notRated"; text: string }[] = [
+  { key: "good", label: "Good", countKey: "good", text: "text-emerald-700" },
+  { key: "bad", label: "Bad", countKey: "bad", text: "text-rose-600" },
+  { key: "neutral", label: "Neutral", countKey: "neutral", text: "text-sky-700" },
+  { key: "not_rated", label: "Not Rated", countKey: "notRated", text: "text-slate-600" },
+]
+
+const OVERALL_BADGE: Record<string, string> = {
+  Good: "bg-emerald-100 text-emerald-800 border-emerald-300",
+  Bad: "bg-rose-100 text-rose-800 border-rose-300",
+  Neutral: "bg-sky-100 text-sky-800 border-sky-300",
+  "Not Rated": "bg-slate-100 text-slate-700 border-slate-300",
+  "Needs Improvement": "bg-amber-100 text-amber-800 border-amber-300",
+}
 
 const HR_VERIFY_STATUS_OPTIONS = [
   "Half Day – Call Audit FAIL",
@@ -305,81 +329,42 @@ export default function SalesCallAuditPage() {
     }
   }
 
-  // Good / Bad Call Detail Modal
+  // Call detail popup — calls from sales_call_audit_live_pilot_calls for one daily record.
+  // Counts come from the daily record itself so they always match the table.
   const [callDetailModal, setCallDetailModal] = useState<{
     open: boolean
-    type: "good" | "bad" | "all"
+    type: "all" | CallGroupKey
     agent: AgentAudit
     date: string
   } | null>(null)
-  const [modalCalls, setModalCalls] = useState<any[]>([])
+  const [modalCalls, setModalCalls] = useState<AuditedCallDetail[]>([])
   const [modalCallsLoading, setModalCallsLoading] = useState(false)
-  const [modalAgentMeta, setModalAgentMeta] = useState<any>(null)
-  const [modalCallTab, setModalCallTab] = useState<"all" | "good" | "bad">("all")
+  const [modalCallTab, setModalCallTab] = useState<"all" | CallGroupKey>("all")
   const [modalCallSearch, setModalCallSearch] = useState("")
-  const [expandedCallId, setExpandedCallId] = useState<string | null>(null)
 
-  // Dynamic counts calculated directly from actual audited calls from kairali_sales_metric_bot_for_ho
-  const modalGoodCallsCount = useMemo(() => {
-    return modalCalls.filter(c => c.qualityType === "good").length
-  }, [modalCalls])
-
-  const modalBadCallsCount = useMemo(() => {
-    return modalCalls.filter(c => c.qualityType === "bad").length
-  }, [modalCalls])
-
-  const modalTotalCallsCount = useMemo(() => {
-    return modalCalls.length
-  }, [modalCalls])
-
-  const displayGoodCalls = modalCallsLoading
-    ? (callDetailModal?.agent.good ?? 0)
-    : (modalAgentMeta?.goodCalls ?? modalGoodCallsCount)
-
-  const displayBadCalls = modalCallsLoading
-    ? (callDetailModal?.agent.bad ?? 0)
-    : (modalAgentMeta?.badCalls ?? modalBadCallsCount)
-
-  const displayTotalCalls = modalCallsLoading
-    ? (callDetailModal?.agent.calls ?? (displayGoodCalls + displayBadCalls))
-    : (modalAgentMeta?.totalCalls ?? modalTotalCallsCount)
-
-  // Fetch granular audited call details when modal is opened
   useEffect(() => {
     if (!callDetailModal?.open || !callDetailModal.agent) {
       setModalCalls([])
-      setModalAgentMeta(null)
       return
     }
     setModalCallTab(callDetailModal.type)
     setModalCallSearch("")
-    setExpandedCallId(null)
 
     const fetchModalCalls = async () => {
       try {
         setModalCallsLoading(true)
-        const params = new URLSearchParams({
-          record_id: String(callDetailModal.agent.recordId || ""),
-          emp_id: callDetailModal.agent.id || "",
-          name: callDetailModal.agent.name || "",
-          date: callDetailModal.date || "",
-          type: "all",
-        })
+        const params = new URLSearchParams({ record_id: String(callDetailModal.agent.recordId) })
         const res = await fetch(`/api/sales-call-audit/calls?${params.toString()}`)
-        if (res.ok) {
-          const json = await res.json()
-          if (json.success && Array.isArray(json.data)) {
-            setModalCalls(json.data)
-            if (json.agent) {
-              setModalAgentMeta(json.agent)
-            }
-            if (json.data.length > 0 && json.data[0].callId) {
-              setExpandedCallId(json.data[0].callId)
-            }
-          }
+        const json = await res.json().catch(() => null)
+        if (res.ok && json?.success && Array.isArray(json.data)) {
+          setModalCalls(json.data)
+        } else {
+          setModalCalls([])
+          toast.error(json?.error || "Failed to load call details")
         }
       } catch (e) {
         console.error("Failed to load call details", e)
+        setModalCalls([])
       } finally {
         setModalCallsLoading(false)
       }
@@ -473,19 +458,15 @@ export default function SalesCallAuditPage() {
         calls: row.total_calls_audited || 0,
         good: row.good_calls || 0,
         bad: row.bad_calls || 0,
-        score: Number(row.avg_score || 0),
+        neutral: row.neutral || 0,
+        notRated: row.not_rated || 0,
+        overallPerformance: row.overall_performance || overallOf(row.good_calls || 0, row.bad_calls || 0, row.neutral || 0),
         result: isPass ? "Pass" : "Fail",
         disposition: isPass ? "Follow-up / Converted" : "Callback / Not Interested",
         emailStatus: (() => {
           const s = String(row.hr_level_whatsapp_update_status_to_sales || "").trim().toLowerCase()
           return s === "sent" || s === "success" || s === "delivered" ? "Sent" : "Not Sent"
         })(),
-        productKnowledge: row.product_knowledge !== null ? Number(row.product_knowledge) : null,
-        customerUnderstanding: row.customer_understanding !== null ? Number(row.customer_understanding) : null,
-        communicationSkills: row.communication_skills !== null ? Number(row.communication_skills) : null,
-        objectionHandling: row.objection_handling !== null ? Number(row.objection_handling) : null,
-        closingSkills: row.closing_skills !== null ? Number(row.closing_skills) : null,
-        toneVolume: row.tone_volume !== null ? Number(row.tone_volume) : null,
         timeDelayHr: row.time_delay_hr,
         hrName: row.hr_name,
         hrVerifyStatus: row.hr_verify_status,
@@ -590,9 +571,10 @@ export default function SalesCallAuditPage() {
   const failCount = allFilteredAgents.filter(agent => agent.result === "Fail").length
   const passRate = allFilteredAgents.length ? Math.round((passCount / allFilteredAgents.length) * 100) : 0
   const failRate = allFilteredAgents.length ? Math.round((failCount / allFilteredAgents.length) * 100) : 0
-  const averageScore = allFilteredAgents.length
-    ? allFilteredAgents.reduce((sum, agent) => sum + agent.score, 0) / allFilteredAgents.length
-    : 0
+  const teamGoodRate = goodRateOf(
+    allFilteredAgents.reduce((sum, agent) => sum + agent.good, 0),
+    allFilteredAgents.reduce((sum, agent) => sum + agent.bad, 0)
+  )
 
   const hrActionsCompleted = allFilteredAgents.filter(
     agent => agent.hrVerifyStatus || agent.hrActionForCalling || agent.otherRemarks
@@ -600,7 +582,7 @@ export default function SalesCallAuditPage() {
   const pendingHrActions = Math.max(0, failCount - hrActionsCompleted)
   const attendanceSyncCount = allFilteredAgents.filter(agent => agent.attendanceTrackerUpdated || agent.accountFmsUpdated).length
 
-  // Sales Agents Ranking Leaderboard based on average score & pass/fail outcome
+  // Sales Agents Ranking Leaderboard based on good-call rate & overall performance
   const agentLeaderboard = useMemo(() => {
     const map = new Map<string, {
       id: string
@@ -608,10 +590,10 @@ export default function SalesCallAuditPage() {
       designation: string
       initials: string
       totalRecords: number
-      totalScore: number
       totalCalls: number
       goodCalls: number
       badCalls: number
+      neutralCalls: number
       passCount: number
       failCount: number
     }>()
@@ -626,35 +608,35 @@ export default function SalesCallAuditPage() {
           designation: agent.designation,
           initials: agent.initials,
           totalRecords: 1,
-          totalScore: agent.score,
           totalCalls: agent.calls,
           goodCalls: agent.good,
           badCalls: agent.bad,
+          neutralCalls: agent.neutral,
           passCount: agent.result === "Pass" ? 1 : 0,
           failCount: agent.result === "Fail" ? 1 : 0,
         })
       } else {
         existing.totalRecords += 1
-        existing.totalScore += agent.score
         existing.totalCalls += agent.calls
         existing.goodCalls += agent.good
         existing.badCalls += agent.bad
+        existing.neutralCalls += agent.neutral
         if (agent.result === "Pass") existing.passCount += 1
         if (agent.result === "Fail") existing.failCount += 1
       }
     })
 
     const list = Array.from(map.values()).map(item => {
-      const avgScore = item.totalRecords > 0 ? Number((item.totalScore / item.totalRecords).toFixed(2)) : 0
-      const outcome: "Pass" | "Fail" = avgScore >= 3.0 ? "Pass" : "Fail"
+      const goodRate = goodRateOf(item.goodCalls, item.badCalls)
+      const overall = overallOf(item.goodCalls, item.badCalls, item.neutralCalls)
 
       return {
         id: item.id,
         name: item.name,
         designation: item.designation,
         initials: item.initials,
-        avgScore,
-        outcome,
+        goodRate,
+        overall,
         totalCalls: item.totalCalls,
         goodCalls: item.goodCalls,
         badCalls: item.badCalls,
@@ -664,10 +646,10 @@ export default function SalesCallAuditPage() {
       }
     })
 
-    // Sort by avgScore descending (highest score first); if tied, sort by Pass outcome then calls
+    // Sort by good-call rate (unrated agents last), then Good overall, then calls
     list.sort((a, b) => {
-      if (b.avgScore !== a.avgScore) return b.avgScore - a.avgScore
-      if (a.outcome !== b.outcome) return a.outcome === "Pass" ? -1 : 1
+      if ((b.goodRate ?? -1) !== (a.goodRate ?? -1)) return (b.goodRate ?? -1) - (a.goodRate ?? -1)
+      if (a.overall !== b.overall) return a.overall === "Good" ? -1 : b.overall === "Good" ? 1 : 0
       return b.totalCalls - a.totalCalls
     })
 
@@ -805,7 +787,9 @@ export default function SalesCallAuditPage() {
           total_calls_audited: actionTarget.agent.calls,
           good_calls: actionTarget.agent.good,
           bad_calls: actionTarget.agent.bad,
-          avg_score: actionTarget.agent.score,
+          neutral: actionTarget.agent.neutral,
+          not_rated: actionTarget.agent.notRated,
+          overall_performance: actionTarget.agent.overallPerformance,
           hr_verify_status: verifyStatus.trim(),
           hr_action_for_calling_fail_pass: callingAction.trim(),
           other_remarks: remarks.trim(),
@@ -848,14 +832,10 @@ export default function SalesCallAuditPage() {
       "Designation",
       "Calls Audited",
       "Good Calls",
-      "Bad Calls",
-      "Product Knowledge",
-      "Customer Understanding",
-      "Communication Skills",
-      "Objection Handling",
-      "Closing Skills",
-      "Tone & Volume",
-      "Average Score",
+      "Bad Calls (incl. Needs Improvement)",
+      "Neutral",
+      "Not Rated",
+      "Overall Performance",
       "Result",
       "Time Delay HR",
       "HR Name",
@@ -876,13 +856,9 @@ export default function SalesCallAuditPage() {
         agent.calls,
         agent.good,
         agent.bad,
-        agent.productKnowledge ?? "",
-        agent.customerUnderstanding ?? "",
-        agent.communicationSkills ?? "",
-        agent.objectionHandling ?? "",
-        agent.closingSkills ?? "",
-        agent.toneVolume ?? "",
-        agent.score.toFixed(2),
+        agent.neutral,
+        agent.notRated,
+        `"${agent.overallPerformance}"`,
         agent.result,
         `"${agent.timeDelayHr || ""}"`,
         `"${agent.hrName || ""}"`,
@@ -1174,14 +1150,14 @@ export default function SalesCallAuditPage() {
                 <div className="mt-1 text-[11px] text-slate-500">Across {allFilteredAgents.length} database logs</div>
               </div>
 
-              {/* Average KPI Score */}
+              {/* Good-call rate */}
               <div className="bg-white border-2 border-indigo-300 rounded-lg p-3 shadow-sm hover:shadow-md transition">
                 <div className="flex items-center justify-between mb-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-700">Average Quality Score</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-700">Good-Call Rate</p>
                   <TrendingUp className="h-4 w-4 text-indigo-600" />
                 </div>
-                <p className="text-2xl font-bold text-slate-900 leading-tight">{averageScore.toFixed(2)} <span className="text-sm font-normal text-slate-400">/ 5.0</span></p>
-                <div className="mt-1 text-[11px] text-slate-500">Benchmark requirement: 3.00+</div>
+                <p className="text-2xl font-bold text-slate-900 leading-tight">{teamGoodRate === null ? "—" : `${teamGoodRate}%`}</p>
+                <div className="mt-1 text-[11px] text-slate-500">Good ÷ (Good + Bad); Neutral &amp; Not Rated excluded</div>
               </div>
 
               {/* Passed Audits */}
@@ -1276,7 +1252,7 @@ export default function SalesCallAuditPage() {
                     Sales Agents Quality Ranking Leaderboard
                   </h4>
                   <p className="text-[11px] text-slate-500">
-                    Ranked by average call audit score & Pass/Fail status (Target: Benchmark ≥ 3.0 / 5.0)
+                    Ranked by good-call rate (Good ÷ Good + Bad), then overall performance and audited calls
                   </p>
                 </div>
               </div>
@@ -1298,15 +1274,15 @@ export default function SalesCallAuditPage() {
                     <TableRow className="hover:bg-slate-100/90 border-b border-slate-200 text-[11px]">
                       <TableHead className="w-16 font-bold text-slate-700 text-center py-2.5">Rank</TableHead>
                       <TableHead className="font-bold text-slate-700 py-2.5">Sales Agent</TableHead>
-                      <TableHead className="w-28 font-bold text-slate-700 text-center py-2.5">Outcome</TableHead>
-                      <TableHead className="w-36 font-bold text-slate-700 text-center py-2.5">Avg Score</TableHead>
+                      <TableHead className="w-28 font-bold text-slate-700 text-center py-2.5">Overall</TableHead>
+                      <TableHead className="w-36 font-bold text-slate-700 text-center py-2.5">Good-Call Rate</TableHead>
                       <TableHead className="w-40 font-bold text-slate-700 text-center py-2.5">Audited Calls</TableHead>
                       <TableHead className="w-32 font-bold text-slate-700 text-center py-2.5">Audited Days</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {agentLeaderboard.map(agent => {
-                      const isPass = agent.outcome === "Pass"
+                      const isGood = agent.overall === "Good"
                       const isTop1 = agent.rank === 1
                       const isTop2 = agent.rank === 2
                       const isTop3 = agent.rank === 3
@@ -1358,34 +1334,23 @@ export default function SalesCallAuditPage() {
                             </div>
                           </TableCell>
 
-                          {/* Outcome */}
+                          {/* Overall (live pilot majority rule over the period) */}
                           <TableCell className="text-center py-2.5">
-                            <span
-                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold shadow-2xs ${
-                                isPass
-                                  ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                                  : "bg-rose-100 text-rose-800 border border-rose-300"
-                              }`}
-                            >
-                              {isPass ? <CheckCircle2 className="h-3 w-3 text-emerald-600" /> : <XCircle className="h-3 w-3 text-rose-600" />}
-                              {agent.outcome.toUpperCase()}
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold shadow-2xs border ${OVERALL_BADGE[agent.overall] || OVERALL_BADGE["Not Rated"]}`}>
+                              {agent.overall.toUpperCase()}
                             </span>
                           </TableCell>
 
-                          {/* Avg Score */}
+                          {/* Good-call rate */}
                           <TableCell className="text-center py-2.5">
                             <div className="flex flex-col items-center justify-center">
-                              <span
-                                className={`text-xs font-extrabold ${
-                                  isPass ? "text-emerald-700" : "text-rose-600"
-                                }`}
-                              >
-                                {agent.avgScore.toFixed(2)} <span className="text-[10px] font-normal text-slate-400">/ 5.0</span>
+                              <span className={`text-xs font-extrabold ${isGood ? "text-emerald-700" : "text-rose-600"}`}>
+                                {agent.goodRate === null ? "—" : `${agent.goodRate}%`}
                               </span>
                               <div className="w-20 bg-slate-200 rounded-full h-1.5 mt-1 overflow-hidden">
                                 <div
-                                  className={`h-1.5 rounded-full ${isPass ? "bg-emerald-500" : "bg-rose-500"}`}
-                                  style={{ width: `${Math.min(100, Math.max(0, (agent.avgScore / 5) * 100))}%` }}
+                                  className={`h-1.5 rounded-full ${isGood ? "bg-emerald-500" : "bg-rose-500"}`}
+                                  style={{ width: `${agent.goodRate ?? 0}%` }}
                                 />
                               </div>
                             </div>
@@ -1463,7 +1428,7 @@ export default function SalesCallAuditPage() {
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
-                      data={allFilteredAgents.map(a => ({ name: a.name.split(" ")[0], calls: a.calls, score: a.score }))}
+                      data={allFilteredAgents.map(a => ({ name: a.name.split(" ")[0], calls: a.calls }))}
                       margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -1513,8 +1478,8 @@ export default function SalesCallAuditPage() {
                   <TableHead className="text-white font-semibold pl-6 pr-3 text-left">Sales Person</TableHead>
                   <TableHead className="text-white font-semibold px-3 text-left">Designation</TableHead>
                   <TableHead className="text-white font-semibold px-3 text-right">Calls</TableHead>
-                  <TableHead className="text-white font-semibold px-3 text-center">Good/Bad</TableHead>
-                  <TableHead className="text-white font-semibold px-3 text-right">Avg Score</TableHead>
+                  <TableHead className="text-white font-semibold px-3 text-center" title="Bad includes Needs Improvement">Good / Bad / Neutral / Not Rated</TableHead>
+                  <TableHead className="text-white font-semibold px-3 text-center">Overall</TableHead>
                   <TableHead className="text-white font-semibold px-3 text-center">Outcome</TableHead>
                   <TableHead className="text-white font-semibold px-3 text-left">HR Action Status</TableHead>
                   <TableHead className="text-white font-semibold px-3 text-left">Delay (HR)</TableHead>
@@ -1527,11 +1492,11 @@ export default function SalesCallAuditPage() {
                   const pass = day.agents.filter(agent => agent.result === "Pass").length
                   const fail = day.agents.filter(agent => agent.result === "Fail").length
                   const calls = day.agents.reduce((sum, agent) => sum + agent.calls, 0)
-                  const score = day.agents.length
-                    ? day.agents.reduce((sum, agent) => sum + agent.score, 0) / day.agents.length
-                    : 0
                   const goodTotal = day.agents.reduce((sum, agent) => sum + agent.good, 0)
                   const badTotal = day.agents.reduce((sum, agent) => sum + agent.bad, 0)
+                  const neutralTotal = day.agents.reduce((sum, agent) => sum + agent.neutral, 0)
+                  const notRatedTotal = day.agents.reduce((sum, agent) => sum + agent.notRated, 0)
+                  const dayGoodRate = goodRateOf(goodTotal, badTotal)
                   const actionDone = day.agents.filter(
                     agent => agent.hrVerifyStatus || agent.hrActionForCalling
                   ).length
@@ -1582,21 +1547,25 @@ export default function SalesCallAuditPage() {
                           </span>
                         </TableCell>
 
-                        {/* Column 4: Good/Bad (centered) */}
+                        {/* Column 4: Good / Bad / Neutral / Not Rated (centered) */}
                         <TableCell className="py-2.5 px-3 text-center">
                           <span className="inline-flex items-center text-xs tabular-nums font-bold">
                             <span className="text-emerald-700">{goodTotal}</span>
                             <span className="text-slate-400 mx-1">/</span>
                             <span className="text-rose-700">{badTotal}</span>
+                            <span className="text-slate-400 mx-1">/</span>
+                            <span className="text-sky-700">{neutralTotal}</span>
+                            <span className="text-slate-400 mx-1">/</span>
+                            <span className="text-slate-600">{notRatedTotal}</span>
                           </span>
                         </TableCell>
 
-                        {/* Column 5: Avg Score (numeric right-aligned) */}
-                        <TableCell className="py-2.5 px-3 text-right">
+                        {/* Column 5: Good-call rate for the day */}
+                        <TableCell className="py-2.5 px-3 text-center" title="Good-call rate: Good ÷ (Good + Bad)">
                           <span className="text-sm font-bold text-slate-900 tabular-nums">
-                            {score.toFixed(2)}
+                            {dayGoodRate === null ? "—" : `${dayGoodRate}%`}
                           </span>
-                          <span className="text-slate-500 text-[11px] font-normal ml-1">/ 5</span>
+                          <span className="text-slate-500 text-[11px] font-normal ml-1">good</span>
                         </TableCell>
 
                         {/* Column 6: Outcome (centered pass / fail counts) */}
@@ -1729,41 +1698,33 @@ export default function SalesCallAuditPage() {
                                   </button>
                                 </TableCell>
 
-                                {/* Good / Bad (tabular-nums centered) */}
+                                {/* Good / Bad / Neutral / Not Rated — each opens its popup tab */}
                                 <TableCell className="py-2.5 px-3 text-center">
                                   <span className="inline-flex items-center text-xs tabular-nums font-medium">
-                                    <button
-                                      type="button"
-                                      onClick={event => {
-                                        event.stopPropagation()
-                                        setCallDetailModal({ open: true, type: "good", agent, date: day.date })
-                                      }}
-                                      className="text-emerald-700 font-semibold hover:underline cursor-pointer"
-                                      title="Click to view Good Calls details"
-                                    >
-                                      {agent.good}
-                                    </button>
-                                    <span className="text-slate-300 mx-1">/</span>
-                                    <button
-                                      type="button"
-                                      onClick={event => {
-                                        event.stopPropagation()
-                                        setCallDetailModal({ open: true, type: "bad", agent, date: day.date })
-                                      }}
-                                      className="text-rose-600 font-semibold hover:underline cursor-pointer"
-                                      title="Click to view Bad Calls details"
-                                    >
-                                      {agent.bad}
-                                    </button>
+                                    {CALL_GROUPS.map((g, i) => (
+                                      <Fragment key={g.key}>
+                                        {i > 0 && <span className="text-slate-300 mx-1">/</span>}
+                                        <button
+                                          type="button"
+                                          onClick={event => {
+                                            event.stopPropagation()
+                                            setCallDetailModal({ open: true, type: g.key, agent, date: day.date })
+                                          }}
+                                          className={`${g.text} font-semibold hover:underline cursor-pointer`}
+                                          title={`Click to view ${g.label} calls`}
+                                        >
+                                          {agent[g.countKey]}
+                                        </button>
+                                      </Fragment>
+                                    ))}
                                   </span>
                                 </TableCell>
 
-                                {/* Avg Score (numeric right-aligned) */}
-                                <TableCell className="py-2.5 px-3 text-right">
-                                  <span className="text-xs font-semibold text-slate-900 tabular-nums">
-                                    {agent.score.toFixed(2)}
+                                {/* Overall Performance (as written by the live pilot) */}
+                                <TableCell className="py-2.5 px-3 text-center">
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${OVERALL_BADGE[agent.overallPerformance] || OVERALL_BADGE["Not Rated"]}`}>
+                                    {agent.overallPerformance}
                                   </span>
-                                  <span className="text-slate-400 text-[11px] font-normal ml-1">/ 5</span>
                                 </TableCell>
 
                                 {/* Outcome */}
@@ -2015,108 +1976,33 @@ export default function SalesCallAuditPage() {
             </div>
           </div>
 
-          {/* 6 Audit Quality Parameter Cards from database */}
+          {/* Call breakdown from the live pilot daily report */}
           <div className="p-5 space-y-4">
             <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
               <Zap className="h-3.5 w-3.5 text-blue-600" />
-              6 Core Evaluation Metrics
+              Audited Call Breakdown
             </h4>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              {/* Parameter 1: Product Knowledge */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              {CALL_GROUPS.map(g => (
+                <button
+                  key={g.key}
+                  type="button"
+                  onClick={() => setCallDetailModal({ open: true, type: g.key, agent: selectedAgent.agent, date: selectedAgent.date })}
+                  className="bg-slate-50 rounded-lg p-3 border border-slate-200 shadow-sm text-left hover:border-blue-300 cursor-pointer transition-colors"
+                  title={`View ${g.label} calls`}
+                >
+                  <p className="text-[10px] font-semibold uppercase text-slate-500">
+                    {g.label}{g.key === "bad" && " (incl. Needs Improvement)"}
+                  </p>
+                  <p className={`text-xl font-bold mt-1 ${g.text}`}>{selectedAgent.agent[g.countKey]}</p>
+                </button>
+              ))}
               <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 shadow-sm">
-                <p className="text-[10px] font-semibold uppercase text-slate-500">Product Knowledge</p>
-                <p className="text-xl font-bold text-slate-900 mt-1">
-                  {selectedAgent.agent.productKnowledge !== null ? (
-                    <>
-                      {selectedAgent.agent.productKnowledge.toFixed(2)}
-                      <span className="text-xs font-normal text-slate-400 ml-1">/ 5.0</span>
-                    </>
-                  ) : (
-                    "—"
-                  )}
-                </p>
-                <div className="mt-1 text-[10px] text-slate-400 font-medium">Target: ≥ 2.5 / 5.0</div>
-              </div>
-
-              {/* Parameter 2: Customer Understanding */}
-              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 shadow-sm">
-                <p className="text-[10px] font-semibold uppercase text-slate-500">Customer Understanding</p>
-                <p className="text-xl font-bold text-slate-900 mt-1">
-                  {selectedAgent.agent.customerUnderstanding !== null ? (
-                    <>
-                      {selectedAgent.agent.customerUnderstanding.toFixed(2)}
-                      <span className="text-xs font-normal text-slate-400 ml-1">/ 5.0</span>
-                    </>
-                  ) : (
-                    "—"
-                  )}
-                </p>
-                <div className="mt-1 text-[10px] text-slate-400 font-medium">Target: ≥ 2.5 / 5.0</div>
-              </div>
-
-              {/* Parameter 3: Communication Skills */}
-              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 shadow-sm">
-                <p className="text-[10px] font-semibold uppercase text-slate-500">Communication Skills</p>
-                <p className="text-xl font-bold text-slate-900 mt-1">
-                  {selectedAgent.agent.communicationSkills !== null ? (
-                    <>
-                      {selectedAgent.agent.communicationSkills.toFixed(2)}
-                      <span className="text-xs font-normal text-slate-400 ml-1">/ 5.0</span>
-                    </>
-                  ) : (
-                    "—"
-                  )}
-                </p>
-                <div className="mt-1 text-[10px] text-slate-400 font-medium">Target: ≥ 2.5 / 5.0</div>
-              </div>
-
-              {/* Parameter 4: Objection Handling */}
-              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 shadow-sm">
-                <p className="text-[10px] font-semibold uppercase text-slate-500">Objection Handling</p>
-                <p className="text-xl font-bold text-slate-900 mt-1">
-                  {selectedAgent.agent.objectionHandling !== null ? (
-                    <>
-                      {selectedAgent.agent.objectionHandling.toFixed(2)}
-                      <span className="text-xs font-normal text-slate-400 ml-1">/ 5.0</span>
-                    </>
-                  ) : (
-                    "—"
-                  )}
-                </p>
-                <div className="mt-1 text-[10px] text-slate-400 font-medium">Target: ≥ 2.5 / 5.0</div>
-              </div>
-
-              {/* Parameter 5: Closing Skills */}
-              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 shadow-sm">
-                <p className="text-[10px] font-semibold uppercase text-slate-500">Closing Skills</p>
-                <p className="text-xl font-bold text-slate-900 mt-1">
-                  {selectedAgent.agent.closingSkills !== null ? (
-                    <>
-                      {selectedAgent.agent.closingSkills.toFixed(2)}
-                      <span className="text-xs font-normal text-slate-400 ml-1">/ 5.0</span>
-                    </>
-                  ) : (
-                    "—"
-                  )}
-                </p>
-                <div className="mt-1 text-[10px] text-slate-400 font-medium">Target: ≥ 2.5 / 5.0</div>
-              </div>
-
-              {/* Parameter 6: Tone & Volume */}
-              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 shadow-sm">
-                <p className="text-[10px] font-semibold uppercase text-slate-500">Tone & Volume</p>
-                <p className="text-xl font-bold text-slate-900 mt-1">
-                  {selectedAgent.agent.toneVolume !== null ? (
-                    <>
-                      {selectedAgent.agent.toneVolume.toFixed(2)}
-                      <span className="text-xs font-normal text-slate-400 ml-1">/ 5.0</span>
-                    </>
-                  ) : (
-                    "—"
-                  )}
-                </p>
-                <div className="mt-1 text-[10px] text-slate-400 font-medium">Target: ≥ 2.5 / 5.0</div>
+                <p className="text-[10px] font-semibold uppercase text-slate-500">Overall Performance</p>
+                <span className={`inline-flex items-center mt-1.5 px-2 py-0.5 rounded-full text-xs font-bold border ${OVERALL_BADGE[selectedAgent.agent.overallPerformance] || OVERALL_BADGE["Not Rated"]}`}>
+                  {selectedAgent.agent.overallPerformance}
+                </span>
               </div>
             </div>
 
@@ -2486,490 +2372,243 @@ export default function SalesCallAuditPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ─── Good / Bad Call Quality Breakdown Modal Dialog ──────────────────────── */}
+      {/* ─── Call Audit Details Popup (sales_call_audit_live_pilot_calls) ─── */}
       <Dialog
         open={Boolean(callDetailModal?.open)}
         onOpenChange={open => !open && setCallDetailModal(null)}
       >
         <DialogContent className="max-h-[92vh] sm:max-w-4xl p-0 gap-0 rounded-2xl border border-slate-200 shadow-2xl flex flex-col overflow-hidden bg-white">
-          {callDetailModal && (
-            <>
-              {/* Header */}
-              <div
-                className={`flex-shrink-0 p-5 text-white ${callDetailModal.type === "good"
-                  ? "bg-gradient-to-r from-emerald-600 via-teal-700 to-emerald-800"
-                  : callDetailModal.type === "bad"
-                    ? "bg-gradient-to-r from-rose-600 via-rose-700 to-red-800"
-                    : "bg-gradient-to-r from-blue-600 via-indigo-700 to-blue-800"
-                  }`}
-              >
-                <div className="flex items-center justify-between">
+          {callDetailModal && (() => {
+            const agent = callDetailModal.agent
+            const isPass = agent.result === "Pass"
+            const tabs: { key: "all" | CallGroupKey; label: string; count: number; active: string; idle: string }[] = [
+              { key: "all", label: "All", count: agent.calls, active: "bg-slate-800 text-white", idle: "text-slate-600 hover:bg-slate-100" },
+              ...CALL_GROUPS.map(g => ({
+                key: g.key,
+                label: g.label,
+                count: agent[g.countKey],
+                active: g.key === "good" ? "bg-emerald-600 text-white" : g.key === "bad" ? "bg-rose-600 text-white" : g.key === "neutral" ? "bg-sky-600 text-white" : "bg-slate-600 text-white",
+                idle: `${g.text} hover:bg-slate-100`,
+              })),
+            ]
+            const q = modalCallSearch.trim().toLowerCase()
+            const filtered = modalCalls.filter(call => {
+              if (modalCallTab !== "all" && call.group !== modalCallTab) return false
+              if (!q) return true
+              return [call.callId, call.leadId, call.clientName, call.crmOutcome, call.crmNotes, call.performanceRemarks, call.remarks]
+                .some(v => v && v.toLowerCase().includes(q))
+            })
+
+            return (
+              <>
+                {/* Header */}
+                <div className="flex-shrink-0 p-5 text-white bg-gradient-to-r from-blue-600 via-indigo-700 to-blue-800">
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white shadow-md flex-shrink-0">
-                      {callDetailModal.type === "good" ? (
-                        <ThumbsUp className="h-6 w-6" />
-                      ) : callDetailModal.type === "bad" ? (
-                        <ThumbsDown className="h-6 w-6" />
-                      ) : (
-                        <Headphones className="h-6 w-6" />
-                      )}
+                    <div className="w-11 h-11 rounded-xl bg-white/20 border border-white/30 flex items-center justify-center shadow-md flex-shrink-0">
+                      <Headphones className="h-6 w-6" />
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
-                        <DialogTitle className="text-lg font-bold text-white leading-tight">
-                          {callDetailModal.type === "good"
-                            ? "Good Quality Calls Breakdown & Logs"
-                            : callDetailModal.type === "bad"
-                              ? "Deficient Calls & Quality Audit Logs"
-                              : "Complete Call Audit Breakdown & Logs"}
-                        </DialogTitle>
-                        <Badge
-                          className={
-                            callDetailModal.type === "good"
-                              ? "bg-emerald-500/90 text-white text-[10px] font-bold border border-emerald-300/40"
-                              : callDetailModal.type === "bad"
-                                ? "bg-rose-500/90 text-white text-[10px] font-bold border border-rose-300/40"
-                                : "bg-white/20 text-white text-[10px] font-bold border border-white/30"
-                          }
-                        >
-                          {callDetailModal.type === "good"
-                            ? `${displayGoodCalls} Good Calls`
-                            : callDetailModal.type === "bad"
-                              ? `${displayBadCalls} Bad Calls`
-                              : `${displayTotalCalls} Total Calls`}
-                        </Badge>
-                      </div>
+                      <DialogTitle className="text-lg font-bold text-white leading-tight">Call Audit Details</DialogTitle>
                       <DialogDescription className="text-xs text-white/80 mt-0.5">
-                        Individual call evaluations for {callDetailModal.agent.name} on {callDetailModal.date}
+                        Audited calls for {agent.name} on {callDetailModal.date}
                       </DialogDescription>
                     </div>
                   </div>
-                </div>
 
-                {/* Sub-header meta bar */}
-                <div className="mt-4 pt-3 border-t border-white/20 flex flex-wrap items-center justify-between gap-2 text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="h-6 w-6 rounded-full bg-white text-slate-800 font-bold flex items-center justify-center text-[10px]">
-                      {callDetailModal.agent.initials}
-                    </span>
-                    <span className="font-semibold text-white">{callDetailModal.agent.name}</span>
-                    <span className="text-white/70 font-mono text-[11px]">({callDetailModal.agent.id})</span>
-                    <span className="text-white/80 text-[10px] bg-white/10 px-1.5 py-0.5 rounded">
-                      {callDetailModal.agent.designation}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="bg-white/15 px-2 py-0.5 rounded text-[11px] text-white">
-                      Avg Score: <strong>{(modalAgentMeta?.avgScore ?? callDetailModal.agent.score).toFixed(2)} / 5</strong>
-                    </span>
-                    <span
-                      className={
-                        (modalAgentMeta?.outcome || callDetailModal.agent.result).toUpperCase() === "PASS"
-                          ? "bg-emerald-500 text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-xs"
-                          : "bg-rose-500 text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-xs"
-                      }
-                    >
-                      {(modalAgentMeta?.outcome || callDetailModal.agent.result).toUpperCase()}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Employee Daily Overall 6 Metrics (Aggregated Daily Audit) */}
-                <div className="mt-3.5 pt-3 border-t border-white/20">
-                  <div className="flex flex-wrap items-center justify-between text-xs text-white/95 mb-2 gap-1">
-                    <span className="font-semibold flex items-center gap-1.5">
-                      <ListChecks className="h-3.5 w-3.5" />
-                      Employee Daily Overall 6 Metrics{" "}
-                      <span className="text-[11px] text-white/75 font-normal">
-                        (Aggregated Daily Audit)
+                  <div className="mt-4 pt-3 border-t border-white/20 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="h-6 w-6 rounded-full bg-white text-slate-800 font-bold flex items-center justify-center text-[10px]">
+                        {agent.initials}
                       </span>
-                    </span>
-                    <span className="text-[10px] text-white/90 bg-white/15 px-2 py-0.5 rounded font-mono">
-                      Target: Benchmark ≥ 2.5 / 5.0
-                    </span>
+                      <span className="font-semibold">{agent.name}</span>
+                      <span className="text-white/70 font-mono text-[11px]">({agent.id})</span>
+                      <span className="text-white/80 text-[10px] bg-white/10 px-1.5 py-0.5 rounded">{agent.designation}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${OVERALL_BADGE[agent.overallPerformance] || OVERALL_BADGE["Not Rated"]}`}>
+                        Overall: {agent.overallPerformance}
+                      </span>
+                      <span className={`${isPass ? "bg-emerald-500" : "bg-rose-500"} text-white px-2 py-0.5 rounded text-[10px] font-bold`}>
+                        {agent.result.toUpperCase()}
+                      </span>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-                    {[
-                      { label: "PRODUCT KNOWLEDGE", val: callDetailModal.agent.productKnowledge },
-                      { label: "CUSTOMER UNDERSTAND...", val: callDetailModal.agent.customerUnderstanding },
-                      { label: "COMMUNICATION SKILLS", val: callDetailModal.agent.communicationSkills },
-                      { label: "OBJECTION HANDLING", val: callDetailModal.agent.objectionHandling },
-                      { label: "CLOSING SKILLS", val: callDetailModal.agent.closingSkills },
-                      { label: "TONE & VOLUME", val: callDetailModal.agent.toneVolume },
-                    ].map((m, idx) => {
-                      const val = m.val !== null && m.val !== undefined ? Number(m.val) : null
+                </div>
+
+                {/* Tabs & Search */}
+                <div className="p-4 bg-slate-100/80 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-1.5 bg-white p-1 rounded-lg border border-slate-200 shadow-xs w-full sm:w-auto">
+                    {tabs.map(t => (
+                      <button
+                        key={t.key}
+                        type="button"
+                        onClick={() => setModalCallTab(t.key)}
+                        className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${modalCallTab === t.key ? t.active : t.idle}`}
+                        title={t.key === "bad" ? "Includes Needs Improvement" : undefined}
+                      >
+                        {t.label} ({t.count})
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="relative w-full sm:w-64">
+                    <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                    <input
+                      type="text"
+                      value={modalCallSearch}
+                      onChange={e => setModalCallSearch(e.target.value)}
+                      placeholder="Search client, lead, notes..."
+                      className="w-full h-8 pl-8 pr-3 text-xs bg-white border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-xs"
+                    />
+                    {modalCallSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setModalCallSearch("")}
+                        className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Body */}
+                <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5 text-xs bg-slate-50">
+                  {!modalCallsLoading && modalCalls.length !== agent.calls && (
+                    <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                      Showing {modalCalls.length} audited call record(s); the daily report counts {agent.calls}. The call log may still be syncing from the audit sheet.
+                    </p>
+                  )}
+                  {modalCallsLoading ? (
+                    <div className="py-16 text-center">
+                      <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-2" />
+                      <p className="text-xs font-semibold text-slate-600">Loading audited calls...</p>
+                    </div>
+                  ) : filtered.length === 0 ? (
+                    <div className="py-12 text-center bg-white rounded-xl border border-slate-200 p-6">
+                      <Headphones className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                      <p className="font-bold text-slate-700 text-xs">
+                        {modalCalls.length === 0 ? "No audited calls found for this date" : "No calls match this filter"}
+                      </p>
+                      {modalCalls.length > 0 && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setModalCallSearch("")
+                            setModalCallTab("all")
+                          }}
+                          className="mt-3 text-xs h-7 border-slate-300 cursor-pointer"
+                        >
+                          Reset filters
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    filtered.map(call => {
+                      const cold = [
+                        ["Recommended action", call.recommendedAction],
+                        ["Cold reason", call.coldReason],
+                        ["Action mode", call.actionMode],
+                        ["Follow-up owner", call.followupOwner],
+                        ["Follow-up due", call.followupDue],
+                        ["Target team", call.targetTeam],
+                        ["Escalation reason", call.escalationReason],
+                        ["Remarks", call.remarks],
+                        ["What went wrong", call.whatWentWrong],
+                        ["Suggested solution", call.suggestedSolution],
+                      ].filter((entry): entry is [string, string] => Boolean(entry[1]))
+
                       return (
-                        <div key={idx} className="bg-white rounded-lg p-2.5 shadow-xs text-slate-800">
-                          <div className="text-[9px] font-bold text-slate-500 uppercase tracking-tight truncate">
-                            {m.label}
+                        <div key={call.callId} className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+                          <div className="p-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 border-b border-slate-100 bg-slate-50/60">
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-bold text-slate-900 text-xs">
+                                  {call.clientName ? `Client: ${call.clientName}` : "Client not recorded"}
+                                </span>
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${OVERALL_BADGE[call.performance]}`}>
+                                  {call.performance.toUpperCase()}
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500 mt-0.5">
+                                {call.leadId && <span className="font-mono font-semibold text-slate-700">{call.leadId}</span>}
+                                <span className="inline-flex items-center gap-1">
+                                  <Clock className="h-3 w-3 text-slate-400" />
+                                  {call.callTime}
+                                </span>
+                                {call.businessUnit && <span>• {call.businessUnit}</span>}
+                                {call.callStage && <span>• {call.callStage}</span>}
+                              </div>
+                            </div>
+                            {call.recordingUrl && (
+                              <a
+                                href={call.recordingUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 self-start sm:self-auto text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline px-2.5 py-1 bg-white rounded-md border border-blue-200 shadow-2xs"
+                              >
+                                <Volume2 className="h-3 w-3" />
+                                Open recording
+                              </a>
+                            )}
                           </div>
-                          <div
-                            className={`text-sm font-extrabold mt-0.5 ${
-                              val !== null && val < 2.5 ? "text-rose-600" : "text-emerald-700"
-                            }`}
-                          >
-                            {val !== null ? `${val.toFixed(1)} / 5.0` : "— / 5.0"}
+
+                          <div className="p-3.5 space-y-3">
+                            {call.performanceRemarks && (
+                              <div className="text-xs text-slate-700">
+                                <span className="font-bold text-slate-900 block mb-1">Overall performance remarks</span>
+                                <p className="text-slate-600 leading-relaxed whitespace-pre-line">{call.performanceRemarks}</p>
+                              </div>
+                            )}
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50/70 p-3 rounded-lg border border-slate-200">
+                              <div>
+                                <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">CRM outcome (by salesperson)</span>
+                                <p className="font-semibold text-slate-800 mt-0.5">{call.crmOutcome || "—"}</p>
+                              </div>
+                              <div>
+                                <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">CRM notes</span>
+                                <p className="text-slate-700 mt-0.5 whitespace-pre-line">{call.crmNotes || "—"}</p>
+                              </div>
+                            </div>
+
+                            {cold.length > 0 && (
+                              <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                                <span className="text-[10px] font-bold uppercase text-amber-800 tracking-wider">Cold lead review</span>
+                                <dl className="mt-1.5 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+                                  {cold.map(([label, value]) => (
+                                    <div key={label} className={value.length > 80 ? "sm:col-span-2" : undefined}>
+                                      <dt className="text-[10px] font-semibold text-slate-500">{label}</dt>
+                                      <dd className="text-slate-800 whitespace-pre-line">{value}</dd>
+                                    </div>
+                                  ))}
+                                </dl>
+                              </div>
+                            )}
                           </div>
                         </div>
                       )
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* Filter Tabs & Search Bar */}
-              <div className="p-4 bg-slate-100/80 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div className="flex items-center gap-1.5 bg-white p-1 rounded-lg border border-slate-200 shadow-xs w-full sm:w-auto">
-                  <button
-                    type="button"
-                    onClick={() => setModalCallTab("all")}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${modalCallTab === "all"
-                      ? "bg-slate-800 text-white shadow-xs"
-                      : "text-slate-600 hover:bg-slate-100"
-                      }`}
-                  >
-                    All Calls ({displayTotalCalls})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setModalCallTab("good")}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${modalCallTab === "good"
-                      ? "bg-emerald-600 text-white shadow-xs"
-                      : "text-emerald-700 hover:bg-emerald-50"
-                      }`}
-                  >
-                    <ThumbsUp className="h-3.5 w-3.5" />
-                    Good Calls ({displayGoodCalls})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setModalCallTab("bad")}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${modalCallTab === "bad"
-                      ? "bg-rose-600 text-white shadow-xs"
-                      : "text-rose-700 hover:bg-rose-50"
-                      }`}
-                  >
-                    <ThumbsDown className="h-3.5 w-3.5" />
-                    Bad Calls ({displayBadCalls})
-                  </button>
-                </div>
-
-                <div className="relative w-full sm:w-64">
-                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                  <input
-                    type="text"
-                    value={modalCallSearch}
-                    onChange={e => setModalCallSearch(e.target.value)}
-                    placeholder="Search client, lead, notes..."
-                    className="w-full h-8 pl-8 pr-3 text-xs bg-white border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-xs"
-                  />
-                  {modalCallSearch && (
-                    <button
-                      type="button"
-                      onClick={() => setModalCallSearch("")}
-                      className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
+                    })
                   )}
                 </div>
-              </div>
 
-              {/* Body: List of Detailed Calls */}
-              <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5 text-xs bg-slate-50">
-                {modalCallsLoading ? (
-                  <div className="py-16 text-center">
-                    <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-2" />
-                    <p className="text-xs font-semibold text-slate-600">Loading call recordings & audit evaluation logs...</p>
-                  </div>
-                ) : modalCalls.length === 0 ? (
-                  <div className="py-16 text-center bg-white rounded-xl border border-slate-200 p-8">
-                    <Headphones className="h-10 w-10 text-slate-300 mx-auto mb-2" />
-                    <p className="font-semibold text-slate-700 text-sm">No individual calls found for this date</p>
-                    <p className="text-xs text-slate-400 mt-1">Audit metrics were aggregated for this reporting batch.</p>
-                  </div>
-                ) : (
-                  (() => {
-                    const filtered = modalCalls.filter(call => {
-                      // Rule 1: if call type = voicemail, exclude it
-                      const ct = String(call.callType || "").toLowerCase()
-                      if (ct.includes("voicemail") || ct.includes("voice mail") || ct === "left_voicemail") return false
-                      // Rule 2: IsAudible must be true for showing data
-                      if (call.isAudible !== undefined && call.isAudible === false) return false
-                      // Rule 3: avg score must be greater than 0
-                      if (call.avgScore !== null && call.avgScore !== undefined && call.avgScore <= 0) return false
-
-                      if (modalCallTab === "good" && call.qualityType !== "good") return false
-                      if (modalCallTab === "bad" && call.qualityType !== "bad") return false
-                      if (modalCallSearch.trim()) {
-                        const q = modalCallSearch.toLowerCase()
-                        const match =
-                          (call.callId && call.callId.toLowerCase().includes(q)) ||
-                          (call.leadId && call.leadId.toLowerCase().includes(q)) ||
-                          (call.clientName && call.clientName.toLowerCase().includes(q)) ||
-                          (call.clientPhone && call.clientPhone.toLowerCase().includes(q)) ||
-                          (call.statedOutcome && call.statedOutcome.toLowerCase().includes(q)) ||
-                          (call.auditorObservation && call.auditorObservation.toLowerCase().includes(q))
-                        if (!match) return false
-                      }
-                      return true
-                    })
-
-                    if (filtered.length === 0) {
-                      return (
-                        <div className="py-12 text-center bg-white rounded-xl border border-slate-200 p-6">
-                          <Search className="h-8 w-8 text-slate-300 mx-auto mb-2" />
-                          <p className="font-bold text-slate-700 text-xs">No calls match "{modalCallSearch}" in {modalCallTab} filter</p>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setModalCallSearch("")
-                              setModalCallTab("all")
-                            }}
-                            className="mt-3 text-xs h-7 border-slate-300 cursor-pointer"
-                          >
-                            Reset filters
-                          </Button>
-                        </div>
-                      )
-                    }
-
-                    return filtered.map((call, idx) => {
-                      const isGood = call.qualityType === "good"
-                      const isExpanded = expandedCallId === call.callId
-
-                      return (
-                        <div
-                          key={call.callId || idx}
-                          className={`bg-white rounded-xl border transition-all duration-200 shadow-xs hover:shadow-sm overflow-hidden ${isGood
-                            ? "border-emerald-200/80 hover:border-emerald-300"
-                            : "border-rose-200/80 hover:border-rose-300"
-                            }`}
-                        >
-                          {/* Call Card Header */}
-                          <div
-                            className={`p-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 border-b ${isGood ? "bg-emerald-50/40 border-emerald-100" : "bg-rose-50/40 border-rose-100"
-                              }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div
-                                className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-xs ${isGood
-                                  ? "bg-emerald-600 text-white"
-                                  : "bg-rose-600 text-white"
-                                  }`}
-                              >
-                                {isGood ? <ThumbsUp className="h-4 w-4" /> : <ThumbsDown className="h-4 w-4" />}
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-bold text-slate-900 text-xs">
-                                    {call.clientName ? `Client: ${call.clientName}` : (callDetailModal?.agent?.name ? `Agent: ${callDetailModal.agent.name}` : "Call Audit Evaluation")}
-                                  </span>
-                                  {call.clientPhone && (
-                                    <span className="text-[11px] text-slate-400 font-mono">({call.clientPhone})</span>
-                                  )}
-                                  <Badge
-                                    className={`text-[10px] font-bold px-1.5 py-0.2 ${isGood
-                                      ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                                      : "bg-rose-100 text-rose-800 border-rose-300"
-                                      }`}
-                                  >
-                                    {isGood ? "GOOD CALL" : "BAD CALL"}
-                                  </Badge>
-                                </div>
-                                <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono mt-0.5">
-                                  {call.leadId && (
-                                    <span className="font-semibold text-slate-700">{call.leadId}</span>
-                                  )}
-                                  {call.leadId && call.callType && <span>•</span>}
-                                  {call.callType && (
-                                    <span className="text-slate-600 font-sans font-medium">{call.callType}</span>
-                                  )}
-                                  {(call.leadId || call.callType) && <span>•</span>}
-                                  <span className="inline-flex items-center gap-1 text-slate-600">
-                                    <Clock className="h-3 w-3 text-slate-400" />
-                                    {call.callTime} {call.callDuration ? `(${call.callDuration})` : ""}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2.5 justify-end">
-                              <div className="text-right">
-                                <span className="text-[10px] text-slate-400 uppercase font-semibold">Call Score</span>
-                                <div
-                                  className={`text-sm font-bold ${isGood ? "text-emerald-700" : "text-rose-700"
-                                    }`}
-                                >
-                                  {call.avgScore ? Number(call.avgScore).toFixed(2) : "—"} / 5.0
-                                </div>
-                              </div>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setExpandedCallId(isExpanded ? null : call.callId)}
-                                className="h-7 px-2 text-[11px] border-slate-200 text-slate-700 hover:bg-slate-100 cursor-pointer"
-                              >
-                                {isExpanded ? "Hide Metrics" : "6 Metrics"}
-                                {isExpanded ? (
-                                  <ChevronDown className="h-3.5 w-3.5 ml-1" />
-                                ) : (
-                                  <ChevronRight className="h-3.5 w-3.5 ml-1" />
-                                )}
-                              </Button>
-                            </div>
-                          </div>
-
-                          {/* Call Card Body */}
-                          <div className="p-3.5 space-y-3">
-                            {/* Audio Recording Player */}
-                            {call.recordingUrl && (
-                              <div className="bg-slate-50/90 p-2.5 rounded-lg border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
-                                  <Volume2 className="h-4 w-4 text-indigo-600 flex-shrink-0" />
-                                  <span className="uppercase text-[11px] tracking-wider text-slate-700 font-bold">CALL RECORDING:</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <audio
-                                    controls
-                                    src={call.recordingUrl}
-                                    className="h-8 max-w-full sm:max-w-[280px] rounded"
-                                    preload="none"
-                                  />
-                                  <a
-                                    href={call.recordingUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline px-2.5 py-1 bg-white rounded-md border border-blue-200 shadow-2xs"
-                                  >
-                                    <ExternalLink className="h-3 w-3" />
-                                    Open Audio
-                                  </a>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* 6 Call-Specific Metrics Evaluation (Specific to this call) */}
-                            {isExpanded && (
-                              <div className="bg-slate-50/80 border border-slate-200/90 rounded-xl p-3 space-y-2 animate-in fade-in duration-200">
-                                <div className="flex flex-wrap items-center justify-between text-xs gap-1">
-                                  <span className="font-semibold text-slate-700 flex items-center gap-1.5">
-                                    <ListChecks className="h-3.5 w-3.5 text-blue-600" />
-                                    6 Call-Specific Metrics Evaluation{" "}
-                                    {call.leadId && (
-                                      <span className="text-[10px] text-slate-500 font-mono font-normal">
-                                        (Lead: {call.leadId})
-                                      </span>
-                                    )}
-                                  </span>
-                                  <span className="text-[10px] text-slate-400 font-mono">Scores out of 5.0</span>
-                                </div>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-0.5">
-                                  {[
-                                    { label: "Product Knowledge", val: call.productKnowledge },
-                                    { label: "Customer Understand...", val: call.customerUnderstanding },
-                                    { label: "Communication Skills", val: call.communicationSkills },
-                                    { label: "Objection Handling", val: call.objectionHandling },
-                                    { label: "Closing Skills", val: call.closingSkills },
-                                    { label: "Tone & Volume", val: call.toneVolume },
-                                  ].map((metric, mIdx) => {
-                                    const score = metric.val !== null && metric.val !== undefined ? Number(metric.val) : null
-                                    return (
-                                      <div key={mIdx} className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs">
-                                        <span className="text-[9px] font-bold text-slate-500 uppercase block truncate">
-                                          {metric.label}
-                                        </span>
-                                        <span
-                                          className={`font-bold text-xs block mt-0.5 ${
-                                            score !== null && score >= 2.5 ? "text-emerald-700" : "text-rose-700"
-                                          }`}
-                                        >
-                                          {score !== null ? `${score.toFixed(1)} / 5.0` : "— / 5.0"}
-                                        </span>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Stated vs Verified Outcomes */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50/70 p-3 rounded-lg border border-slate-200">
-                              <div>
-                                <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
-                                  AGENT STATED OUTCOME:
-                                </span>
-                                <p className="font-semibold text-slate-800 mt-0.5">{call.statedOutcome || "—"}</p>
-                              </div>
-                              <div>
-                                <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
-                                  AUDITOR EVALUATION:
-                                </span>
-                                <p
-                                  className={`font-semibold mt-0.5 ${
-                                    isGood ? "text-emerald-700" : "text-rose-700 font-bold"
-                                  }`}
-                                >
-                                  {call.verifiedOutcome || "—"}
-                                </p>
-                              </div>
-                            </div>
-
-                            {/* Auditor Observation */}
-                            {call.auditorObservation && (
-                              <div className="text-xs text-slate-700 bg-white p-3 rounded-lg border border-slate-200/80 shadow-2xs">
-                                <span className="font-bold text-slate-900 block mb-1">Auditor Quality Finding:</span>
-                                <p className="text-slate-600 leading-relaxed">{call.auditorObservation}</p>
-                              </div>
-                            )}
-
-                            {/* Strengths & Deficiencies Tags */}
-                            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                              {call.strengths &&
-                                call.strengths.map((str: string, sIdx: number) => (
-                                  <span
-                                    key={sIdx}
-                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs"
-                                  >
-                                    <CheckCircle2 className="h-3 w-3 text-emerald-600 flex-shrink-0" />
-                                    {str}
-                                  </span>
-                                ))}
-                              {call.deficiencies &&
-                                call.deficiencies.map((def: string, dIdx: number) => (
-                                  <span
-                                    key={dIdx}
-                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs"
-                                  >
-                                    <AlertCircle className="h-3 w-3 text-rose-600 flex-shrink-0" />
-                                    {def}
-                                  </span>
-                                ))}
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })
-                  })()
-                )}
-              </div>
-
-              {/* Footer */}
-              <DialogFooter className="flex-shrink-0 px-5 sm:px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex flex-row items-center justify-between">
-                <span className="text-[11px] text-slate-500 font-mono">
-                  Agent ID: {callDetailModal.agent.id} • Date: {callDetailModal.date}
-                </span>
-                <Button
-                  size="sm"
-                  onClick={() => setCallDetailModal(null)}
-                  className="bg-slate-800 hover:bg-slate-900 text-white text-xs px-5 shadow-sm font-semibold cursor-pointer"
-                >
-                  Close
-                </Button>
-              </DialogFooter>
-            </>
-          )}
+                {/* Footer */}
+                <DialogFooter className="flex-shrink-0 px-5 sm:px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex flex-row items-center justify-between">
+                  <span className="text-[11px] text-slate-500 font-mono">
+                    Agent ID: {agent.id} • Date: {callDetailModal.date}
+                  </span>
+                  <Button
+                    size="sm"
+                    onClick={() => setCallDetailModal(null)}
+                    className="bg-slate-800 hover:bg-slate-900 text-white text-xs px-5 shadow-sm font-semibold cursor-pointer"
+                  >
+                    Close
+                  </Button>
+                </DialogFooter>
+              </>
+            )
+          })()}
         </DialogContent>
       </Dialog>
     </div>

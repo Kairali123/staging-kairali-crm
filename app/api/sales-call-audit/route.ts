@@ -27,22 +27,19 @@ export type SalesCallAuditRecord = {
   daily_fail_pass: string | null
   total_calls_audited: number | null
   good_calls: number | null
+  // Needs Improvement + Bad, as written by the live pilot daily fail report
   bad_calls: number | null
-  product_knowledge: number | null
-  customer_understanding: number | null
-  communication_skills: number | null
-  objection_handling: number | null
-  closing_skills: number | null
-  tone_volume: number | null
-  avg_score: number | null
-  planned_management: string | null
+  neutral: number | null
+  // DB column `not_related` holds the Not Rated count
+  not_rated: number | null
+  overall_performance: string | null
+  planned_hr: string | null
   actual_hr: string | null
   time_delay_hr: string | null
   hr_name: string | null
   hr_verify_status: string | null
   hr_action_for_calling_fail_pass: string | null
   other_remarks: string | null
-  hr_level_whatsapp_update_status_to_sales: string | null
   update_master_attendance_tracker: string | null
   update_status_of_account_fms: string | null
   created_at: string | null
@@ -85,10 +82,8 @@ export async function GET(req: NextRequest) {
     let query = `
       SELECT 
         id, time_stamp, emp_id, name, designation, mid, daily_fail_pass,
-        total_calls_audited, good_calls, bad_calls, product_knowledge,
-        customer_understanding, communication_skills, objection_handling,
-        closing_skills, tone_volume, avg_score, planned_management, actual_hr,
-        time_delay_hr, hr_name, hr_verify_status, hr_action_for_calling_fail_pass,
+        total_calls_audited, good_calls, bad_calls, neutral, not_related,
+        overall_performance, planned_hr, actual_hr, time_delay_hr, hr_name, hr_verify_status, hr_action_for_calling_fail_pass,
         other_remarks, updated_in_master_attendance_tracker, updated_in_pagarbook,
         update_master_attendance_tracker, update_status_of_account_fms,
         created_at, updated_at
@@ -149,24 +144,20 @@ export async function GET(req: NextRequest) {
       designation: row.designation || "",
       mid: row.mid || "",
       daily_fail_pass: row.daily_fail_pass ? row.daily_fail_pass.toUpperCase() : "FAIL",
-      total_calls_audited: row.total_calls_audited ? Number(row.total_calls_audited) : 0,
-      good_calls: row.good_calls ? Number(row.good_calls) : 0,
-      bad_calls: row.bad_calls ? Number(row.bad_calls) : 0,
-      product_knowledge: row.product_knowledge !== null ? Number(row.product_knowledge) : null,
-      customer_understanding: row.customer_understanding !== null ? Number(row.customer_understanding) : null,
-      communication_skills: row.communication_skills !== null ? Number(row.communication_skills) : null,
-      objection_handling: row.objection_handling !== null ? Number(row.objection_handling) : null,
-      closing_skills: row.closing_skills !== null ? Number(row.closing_skills) : null,
-      tone_volume: row.tone_volume !== null ? Number(row.tone_volume) : null,
-      avg_score: row.avg_score !== null ? Number(row.avg_score) : 0,
-      planned_management: row.planned_management ? new Date(row.planned_management).toISOString() : null,
+      // The pilot report writes 0 as NULL, so every count reads NULL as 0
+      total_calls_audited: Number(row.total_calls_audited) || 0,
+      good_calls: Number(row.good_calls) || 0,
+      bad_calls: Number(row.bad_calls) || 0,
+      neutral: Number(row.neutral) || 0,
+      not_rated: Number(row.not_related) || 0,
+      overall_performance: row.overall_performance || null,
+      planned_hr: row.planned_hr ? new Date(row.planned_hr).toISOString() : null,
       actual_hr: row.actual_hr ? new Date(row.actual_hr).toISOString() : null,
       time_delay_hr: row.time_delay_hr || null,
       hr_name: row.hr_name || null,
       hr_verify_status: row.hr_verify_status || null,
       hr_action_for_calling_fail_pass: row.hr_action_for_calling_fail_pass || null,
       other_remarks: row.other_remarks || null,
-      hr_level_whatsapp_update_status_to_sales: row.hr_level_whatsapp_update_status_to_sales || null,
       update_master_attendance_tracker: row.update_master_attendance_tracker || row.updated_in_master_attendance_tracker || null,
       update_status_of_account_fms: row.update_status_of_account_fms || row.updated_in_pagarbook || null,
       created_at: row.created_at ? new Date(row.created_at).toISOString() : null,
@@ -319,7 +310,9 @@ export async function POST(req: NextRequest) {
         total_calls_audited: body.total_calls_audited ?? body.calls ?? 0,
         good_calls: body.good_calls ?? body.good ?? 0,
         bad_calls: body.bad_calls ?? body.bad ?? 0,
-        avg_score: body.avg_score ?? body.score ?? 0,
+        neutral: body.neutral ?? 0,
+        not_rated: body.not_rated ?? 0,
+        overall_performance: body.overall_performance || "",
         hr_verify_status: hr_verify_status || body.verifyStatus || "",
         hr_action_for_calling_fail_pass: hr_action_for_calling_fail_pass || body.callingAction || "",
         other_remarks: other_remarks || body.remarks || "",

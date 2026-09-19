@@ -55,8 +55,13 @@ export function renderAuditReportEmail({
           <span style="color: #94a3b8; margin: 0 4px;">/</span>
           <span style="color: #be123c; font-weight: 600;">${emp.bad}</span>
         </td>
-        <td style="padding: 12px 14px; text-align: center; font-weight: 600; color: #1e293b; font-size: 13px;">
-          ${typeof emp.score === "number" ? emp.score.toFixed(2) : emp.score}
+        <td style="padding: 12px 14px; text-align: center; font-size: 12px; color: #475569;">
+          ${emp.neutral}
+          <span style="color: #94a3b8; margin: 0 4px;">/</span>
+          ${emp.notRated}
+        </td>
+        <td style="padding: 12px 14px; text-align: center; font-weight: 600; color: #1e293b; font-size: 12px;">
+          ${emp.overallPerformance || "—"}
         </td>
         <td style="padding: 12px 14px; text-align: center;">
           <span style="display: inline-block; padding: 2px 10px; border-radius: 9999px; font-size: 10px; font-weight: 700; text-transform: uppercase; ${
@@ -72,17 +77,13 @@ export function renderAuditReportEmail({
     )
     .join("")
 
-  const teamScore = typeof metrics.teamAverageScore === "number"
-    ? metrics.teamAverageScore.toFixed(2)
-    : String(metrics.teamAverageScore)
-
   const wrongOutcomes = typeof metrics.wrongOutcomesPercentage === "number"
     ? metrics.wrongOutcomesPercentage.toFixed(2)
     : String(metrics.wrongOutcomesPercentage)
 
-  const teamPerf = typeof metrics.teamPerformancePercentage === "number"
-    ? metrics.teamPerformancePercentage.toFixed(1)
-    : String(metrics.teamPerformancePercentage)
+  const goodCallRate = typeof metrics.goodCallRate === "number"
+    ? metrics.goodCallRate.toFixed(1)
+    : String(metrics.goodCallRate)
 
   const html = `
     <!DOCTYPE html>
@@ -132,7 +133,7 @@ export function renderAuditReportEmail({
               <!-- Verified Good -->
               <td style="width: 25%; background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 14px 10px; text-align: center;">
                 <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #15803d;">
-                  Verified Good
+                  Good Calls
                 </div>
                 <div style="font-size: 26px; font-weight: 800; color: #166534; margin-top: 4px;">
                   ${metrics.verified}
@@ -142,7 +143,7 @@ export function renderAuditReportEmail({
               <!-- Mismatch Bad -->
               <td style="width: 25%; background-color: #fff1f2; border: 1px solid #fecdd3; border-radius: 12px; padding: 14px 10px; text-align: center;">
                 <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #be123c;">
-                  Mismatch Bad
+                  Bad Calls
                 </div>
                 <div style="font-size: 26px; font-weight: 800; color: #9f1239; margin-top: 4px;">
                   ${metrics.mismatch}
@@ -163,11 +164,14 @@ export function renderAuditReportEmail({
 
           <!-- Secondary KPI Pill -->
           <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 16px; margin-bottom: 20px; font-size: 12px; font-weight: 600;">
-            <span style="color: #64748b;">Team average:</span>
-            <span style="color: #0f172a; font-weight: 700; margin-left: 4px;">${teamScore} / 5</span>
+            <span style="color: #64748b;">Good-call rate:</span>
+            <span style="color: #047857; font-weight: 700; margin-left: 4px;">${goodCallRate}%</span>
             <span style="color: #cbd5e1; margin: 0 10px;">|</span>
-            <span style="color: #64748b;">Team performance:</span>
-            <span style="color: #047857; font-weight: 700; margin-left: 4px;">${teamPerf}%</span>
+            <span style="color: #64748b;">Neutral:</span>
+            <span style="color: #0f172a; font-weight: 700; margin-left: 4px;">${metrics.totalNeutral}</span>
+            <span style="color: #cbd5e1; margin: 0 10px;">|</span>
+            <span style="color: #64748b;">Not Rated:</span>
+            <span style="color: #0f172a; font-weight: 700; margin-left: 4px;">${metrics.totalNotRated}</span>
           </div>
 
           <!-- HR Action Banner -->
@@ -182,7 +186,8 @@ export function renderAuditReportEmail({
                 <th style="padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #475569; font-weight: 700;">Employee</th>
                 <th style="padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #475569; font-weight: 700; text-align: center;">Calls</th>
                 <th style="padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #475569; font-weight: 700; text-align: center;">Good / Bad</th>
-                <th style="padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #475569; font-weight: 700; text-align: center;">Score</th>
+                <th style="padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #475569; font-weight: 700; text-align: center;">Neutral / Not Rated</th>
+                <th style="padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #475569; font-weight: 700; text-align: center;">Overall</th>
                 <th style="padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #475569; font-weight: 700; text-align: center;">Result</th>
               </tr>
             </thead>

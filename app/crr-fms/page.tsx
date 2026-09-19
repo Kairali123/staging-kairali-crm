@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useAuth, type UserRole } from "@/hooks/use-auth";
-import { useCrrBookings, isStageLocked, hasStageNoPlannedDate, getStagePlannedDate, getStageActualDate, getStageSavedData, getStageDoer, isBookingCancelled, saveStage, DEFAULT_STAGE_USERS } from "@/hooks/use-crr-bookings";
+import { useCrrBookings, getStagePlannedDate, getStageActualDate, getStageSavedData, getStageDoer, isBookingCancelled, saveStage, DEFAULT_STAGE_USERS } from "@/hooks/use-crr-bookings";
 import type {
     Role,
     Resp,
@@ -14,6 +14,7 @@ import type {
     Stage,
     Guest,
 } from "@/types/crr";
+import { stageBlockReason, stageDateLock } from "@/lib/crr-stage-rules";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
@@ -188,8 +189,8 @@ function parseDMY(dateStr: string): Date {
     return new Date(s);
 }
 
-// A pending booking that checks in after tomorrow isn't actionable yet: it is
-// blurred out and parked at the bottom of the Pending Records table.
+// A pending booking that checks in after tomorrow is parked at the bottom of the
+// Pending Records table. What can be filled is decided per stage (lib/crr-stage-rules).
 function isFutureCheckin(dateStr: string): boolean {
     const d = parseDMY(dateStr);
     if (isNaN(d.getTime())) return false;
@@ -422,6 +423,17 @@ export default function CRRCallingProcessPage() {
             return user.permissions.includes(`crr_fms.stage${stageNo}`);
         };
     }, [user, isAdminRole]);
+
+    /* ---------- STAGE RULES (issue #157) ----------
+       Same rule for every role: see lib/crr-stage-rules. Evaluated at render
+       time against today's IST date, so a stage opens at 12:00 AM IST. */
+    const gateOf = (g: Guest, n: number) => ({
+        checkIn: g.checkin,
+        checkOut: g.checkout,
+        bookingStatus: g.bookingStatus,
+        info: g.stages?.find((s) => s.stage === n),
+    });
+    const blockReasonOf = (g: Guest, n: number) => stageBlockReason(n, gateOf(g, n));
 
     /* ---------- STAGES THIS USER IS PERMITTED TO WORK ON ----------
        Explicit "crr_fms.stageN" grants only — intentionally NOT including
@@ -727,34 +739,11 @@ export default function CRRCallingProcessPage() {
     const isStage7Processing = activeResultProgressGuest?.stageStatus?.[6] === "Processing";
     const isStage8Complete = activeReferralGuest?.stageStatus?.[7] === "Complete";
 
-    // Helper: Form lock state inside stage modals.
-    // If planned date is missing/empty, stage remains clickable in the menu, but form is locked with an explicit message.
-    // This missing-planned lock applies to ALL users including Super Admin — no bypass allowed.
-    // If planned date is in the future, form is locked until that planned date (Admin can override this only).
+    // Form lock banner inside stage modals: scheduling reasons only (planned date
+    // missing, or the stage's open date not reached). No role bypass.
     const getStageFormLockState = (guest: Guest | null, stageNo: number) => {
-        if (!guest) return { isLocked: false, reason: null, message: "" };
-        const stageInfo = guest.stages?.find((s) => s.stage === stageNo);
-        const plannedDate = stageInfo?.plannedDate;
-        const hasPlanned = plannedDate && String(plannedDate).trim() !== "" && String(plannedDate).trim() !== "-";
-
-        if (!hasPlanned) {
-            // No planned date → LOCKED for ALL users (Super Admin included — no bypass)
-            return {
-                isLocked: true,
-                reason: "missing_planned",
-                message: "Form is locked: Planned date is not scheduled yet. Please wait until the planned date is set in the system before filling this stage.",
-            };
-        }
-
-        if (stageInfo?.locked) {
-            return {
-                isLocked: !isAdminRole,
-                reason: "future_date",
-                message: `Form is locked: This stage unlocks on ${formatISTDate(plannedDate)}. Fields are read-only until then.`,
-            };
-        }
-
-        return { isLocked: false, reason: null, message: "" };
+        const message = guest ? stageDateLock(stageNo, gateOf(guest, stageNo)) : null;
+        return { isLocked: message !== null, message: message ?? "" };
     };
 
     const s1Lock = getStageFormLockState(activeWelcomeGuest, 1);
@@ -766,51 +755,36 @@ export default function CRRCallingProcessPage() {
     const s7Lock = getStageFormLockState(activeResultProgressGuest, 7);
     const s8Lock = getStageFormLockState(activeReferralGuest, 8);
 
-    // Combined read-only flags: locked (planned date not reached or missing planned date) OR completed OR processing.
-    const isWelcomeDisabled = !activeWelcomeGuest || s1Lock.isLocked || isStage1Complete || isStage1Processing;
-    const isCallDisabled = !activeCallGuest || s2Lock.isLocked || isStage2Complete;
-    const isGuestDisabled = !activeGuest || s3Lock.isLocked || isStage3Complete || activeGuest.allComplete;
-    const isFeedbackDisabled = !activeFeedbackGuest || s4Lock.isLocked;
-    const isRatingDisabled = !activeRatingGuest || s5Lock.isLocked || isStage5Complete || isStage5Processing;
-    const isSafeReturnDisabled = !activeSafeReturnGuest || s6Lock.isLocked || isStage6Complete || isStage6Processing;
-    const isResultDisabled = !activeResultProgressGuest || s7Lock.isLocked || isStage7Complete || isStage7Processing;
-    const isReferralDisabled = !activeReferralGuest || s8Lock.isLocked || isStage8Complete;
+    // Read-only unless the stage rule allows submitting (cancelled, complete, processing, or not open yet).
+    const isWelcomeDisabled = !activeWelcomeGuest || blockReasonOf(activeWelcomeGuest, 1) !== null;
+    const isCallDisabled = !activeCallGuest || blockReasonOf(activeCallGuest, 2) !== null;
+    const isGuestDisabled = !activeGuest || blockReasonOf(activeGuest, 3) !== null;
+    const isFeedbackDisabled = !activeFeedbackGuest || blockReasonOf(activeFeedbackGuest, 4) !== null;
+    const isRatingDisabled = !activeRatingGuest || blockReasonOf(activeRatingGuest, 5) !== null;
+    const isSafeReturnDisabled = !activeSafeReturnGuest || blockReasonOf(activeSafeReturnGuest, 6) !== null;
+    const isResultDisabled = !activeResultProgressGuest || blockReasonOf(activeResultProgressGuest, 7) !== null;
+    const isReferralDisabled = !activeReferralGuest || blockReasonOf(activeReferralGuest, 8) !== null;
 
     // "Driver Assignment - Arrival Pickup" modal (Stage 9)
     const [activeDriverArrivalGuestId, setActiveDriverArrivalGuestId] = useState<number | null>(null);
     const activeDriverArrivalGuest = guests.find((g) => g.id === activeDriverArrivalGuestId) || null;
     const isStage9Complete = activeDriverArrivalGuest?.stageStatus?.[8] === "Complete";
     const isStage9Processing = activeDriverArrivalGuest?.stageStatus?.[8] === "Processing";
-    // Missing planned date → locked for ALL users (Super Admin included). Future planned date → locked only for non-admins.
-    const isDriverArrivalDisabled = !activeDriverArrivalGuest ||
-        (activeDriverArrivalGuest && hasStageNoPlannedDate(activeDriverArrivalGuest, 9)) ||
-        (!isAdminRole && isStageLocked(activeDriverArrivalGuest, 9)) ||
-        isStage9Complete ||
-        isStage9Processing;
+    const isDriverArrivalDisabled = !activeDriverArrivalGuest || blockReasonOf(activeDriverArrivalGuest, 9) !== null;
 
     // "Driver Assignment - Departure Drop" modal (Stage 10)
     const [activeDriverDepartureGuestId, setActiveDriverDepartureGuestId] = useState<number | null>(null);
     const activeDriverDepartureGuest = guests.find((g) => g.id === activeDriverDepartureGuestId) || null;
     const isStage10Complete = activeDriverDepartureGuest?.stageStatus?.[9] === "Complete";
     const isStage10Processing = activeDriverDepartureGuest?.stageStatus?.[9] === "Processing";
-    // Missing planned date → locked for ALL users (Super Admin included). Future planned date → locked only for non-admins.
-    const isDriverDepartureDisabled = !activeDriverDepartureGuest ||
-        (activeDriverDepartureGuest && hasStageNoPlannedDate(activeDriverDepartureGuest, 10)) ||
-        (!isAdminRole && isStageLocked(activeDriverDepartureGuest, 10)) ||
-        isStage10Complete ||
-        isStage10Processing;
+    const isDriverDepartureDisabled = !activeDriverDepartureGuest || blockReasonOf(activeDriverDepartureGuest, 10) !== null;
 
     // "Guest Requirement Verification" modal (Stage 11)
     const [activeRequirementVerificationGuestId, setActiveRequirementVerificationGuestId] = useState<number | null>(null);
     const activeRequirementVerificationGuest = guests.find((g) => g.id === activeRequirementVerificationGuestId) || null;
     const isStage11Complete = activeRequirementVerificationGuest?.stageStatus?.[10] === "Complete";
     const isStage11Processing = activeRequirementVerificationGuest?.stageStatus?.[10] === "Processing";
-    // Missing planned date → locked for ALL users (Super Admin included). Future planned date → locked only for non-admins.
-    const isRequirementVerificationDisabled = !activeRequirementVerificationGuest ||
-        (activeRequirementVerificationGuest && hasStageNoPlannedDate(activeRequirementVerificationGuest, 11)) ||
-        (!isAdminRole && isStageLocked(activeRequirementVerificationGuest, 11)) ||
-        isStage11Complete ||
-        isStage11Processing;
+    const isRequirementVerificationDisabled = !activeRequirementVerificationGuest || blockReasonOf(activeRequirementVerificationGuest, 11) !== null;
 
     // "Booking & Guest Details" shared popup — used by the 3 not-yet-built action buttons
     const [activeDetailsGuestId, setActiveDetailsGuestId] = useState<number | null>(null);
@@ -1097,11 +1071,11 @@ export default function CRRCallingProcessPage() {
                 activePend++;
                 // "Actionable now" = the subset of pendingRows that is already unlocked
                 if (stageNum !== null) {
-                    if (g.stageStatus[stageNum - 1] !== "Complete" && !isStageLocked(g, stageNum)) {
+                    if (blockReasonOf(g, stageNum) === null) {
                         actionablePend++;
                     }
                 } else {
-                    if (stagesToCheck.some((n) => g.stageStatus[n - 1] !== "Complete" && !isStageLocked(g, n))) {
+                    if (stagesToCheck.some((n) => blockReasonOf(g, n) === null)) {
                         actionablePend++;
                     }
                 }
@@ -1397,8 +1371,7 @@ export default function CRRCallingProcessPage() {
     async function saveModal() {
         if (!canEditStage(3)) return; // permission gate — Stage 3
         if (!activeGuest) return closeModal();
-        const s3Lock = getStageFormLockState(activeGuest, 3);
-        if (!isAdminRole && s3Lock.isLocked) return;
+        if (blockReasonOf(activeGuest, 3)) return;
         if (isStage3Complete) return; // completed stage is read-only
         if (!isModalFormComplete() || modalSaved) return;
 
@@ -1445,7 +1418,7 @@ export default function CRRCallingProcessPage() {
     async function saveDriverArrivalModal(data: any) {
         if (!canEditStage(9)) return;
         if (!activeDriverArrivalGuest) return;
-        if (!isAdminRole && isStageLocked(activeDriverArrivalGuest, 9)) return;
+        if (blockReasonOf(activeDriverArrivalGuest, 9)) return;
         if (isStage9Complete || isStage9Processing) return;
 
         const guestId = activeDriverArrivalGuest.id;
@@ -1479,7 +1452,7 @@ export default function CRRCallingProcessPage() {
     async function saveDriverDepartureModal(data: any) {
         if (!canEditStage(10)) return;
         if (!activeDriverDepartureGuest) return;
-        if (!isAdminRole && isStageLocked(activeDriverDepartureGuest, 10)) return;
+        if (blockReasonOf(activeDriverDepartureGuest, 10)) return;
         if (isStage10Complete || isStage10Processing) return;
 
         const guestId = activeDriverDepartureGuest.id;
@@ -1513,7 +1486,7 @@ export default function CRRCallingProcessPage() {
     async function saveRequirementVerificationModal(data: any) {
         if (!canEditStage(11)) return;
         if (!activeRequirementVerificationGuest) return;
-        if (!isAdminRole && isStageLocked(activeRequirementVerificationGuest, 11)) return;
+        if (blockReasonOf(activeRequirementVerificationGuest, 11)) return;
         if (isStage11Complete || isStage11Processing) return;
 
         const guestId = activeRequirementVerificationGuest.id;
@@ -1584,9 +1557,9 @@ export default function CRRCallingProcessPage() {
     async function saveWelcomeModal() {
         if (!canEditStage(1)) return; // permission gate — Stage 1
         if (!activeWelcomeGuest) return;
-        const s1Lock = getStageFormLockState(activeWelcomeGuest, 1);
-        if (!isAdminRole && s1Lock.isLocked) {
-            setWelcomeFormError(s1Lock.message || "This stage is locked.");
+        const s1Block = blockReasonOf(activeWelcomeGuest, 1);
+        if (s1Block) {
+            setWelcomeFormError(s1Block);
             return;
         }
         if (isStage1Complete) {
@@ -1662,9 +1635,9 @@ export default function CRRCallingProcessPage() {
     async function saveSafeReturnModal() {
         if (!canEditStage(6)) return; // permission gate — Stage 6
         if (!activeSafeReturnGuest) return;
-        const s6Lock = getStageFormLockState(activeSafeReturnGuest, 6);
-        if (!isAdminRole && s6Lock.isLocked) {
-            setSafeReturnFormError(s6Lock.message || "This stage is locked.");
+        const s6Block = blockReasonOf(activeSafeReturnGuest, 6);
+        if (s6Block) {
+            setSafeReturnFormError(s6Block);
             return;
         }
         if (isStage6Complete) {
@@ -1738,9 +1711,9 @@ export default function CRRCallingProcessPage() {
     async function saveResultProgressModal() {
         if (!canEditStage(7)) return; // permission gate — Stage 7
         if (!activeResultProgressGuest) return;
-        const s7Lock = getStageFormLockState(activeResultProgressGuest, 7);
-        if (!isAdminRole && s7Lock.isLocked) {
-            setResultFormError(s7Lock.message || "This stage is locked.");
+        const s7Block = blockReasonOf(activeResultProgressGuest, 7);
+        if (s7Block) {
+            setResultFormError(s7Block);
             return;
         }
         if (isStage7Complete) {
@@ -1805,9 +1778,9 @@ export default function CRRCallingProcessPage() {
     async function saveFeedbackModal() {
         if (!canEditStage(4)) return; // permission gate — Stage 4
         if (!activeFeedbackGuest) return;
-        const s4Lock = getStageFormLockState(activeFeedbackGuest, 4);
-        if (!isAdminRole && s4Lock.isLocked) {
-            setFeedbackFormError(s4Lock.message || "This stage is locked.");
+        const s4Block = blockReasonOf(activeFeedbackGuest, 4);
+        if (s4Block) {
+            setFeedbackFormError(s4Block);
             return;
         }
         if (!isFeedbackFormComplete() || feedbackSaved) {
@@ -1865,9 +1838,9 @@ export default function CRRCallingProcessPage() {
     async function saveReferralModal() {
         if (!canEditStage(8)) return; // permission gate — Stage 8
         if (!activeReferralGuest) return;
-        const s8Lock = getStageFormLockState(activeReferralGuest, 8);
-        if (!isAdminRole && s8Lock.isLocked) {
-            setReferralFormError(s8Lock.message || "This stage is locked.");
+        const s8Block = blockReasonOf(activeReferralGuest, 8);
+        if (s8Block) {
+            setReferralFormError(s8Block);
             return;
         }
         if (isStage8Complete) {
@@ -1945,9 +1918,9 @@ export default function CRRCallingProcessPage() {
     async function saveRatingModal() {
         if (!canEditStage(5)) return; // permission gate — Stage 5
         if (!activeRatingGuest) return;
-        const s5Lock = getStageFormLockState(activeRatingGuest, 5);
-        if (!isAdminRole && s5Lock.isLocked) {
-            setRatingFormError(s5Lock.message || "This stage is locked.");
+        const s5Block = blockReasonOf(activeRatingGuest, 5);
+        if (s5Block) {
+            setRatingFormError(s5Block);
             return;
         }
         if (isStage5Complete) {
@@ -2031,8 +2004,11 @@ export default function CRRCallingProcessPage() {
                 break;
             case 8: {
                 const isComplete = g.stageStatus[7] === "Complete";
+                const lock = stageDateLock(8, gateOf(g, 8));
                 if (isComplete) {
                     openReferralModal(guestId);
+                } else if (lock) {
+                    toast.info(lock);
                 } else {
                     window.open(buildReferralFormUrl(g.bookingId), "_blank", "noopener,noreferrer");
                 }
@@ -2061,9 +2037,9 @@ export default function CRRCallingProcessPage() {
     async function saveCallModal() {
         if (!canEditStage(2)) return; // permission gate — Stage 2
         if (!activeCallGuest) return;
-        const s2Lock = getStageFormLockState(activeCallGuest, 2);
-        if (!isAdminRole && s2Lock.isLocked) {
-            setCallFormError(s2Lock.message || "This stage is locked.");
+        const s2Block = blockReasonOf(activeCallGuest, 2);
+        if (s2Block) {
+            setCallFormError(s2Block);
             return;
         }
         if (isStage2Complete) {
@@ -2320,12 +2296,10 @@ export default function CRRCallingProcessPage() {
                                     const stageObj = STAGES[activeStageNum - 1] || STAGES[0];
                                     const isCurrentStageComplete = g.allComplete || (g.stageStatus && g.stageStatus[activeStageNum - 1] === "Complete");
                                     const isPendingStage = !isCurrentStageComplete && !isBookingCancelled(g);
-                                    const isLocked = isPendingTable && isFutureCheckin(g.checkin);
                                     return (
                                         <tr
                                             key={g.id}
-                                            title={isLocked ? "Check-in is after tomorrow - not actionable yet" : undefined}
-                                            className={`group border-b border-slate-200 hover:bg-slate-50/80 transition-colors${isLocked ? " blur-[2px] opacity-50 pointer-events-none select-none" : ""}`}
+                                            className="group border-b border-slate-200 hover:bg-slate-50/80 transition-colors"
                                         >
                                             {/* Timestamp */}
                                             <td
@@ -2470,24 +2444,14 @@ export default function CRRCallingProcessPage() {
                                                         <span>View Details</span>
                                                     </Button>
 
-                                                    {isBookingCancelled(g) && !isAdminRole ? (
+                                                    {isBookingCancelled(g) ? (
                                                         <span className="inline-flex items-center text-xs font-medium text-slate-400 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg">
                                                             Cancelled
                                                         </span>
                                                     ) : (
                                                         <DropdownMenu>
                                                             <DropdownMenuTrigger asChild>
-                                                                {isBookingCancelled(g) ? (
-                                                                    <Button
-                                                                        size="sm"
-                                                                        variant="outline"
-                                                                        className="h-8 px-2.5 text-xs font-semibold text-red-700 bg-red-50 border-red-200 hover:bg-red-100 rounded-lg flex items-center gap-1 shadow-2xs"
-                                                                    >
-                                                                        <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
-                                                                        <span>Cancelled</span>
-                                                                        <ChevronDown className="h-3 w-3 text-red-500/70" />
-                                                                    </Button>
-                                                                ) : !isPendingStage ? (
+                                                                {!isPendingStage ? (
                                                                     <Button
                                                                         size="sm"
                                                                         variant="outline"
@@ -2511,22 +2475,18 @@ export default function CRRCallingProcessPage() {
                                                                 )}
                                                             </DropdownMenuTrigger>
                                                             <DropdownMenuContent align="end" className="w-64 max-h-96 overflow-y-auto">
-                                                                {isBookingCancelled(g) && (
-                                                                    <div className="px-2.5 py-1.5 mx-1 my-1 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-md flex items-center gap-1.5">
-                                                                        <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-                                                                        <span>Cancelled Booking (Admin Access)</span>
-                                                                    </div>
-                                                                )}
                                                                 {/* Stage 1 */}
                                                                 {canEditStage(1) && (() => {
                                                                     const isComplete = g.stageStatus[0] === "Complete";
                                                                     const isDisabled = isComplete;
+                                                                    const lockMsg = isComplete ? null : stageDateLock(1, gateOf(g, 1));
                                                                     return (
                                                                         <DropdownMenuItem
                                                                             disabled={isDisabled}
                                                                             onSelect={(e) => {
                                                                                 e.preventDefault();
                                                                                 if (isComplete) return;
+                                                                                if (lockMsg) toast.info(lockMsg);
                                                                                 setTimeout(() => openWelcomeModal(g.id), 0);
                                                                             }}
                                                                             className="flex items-center justify-between gap-2.5 text-sky-600 focus:text-sky-700 cursor-pointer disabled:opacity-40"
@@ -2535,7 +2495,7 @@ export default function CRRCallingProcessPage() {
                                                                                 <Home className="h-4 w-4 shrink-0" />
                                                                                 <span className="truncate">Arrival Welcome on Pickup</span>
                                                                             </div>
-                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                            {isComplete ? <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" /> : lockMsg && <span title={lockMsg}><Clock className="h-4 w-4 text-amber-500 shrink-0 ml-auto" /></span>}
                                                                         </DropdownMenuItem>
                                                                     );
                                                                 })()}
@@ -2543,12 +2503,14 @@ export default function CRRCallingProcessPage() {
                                                                 {canEditStage(2) && (() => {
                                                                     const isComplete = g.stageStatus[1] === "Complete";
                                                                     const isDisabled = isComplete;
+                                                                    const lockMsg = isComplete ? null : stageDateLock(2, gateOf(g, 2));
                                                                     return (
                                                                         <DropdownMenuItem
                                                                             disabled={isDisabled}
                                                                             onSelect={(e) => {
                                                                                 e.preventDefault();
                                                                                 if (isComplete) return;
+                                                                                if (lockMsg) toast.info(lockMsg);
                                                                                 setTimeout(() => openCallModal(g.id), 0);
                                                                             }}
                                                                             className="flex items-center justify-between gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
@@ -2557,7 +2519,7 @@ export default function CRRCallingProcessPage() {
                                                                                 <PhoneCall className="h-4 w-4 shrink-0" />
                                                                                 <span className="truncate">Guest Request &amp; Complaint Management</span>
                                                                             </div>
-                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                            {isComplete ? <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" /> : lockMsg && <span title={lockMsg}><Clock className="h-4 w-4 text-amber-500 shrink-0 ml-auto" /></span>}
                                                                         </DropdownMenuItem>
                                                                     );
                                                                 })()}
@@ -2568,12 +2530,14 @@ export default function CRRCallingProcessPage() {
                                                                 {canEditStage(3) && (() => {
                                                                     const isComplete = g.stageStatus[2] === "Complete";
                                                                     const isDisabled = isComplete;
+                                                                    const lockMsg = isComplete ? null : stageDateLock(3, gateOf(g, 3));
                                                                     return (
                                                                         <DropdownMenuItem
                                                                             disabled={isDisabled}
                                                                             onSelect={(e) => {
                                                                                 e.preventDefault();
                                                                                 if (isComplete) return;
+                                                                                if (lockMsg) toast.info(lockMsg);
                                                                                 setTimeout(() => openModal(g.id), 0);
                                                                             }}
                                                                             className="flex items-center justify-between gap-2.5 text-blue-600 focus:text-blue-700 cursor-pointer disabled:opacity-40"
@@ -2582,7 +2546,7 @@ export default function CRRCallingProcessPage() {
                                                                                 <Calendar className="h-4 w-4 shrink-0" />
                                                                                 <span className="truncate">Next Visit Planning &amp; Confirmation</span>
                                                                             </div>
-                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                            {isComplete ? <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" /> : lockMsg && <span title={lockMsg}><Clock className="h-4 w-4 text-amber-500 shrink-0 ml-auto" /></span>}
                                                                         </DropdownMenuItem>
                                                                     );
                                                                 })()}
@@ -2590,12 +2554,14 @@ export default function CRRCallingProcessPage() {
                                                                 {canEditStage(4) && (() => {
                                                                     const isComplete = g.stageStatus[3] === "Complete";
                                                                     const isDisabled = isComplete;
+                                                                    const lockMsg = isComplete ? null : stageDateLock(4, gateOf(g, 4));
                                                                     return (
                                                                         <DropdownMenuItem
                                                                             disabled={isDisabled}
                                                                             onSelect={(e) => {
                                                                                 e.preventDefault();
                                                                                 if (isComplete) return;
+                                                                                if (lockMsg) toast.info(lockMsg);
                                                                                 setTimeout(() => openFeedbackModal(g.id), 0);
                                                                             }}
                                                                             className="flex items-center justify-between gap-2.5 text-amber-600 focus:text-amber-700 cursor-pointer disabled:opacity-40"
@@ -2604,7 +2570,7 @@ export default function CRRCallingProcessPage() {
                                                                                 <Star className="h-4 w-4 shrink-0" />
                                                                                 <span className="truncate">Guest Feedback &amp; Outcome Confirmation</span>
                                                                             </div>
-                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                            {isComplete ? <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" /> : lockMsg && <span title={lockMsg}><Clock className="h-4 w-4 text-amber-500 shrink-0 ml-auto" /></span>}
                                                                         </DropdownMenuItem>
                                                                     );
                                                                 })()}
@@ -2612,12 +2578,14 @@ export default function CRRCallingProcessPage() {
                                                                 {canEditStage(5) && (() => {
                                                                     const isComplete = g.stageStatus[4] === "Complete";
                                                                     const isDisabled = isComplete;
+                                                                    const lockMsg = isComplete ? null : stageDateLock(5, gateOf(g, 5));
                                                                     return (
                                                                         <DropdownMenuItem
                                                                             disabled={isDisabled}
                                                                             onSelect={(e) => {
                                                                                 e.preventDefault();
                                                                                 if (isComplete) return;
+                                                                                if (lockMsg) toast.info(lockMsg);
                                                                                 setTimeout(() => openRatingModal(g.id), 0);
                                                                             }}
                                                                             className="flex items-center justify-between gap-2.5 text-orange-600 focus:text-orange-700 cursor-pointer disabled:opacity-40"
@@ -2626,7 +2594,7 @@ export default function CRRCallingProcessPage() {
                                                                                 <Send className="h-4 w-4 shrink-0" />
                                                                                 <span className="truncate">Online Rating &amp; Review Request</span>
                                                                             </div>
-                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                            {isComplete ? <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" /> : lockMsg && <span title={lockMsg}><Clock className="h-4 w-4 text-amber-500 shrink-0 ml-auto" /></span>}
                                                                         </DropdownMenuItem>
                                                                     );
                                                                 })()}
@@ -2637,12 +2605,14 @@ export default function CRRCallingProcessPage() {
                                                                 {canEditStage(6) && (() => {
                                                                     const isComplete = g.stageStatus[5] === "Complete";
                                                                     const isDisabled = isComplete;
+                                                                    const lockMsg = isComplete ? null : stageDateLock(6, gateOf(g, 6));
                                                                     return (
                                                                         <DropdownMenuItem
                                                                             disabled={isDisabled}
                                                                             onSelect={(e) => {
                                                                                 e.preventDefault();
                                                                                 if (isComplete) return;
+                                                                                if (lockMsg) toast.info(lockMsg);
                                                                                 setTimeout(() => openSafeReturnModal(g.id), 0);
                                                                             }}
                                                                             className="flex items-center justify-between gap-2.5 text-emerald-600 focus:text-emerald-700 cursor-pointer disabled:opacity-40"
@@ -2651,7 +2621,7 @@ export default function CRRCallingProcessPage() {
                                                                                 <RotateCcw className="h-4 w-4 shrink-0" />
                                                                                 <span className="truncate">Safe Return Confirmation</span>
                                                                             </div>
-                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                            {isComplete ? <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" /> : lockMsg && <span title={lockMsg}><Clock className="h-4 w-4 text-amber-500 shrink-0 ml-auto" /></span>}
                                                                         </DropdownMenuItem>
                                                                     );
                                                                 })()}
@@ -2659,12 +2629,14 @@ export default function CRRCallingProcessPage() {
                                                                 {canEditStage(7) && (() => {
                                                                     const isComplete = g.stageStatus[6] === "Complete";
                                                                     const isDisabled = isComplete;
+                                                                    const lockMsg = isComplete ? null : stageDateLock(7, gateOf(g, 7));
                                                                     return (
                                                                         <DropdownMenuItem
                                                                             disabled={isDisabled}
                                                                             onSelect={(e) => {
                                                                                 e.preventDefault();
                                                                                 if (isComplete) return;
+                                                                                if (lockMsg) toast.info(lockMsg);
                                                                                 setTimeout(() => openResultProgressModal(g.id), 0);
                                                                             }}
                                                                             className="flex items-center justify-between gap-2.5 text-teal-600 focus:text-teal-700 cursor-pointer disabled:opacity-40"
@@ -2673,7 +2645,7 @@ export default function CRRCallingProcessPage() {
                                                                                 <FileText className="h-4 w-4 shrink-0" />
                                                                                 <span className="truncate">Result Tracking &amp; Health Progress Check</span>
                                                                             </div>
-                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                            {isComplete ? <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" /> : lockMsg && <span title={lockMsg}><Clock className="h-4 w-4 text-amber-500 shrink-0 ml-auto" /></span>}
                                                                         </DropdownMenuItem>
                                                                     );
                                                                 })()}
@@ -2681,12 +2653,14 @@ export default function CRRCallingProcessPage() {
                                                                 {canEditStage(8) && (() => {
                                                                     const isComplete = g.stageStatus[7] === "Complete";
                                                                     const isDisabled = isComplete;
+                                                                    const lockMsg = isComplete ? null : stageDateLock(8, gateOf(g, 8));
                                                                     return (
                                                                         <DropdownMenuItem
                                                                             disabled={isDisabled}
                                                                             onSelect={(e) => {
                                                                                 e.preventDefault();
                                                                                 if (isComplete) return;
+                                                                                if (lockMsg) { toast.info(lockMsg); return; }
                                                                                 if (isComplete) {
                                                                                     setTimeout(() => openReferralModal(g.id), 0);
                                                                                 } else {
@@ -2699,7 +2673,7 @@ export default function CRRCallingProcessPage() {
                                                                                 <Users className="h-4 w-4 shrink-0" />
                                                                                 <span className="truncate">Referral Collection &amp; Lead Generation</span>
                                                                             </div>
-                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                            {isComplete ? <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" /> : lockMsg && <span title={lockMsg}><Clock className="h-4 w-4 text-amber-500 shrink-0 ml-auto" /></span>}
                                                                         </DropdownMenuItem>
                                                                     );
                                                                 })()}
@@ -2710,12 +2684,14 @@ export default function CRRCallingProcessPage() {
                                                                 {canEditStage(9) && (() => {
                                                                     const isComplete = g.stageStatus[8] === "Complete";
                                                                     const isDisabled = isComplete;
+                                                                    const lockMsg = isComplete ? null : stageDateLock(9, gateOf(g, 9));
                                                                     return (
                                                                         <DropdownMenuItem
                                                                             disabled={isDisabled}
                                                                             onSelect={(e) => {
                                                                                 e.preventDefault();
                                                                                 if (isComplete) return;
+                                                                                if (lockMsg) toast.info(lockMsg);
                                                                                 setTimeout(() => openDriverArrivalModal(g.id), 0);
                                                                             }}
                                                                             className="flex items-center justify-between gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
@@ -2724,7 +2700,7 @@ export default function CRRCallingProcessPage() {
                                                                                 <Briefcase className="h-4 w-4 shrink-0" />
                                                                                 <span className="truncate">Driver Assignment – Arrival Pickup</span>
                                                                             </div>
-                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                            {isComplete ? <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" /> : lockMsg && <span title={lockMsg}><Clock className="h-4 w-4 text-amber-500 shrink-0 ml-auto" /></span>}
                                                                         </DropdownMenuItem>
                                                                     );
                                                                 })()}
@@ -2732,12 +2708,14 @@ export default function CRRCallingProcessPage() {
                                                                 {canEditStage(10) && (() => {
                                                                     const isComplete = g.stageStatus[9] === "Complete";
                                                                     const isDisabled = isComplete;
+                                                                    const lockMsg = isComplete ? null : stageDateLock(10, gateOf(g, 10));
                                                                     return (
                                                                         <DropdownMenuItem
                                                                             disabled={isDisabled}
                                                                             onSelect={(e) => {
                                                                                 e.preventDefault();
                                                                                 if (isComplete) return;
+                                                                                if (lockMsg) toast.info(lockMsg);
                                                                                 setTimeout(() => openDriverDepartureModal(g.id), 0);
                                                                             }}
                                                                             className="flex items-center justify-between gap-2.5 text-indigo-600 focus:text-indigo-700 cursor-pointer disabled:opacity-40"
@@ -2746,7 +2724,7 @@ export default function CRRCallingProcessPage() {
                                                                                 <Briefcase className="h-4 w-4 shrink-0" />
                                                                                 <span className="truncate">Driver Assignment – Departure Drop</span>
                                                                             </div>
-                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                            {isComplete ? <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" /> : lockMsg && <span title={lockMsg}><Clock className="h-4 w-4 text-amber-500 shrink-0 ml-auto" /></span>}
                                                                         </DropdownMenuItem>
                                                                     );
                                                                 })()}
@@ -2754,12 +2732,14 @@ export default function CRRCallingProcessPage() {
                                                                 {canEditStage(11) && (() => {
                                                                     const isComplete = g.stageStatus[10] === "Complete";
                                                                     const isDisabled = isComplete;
+                                                                    const lockMsg = isComplete ? null : stageDateLock(11, gateOf(g, 11));
                                                                     return (
                                                                         <DropdownMenuItem
                                                                             disabled={isDisabled}
                                                                             onSelect={(e) => {
                                                                                 e.preventDefault();
                                                                                 if (isComplete) return;
+                                                                                if (lockMsg) toast.info(lockMsg);
                                                                                 setTimeout(() => openRequirementVerificationModal(g.id), 0);
                                                                             }}
                                                                             className="flex items-center justify-between gap-2.5 text-teal-600 focus:text-teal-700 cursor-pointer disabled:opacity-40"
@@ -2768,7 +2748,7 @@ export default function CRRCallingProcessPage() {
                                                                                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                                                                                 <span className="truncate">Guest Requirement Verification</span>
                                                                             </div>
-                                                                            {isComplete && <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" />}
+                                                                            {isComplete ? <Check className="h-4 w-4 text-emerald-600 shrink-0 ml-auto" /> : lockMsg && <span title={lockMsg}><Clock className="h-4 w-4 text-amber-500 shrink-0 ml-auto" /></span>}
                                                                         </DropdownMenuItem>
                                                                     );
                                                                 })()}
@@ -4527,8 +4507,8 @@ export default function CRRCallingProcessPage() {
                                             </div>
                                         )}
                                         <div className="grid grid-cols-1 gap-4">
-                                            {/* Row 1: Referral Taking URL — hidden once data exists */}
-                                            {!hasData && (
+                                            {/* Row 1: Referral Taking URL — hidden once data exists or while the stage is not open */}
+                                            {!hasData && !s8Lock.isLocked && (
                                                 <div className="space-y-2">
                                                     <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
                                                         Referral Taking URL

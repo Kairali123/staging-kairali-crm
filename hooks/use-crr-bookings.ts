@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Guest, StageInfo, StageStatus } from "@/types/crr";
+import { METADATA_KEYS, isCancelledStatus, stageStatusOf } from "@/lib/crr-stage-rules";
 
 /* =========================================================
    REQUIRED TYPE UPDATE — @/types/crr
@@ -113,18 +114,10 @@ function stageOf(stages: StageInfo[], stageNo: number): StageInfo | undefined {
     return stages.find((s) => s.stage === stageNo);
 }
 
-// Metadata keys that do not represent user-submitted stage data
-const METADATA_KEYS = new Set(["doer", "assignedBy", "stageKey", "stage_key"]);
-
 // True when the saved row has at least one non-empty value —
 // used to decide whether legacy per-stage objects should be hydrated.
 function hasAnyValue(saved: Record<string, string> | null): boolean {
     return !!saved && Object.entries(saved).some(([k, v]) => !METADATA_KEYS.has(k) && v.trim() !== "");
-}
-
-function hasActualSavedContent(saved: Record<string, string | number | null> | null | undefined): boolean {
-    if (!saved) return false;
-    return Object.entries(saved).some(([k, v]) => !METADATA_KEYS.has(k) && v !== null && String(v).trim() !== "");
 }
 
 function mapRow(row: GasBookingRow): Guest {
@@ -141,19 +134,8 @@ function mapRow(row: GasBookingRow): Guest {
     // timestamp) is non-empty on the stage's own row — GAS resolves the
     // correct CrrCalling row per stage via UID + Call Purpose keyword.
     // currentStage = first not-completed stage (1-indexed); 9 if all 8 are complete.
-    // Stages that use the two-phase to_show model (KTAHV_CRR_Calling_FMS.to_show, ktahv_guest_tracker_part2.stage9_to_show, stage10_to_show, ktahv_guest_tracker.stage11_to_show)
-    const TO_SHOW_STAGES = new Set([1, 5, 6, 7, 9, 10, 11]);
-
-    const stageStatus: StageStatus[] = Array.from({ length: 11 }, (_, i) => {
-        const info = stageOf(stages, i + 1);
-        if (info?.completed) return "Complete";
-        // Two-phase stages (1, 5, 6, 7, 9, 10, 11): if submitted/saved data exists but to_show is false -> "Processing"
-        const hasSavedContent = hasActualSavedContent(info?.savedData);
-        if (TO_SHOW_STAGES.has(i + 1) && (info?.submitted || info?.actualDate || hasSavedContent) && !info?.toShow) {
-            return "Processing";
-        }
-        return "Pending";
-    });
+    // Two-phase to_show stages report "Processing" — see stageStatusOf in lib/crr-stage-rules.
+    const stageStatus: StageStatus[] = Array.from({ length: 11 }, (_, i) => stageStatusOf(i + 1, stageOf(stages, i + 1)));
     // "Processing" stages do NOT count as complete for progress tracking.
     // Only "Complete" stages advance currentStage / trigger allComplete.
     const firstIncompleteIdx = stageStatus.findIndex((s) => s !== "Complete");
@@ -533,7 +515,7 @@ export function getStageDoer(guest: Guest | null | undefined, stageNo: number, s
 // A cancelled booking auto-closes its guest journey: no stage is actionable,
 // nothing counts as pending, and stage actions are unavailable.
 export function isBookingCancelled(guest: Guest): boolean {
-    return /cancel/i.test(String(guest.bookingStatus ?? ""));
+    return isCancelledStatus(guest.bookingStatus);
 }
 
 export function isStageCompleted(guest: Guest, stageNo: number): boolean {
