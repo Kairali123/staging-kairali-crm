@@ -13,7 +13,7 @@ import { LoaderCircle } from "lucide-react"
  *   - "Edit order" button is completely hidden from the UI.
  * ─────────────────────────────────────────────────────────────────────────────
  */
-const ENABLE_EDIT_ORDER = false
+const ENABLE_EDIT_ORDER = true
 
 const PRIMARY_ORDER_FORM_URL = "/new-order-fms/primary-order-form/app/index.html"
 

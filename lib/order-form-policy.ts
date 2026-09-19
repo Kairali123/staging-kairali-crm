@@ -43,6 +43,49 @@ export function authorizeOrderFormAction(user: unknown, action: OrderFormAction)
   if (hasAdminRole(user, 'trimmed-lower')) return true
   const granted = getPermissions(user)
   if (granted.includes('all')) return true
+
+  // Support primary_order_form permissions as well as new-order-fms permissions
+  const isViewAction = ['health', 'getProducts', 'getUsers'].includes(action)
+  const isEditAction = ['findBuyer', 'getOrder', 'status', 'submit', 'uploadFile'].includes(action)
+  const isManageAction = ['syncProducts', 'retry'].includes(action)
+
+  if (isViewAction) {
+    if (
+      granted.includes('primary_order_form.view') ||
+      granted.includes('primary_order_form.viewSelf') ||
+      granted.includes('primary_order_form.viewAll') ||
+      granted.includes('primary_order_form.edit') ||
+      granted.includes('primary_order_form') ||
+      granted.includes('primary-order-form.view') ||
+      granted.includes('primary-order-form.viewSelf') ||
+      granted.includes('primary-order-form.viewAll') ||
+      granted.includes('primary-order-form.edit') ||
+      granted.includes('primary-order-form')
+    ) {
+      return true
+    }
+  }
+
+  if (isEditAction) {
+    if (
+      granted.includes('primary_order_form.edit') ||
+      granted.includes('primary_order_form.manage') ||
+      granted.includes('primary-order-form.edit') ||
+      granted.includes('primary-order-form.manage')
+    ) {
+      return true
+    }
+  }
+
+  if (isManageAction) {
+    if (
+      granted.includes('primary_order_form.manage') ||
+      granted.includes('primary-order-form.manage')
+    ) {
+      return true
+    }
+  }
+
   return actionPolicy[action].permissions.some((permission) => granted.includes(permission))
 }
 

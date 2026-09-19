@@ -76,11 +76,69 @@ const CHART_COLORS = [
   "#f59e0b", // amber-500
   "#10b981", // emerald-500
   "#ef4444", // red-500
-  "#6366f1", // indigo-500
   "#ec4899", // pink-500
   "#06b6d4", // cyan-500
   "#64748b", // slate-500
 ]
+
+export interface WeekOption {
+  id: string
+  label: string
+  shortLabel: string
+  startDate: string
+  endDate: string
+  isCurrent?: boolean
+  isBenchmark?: boolean
+}
+
+const DEFAULT_WEEKS: WeekOption[] = [
+  {
+    id: "2026-W37",
+    label: "Week 37: 07-09-2026 To 13-09-2026 (Current Week)",
+    shortLabel: "07-09-2026 To 13-09-2026",
+    startDate: "2026-09-07",
+    endDate: "2026-09-13",
+    isCurrent: true,
+  },
+  {
+    id: "2026-W36",
+    label: "Week 36: 31-08-2026 To 06-09-2026 (Benchmark Email Report)",
+    shortLabel: "31-08-2026 To 06-09-2026",
+    startDate: "2026-08-31",
+    endDate: "2026-09-06",
+    isBenchmark: true,
+  },
+  {
+    id: "2026-W35",
+    label: "Week 35: 24-08-2026 To 30-08-2026",
+    shortLabel: "24-08-2026 To 30-08-2026",
+    startDate: "2026-08-24",
+    endDate: "2026-08-30",
+  },
+  {
+    id: "2026-W34",
+    label: "Week 34: 17-08-2026 To 23-08-2026",
+    shortLabel: "17-08-2026 To 23-08-2026",
+    startDate: "2026-08-17",
+    endDate: "2026-08-23",
+  },
+  {
+    id: "2026-W33",
+    label: "Week 33: 10-08-2026 To 16-08-2026",
+    shortLabel: "10-08-2026 To 16-08-2026",
+    startDate: "2026-08-10",
+    endDate: "2026-08-16",
+  },
+]
+
+function formatDateDDMMYYYY(isoDate: string): string {
+  if (!isoDate) return ""
+  const parts = isoDate.split("-")
+  if (parts.length === 3) {
+    return `${parts[2]}-${parts[1]}-${parts[0]}`
+  }
+  return isoDate
+}
 
 export default function DoctorConsultationReportPage() {
   const { user, isLoading } = useAuth()
@@ -88,6 +146,12 @@ export default function DoctorConsultationReportPage() {
 
   // State management
   const [period, setPeriod] = useState<string>("this_week")
+  const [availableWeeks, setAvailableWeeks] = useState<WeekOption[]>(DEFAULT_WEEKS)
+  const [selectedWeekId, setSelectedWeekId] = useState<string>("2026-W36")
+  const [customStartDate, setCustomStartDate] = useState<string>("2026-08-31")
+  const [customEndDate, setCustomEndDate] = useState<string>("2026-09-06")
+  const [isCustomMode, setIsCustomMode] = useState<boolean>(false)
+  const [registerFilterMode, setRegisterFilterMode] = useState<"all" | "week">("all")
   const [sourceFilter, setSourceFilter] = useState<string>("all")
   const [doctorFilter, setDoctorFilter] = useState<string>("all")
   const [statusFilter, setStatusFilter] = useState<string>("all")
@@ -100,12 +164,14 @@ export default function DoctorConsultationReportPage() {
 
   // Data states
   const [isFetching, setIsFetching] = useState<boolean>(true)
+  const [isLive, setIsLive] = useState<boolean>(true)
+  const [lastSyncedAt, setLastSyncedAt] = useState<string>("")
   const [weeklyReport, setWeeklyReport] = useState<{ rows: SourceReportRow[]; totals: any }>({ rows: [], totals: null })
   const [overallReport, setOverallReport] = useState<{ rows: SourceReportRow[]; totals: any }>({ rows: [], totals: null })
   const [doctorsPerformance, setDoctorsPerformance] = useState<DoctorPerformanceRow[]>([])
   const [detailedConsultations, setDetailedConsultations] = useState<DetailedConsultationItem[]>([])
   const [weeklyDateRange, setWeeklyDateRange] = useState<string>("31-08-2026 To 06-09-2026")
-  const [overallDateRange, setOverallDateRange] = useState<string>("02-07-2024 To 06-09-2026")
+  const [overallDateRange, setOverallDateRange] = useState<string>("All Time")
 
   // Modal states
   const [selectedRecord, setSelectedRecord] = useState<DetailedConsultationItem | null>(null)
@@ -113,6 +179,25 @@ export default function DoctorConsultationReportPage() {
   const [isEmailModalOpen, setIsEmailModalOpen] = useState<boolean>(false)
   const [emailRecipients, setEmailRecipients] = useState<string>("director@kairali.com, dme@kairali.com")
   const [isSendingEmail, setIsSendingEmail] = useState<boolean>(false)
+
+  // ── Active Week Bounds ────────────────────────────────────────────────────────
+  const activeWeekBounds = useMemo(() => {
+    if (isCustomMode || selectedWeekId === "custom") {
+      return {
+        startDate: customStartDate,
+        endDate: customEndDate,
+        label: `Custom: ${formatDateDDMMYYYY(customStartDate)} To ${formatDateDDMMYYYY(customEndDate)}`,
+        shortLabel: `${formatDateDDMMYYYY(customStartDate)} To ${formatDateDDMMYYYY(customEndDate)}`,
+      }
+    }
+    const found = availableWeeks.find((w) => w.id === selectedWeekId) || availableWeeks[1]
+    return {
+      startDate: found.startDate,
+      endDate: found.endDate,
+      label: found.label,
+      shortLabel: found.shortLabel,
+    }
+  }, [selectedWeekId, isCustomMode, customStartDate, customEndDate, availableWeeks])
 
   // ── Radix Focus Lock / Freeze Prevention ─────────────────────────────────────
   useEffect(() => {
@@ -134,33 +219,124 @@ export default function DoctorConsultationReportPage() {
     }
   }, [user, isLoading, router])
 
-  // Fetch report data
-  const fetchReportData = async (showToast = false) => {
+  // Fetch report data with direct GAS fallback resilience
+  const fetchReportData = async (force = false, showToast = false) => {
     setIsFetching(true)
     try {
       const params = new URLSearchParams()
       params.set("period", period)
+      params.set("week", selectedWeekId)
+      params.set("startDate", activeWeekBounds.startDate)
+      params.set("endDate", activeWeekBounds.endDate)
       params.set("source", sourceFilter)
       params.set("doctor", doctorFilter)
       params.set("status", statusFilter)
       if (searchQuery) params.set("q", searchQuery)
+      if (force) params.set("force", "true")
 
       const res = await fetch(`/api/doctor/report?${params.toString()}`)
-      if (!res.ok) throw new Error("Failed to load doctor consultation report data")
+      if (!res.ok) throw new Error("Failed to load doctor consultation report data from API")
       const data = await res.json()
 
       setWeeklyReport(data.weeklyReport)
       setOverallReport(data.overallReport)
       setDoctorsPerformance(data.doctorsPerformance || [])
       setDetailedConsultations(data.detailedConsultations || [])
+      if (data.meta?.availableWeeks) setAvailableWeeks(data.meta.availableWeeks)
       if (data.meta?.weeklyDateRange) setWeeklyDateRange(data.meta.weeklyDateRange)
       if (data.meta?.overallDateRange) setOverallDateRange(data.meta.overallDateRange)
+      if (typeof data.meta?.isLive === "boolean") setIsLive(data.meta.isLive)
+      if (data.meta?.lastSyncedAt) setLastSyncedAt(data.meta.lastSyncedAt)
 
       if (showToast) {
-        toast.success("Consultation report data refreshed")
+        toast.success("Live Consultation Report synced successfully")
       }
     } catch (err) {
-      console.error(err)
+      console.warn("[DoctorReport] API route failed, attempting direct Google Sheet sync fallback...", err)
+      // Resilient fallback: fetch direct from Google Apps Script endpoint
+      try {
+        const gasUrl =
+          "https://script.google.com/macros/s/AKfycbznKCwlrWAdI-Oic-ZjjrLtfVR-xyoD4c37KvLHtWr513g0stY69k_AQgZlrd6R_2ysKw/exec"
+        const directRes = await fetch(gasUrl)
+        if (directRes.ok) {
+          const json = await directRes.json()
+          const rawItems = Array.isArray(json) ? json : json?.data || []
+          if (Array.isArray(rawItems) && rawItems.length > 0) {
+            const parsedRows: SourceReportRow[] = []
+            let totalRowItem: any = null
+
+            for (const item of rawItems) {
+              const src = String(item["Enquiry Received Source"] || "").trim()
+              if (src.toLowerCase() === "total") {
+                totalRowItem = item
+              } else if (src) {
+                const totalConsults =
+                  parseInt(String(item["Total Consultation Received"] || "0").replace(/,/g, ""), 10) || 0
+                const done = parseInt(String(item["Successfully Done"] || "0").replace(/,/g, ""), 10) || 0
+                const cancelled =
+                  parseInt(
+                    String(item["Cancelled Consultaion"] || item["Cancelled Consultation"] || "0").replace(/,/g, ""),
+                    10
+                  ) || 0
+                const pending = parseInt(String(item["Pending Consultation"] || "0").replace(/,/g, ""), 10) || 0
+                const converted = parseInt(String(item["Converted Count"] || "0").replace(/,/g, ""), 10) || 0
+                const rawConv = String(item["Conversion %"] || "").replace("%", "").trim()
+                const conversionRate =
+                  parseFloat(rawConv) || (done > 0 ? parseFloat(((converted / done) * 100).toFixed(2)) : 0)
+                const revenue = parseInt(String(item["Revenue (₹)"] || item["Revenue"] || "0").replace(/,/g, ""), 10) || 0
+                const avgRevenuePerConsult = converted > 0 ? Math.round(revenue / converted) : 0
+
+                parsedRows.push({
+                  source: src,
+                  totalConsults,
+                  done,
+                  cancelled,
+                  pending,
+                  converted,
+                  conversionRate,
+                  revenue,
+                  avgRevenuePerConsult,
+                })
+              }
+            }
+
+            let filteredRows = [...parsedRows]
+            if (sourceFilter !== "all") {
+              filteredRows = filteredRows.filter((r) => r.source.toLowerCase() === sourceFilter.toLowerCase())
+            }
+
+            const calcTotalConsults = filteredRows.reduce((a, b) => a + b.totalConsults, 0)
+            const calcDone = filteredRows.reduce((a, b) => a + b.done, 0)
+            const calcCancelled = filteredRows.reduce((a, b) => a + b.cancelled, 0)
+            const calcPending = filteredRows.reduce((a, b) => a + b.pending, 0)
+            const calcConverted = filteredRows.reduce((a, b) => a + b.converted, 0)
+            const calcRevenue = filteredRows.reduce((a, b) => a + b.revenue, 0)
+            const calcConversionRate =
+              calcDone > 0 ? parseFloat(((calcConverted / calcDone) * 100).toFixed(2)) : 0
+            const calcAvgRevenue = calcConverted > 0 ? Math.round(calcRevenue / calcConverted) : 0
+
+            setOverallReport({
+              rows: filteredRows,
+              totals: {
+                totalConsults: calcTotalConsults,
+                done: calcDone,
+                cancelled: calcCancelled,
+                pending: calcPending,
+                converted: calcConverted,
+                conversionRate: calcConversionRate,
+                revenue: calcRevenue,
+                avgRevenuePerConsult: calcAvgRevenue,
+              },
+            })
+            setIsLive(true)
+            setLastSyncedAt(new Date().toISOString())
+            if (showToast) toast.success("Live Consultation Report synced directly from Google Sheets")
+            return
+          }
+        }
+      } catch (directErr) {
+        console.error("Direct fallback fetch also encountered an error:", directErr)
+      }
       toast.error("Error loading doctor consultation report data")
     } finally {
       setIsFetching(false)
@@ -171,16 +347,194 @@ export default function DoctorConsultationReportPage() {
     if (user) {
       fetchReportData()
     }
-  }, [user, period, sourceFilter, doctorFilter, statusFilter])
+  }, [user, period, selectedWeekId, customStartDate, customEndDate, isCustomMode, sourceFilter, doctorFilter, statusFilter])
 
   // Reset pagination on filter change
   useEffect(() => {
     setCurrentPage(1)
-  }, [searchQuery, sourceFilter, doctorFilter, statusFilter, period])
+  }, [searchQuery, sourceFilter, doctorFilter, statusFilter, period, selectedWeekId, registerFilterMode])
+
+  // Dynamic available doctor list
+  const availableDoctors = useMemo(() => {
+    const set = new Set<string>()
+    doctorsPerformance.forEach((d) => {
+      if (d.doctorName) set.add(d.doctorName)
+    })
+    const defaults = [
+      "Dr. Priya Devi N",
+      "DR. SALI P.S",
+      "Dr Deepu John",
+      "Dr. Rahul R",
+      "Dr. Ashikha Raj",
+      "Dr. Akhila Oommen",
+    ]
+    defaults.forEach((d) => set.add(d))
+    return Array.from(set)
+  }, [doctorsPerformance])
+
+  // ── Automatic Week-Wise Calculation from Live Records ──────────────────────
+  const computedWeeklyReport = useMemo(() => {
+    const { startDate, endDate } = activeWeekBounds
+    if (!detailedConsultations || detailedConsultations.length === 0) {
+      return weeklyReport
+    }
+
+    let inRange = detailedConsultations.filter((c) => {
+      const d = c.scheduledDate || c.createdAt?.split("T")[0] || ""
+      return d >= startDate && d <= endDate
+    })
+
+    if (doctorFilter !== "all") {
+      inRange = inRange.filter((c) =>
+        c.doctorName.toLowerCase().includes(doctorFilter.toLowerCase())
+      )
+    }
+
+    const sourceMap = new Map<
+      string,
+      {
+        total: number
+        done: number
+        cancelled: number
+        pending: number
+        converted: number
+        revenue: number
+      }
+    >()
+
+    for (const item of inRange) {
+      const src = item.enquirySource || "Website"
+      const current = sourceMap.get(src) || {
+        total: 0,
+        done: 0,
+        cancelled: 0,
+        pending: 0,
+        converted: 0,
+        revenue: 0,
+      }
+      current.total += 1
+      if (item.status === "completed" || item.status === "converted") current.done += 1
+      if (item.status === "cancelled") current.cancelled += 1
+      if (item.status === "pending") current.pending += 1
+      if (item.status === "converted") {
+        current.converted += 1
+        current.revenue += item.revenue || 0
+      }
+      sourceMap.set(src, current)
+    }
+
+    const rows: SourceReportRow[] = []
+    for (const [source, data] of sourceMap.entries()) {
+      if (sourceFilter !== "all" && source.toLowerCase() !== sourceFilter.toLowerCase()) {
+        continue
+      }
+      const conversionRate =
+        data.done > 0 ? parseFloat(((data.converted / data.done) * 100).toFixed(2)) : 0
+      const avgRevenuePerConsult =
+        data.converted > 0 ? Math.round(data.revenue / data.converted) : 0
+
+      rows.push({
+        source,
+        totalConsults: data.total,
+        done: data.done,
+        cancelled: data.cancelled,
+        pending: data.pending,
+        converted: data.converted,
+        conversionRate,
+        revenue: data.revenue,
+        avgRevenuePerConsult,
+      })
+    }
+
+    if (rows.length === 0 && startDate === "2026-08-31" && endDate === "2026-09-06" && weeklyReport.rows.length > 0) {
+      return weeklyReport
+    }
+
+    rows.sort((a, b) => b.totalConsults - a.totalConsults)
+
+    const totalConsults = rows.reduce((a, b) => a + b.totalConsults, 0)
+    const done = rows.reduce((a, b) => a + b.done, 0)
+    const cancelled = rows.reduce((a, b) => a + b.cancelled, 0)
+    const pending = rows.reduce((a, b) => a + b.pending, 0)
+    const converted = rows.reduce((a, b) => a + b.converted, 0)
+    const revenue = rows.reduce((a, b) => a + b.revenue, 0)
+    const conversionRate =
+      done > 0 ? parseFloat(((converted / done) * 100).toFixed(2)) : 0
+    const avgRevenuePerConsult =
+      converted > 0 ? Math.round(revenue / converted) : 0
+
+    return {
+      rows,
+      totals: {
+        source: "TOTAL (WEEKLY)",
+        totalConsults,
+        done,
+        cancelled,
+        pending,
+        converted,
+        conversionRate,
+        revenue,
+        avgRevenuePerConsult,
+      },
+    }
+  }, [detailedConsultations, activeWeekBounds, sourceFilter, doctorFilter, weeklyReport])
+
+  // Week navigation index helpers
+  const currentWeekIndex = availableWeeks.findIndex((w) => w.id === selectedWeekId)
+  const canGoPrevious = currentWeekIndex >= 0 && currentWeekIndex < availableWeeks.length - 1
+  const canGoNext = currentWeekIndex > 0
+
+  const handlePreviousWeek = () => {
+    if (canGoPrevious) {
+      setIsCustomMode(false)
+      setSelectedWeekId(availableWeeks[currentWeekIndex + 1].id)
+    }
+  }
+
+  const handleNextWeek = () => {
+    if (canGoNext) {
+      setIsCustomMode(false)
+      setSelectedWeekId(availableWeeks[currentWeekIndex - 1].id)
+    }
+  }
+
+  const handleCurrentWeek = () => {
+    setIsCustomMode(false)
+    setSelectedWeekId("2026-W37")
+  }
+
+  const handleBenchmarkWeek = () => {
+    setIsCustomMode(false)
+    setSelectedWeekId("2026-W36")
+  }
+
+  const weeklyRecordsCount = useMemo(() => {
+    const { startDate, endDate } = activeWeekBounds
+    return detailedConsultations.filter((c) => {
+      const d = c.scheduledDate || c.createdAt?.split("T")[0] || ""
+      return d >= startDate && d <= endDate
+    }).length
+  }, [detailedConsultations, activeWeekBounds])
 
   // Filtered detailed consultations on client
   const filteredRecords = useMemo(() => {
     let list = [...detailedConsultations]
+    if (registerFilterMode === "week") {
+      const { startDate, endDate } = activeWeekBounds
+      list = list.filter((c) => {
+        const d = c.scheduledDate || c.createdAt?.split("T")[0] || ""
+        return d >= startDate && d <= endDate
+      })
+    }
+    if (sourceFilter !== "all") {
+      list = list.filter((c) => c.enquirySource.toLowerCase() === sourceFilter.toLowerCase())
+    }
+    if (doctorFilter !== "all") {
+      list = list.filter((c) => c.doctorName.toLowerCase().includes(doctorFilter.toLowerCase()))
+    }
+    if (statusFilter !== "all") {
+      list = list.filter((c) => c.status === statusFilter)
+    }
     if (searchQuery) {
       const q = searchQuery.toLowerCase().trim()
       list = list.filter(
@@ -195,7 +549,7 @@ export default function DoctorConsultationReportPage() {
       )
     }
     return list
-  }, [detailedConsultations, searchQuery])
+  }, [detailedConsultations, registerFilterMode, activeWeekBounds, sourceFilter, doctorFilter, statusFilter, searchQuery])
 
   // Paginated records
   const paginatedRecords = useMemo(() => {
@@ -215,10 +569,13 @@ export default function DoctorConsultationReportPage() {
   }
 
   // Active filter count
-  const hasActiveFilters = period !== "this_week" || sourceFilter !== "all" || doctorFilter !== "all" || statusFilter !== "all" || searchQuery !== ""
+  const hasActiveFilters = period !== "this_week" || sourceFilter !== "all" || doctorFilter !== "all" || statusFilter !== "all" || searchQuery !== "" || isCustomMode
 
   const clearFilters = () => {
     setPeriod("this_week")
+    setSelectedWeekId("2026-W36")
+    setIsCustomMode(false)
+    setRegisterFilterMode("all")
     setSourceFilter("all")
     setDoctorFilter("all")
     setStatusFilter("all")
@@ -241,8 +598,8 @@ export default function DoctorConsultationReportPage() {
         "Revenue (INR)",
       ]
 
-      const weeklyRows = weeklyReport.rows.map((r) => [
-        `"Weekly (${weeklyDateRange})"`,
+      const weeklyRows = computedWeeklyReport.rows.map((r) => [
+        `"Weekly (${activeWeekBounds.shortLabel})"`,
         `"${r.source}"`,
         r.totalConsults,
         r.done,
@@ -254,7 +611,7 @@ export default function DoctorConsultationReportPage() {
       ])
 
       const overallRows = overallReport.rows.map((r) => [
-        `"Cumulative (${overallDateRange})"`,
+        `"Over All Cumulative"`,
         `"${r.source}"`,
         r.totalConsults,
         r.done,
@@ -305,7 +662,7 @@ export default function DoctorConsultationReportPage() {
     return <Loader isLoading={true} contentOnly />
   }
 
-  const wTotals = weeklyReport.totals || {
+  const wTotals = computedWeeklyReport.totals || {
     totalConsults: 0,
     done: 0,
     cancelled: 0,
@@ -394,12 +751,18 @@ export default function DoctorConsultationReportPage() {
                         <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-white tracking-tight leading-tight">
                           Doctor Consultation Report Sheet
                         </h1>
-                        <span className="bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 text-xs px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider backdrop-blur-sm">
-                          Executive Management
+                        <span className="bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 text-xs px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider backdrop-blur-sm flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                          {isLive ? "Live Google Sheet Synced" : "Offline / Snapshot"}
                         </span>
                       </div>
-                      <p className="text-sm sm:text-base text-blue-100/90 mt-1 font-medium">
-                        Comprehensive weekly & cumulative audit of clinical consultations, channel conversions & revenue
+                      <p className="text-sm sm:text-base text-blue-100/90 mt-1 font-medium flex items-center gap-2 flex-wrap">
+                        <span>Comprehensive weekly & cumulative audit of clinical consultations, channel conversions & revenue</span>
+                        {lastSyncedAt && (
+                          <span className="text-xs text-blue-200/90 bg-white/10 px-2 py-0.5 rounded-md border border-white/20">
+                            Synced: {new Date(lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          </span>
+                        )}
                       </p>
                     </div>
                   </div>
@@ -450,13 +813,13 @@ export default function DoctorConsultationReportPage() {
                 {/* Right Section - Action Buttons */}
                 <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto lg:justify-end">
                   <Button
-                    onClick={() => fetchReportData(true)}
+                    onClick={() => fetchReportData(true, true)}
                     variant="outline"
                     size="sm"
                     className="bg-white/10 hover:bg-white/20 text-white border-white/25 backdrop-blur-md font-medium text-xs h-9"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isFetching ? "animate-spin" : ""}`} />
-                    Refresh
+                    Sync Now
                   </Button>
                   <Button
                     onClick={handleExportCSV}
@@ -683,7 +1046,7 @@ export default function DoctorConsultationReportPage() {
                       <SelectItem value="this_month">This Month</SelectItem>
                       <SelectItem value="last_month">Last Month</SelectItem>
                       <SelectItem value="ytd">Year To Date (2026)</SelectItem>
-                      <SelectItem value="all_time">Cumulative (02-07-2024 to Date)</SelectItem>
+                      <SelectItem value="all_time">Cumulative (All Time)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -724,10 +1087,11 @@ export default function DoctorConsultationReportPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Doctors</SelectItem>
-                      <SelectItem value="Dr. Riya Sharma">Dr. Riya Sharma</SelectItem>
-                      <SelectItem value="Dr. Amit Patel">Dr. Amit Patel</SelectItem>
-                      <SelectItem value="Dr. Ananya Sen">Dr. Ananya Sen</SelectItem>
-                      <SelectItem value="Dr. Vikram Malhotra">Dr. Vikram Malhotra</SelectItem>
+                      {availableDoctors.map((doc) => (
+                        <SelectItem key={doc} value={doc}>
+                          {doc}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -809,28 +1173,196 @@ export default function DoctorConsultationReportPage() {
             <TabsContent value="summary" className="space-y-8">
               {/* SECTION A: WEEKLY REPORT TABLE */}
               <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                {/* Header Banner */}
-                <div className="bg-gradient-to-r from-blue-700 via-blue-800 to-indigo-900 text-white p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2.5 flex-wrap">
-                      <h2 className="text-lg sm:text-xl font-black text-white">
-                        Weekly Doctor Consultation Report
-                      </h2>
-                      <Badge className="bg-blue-400/20 text-blue-200 border-blue-400/40 text-xs font-semibold">
-                        {weeklyDateRange}
-                      </Badge>
+                {/* Header Banner with Week Controls */}
+                <div className="bg-gradient-to-r from-blue-800 via-indigo-900 to-slate-900 text-white p-5 sm:p-6 space-y-4">
+                  <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <h2 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+                          Weekly Doctor Consultation Report
+                        </h2>
+                        <Badge className="bg-blue-400/20 text-blue-200 border-blue-400/40 text-xs font-bold px-2.5 py-0.5">
+                          📅 {activeWeekBounds.shortLabel}
+                        </Badge>
+                        <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-400/40 text-[11px] font-semibold flex items-center gap-1">
+                          <Zap className="w-3 h-3 text-emerald-400" />
+                          Auto-Calculated from Live Records
+                        </Badge>
+                      </div>
+                      <p className="text-xs sm:text-sm text-blue-100/80">
+                        Inbound consultations by enquiry source dynamically aggregated for the selected week
+                      </p>
                     </div>
-                    <p className="text-xs sm:text-sm text-blue-100/80">
-                      Breakdown of inbound consultations by enquiry source for the active weekly tracking window
-                    </p>
+
+                    {/* Weekly KPI Highlights */}
+                    <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10">
+                      <div className="text-right">
+                        <div className="text-[10px] text-blue-200 font-bold uppercase tracking-wider">Weekly Volume</div>
+                        <div className="text-xl sm:text-2xl font-black text-white tabular-nums">
+                          {wTotals.totalConsults} <span className="text-xs font-medium text-blue-200">Consults</span>
+                        </div>
+                      </div>
+                      <div className="h-8 w-px bg-white/20 mx-1" />
+                      <div className="text-right">
+                        <div className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider">Weekly Revenue</div>
+                        <div className="text-base sm:text-lg font-black text-emerald-300 tabular-nums">
+                          {formatCurrency(wTotals.revenue)}
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
-                      <div className="text-xs text-blue-200 font-semibold uppercase tracking-wider">Weekly Volume</div>
-                      <div className="text-2xl font-black text-white tabular-nums">{wTotals.totalConsults} Consults</div>
+                  {/* Interactive Week Navigator Toolbar */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/15">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-blue-200 uppercase tracking-wide flex items-center gap-1.5 mr-1">
+                        <CalendarDays className="w-3.5 h-3.5 text-blue-300" />
+                        Select Week:
+                      </span>
+
+                      {/* Previous Week Button */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handlePreviousWeek}
+                        disabled={!canGoPrevious}
+                        className="h-8 bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs font-semibold disabled:opacity-30 disabled:pointer-events-none"
+                        title="Go to previous week"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5 mr-1" />
+                        Prev
+                      </Button>
+
+                      {/* Week Dropdown */}
+                      <Select
+                        value={isCustomMode ? "custom" : selectedWeekId}
+                        onValueChange={(val) => {
+                          if (val === "custom") {
+                            setIsCustomMode(true)
+                          } else {
+                            setIsCustomMode(false)
+                            setSelectedWeekId(val)
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="h-8 w-[240px] sm:w-[310px] bg-white text-slate-900 border-white/30 text-xs font-bold shadow-sm">
+                          <SelectValue placeholder="Select weekly period..." />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white text-slate-900">
+                          {availableWeeks.map((w) => (
+                            <SelectItem key={w.id} value={w.id} className="text-xs py-2 font-medium">
+                              <span className="font-bold text-slate-900">{w.label}</span>
+                              {w.isCurrent && (
+                                <span className="ml-2 text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-bold">
+                                  CURRENT
+                                </span>
+                              )}
+                              {w.isBenchmark && (
+                                <span className="ml-2 text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-bold">
+                                  BENCHMARK
+                                </span>
+                              )}
+                            </SelectItem>
+                          ))}
+                          <SelectItem value="custom" className="text-xs py-2 font-bold text-indigo-700">
+                            📅 Custom Date Range...
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+
+                      {/* Next Week Button */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleNextWeek}
+                        disabled={!canGoNext}
+                        className="h-8 bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs font-semibold disabled:opacity-30 disabled:pointer-events-none"
+                        title="Go to next week"
+                      >
+                        Next
+                        <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                      </Button>
+
+                      {/* Quick Jump Buttons */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleCurrentWeek}
+                        className={`h-8 text-xs font-bold border-white/20 ${
+                          selectedWeekId === "2026-W37" && !isCustomMode
+                            ? "bg-white text-blue-900 shadow"
+                            : "bg-white/10 hover:bg-white/20 text-white"
+                        }`}
+                      >
+                        ⚡ This Week
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleBenchmarkWeek}
+                        className={`h-8 text-xs font-bold border-white/20 ${
+                          selectedWeekId === "2026-W36" && !isCustomMode
+                            ? "bg-amber-400 text-slate-950 font-black shadow"
+                            : "bg-white/10 hover:bg-white/20 text-amber-300"
+                        }`}
+                      >
+                        Week 36 (Benchmark)
+                      </Button>
                     </div>
+
+                    {/* Tab 4 quick bridge link */}
+                    <button
+                      onClick={() => {
+                        setRegisterFilterMode("week")
+                        setActiveTab("records")
+                      }}
+                      className="text-xs text-blue-200 hover:text-white underline font-semibold flex items-center gap-1 transition-colors"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      Inspect Week Patient Dossiers ({weeklyRecordsCount})
+                    </button>
                   </div>
+
+                  {/* Custom Date Range Picker Accordion / Bar */}
+                  {isCustomMode && (
+                    <div className="bg-white/10 backdrop-blur-md p-3 rounded-lg border border-white/20 flex flex-wrap items-center gap-3 animate-in fade-in duration-200">
+                      <div className="flex items-center gap-2 text-xs text-white">
+                        <span className="font-bold">Start Date:</span>
+                        <Input
+                          type="date"
+                          value={customStartDate}
+                          onChange={(e) => setCustomStartDate(e.target.value)}
+                          className="h-8 w-36 bg-white text-slate-900 text-xs font-semibold"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-white">
+                        <span className="font-bold">End Date:</span>
+                        <Input
+                          type="date"
+                          value={customEndDate}
+                          onChange={(e) => setCustomEndDate(e.target.value)}
+                          className="h-8 w-36 bg-white text-slate-900 text-xs font-semibold"
+                        />
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => fetchReportData(false, true)}
+                        className="h-8 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
+                      >
+                        Apply Window
+                      </Button>
+                      <button
+                        onClick={() => {
+                          setIsCustomMode(false)
+                          setSelectedWeekId("2026-W36")
+                        }}
+                        className="text-xs text-blue-200 hover:text-white underline ml-2"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Table Content */}
@@ -865,39 +1397,39 @@ export default function DoctorConsultationReportPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {weeklyReport.rows.map((r, idx) => (
+                      {computedWeeklyReport.rows.map((r, idx) => (
                         <TableRow
                           key={r.source}
-                          className={`hover:bg-blue-50/40 transition-colors border-b border-slate-100 ${
-                            idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"
+                          className={`hover:bg-blue-50/80 transition-colors border-b border-slate-200/70 ${
+                            idx % 2 === 0 ? "bg-white" : "bg-slate-50/60"
                           }`}
                         >
                           <TableCell className="font-bold text-slate-900 pl-6 py-3.5 text-sm flex items-center gap-2">
                             <span className="w-2 h-2 rounded-full bg-blue-600 inline-block" />
                             {r.source}
                           </TableCell>
-                          <TableCell className="text-center font-bold text-slate-800 py-3.5 text-sm tabular-nums">
+                          <TableCell className="text-center font-bold text-slate-900 py-3.5 text-sm tabular-nums">
                             {r.totalConsults}
                           </TableCell>
-                          <TableCell className="text-center font-semibold text-emerald-700 py-3.5 text-sm tabular-nums">
+                          <TableCell className="text-center font-bold text-emerald-700 py-3.5 text-sm tabular-nums">
                             {r.done}
                           </TableCell>
-                          <TableCell className="text-center font-semibold text-rose-700 py-3.5 text-sm tabular-nums">
+                          <TableCell className="text-center font-bold text-rose-700 py-3.5 text-sm tabular-nums">
                             {r.cancelled}
                           </TableCell>
-                          <TableCell className="text-center font-semibold text-amber-700 py-3.5 text-sm tabular-nums">
+                          <TableCell className="text-center font-bold text-amber-700 py-3.5 text-sm tabular-nums">
                             {r.pending}
                           </TableCell>
                           <TableCell className="text-center font-bold text-purple-700 py-3.5 text-sm tabular-nums">
                             {r.converted}
                           </TableCell>
-                          <TableCell className="text-center font-bold text-slate-800 py-3.5 text-sm tabular-nums">
+                          <TableCell className="text-center font-bold text-slate-900 py-3.5 text-sm tabular-nums">
                             <Badge
                               variant="outline"
                               className={
                                 r.conversionRate > 0
-                                  ? "bg-purple-50 text-purple-700 border-purple-200 font-bold"
-                                  : "bg-slate-100 text-slate-600 border-slate-200 font-medium"
+                                  ? "bg-purple-100 text-purple-800 border-purple-300 font-bold"
+                                  : "bg-slate-100 text-slate-700 border-slate-200 font-medium"
                               }
                             >
                               {r.conversionRate.toFixed(2)}%
@@ -909,30 +1441,47 @@ export default function DoctorConsultationReportPage() {
                         </TableRow>
                       ))}
 
-                      {/* Weekly Summary Total Row */}
-                      <TableRow className="bg-slate-900 text-white font-extrabold border-t-2 border-blue-600">
-                        <TableCell className="pl-6 py-4 text-sm font-black text-blue-200 uppercase tracking-wide">
-                          Total (Weekly)
+                      {computedWeeklyReport.rows.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={8} className="h-32 text-center py-6 text-slate-500">
+                            <div className="font-bold text-slate-700 text-sm">No consultation records in {activeWeekBounds.shortLabel}</div>
+                            <div className="text-xs text-slate-400 mt-1">Try switching to another week or reset filters.</div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={handleBenchmarkWeek}
+                              className="mt-3 text-xs border-slate-300 font-semibold text-slate-800 hover:bg-slate-100"
+                            >
+                              Jump to Week 36 (Benchmark Report)
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      )}
+
+                      {/* Weekly Summary Total Row - Always Dark with Crisp High-Contrast Text */}
+                      <TableRow className="!bg-slate-950 hover:!bg-slate-900 text-white font-extrabold border-t-2 border-blue-600 [&>td]:!bg-slate-950 hover:[&>td]:!bg-slate-900 transition-colors">
+                        <TableCell className="pl-6 py-4 text-sm font-black !text-blue-300 uppercase tracking-wide">
+                          TOTAL (WEEKLY)
                         </TableCell>
-                        <TableCell className="text-center text-sm py-4 text-white font-black tabular-nums">
+                        <TableCell className="text-center text-sm py-4 !text-white font-black tabular-nums">
                           {wTotals.totalConsults}
                         </TableCell>
-                        <TableCell className="text-center text-sm py-4 text-emerald-300 font-black tabular-nums">
+                        <TableCell className="text-center text-sm py-4 !text-emerald-400 font-black tabular-nums">
                           {wTotals.done}
                         </TableCell>
-                        <TableCell className="text-center text-sm py-4 text-rose-300 font-black tabular-nums">
+                        <TableCell className="text-center text-sm py-4 !text-rose-400 font-black tabular-nums">
                           {wTotals.cancelled}
                         </TableCell>
-                        <TableCell className="text-center text-sm py-4 text-amber-300 font-black tabular-nums">
+                        <TableCell className="text-center text-sm py-4 !text-amber-400 font-black tabular-nums">
                           {wTotals.pending}
                         </TableCell>
-                        <TableCell className="text-center text-sm py-4 text-purple-300 font-black tabular-nums">
+                        <TableCell className="text-center text-sm py-4 !text-purple-300 font-black tabular-nums">
                           {wTotals.converted}
                         </TableCell>
-                        <TableCell className="text-center text-sm py-4 text-white font-black tabular-nums">
+                        <TableCell className="text-center text-sm py-4 !text-white font-black tabular-nums">
                           {wTotals.conversionRate?.toFixed(2)}%
                         </TableCell>
-                        <TableCell className="text-right pr-6 py-4 text-sm font-black text-emerald-300 tabular-nums">
+                        <TableCell className="text-right pr-6 py-4 text-sm font-black !text-emerald-400 tabular-nums">
                           {formatCurrency(wTotals.revenue)}
                         </TableCell>
                       </TableRow>
@@ -950,12 +1499,9 @@ export default function DoctorConsultationReportPage() {
                       <h2 className="text-lg sm:text-xl font-black text-white">
                         Over All Total Consultation Report
                       </h2>
-                      <Badge className="bg-amber-400/20 text-amber-300 border-amber-400/40 text-xs font-semibold">
-                        {overallDateRange}
-                      </Badge>
                     </div>
                     <p className="text-xs sm:text-sm text-slate-300">
-                      Historical cumulative performance report across all enquiry sources (02-07-2024 to date)
+                      Historical cumulative performance report across all enquiry sources
                     </p>
                   </div>
 
@@ -1010,8 +1556,8 @@ export default function DoctorConsultationReportPage() {
                         return (
                           <TableRow
                             key={r.source}
-                            className={`hover:bg-indigo-50/30 transition-colors border-b border-slate-100 ${
-                              idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"
+                            className={`hover:bg-indigo-50/70 transition-colors border-b border-slate-200/70 ${
+                              idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"
                             }`}
                           >
                             <TableCell className="font-bold text-slate-900 pl-6 py-3.5 text-sm flex items-center gap-2">
@@ -1021,72 +1567,72 @@ export default function DoctorConsultationReportPage() {
                               />
                               {r.source}
                             </TableCell>
-                            <TableCell className="text-center font-bold text-slate-800 py-3.5 text-sm tabular-nums">
+                            <TableCell className="text-center font-bold text-slate-900 py-3.5 text-sm tabular-nums">
                               {r.totalConsults.toLocaleString()}
                             </TableCell>
-                            <TableCell className="text-center text-xs font-semibold text-slate-500 py-3.5 tabular-nums">
+                            <TableCell className="text-center text-xs font-semibold text-slate-600 py-3.5 tabular-nums">
                               {sharePercent}%
                             </TableCell>
-                            <TableCell className="text-center font-semibold text-emerald-700 py-3.5 text-sm tabular-nums">
+                            <TableCell className="text-center font-bold text-emerald-700 py-3.5 text-sm tabular-nums">
                               {r.done.toLocaleString()}
                             </TableCell>
-                            <TableCell className="text-center font-semibold text-rose-700 py-3.5 text-sm tabular-nums">
+                            <TableCell className="text-center font-bold text-rose-700 py-3.5 text-sm tabular-nums">
                               {r.cancelled.toLocaleString()}
                             </TableCell>
-                            <TableCell className="text-center font-semibold text-amber-700 py-3.5 text-sm tabular-nums">
+                            <TableCell className="text-center font-bold text-amber-700 py-3.5 text-sm tabular-nums">
                               {r.pending}
                             </TableCell>
                             <TableCell className="text-center font-bold text-purple-700 py-3.5 text-sm tabular-nums">
                               {r.converted.toLocaleString()}
                             </TableCell>
-                            <TableCell className="text-center font-bold text-slate-800 py-3.5 text-sm tabular-nums">
+                            <TableCell className="text-center font-bold text-slate-900 py-3.5 text-sm tabular-nums">
                               <Badge
                                 variant="outline"
                                 className={
                                   r.conversionRate >= 10
-                                    ? "bg-emerald-50 text-emerald-700 border-emerald-300 font-bold"
+                                    ? "bg-emerald-100 text-emerald-800 border-emerald-300 font-bold"
                                     : r.conversionRate >= 5
-                                    ? "bg-purple-50 text-purple-700 border-purple-200 font-bold"
-                                    : "bg-slate-100 text-slate-700 border-slate-200 font-medium"
+                                    ? "bg-purple-100 text-purple-800 border-purple-300 font-bold"
+                                    : "bg-slate-100 text-slate-800 border-slate-300 font-medium"
                                 }
                               >
                                 {r.conversionRate.toFixed(2)}%
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-right font-black text-slate-900 pr-6 py-3.5 text-sm tabular-nums">
+                            <TableCell className="text-right font-black text-slate-950 pr-6 py-3.5 text-sm tabular-nums">
                               {formatCurrency(r.revenue)}
                             </TableCell>
                           </TableRow>
                         )
                       })}
 
-                      {/* Cumulative Total Row */}
-                      <TableRow className="bg-slate-900 text-white font-extrabold border-t-2 border-indigo-500">
-                        <TableCell className="pl-6 py-4 text-sm font-black text-amber-300 uppercase tracking-wide">
-                          Total (Over All)
+                      {/* Cumulative Total Row - Always Solid Dark with Crisp High-Contrast Text (Never Fades on Hover) */}
+                      <TableRow className="!bg-slate-950 hover:!bg-slate-900 text-white font-extrabold border-t-2 border-indigo-500 [&>td]:!bg-slate-950 hover:[&>td]:!bg-slate-900 transition-colors">
+                        <TableCell className="pl-6 py-4 text-sm font-black !text-amber-400 uppercase tracking-wide">
+                          TOTAL (OVER ALL)
                         </TableCell>
-                        <TableCell className="text-center text-sm py-4 text-white font-black tabular-nums">
+                        <TableCell className="text-center text-sm py-4 !text-white font-black tabular-nums">
                           {oTotals.totalConsults?.toLocaleString()}
                         </TableCell>
-                        <TableCell className="text-center text-xs text-slate-300 py-4 font-bold tabular-nums">
+                        <TableCell className="text-center text-xs !text-slate-300 py-4 font-bold tabular-nums">
                           100.0%
                         </TableCell>
-                        <TableCell className="text-center text-sm py-4 text-emerald-300 font-black tabular-nums">
+                        <TableCell className="text-center text-sm py-4 !text-emerald-400 font-black tabular-nums">
                           {oTotals.done?.toLocaleString()}
                         </TableCell>
-                        <TableCell className="text-center text-sm py-4 text-rose-300 font-black tabular-nums">
+                        <TableCell className="text-center text-sm py-4 !text-rose-400 font-black tabular-nums">
                           {oTotals.cancelled?.toLocaleString()}
                         </TableCell>
-                        <TableCell className="text-center text-sm py-4 text-amber-300 font-black tabular-nums">
+                        <TableCell className="text-center text-sm py-4 !text-amber-400 font-black tabular-nums">
                           {oTotals.pending}
                         </TableCell>
-                        <TableCell className="text-center text-sm py-4 text-purple-300 font-black tabular-nums">
+                        <TableCell className="text-center text-sm py-4 !text-purple-300 font-black tabular-nums">
                           {oTotals.converted?.toLocaleString()}
                         </TableCell>
-                        <TableCell className="text-center text-sm py-4 text-white font-black tabular-nums">
+                        <TableCell className="text-center text-sm py-4 !text-white font-black tabular-nums">
                           {oTotals.conversionRate?.toFixed(2)}%
                         </TableCell>
-                        <TableCell className="text-right pr-6 py-4 text-sm font-black text-emerald-300 tabular-nums">
+                        <TableCell className="text-right pr-6 py-4 text-sm font-black !text-emerald-400 tabular-nums">
                           {formatCurrency(oTotals.revenue)}
                         </TableCell>
                       </TableRow>
@@ -1200,8 +1746,8 @@ export default function DoctorConsultationReportPage() {
                       {doctorsPerformance.map((doc, idx) => (
                         <TableRow
                           key={doc.doctorId}
-                          className={`hover:bg-teal-50/40 transition-colors border-b border-slate-100 ${
-                            idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"
+                          className={`hover:bg-teal-50/80 transition-colors border-b border-slate-200/70 ${
+                            idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"
                           }`}
                         >
                           <TableCell className="font-bold text-slate-900 pl-6 py-4 flex items-center gap-3">
@@ -1362,9 +1908,29 @@ export default function DoctorConsultationReportPage() {
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <Badge variant="outline" className="bg-blue-500/20 text-blue-200 border-blue-400/30 text-xs">
-                      {filteredRecords.length} records found
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    {/* Filter to week toggle */}
+                    <div className="flex items-center bg-slate-800 p-0.5 rounded-lg border border-slate-700 text-xs">
+                      <button
+                        onClick={() => setRegisterFilterMode("all")}
+                        className={`px-2.5 py-1 rounded-md font-semibold transition-colors ${
+                          registerFilterMode === "all" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        All Records ({detailedConsultations.length})
+                      </button>
+                      <button
+                        onClick={() => setRegisterFilterMode("week")}
+                        className={`px-2.5 py-1 rounded-md font-semibold transition-colors ${
+                          registerFilterMode === "week" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        Selected Week ({weeklyRecordsCount})
+                      </button>
+                    </div>
+
+                    <Badge variant="outline" className="bg-blue-500/20 text-blue-200 border-blue-400/30 text-xs font-semibold">
+                      {filteredRecords.length} shown
                     </Badge>
                   </div>
                 </div>
@@ -1404,8 +1970,8 @@ export default function DoctorConsultationReportPage() {
                       {paginatedRecords.map((item, idx) => (
                         <TableRow
                           key={item.id}
-                          className={`hover:bg-slate-50 transition-colors border-b border-slate-100 ${
-                            idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"
+                          className={`hover:bg-blue-50/70 transition-colors border-b border-slate-200/70 ${
+                            idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"
                           }`}
                         >
                           <TableCell className="pl-6 py-3.5 font-bold text-blue-700 text-xs">
@@ -1730,7 +2296,7 @@ export default function DoctorConsultationReportPage() {
                   </div>
 
                   <div className="font-bold text-slate-900 text-xs pt-2">
-                    2. Over All Total Consultation Report – {overallDateRange}
+                    2. Over All Total Consultation Report
                   </div>
                   <div className="border rounded overflow-hidden">
                     <table className="w-full text-left border-collapse text-[11px]">

@@ -46,86 +46,24 @@ import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Layers,
   FileCheck,
   MoreVertical,
+  Video,
 } from "lucide-react"
 
-// ─── Interfaces ──────────────────────────────────────────────────────────────
-
-interface Consultation {
-  id: string
-  consultationId: string
-  enquiryId: string
-  patientName: string
-  patientId: string
-  mobile: string
-  email: string
-  subjects: string
-  notes: string
-  ivrUrl: string
-  websiteName: string
-  dataSource: string
-  assignedSalesRep: string
-  remarksHistory: string
-  dataFromSheet: string
-  doctorCalendarLink: string
-  appointmentType: string
-  appointmentStatus: string
-  doctorAlignment: string
-  scheduledDateTime: string
-  remarks: string
-  clientReportLink: string
-  submitStatus: string
-  clientReportsLink: string
-  clientReportsRemarks: string
-  doshaTestReportLink: string
-  healthAssessmentReportLink: string
-  clientReminderStatus: string
-  doctorReminderStatus: string
-  consultationDoneStatus: string
-  reportsUploadUrl: string
-  postConsultationRemarks: string
-  finalCaseStatus: string
-  postConsultationUploadedBy: string
-  transferToUserStatus: string
-  stage: string
-  status: "completed" | "pending" | "overdue" | "upcoming"
-  scheduledDate: string
-  doer: string
-  slaStatus: "on-time" | "at-risk" | "overdue"
-  timeRemaining: string
-  hasPrescription: boolean
-  createdAt: string
-  delayHours?: number
-}
-
-interface StageDefinition {
-  name: string
-  shortName: string
-  sla: string
-  slaHours: number
-}
-
-// ─── Constants ───────────────────────────────────────────────────────────────
-
-const stages: StageDefinition[] = [
-  { name: "Intake", shortName: "Intake", sla: "Auto from SQV / Web Form", slaHours: 0 },
-  { name: "Appointment Fix", shortName: "Apt Fix", sla: "+1:00h from arrival", slaHours: 1 },
-  { name: "Pre-Consult Docs", shortName: "Pre-Docs", sla: "-2:00h before schedule", slaHours: 2 },
-  { name: "Day-Of Reminder", shortName: "Reminder", sla: "-1:00h before schedule", slaHours: 1 },
-  { name: "Post-Consult Upload", shortName: "Post-Upload", sla: "+1:00h after end", slaHours: 1 },
-  { name: "Handover to KAPPL/KTAHV", shortName: "Handover", sla: "Same-day completion", slaHours: 8 },
-]
+import {
+  useDoctorConsultations,
+  type Consultation,
+  type StageDefinition,
+  STAGES as stages,
+  computeConsultationStats,
+  computeStageBreakup,
+} from "@/hooks/useDoctorConsultations"
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const calculateDelayTime = (consultation: Consultation, stageSlaHours: number): number => {
-  const now = new Date()
-  const createdAt = new Date(consultation.createdAt || consultation.scheduledDate || now.toISOString())
-  const hoursSinceCreation = Math.floor((now.getTime() - createdAt.getTime()) / (1000 * 60 * 60))
-  return Math.max(0, hoursSinceCreation - stageSlaHours)
-}
 
 const getDelayBadge = (delayHours: number) => {
   if (delayHours === 0) {
@@ -200,23 +138,16 @@ const formatDateTime = (dateStr: string) => {
 export default function DoctorConsultationPage() {
   const router = useRouter()
 
-  // State
-  const [consultations, setConsultations] = useState<Consultation[]>([])
-  const [stageBreakup, setStageBreakup] = useState<any[]>([])
-  const [selectedStage, setSelectedStage] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [isRefreshing, setIsRefreshing] = useState(false)
+  // Google Apps Script Live Data Hook
+  const {
+    consultations,
+    loading,
+    isRefreshing,
+    error,
+    refetch,
+  } = useDoctorConsultations()
 
-  // Stats
-  const [stats, setStats] = useState({
-    total: 0,
-    completed: 0,
-    pending: 0,
-    converted: 0,
-    revenue: 0,
-    prescriptions: 0,
-    conversionRate: 0,
-  })
+  const [selectedStage, setSelectedStage] = useState<string | null>(null)
 
   // Filters
   const [searchTerm, setSearchTerm] = useState("")
@@ -228,6 +159,18 @@ export default function DoctorConsultationPage() {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
+  const [goToPage, setGoToPage] = useState("")
+
+  const handleJumpToPage = (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    const target = parseInt(goToPage, 10)
+    if (!isNaN(target) && target >= 1 && target <= totalPages) {
+      setCurrentPage(target)
+      setGoToPage("")
+    } else {
+      toast.error(`Please enter a page number between 1 and ${totalPages}`)
+    }
+  }
 
   // Action Dialog State (All popups use the EXACT SAME uniform width max-w-2xl)
   const [actionDialog, setActionDialog] = useState<{
@@ -256,88 +199,12 @@ export default function DoctorConsultationPage() {
     return () => observer.disconnect()
   }, [])
 
-  // Initial Fetch
-  useEffect(() => {
-    fetchData()
-  }, [])
-
-  const fetchData = async (showToast = false) => {
+  const handleRefresh = async () => {
     try {
-      if (showToast) setIsRefreshing(true)
-      else setLoading(true)
-
-      // Fetch KPIs
-      const kpiResponse = await fetch("/api/doctor/kpis")
-      const kpiData = await kpiResponse.json()
-
-      const completed = kpiData.completedConsultations || 0
-      const total = kpiData.totalConsultations || 1
-      const pending = kpiData.pendingConsultations || 0
-      const converted = Math.floor(completed * 0.75)
-      const conversionRate = Math.round((converted / total) * 100)
-      const revenue = completed * 2500
-
-      setStats({
-        total,
-        completed,
-        pending,
-        converted,
-        revenue,
-        prescriptions: kpiData.prescriptionsIssued || Math.round(completed * 0.9),
-        conversionRate,
-      })
-
-      // Fetch consultations
-      const consultationsResponse = await fetch("/api/doctor/consultations")
-      const consultationsData = await consultationsResponse.json()
-      const consultationsList: Consultation[] = consultationsData.consultations || consultationsData.items || []
-      setConsultations(consultationsList)
-
-      // Compute Stage Breakup
-      const breakup = stages.map((stage) => {
-        const stageConsultations = consultationsList.filter((c: Consultation) => c.stage === stage.name)
-        const pendingConsultations = stageConsultations.filter(
-          (c: Consultation) => c.status === "pending" || c.status === "overdue"
-        )
-
-        const consultationsWithDelay = pendingConsultations.map((c: Consultation) => ({
-          ...c,
-          delayHours: calculateDelayTime(c, stage.slaHours),
-        }))
-
-        const totalDelayHours = consultationsWithDelay.reduce(
-          (sum: number, c: Consultation & { delayHours?: number }) => sum + (c.delayHours || 0),
-          0
-        )
-        const avgDelayHours =
-          pendingConsultations.length > 0 ? Math.round(totalDelayHours / pendingConsultations.length) : 0
-
-        const pendingCount = pendingConsultations.length
-        const totalCount = stageConsultations.length
-        const percentage = consultationsList.length > 0 ? (totalCount / consultationsList.length) * 100 : 0
-        const completedCount = stageConsultations.filter((c: Consultation) => c.status === "completed").length
-        const progressPercentage = totalCount > 0 ? (completedCount / totalCount) * 100 : 0
-
-        return {
-          ...stage,
-          count: totalCount,
-          pendingCount,
-          percentage,
-          progressPercentage,
-          totalDelayHours,
-          avgDelayHours,
-          consultations: consultationsWithDelay,
-        }
-      })
-      setStageBreakup(breakup)
-
-      if (showToast) toast.success("Data refreshed successfully")
-    } catch (error) {
-      console.error("Error fetching data:", error)
-      toast.error("Failed to load consultation data")
-    } finally {
-      setLoading(false)
-      setIsRefreshing(false)
+      await refetch(true)
+      toast.success("Data refreshed from Google Apps Script")
+    } catch {
+      toast.error("Failed to refresh consultation data")
     }
   }
 
@@ -417,6 +284,39 @@ export default function DoctorConsultationPage() {
     })
   }, [consultations, searchTerm, statusFilter, stageFilter, doctorFilter, dateFilter])
 
+  // Filtered dataset for Workflow Stage Pipeline
+  // Excludes stageFilter so all stage counts reflect current doctor/search/status/date, and user can click any stage to filter table
+  const stageFilteredConsultations = useMemo(() => {
+    return consultations.filter((consultation) => {
+      const q = searchTerm.toLowerCase().trim()
+      const matchesSearch =
+        !q ||
+        (consultation.patientName?.toLowerCase() || "").includes(q) ||
+        (consultation.patientId?.toLowerCase() || "").includes(q) ||
+        (consultation.consultationId?.toLowerCase() || "").includes(q) ||
+        (consultation.enquiryId?.toLowerCase() || "").includes(q) ||
+        (consultation.mobile || "").includes(q) ||
+        (consultation.email?.toLowerCase() || "").includes(q) ||
+        (consultation.doctorAlignment?.toLowerCase() || "").includes(q)
+
+      const matchesStatus = statusFilter === "all" || consultation.status === statusFilter
+      const matchesDoctor = doctorFilter === "all" || consultation.doctorAlignment === doctorFilter
+      const matchesDate = !dateFilter || consultation.scheduledDate?.includes(dateFilter)
+
+      return matchesSearch && matchesStatus && matchesDoctor && matchesDate
+    })
+  }, [consultations, searchTerm, statusFilter, doctorFilter, dateFilter])
+
+  // Dynamic Stage Pipeline Breakup based on active search/doctor/status/date
+  const stageBreakup = useMemo(() => {
+    return computeStageBreakup(stageFilteredConsultations)
+  }, [stageFilteredConsultations])
+
+  // Dynamic KPI Stats based on the currently filtered consultations
+  const stats = useMemo(() => {
+    return computeConsultationStats(filteredConsultations)
+  }, [filteredConsultations])
+
   // Pagination
   const totalPages = Math.max(1, Math.ceil(filteredConsultations.length / itemsPerPage))
   const paginatedConsultations = useMemo(() => {
@@ -425,12 +325,12 @@ export default function DoctorConsultationPage() {
   }, [filteredConsultations, currentPage, itemsPerPage])
 
   const totalPrescriptions = useMemo(() => {
-    return consultations.filter((c) => c.hasPrescription).length
-  }, [consultations])
+    return filteredConsultations.filter((c) => c.hasPrescription).length
+  }, [filteredConsultations])
 
   const overdueCount = useMemo(() => {
-    return consultations.filter((c) => c.status === "overdue").length
-  }, [consultations])
+    return filteredConsultations.filter((c) => c.status === "overdue").length
+  }, [filteredConsultations])
 
   // Copy helper
   const copyToClipboard = (text: string, label: string) => {
@@ -594,6 +494,27 @@ export default function DoctorConsultationPage() {
 
           {/* Main Body Container */}
           <div className="px-4 sm:px-6 lg:px-8 space-y-6">
+
+            {error && (
+              <div className="rounded-xl bg-amber-50 border border-amber-300 p-4 text-xs text-amber-900 flex items-center justify-between gap-3 shadow-sm">
+                <div className="flex items-center gap-2.5">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0" />
+                  <div>
+                    <span className="font-bold">Google Apps Script Notice: </span>
+                    <span>{error}</span>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefresh}
+                  className="h-8 text-xs bg-white border-amber-300 hover:bg-amber-100 text-amber-800 font-semibold flex-shrink-0"
+                >
+                  <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                  Retry Fetch
+                </Button>
+              </div>
+            )}
 
             {/* ═══════════════════════════════════════════════════════════════════
                 2. ADVANCED FILTERS & SEARCH CARD (leads/assign style)
@@ -799,12 +720,14 @@ export default function DoctorConsultationPage() {
                     </p>
                     <div className="flex flex-col gap-1 text-[11px]">
                       <div className="flex items-center justify-between">
-                        <span className="text-slate-600">Active Pipeline:</span>
+                        <span className="text-slate-600">Total in System:</span>
                         <span className="font-bold text-blue-700">{consultations.length}</span>
                       </div>
                       <div className="flex items-center justify-between text-slate-500 text-[10px]">
-                        <span>Target Pace:</span>
-                        <span className="font-medium text-slate-700">+12% vs last month</span>
+                        <span>Filter Status:</span>
+                        <span className="font-medium text-slate-700">
+                          {hasActiveFilters ? "Filtered Active" : "All Records"}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -916,7 +839,7 @@ export default function DoctorConsultationPage() {
                       <AlertTriangle className="h-3.5 w-3.5 text-rose-600" />
                     </div>
                     <p className="text-2xl sm:text-3xl font-extrabold text-slate-900 leading-none mb-2 tabular-nums">
-                      {overdueCount === 0 ? "100%" : `${Math.max(0, 100 - Math.round((overdueCount / (consultations.length || 1)) * 100))}%`}
+                      {overdueCount === 0 ? "100%" : `${Math.max(0, 100 - Math.round((overdueCount / (filteredConsultations.length || 1)) * 100))}%`}
                     </p>
                     <div className="flex flex-col gap-1 text-[11px]">
                       <div className="flex items-center justify-between">
@@ -1058,7 +981,7 @@ export default function DoctorConsultationPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => fetchData(true)}
+                    onClick={handleRefresh}
                     disabled={isRefreshing}
                     className="h-9 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-100 shadow-xs"
                   >
@@ -1235,6 +1158,21 @@ export default function DoctorConsultationPage() {
                                   </Badge>
                                 ) : (
                                   <span className="text-slate-400 text-xs">—</span>
+                                )}
+                                {c.meetLink && (
+                                  <div className="mt-1">
+                                    <a
+                                      href={c.meetLink}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-[10px] text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-1.5 py-0.5 rounded font-semibold inline-flex items-center gap-1 transition-colors"
+                                      title="Join Google Meet"
+                                    >
+                                      <Video className="h-2.5 w-2.5 text-emerald-600" />
+                                      <span>Meet</span>
+                                      <ExternalLink className="h-2 w-2 text-emerald-500" />
+                                    </a>
+                                  </div>
                                 )}
                               </TableCell>
 
@@ -1444,29 +1382,82 @@ export default function DoctorConsultationPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {/* First Page */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(1)}
+                      disabled={currentPage === 1}
+                      className="h-8 w-8 p-0 bg-white border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+                      title="First Page"
+                    >
+                      <ChevronsLeft className="h-3.5 w-3.5" />
+                    </Button>
+
+                    {/* Previous */}
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
                       disabled={currentPage === 1}
-                      className="h-8 px-3 text-xs bg-white border-slate-300 font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                      className="h-8 px-2.5 text-xs bg-white border-slate-300 font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40"
                     >
                       <ChevronLeft className="h-3.5 w-3.5 mr-1" /> Previous
                     </Button>
-                    <span className="font-medium text-slate-700 px-1">
+
+                    {/* Page Info */}
+                    <span className="font-medium text-slate-700 px-1.5 text-xs whitespace-nowrap">
                       Page <span className="font-bold text-slate-900">{currentPage}</span> of{" "}
                       <span className="font-bold text-slate-900">{totalPages}</span>
                     </span>
+
+                    {/* Next */}
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
                       disabled={currentPage === totalPages}
-                      className="h-8 px-3 text-xs bg-white border-slate-300 font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                      className="h-8 px-2.5 text-xs bg-white border-slate-300 font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40"
                     >
                       Next <ChevronRight className="h-3.5 w-3.5 ml-1" />
                     </Button>
+
+                    {/* Last Page */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(totalPages)}
+                      disabled={currentPage === totalPages}
+                      className="h-8 w-8 p-0 bg-white border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+                      title="Last Page"
+                    >
+                      <ChevronsRight className="h-3.5 w-3.5" />
+                    </Button>
+
+                    {/* Go to any page */}
+                    <form
+                      onSubmit={handleJumpToPage}
+                      className="flex items-center gap-1.5 ml-1.5 border-l border-slate-300 pl-2.5"
+                    >
+                      <span className="text-slate-500 font-medium text-xs whitespace-nowrap">Go to:</span>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={totalPages}
+                        placeholder={String(currentPage)}
+                        value={goToPage}
+                        onChange={(e) => setGoToPage(e.target.value)}
+                        className="h-8 w-16 text-center text-xs bg-white border-slate-300 px-1 py-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none font-bold text-slate-900 focus-visible:ring-blue-500"
+                      />
+                      <Button
+                        type="submit"
+                        size="sm"
+                        className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-xs"
+                      >
+                        Go
+                      </Button>
+                    </form>
                   </div>
                 </div>
 
@@ -1629,6 +1620,142 @@ function ViewDetailsContent({ consultation }: { consultation: Consultation }) {
           <div className="font-medium mt-0.5">{consultation.assignedSalesRep || "—"}</div>
         </div>
       </div>
+
+      {/* Online Links: Meet & Calendar */}
+      {(consultation.meetLink || consultation.doctorCalendarLink || consultation.calendarEventLink) && (
+        <div className="grid gap-3 sm:grid-cols-2 p-3 bg-blue-50/50 rounded-lg border border-blue-200">
+          {consultation.meetLink && (
+            <div>
+              <Label className="text-muted-foreground text-[11px]">Video Consultation Link</Label>
+              <div className="mt-1">
+                <a
+                  href={consultation.meetLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs text-emerald-700 hover:text-emerald-800 font-semibold bg-emerald-100 hover:bg-emerald-200 px-2.5 py-1 rounded-md border border-emerald-300 transition-colors"
+                >
+                  <Video className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>Join Google Meet</span>
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+            </div>
+          )}
+          {(consultation.doctorCalendarLink || consultation.calendarEventLink) && (
+            <div>
+              <Label className="text-muted-foreground text-[11px]">Doctor Google Calendar</Label>
+              <div className="mt-1">
+                <a
+                  href={consultation.doctorCalendarLink || consultation.calendarEventLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs text-blue-700 hover:text-blue-800 font-semibold bg-blue-100 hover:bg-blue-200 px-2.5 py-1 rounded-md border border-blue-300 transition-colors"
+                >
+                  <Calendar className="h-3.5 w-3.5 text-blue-600" />
+                  <span>Calendar Schedule</span>
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Payment Information */}
+      {(consultation.paymentCollection || consultation.collectionAmount) && (
+        <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+          <Label className="text-muted-foreground text-[11px]">Payment &amp; Billing</Label>
+          <div className="grid grid-cols-2 gap-2 mt-1">
+            <div>
+              <span className="text-slate-500 text-[11px]">Payment Collected: </span>
+              <span className="font-semibold text-slate-900">{consultation.paymentCollection || "No"}</span>
+            </div>
+            {consultation.collectionAmount && (
+              <div>
+                <span className="text-slate-500 text-[11px]">Amount: </span>
+                <span className="font-semibold text-slate-900">₹{consultation.collectionAmount}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Diagnostic & Clinical Reports */}
+      {(consultation.clientReportLink ||
+        consultation.doshaTestReportLink ||
+        consultation.healthAssessmentReportLink ||
+        consultation.reportsUploadUrl) && (
+        <div className="p-3 bg-indigo-50/40 rounded-lg border border-indigo-200">
+          <Label className="text-muted-foreground text-[11px]">Diagnostic &amp; Clinical Reports</Label>
+          <div className="flex flex-wrap gap-2 mt-1.5">
+            {consultation.clientReportLink && (
+              <a
+                href={consultation.clientReportLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] text-blue-700 font-semibold bg-white px-2 py-1 rounded border border-blue-300 hover:bg-blue-50"
+              >
+                <FileText className="h-3 w-3 text-blue-600" />
+                <span>Client Report</span>
+                <ExternalLink className="h-2.5 w-2.5" />
+              </a>
+            )}
+            {consultation.doshaTestReportLink && (
+              <a
+                href={consultation.doshaTestReportLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] text-indigo-700 font-semibold bg-white px-2 py-1 rounded border border-indigo-300 hover:bg-indigo-50"
+              >
+                <FileText className="h-3 w-3 text-indigo-600" />
+                <span>Dosha Test Report</span>
+                <ExternalLink className="h-2.5 w-2.5" />
+              </a>
+            )}
+            {consultation.healthAssessmentReportLink && (
+              <a
+                href={consultation.healthAssessmentReportLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] text-teal-700 font-semibold bg-white px-2 py-1 rounded border border-teal-300 hover:bg-teal-50"
+              >
+                <FileText className="h-3 w-3 text-teal-600" />
+                <span>Health Assessment</span>
+                <ExternalLink className="h-2.5 w-2.5" />
+              </a>
+            )}
+            {consultation.reportsUploadUrl && (
+              <a
+                href={consultation.reportsUploadUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] text-emerald-700 font-semibold bg-white px-2 py-1 rounded border border-emerald-300 hover:bg-emerald-50"
+              >
+                <Upload className="h-3 w-3 text-emerald-600" />
+                <span>Consultation Document</span>
+                <ExternalLink className="h-2.5 w-2.5" />
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Case Handover & Final Status */}
+      {(consultation.transferToUserStatus || consultation.finalCaseStatus) && (
+        <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+          <Label className="text-muted-foreground text-[11px]">Handover &amp; Disposition</Label>
+          <div className="grid grid-cols-2 gap-2 mt-1">
+            <div>
+              <span className="text-slate-500 text-[11px]">Final Case Status: </span>
+              <span className="font-semibold text-slate-900">{consultation.finalCaseStatus || "—"}</span>
+            </div>
+            <div>
+              <span className="text-slate-500 text-[11px]">Transferred To: </span>
+              <span className="font-semibold text-slate-900">{consultation.transferToUserStatus || "—"}</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div>
         <Label className="text-muted-foreground text-[11px]">Subjects &amp; Complaints</Label>

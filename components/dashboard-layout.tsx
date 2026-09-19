@@ -206,7 +206,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   ]
   const kapplNewOrderSubMenu = [
     { name: "New Order FMS", href: "/new-order-fms", icon: FileText, permission: "new-order-fms.view" },
-    { name: "Primary Order Form", href: "/new-order-fms/primary-order-form", icon: FileText, permission: "new-order-fms.view" },
+    { name: "Primary Order Form", href: "/new-order-fms/primary-order-form", icon: FileText, permission: "primary_order_form.view" },
   ]
 
   const marketingSubMenu = [
@@ -271,12 +271,47 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   //   { name: "Record Meeting", href: "/meetings/record", icon: Phone, description: "Record new meeting" },
   //   { name: "Tasks", href: "/meetings/tasks", icon: List, description: "View meeting tasks" },
   // ]
+  const hasNewOrderFmsPermission = () => {
+    if (isSuperAdmin || user?.permissions?.includes("all") || user?.role === "admin") return true
+    return (
+      hasPermission("new-order-fms.view") ||
+      hasPermission("new-order-fms.viewSelf") ||
+      hasPermission("new-order-fms.viewAll") ||
+      hasPermission("new-order-fms.edit") ||
+      hasPermission("new-order-fms") ||
+      hasPermission("new_order_fms.view") ||
+      hasPermission("new_order_fms.viewSelf") ||
+      hasPermission("new_order_fms.viewAll") ||
+      hasPermission("new_order_fms.edit") ||
+      hasPermission("new_order_fms")
+    )
+  }
+
+  const hasPrimaryOrderFormPermission = () => {
+    if (isSuperAdmin || user?.permissions?.includes("all") || user?.role === "admin") return true
+    return (
+      hasPermission("primary_order_form.view") ||
+      hasPermission("primary_order_form.viewSelf") ||
+      hasPermission("primary_order_form.viewAll") ||
+      hasPermission("primary_order_form.edit") ||
+      hasPermission("primary_order_form") ||
+      hasPermission("primary-order-form.view") ||
+      hasPermission("primary-order-form.viewSelf") ||
+      hasPermission("primary-order-form.viewAll") ||
+      hasPermission("primary-order-form.edit") ||
+      hasPermission("primary-order-form")
+    )
+  }
+
   const filteredNavigation = navigation.filter((item: any) => {
     if (item.superAdminOnly) {
       return isSuperAdmin
     }
     if (item.name === "Sales Reports") {
       return isSuperAdmin || user?.permissions?.includes("all") || salesReportsSubMenu.some(isSalesItemVisible)
+    }
+    if (item.name === "KAPPL New Order") {
+      return hasNewOrderFmsPermission() || hasPrimaryOrderFormPermission()
     }
     return user?.permissions?.includes("all") || (item.permission && hasPermission(item.permission))
   })
@@ -288,7 +323,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if ("permission" in s && typeof s.permission === "string") return hasPermission(s.permission)
     return true
   }).forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
-  if (hasPermission("new-order-fms.view")) kapplNewOrderSubMenu.filter((s) => !("permission" in s) || hasPermission(s.permission)).forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.name, icon: item.icon }))
+  if (hasNewOrderFmsPermission()) {
+    searchableItems.push({ name: "New Order FMS", href: "/new-order-fms", description: "New Order FMS", icon: FileText })
+  }
+  if (hasPrimaryOrderFormPermission()) {
+    searchableItems.push({ name: "Primary Order Form", href: "/new-order-fms/primary-order-form", description: "Primary Order Form", icon: FileText })
+  }
   if (hasPermission("marketing.view") || isSuperAdmin) marketingSubMenu.filter(isMarketingItemVisible).forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
   if (hasPermission("employee.tools")) employeeSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
   if (hasPermission("doctor.consultation.view")) doctorConsultationSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
@@ -547,7 +587,17 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
 
     if (item.name === "KAPPL New Order") {
-      const isActive = pathname.startsWith("/new-order-fms")
+      const isPrimaryOrderFormRoute = pathname.startsWith("/new-order-fms/primary-order-form")
+      const isNewOrderFmsRoute = pathname === "/new-order-fms" || (pathname.startsWith("/new-order-fms") && !isPrimaryOrderFormRoute)
+      const isActive = (hasPrimaryOrderFormPermission() && isPrimaryOrderFormRoute) ||
+                       (hasNewOrderFmsPermission() && isNewOrderFmsRoute)
+      const visibleSubMenu = kapplNewOrderSubMenu.filter((subItem) => {
+        if (subItem.href === "/new-order-fms") return hasNewOrderFmsPermission()
+        if (subItem.href === "/new-order-fms/primary-order-form") return hasPrimaryOrderFormPermission()
+        return hasPermission(subItem.permission) || hasPermission("all")
+      })
+      if (visibleSubMenu.length === 0) return null
+
       return (
         <div key={item.name}>
           <button
@@ -567,22 +617,20 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </button>
           {kapplNewOrderExpanded && (
             <div className="ml-6 mt-2 space-y-1">
-              {kapplNewOrderSubMenu
-                .filter((s) => hasPermission(s.permission) || hasPermission("all"))
-                .map((subItem) => (
-                  <Link
-                    key={subItem.name}
-                    href={subItem.href}
-                    className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${pathname === subItem.href
-                      ? "bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-700 border-l-4 border-emerald-500 shadow-sm font-semibold"
-                      : "text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"
-                      }`}
-                    onClick={() => isMobile && setSidebarOpen(false)}
-                  >
-                    <subItem.icon className={`mr-3 h-4 w-4 ${pathname === subItem.href ? "text-emerald-600" : "text-gray-400"}`} />
-                    {subItem.name}
-                  </Link>
-                ))}
+              {visibleSubMenu.map((subItem) => (
+                <Link
+                  key={subItem.name}
+                  href={subItem.href}
+                  className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${pathname === subItem.href
+                    ? "bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-700 border-l-4 border-emerald-500 shadow-sm font-semibold"
+                    : "text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"
+                    }`}
+                  onClick={() => isMobile && setSidebarOpen(false)}
+                >
+                  <subItem.icon className={`mr-3 h-4 w-4 ${pathname === subItem.href ? "text-emerald-600" : "text-gray-400"}`} />
+                  {subItem.name}
+                </Link>
+              ))}
             </div>
           )}
         </div>

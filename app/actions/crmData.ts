@@ -1,22 +1,10 @@
 'use server';
 
 import { getPool } from '@/lib/db';
+import { formatIsoIST } from '@/lib/lead-date';
 
 function safeDate(val: any): string {
-    if (!val) return "";
-    try {
-        if (val instanceof Date) {
-            if (isNaN(val.getTime())) return "";
-            const p = (n: number) => String(n).padStart(2, "0");
-            return val.getFullYear() + "-" + p(val.getMonth() + 1) + "-" + p(val.getDate()) + "T" + p(val.getHours()) + ":" + p(val.getMinutes()) + ":" + p(val.getSeconds());
-        }
-        const str = String(val).trim();
-        const m = str.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/);
-        if (m) return m[1] + "-" + m[2] + "-" + m[3] + "T" + m[4] + ":" + m[5] + ":" + m[6];
-        return str;
-    } catch {
-        return "";
-    }
+    return formatIsoIST(val, "");
 }
 
 function safeStr(val: any): string {

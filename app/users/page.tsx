@@ -1943,6 +1943,13 @@ export const PAGE_PERMISSIONS_MODULES: PagePermissionModule[] = [
     description: "Product order lifecycle & dispatch",
   },
   {
+    key: "primary_order_form",
+    label: "Primary Order Form",
+    category: "FMS & Booking Systems",
+    actions: ["view", "viewSelf", "viewAll", "edit"],
+    description: "KAPPL Primary Order Form submission & order management",
+  },
+  {
     key: "crr_fms",
     label: "KTAHV CRR Calling FMS",
     category: "FMS & Booking Systems",
@@ -2746,7 +2753,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "leads.view", "leads.edit", "leads.assign",
     "calls_report.view", "sales_report.view", "sales_calling.view",
     "marketing.view", "marketing_funnel.view", "marketing_google_report.view", "marketing_facebook_report.view", "google_adword_report.view",
-    "fms.view", "team.view", "villa_raag.view", "ktahv_booking_form.view", "crr_fms.view", "task_fms.view", "cold_enquiry_reverification.view", "new-order-fms.view", "mr-fms.view",
+    "fms.view", "team.view", "villa_raag.view", "ktahv_booking_form.view", "crr_fms.view", "task_fms.view", "cold_enquiry_reverification.view", "new-order-fms.view", "primary_order_form.view", "primary_order_form.edit", "mr-fms.view",
     "deal_assistant.view", "ai_voice_menu.view", "dialshree_menu.view", "dialshree_received.view", "dialshree_sent.view", "accounts_tracker.view", "partners.view", "meetings.view", "portal_hub.view", "sales_target_portal.view", "call_recording_portal.view", "doctor_portal.view", "partner_onboard_form.view"
   ],
   sales_manager: [

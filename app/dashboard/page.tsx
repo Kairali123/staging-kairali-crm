@@ -98,6 +98,14 @@ const allCards: QuickCard[] = [
   },
   {
     type: "report",
+    name: "Primary Order Form",
+    href: "/new-order-fms/primary-order-form",
+    icon: "📋",
+    desc: "Submit and manage primary orders",
+    permission: "primary_order_form.view",
+  },
+  {
+    type: "report",
     name: "Sales Report",
     href: "/sales/reports",
     icon: "📈",
