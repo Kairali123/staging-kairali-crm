@@ -69,10 +69,17 @@ function resolveAppsScriptConfig(): { url: string; secret: string } | null {
   }
 }
 
+function getUserDisplayName(user: unknown): string {
+  if (!user || typeof user !== 'object' || Array.isArray(user)) return ''
+  const record = user as Record<string, unknown>
+  return typeof record.name === 'string' ? record.name.trim() : (typeof record.user_name === 'string' ? record.user_name.trim() : '')
+}
+
 export async function POST(req: NextRequest) {
   const startedAt = Date.now()
   const correlationId = orderFormCorrelationId(req)
   const user = getVerifiedOrderFormUser(req)
+  const sessionUserName = getUserDisplayName(user)
   let action: OrderFormAction | null = null
   let body: Record<string, unknown> = {}
 
@@ -482,7 +489,7 @@ export async function POST(req: NextRequest) {
           },
           orderType: String(row.order_type || 'New Order'),
           paymentTerms: String(row.payment_terms || 'Credit'),
-          orderPlacedBy: String(row.order_taken_by || user.name || ''),
+          orderPlacedBy: String(row.order_taken_by || sessionUserName || ''),
           attachment: String(row.uploaded_image_link || row.invoice_link || ''),
           shipping: 0,
           shippingTaxRate: 18,
@@ -543,8 +550,8 @@ export async function POST(req: NextRequest) {
     const payload = body.payload as Record<string, unknown>
     if (payload.form && typeof payload.form === 'object') {
       const form = payload.form as Record<string, unknown>
-      if (user?.name) {
-        form.orderPlacedBy = user.name
+      if (sessionUserName) {
+        form.orderPlacedBy = sessionUserName
       }
     }
     if (Array.isArray(payload.products)) {
