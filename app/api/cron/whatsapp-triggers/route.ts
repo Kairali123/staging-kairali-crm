@@ -26,7 +26,12 @@ async function isAuthorizedCron(req: NextRequest): Promise<boolean> {
     return true
   }
 
-  // 2. Secondary: Local worker bearer key (scripts/whatsapp-trigger-worker.mjs)
+  // 2. Vercel automatically sets x-vercel-cron header for scheduled crons defined in vercel.json
+  if (process.env.VERCEL && req.headers.get('x-vercel-cron') === '1') {
+    return true
+  }
+
+  // 3. Secondary: Local worker bearer key (scripts/whatsapp-trigger-worker.mjs)
   try {
     const localKey = (await readFile(path.join(stateRoot(), 'worker.key'), 'utf8')).trim()
     if (localKey.length >= 32 && safeCompare(header, `Bearer ${localKey}`)) {

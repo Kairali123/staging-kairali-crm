@@ -53,15 +53,8 @@ export default function WhatsAppTriggers(){
    if(active){
     setItems(s.triggers||[]);
     setRuns(s.runs||[]);
-    setProviderReady(s.providerReady);
-    let isReady=s.schedulerReady;
-    if(!isReady){
-     try{
-      const ping=await json('/api/whatsapp-trigger-config?action=start-worker');
-      if(ping?.schedulerReady)isReady=true;
-     }catch{}
-    }
-    setSchedulerReady(isReady);
+    setProviderReady(Boolean(s.providerReady));
+    setSchedulerReady(Boolean(s.schedulerReady));
     if(s.triggers?.[0]){
      setConfig(s.triggers[0]);
      setRecipientText(s.triggers[0].recipients.join(', '));
@@ -82,34 +75,25 @@ export default function WhatsAppTriggers(){
    const res=await json('/api/whatsapp-trigger-config?action=start-worker');
    if(res?.schedulerReady){
     setSchedulerReady(true);
-    setNotice('Background worker connected and scheduler ready.');
+    setNotice(res.message || 'Background worker connected and scheduler ready.');
+   } else {
+    setNotice(res?.message || 'Worker not running. Automated sends require a background worker or Vercel Cron.');
    }
-  }catch{
-   setError('Could not connect background worker. Run "npm run whatsapp-trigger:worker".');
+  }catch(err){
+   setError(err instanceof Error ? err.message : 'Could not connect background worker.');
   }finally{setBusy(false)}
  }
  async function refresh(){
   setBusy(true);setError('');
   try{
    let state=await json('/api/whatsapp-trigger-config');
-   let isReady=state.schedulerReady;
-   if(!isReady){
-    try{
-     const ping=await json('/api/whatsapp-trigger-config?action=start-worker');
-     if(ping?.schedulerReady){
-      isReady=true;
-      state=await json('/api/whatsapp-trigger-config');
-     }
-    }catch{}
-   }
-   setSchedulerReady(isReady);
-   setProviderReady(state.providerReady);
+   setSchedulerReady(Boolean(state.schedulerReady));
+   setProviderReady(Boolean(state.providerReady));
    setItems(state.triggers||[]);
    setRuns(state.runs||[]);
    const s=await json('/api/whatsapp-trigger-config/templates').catch(()=>json('/api/whatsapp-trigger-config?action=templates'));
    setTemplates(s.templates||[]);
    setCheckedAt(s.checkedAt||'');
-   setProviderReady(true);
    setNotice('Trigger configuration and send history refreshed');
   }catch(e){
    setTemplates([]);
@@ -158,7 +142,7 @@ export default function WhatsAppTriggers(){
     {[
      [MessageSquare,'Redlava connection',providerReady?'API key configured · verify templates':'API key required',undefined],
      [ShieldCheck,'Meta approval',checkedAt?`${templates.filter(t=>t.compatible).length} compatible report templates`:'Not verified from this server',undefined],
-     [Clock,'Report scheduler',schedulerReady?'Worker ready · activate a trigger to send':'Offline · start the background worker',!schedulerReady?startWorker:undefined]
+     [Clock,'Report scheduler',schedulerReady?'Scheduler ready · runs automatically':'Offline · worker or Vercel Cron needed',!schedulerReady?startWorker:undefined]
     ].map(([Icon,title,value,onClick])=>{
      const I=Icon as typeof Clock;
      return <div key={String(title)} onClick={onClick as any} className={`flex items-center gap-4 rounded-xl border bg-white p-5 ${onClick?'cursor-pointer hover:bg-emerald-50/50 transition-colors':''}`} title={onClick?'Click to connect worker':undefined}>

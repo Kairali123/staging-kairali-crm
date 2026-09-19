@@ -1,4 +1,3 @@
-import {chromium} from 'playwright-core'
 import {exportSalesHTML} from '@/lib/daily-sales-report'
 import {reportExportHTML} from '@/lib/marketing-daily-report'
 import {loadScheduledSales} from '@/lib/email-triggers/load-sales'
@@ -8,12 +7,19 @@ import type {ConfigInput} from './schema'
 // Resolve a working browser launch options object, trying multiple paths/channels so the
 // renderer survives on machines where Edge isn't registered in the expected registry path.
 async function launchBrowser() {
+  let chromium: any
+  try {
+    const pw = await import('playwright-core')
+    chromium = pw.chromium
+  } catch {
+    throw new Error('Playwright is not available in this environment. Headless rendering is disabled.')
+  }
   // 1. Explicit override via environment variable (highest priority)
   if (process.env.WHATSAPP_CHROMIUM_PATH) {
     return chromium.launch({ headless: true, executablePath: process.env.WHATSAPP_CHROMIUM_PATH, timeout: 30000 })
   }
   // 2. Edge via playwright channel (works when Edge is in the default install location)
-  const candidates: (() => ReturnType<typeof chromium.launch>)[] = [
+  const candidates: (() => Promise<any>)[] = [
     () => chromium.launch({ headless: true, channel: 'msedge', timeout: 30000 }),
     () => chromium.launch({ headless: true, executablePath: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', timeout: 30000 }),
     () => chromium.launch({ headless: true, executablePath: 'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe', timeout: 30000 }),
