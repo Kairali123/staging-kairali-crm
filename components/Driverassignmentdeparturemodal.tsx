@@ -31,7 +31,7 @@ const selectStyle: React.CSSProperties = {
     width: "100%",
     padding: "10px 12px",
     borderRadius: 10,
-    border: "1.5px solid #94a3b8",
+    border: "2px solid #334155",
     background: "#ffffff",
     fontSize: 14,
     color: "#0f172a",

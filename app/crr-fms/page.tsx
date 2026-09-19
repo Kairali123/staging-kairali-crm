@@ -3702,7 +3702,7 @@ export default function CRRCallingProcessPage() {
                                             value={modalDate}
                                             disabled={isGuestDisabled}
                                             onChange={(e) => { setModalDate(e.target.value); setModalSaved(false); }}
-                                            className={`h-10 border-[1.5px] border-slate-400 hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 w-full ${isNextVisitDateInvalid ? "!border-red-500 !focus:border-red-500 !ring-red-500" : ""}`}
+                                            className={`h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 w-full ${isNextVisitDateInvalid ? "!border-red-500 !focus:border-red-500 !ring-red-500" : ""}`}
                                         />
                                         {isNextVisitDateInvalid && (
                                             <p className="text-[11px] font-semibold text-red-600 flex items-start gap-1 mt-1 leading-tight">
@@ -3726,7 +3726,7 @@ export default function CRRCallingProcessPage() {
                                             disabled={isGuestDisabled}
                                             onChange={(e) => { setModalRemark(e.target.value); setModalSaved(false); }}
                                             placeholder="Add remarks for this stage..."
-                                            className="min-h-[80px] border-[1.5px] border-slate-400 hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white text-slate-900 placeholder:text-slate-400 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                            className="min-h-[80px] border-2 border-slate-700 hover:border-slate-900 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white text-slate-900 placeholder:text-slate-500 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                         />
                                     </div>
                                 </div>
@@ -3826,7 +3826,7 @@ export default function CRRCallingProcessPage() {
                                                 value={safeReturnStayFeedback}
                                                 onChange={(e) => { setSafeReturnStayFeedback(e.target.value); setSafeReturnSaved(false); }}
                                                 placeholder="Guest's feedback / suggestions..."
-                                                className="min-h-[70px] border-[1.5px] border-slate-400 hover:border-emerald-500 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                className="min-h-[70px] border-2 border-slate-700 hover:border-slate-900 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                             />
                                         </div>
 
@@ -3840,7 +3840,7 @@ export default function CRRCallingProcessPage() {
                                                 value={safeReturnOutcomeRemarks}
                                                 onChange={(e) => { setSafeReturnOutcomeRemarks(e.target.value); setSafeReturnSaved(false); }}
                                                 placeholder="Remarks on the safe return call outcome..."
-                                                className="min-h-[70px] border-[1.5px] border-slate-400 hover:border-emerald-500 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                className="min-h-[70px] border-2 border-slate-700 hover:border-slate-900 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                             />
                                         </div>
 
@@ -3860,7 +3860,7 @@ export default function CRRCallingProcessPage() {
                                                         setSafeReturnSaved(false);
                                                     }}
                                                 >
-                                                    <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-[1.5px] border-slate-400 hover:border-emerald-500 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
+                                                    <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
                                                         <SelectValue placeholder="Select Status" />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -3882,7 +3882,7 @@ export default function CRRCallingProcessPage() {
                                                         disabled={isSafeReturnDisabled}
                                                         value={safeReturnFollowupDate}
                                                         onChange={(e) => { setSafeReturnFollowupDate(e.target.value); setSafeReturnSaved(false); }}
-                                                        className="w-[210px] sm:w-[230px] h-10 border-[1.5px] border-slate-400 hover:border-emerald-500 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                        className="w-[210px] sm:w-[230px] h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                                     />
                                                 </div>
                                             )}
@@ -3898,7 +3898,7 @@ export default function CRRCallingProcessPage() {
                                                         value={safeReturnNotDoneRemarks}
                                                         onChange={(e) => { setSafeReturnNotDoneRemarks(e.target.value); setSafeReturnSaved(false); }}
                                                         placeholder="Reason the safe return call wasn't done / was closed..."
-                                                        className="min-h-[42px] border-[1.5px] border-slate-400 hover:border-emerald-500 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 w-full"
+                                                        className="min-h-[42px] border-2 border-slate-700 hover:border-slate-900 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 w-full"
                                                     />
                                                 </div>
                                             )}
@@ -3916,7 +3916,7 @@ export default function CRRCallingProcessPage() {
                                                         setSafeReturnSaved(false);
                                                     }}
                                                 >
-                                                    <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-[1.5px] border-slate-400 hover:border-emerald-500 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
+                                                    <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
                                                     <SelectValue placeholder="Yes / No" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -4032,7 +4032,7 @@ export default function CRRCallingProcessPage() {
                                                     setRatingSaved(false);
                                                 }}
                                             >
-                                                <SelectTrigger className="h-10 border-[1.5px] border-slate-400 hover:border-orange-500 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
+                                                <SelectTrigger className="h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
                                                     <SelectValue placeholder="Select Status" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -4053,7 +4053,7 @@ export default function CRRCallingProcessPage() {
                                                     value={ratingNotGivenRemarks}
                                                     onChange={(e) => { setRatingNotGivenRemarks(e.target.value); setRatingSaved(false); }}
                                                     placeholder="Reason the guest hasn't given a rating yet..."
-                                                    className="min-h-[42px] border-[1.5px] border-slate-400 hover:border-orange-500 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                    className="min-h-[42px] border-2 border-slate-700 hover:border-slate-900 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                                 />
                                             </div>
                                         )}
@@ -4071,7 +4071,7 @@ export default function CRRCallingProcessPage() {
                                                         setRatingProofFile(e.target.files?.[0] || null);
                                                         setRatingSaved(false);
                                                     }}
-                                                    className="h-10 border-[1.5px] border-slate-400 hover:border-orange-500 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 shadow-sm rounded-lg file:text-orange-700 file:font-semibold disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                    className="h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 shadow-sm rounded-lg file:text-orange-700 file:font-semibold disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                                 />
                                                 {(ratingProofFile || ratingExistingProofFileName) && (
                                                     <p className="text-[11px] font-medium text-slate-500 truncate">
@@ -4091,7 +4091,7 @@ export default function CRRCallingProcessPage() {
                                                 value={ratingOutcomeRemarks}
                                                 onChange={(e) => { setRatingOutcomeRemarks(e.target.value); setRatingSaved(false); }}
                                                 placeholder="Remarks on the rating request outcome..."
-                                                className="min-h-[70px] border-[1.5px] border-slate-400 hover:border-orange-500 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                className="min-h-[70px] border-2 border-slate-700 hover:border-slate-900 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                             />
                                         </div>
 
@@ -4111,7 +4111,7 @@ export default function CRRCallingProcessPage() {
                                                         setRatingSaved(false);
                                                     }}
                                                 >
-                                                    <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-[1.5px] border-slate-400 hover:border-orange-500 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
+                                                    <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
                                                         <SelectValue placeholder="Select Status" />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -4133,7 +4133,7 @@ export default function CRRCallingProcessPage() {
                                                         disabled={isRatingDisabled}
                                                         value={ratingFollowupDate}
                                                         onChange={(e) => { setRatingFollowupDate(e.target.value); setRatingSaved(false); }}
-                                                        className="w-[210px] sm:w-[230px] h-10 border-[1.5px] border-slate-400 hover:border-orange-500 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                        className="w-[210px] sm:w-[230px] h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                                     />
                                                 </div>
                                             )}
@@ -4149,7 +4149,7 @@ export default function CRRCallingProcessPage() {
                                                         value={ratingNotDoneRemarks}
                                                         onChange={(e) => { setRatingNotDoneRemarks(e.target.value); setRatingSaved(false); }}
                                                         placeholder="Reason the rating request wasn't done / was closed..."
-                                                        className="min-h-[42px] border-[1.5px] border-slate-400 hover:border-orange-500 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 w-full"
+                                                        className="min-h-[42px] border-2 border-slate-700 hover:border-slate-900 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 w-full"
                                                     />
                                                 </div>
                                             )}
@@ -4167,7 +4167,7 @@ export default function CRRCallingProcessPage() {
                                                         setRatingSaved(false);
                                                     }}
                                                 >
-                                                    <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-[1.5px] border-slate-400 hover:border-orange-500 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
+                                                    <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
                                                     <SelectValue placeholder="Yes / No" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -4286,7 +4286,7 @@ export default function CRRCallingProcessPage() {
                                             disabled={isFeedbackDisabled}
                                             onChange={(e) => { setFeedbackDoerRemarks(e.target.value); setFeedbackSaved(false); }}
                                             placeholder="Remarks from the doer regarding the feedback / outcome..."
-                                            className="min-h-[90px] border-[1.5px] border-slate-400 hover:border-amber-500 focus:border-amber-600 focus:ring-2 focus:ring-amber-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                            className="min-h-[90px] border-2 border-slate-700 hover:border-slate-900 focus:border-amber-600 focus:ring-2 focus:ring-amber-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                         />
                                     </div>
                                 </div>
@@ -4408,7 +4408,7 @@ export default function CRRCallingProcessPage() {
                                                         disabled={isReferralDisabled}
                                                         onChange={(e) => { setReferralTakenStatus(e.target.value); setReferralSaved(false); }}
                                                         placeholder="e.g. Referral given, Follow-up needed, Declined..."
-                                                        className="h-10 border-[1.5px] border-slate-400 hover:border-emerald-500 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                        className="h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                                     />
                                                 )}
                                             </div>
@@ -4428,7 +4428,7 @@ export default function CRRCallingProcessPage() {
                                                         disabled={isReferralDisabled}
                                                         onChange={(e) => { setReferralDoerRemarks(e.target.value); setReferralSaved(false); }}
                                                         placeholder="Remarks from the doer regarding the referral collection..."
-                                                        className="min-h-[90px] border-[1.5px] border-slate-400 hover:border-emerald-500 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                        className="min-h-[90px] border-2 border-slate-700 hover:border-slate-900 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                                     />
                                                 )}
                                             </div>
@@ -4534,7 +4534,7 @@ export default function CRRCallingProcessPage() {
                                                 value={welcomeOutcomeRemarks}
                                                 onChange={(e) => { setWelcomeOutcomeRemarks(e.target.value); setWelcomeSaved(false); }}
                                                 placeholder="Remarks on the pickup / welcome call outcome..."
-                                                className="min-h-[70px] border-[1.5px] border-slate-400 hover:border-sky-500 focus:border-sky-600 focus:ring-2 focus:ring-sky-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                className="min-h-[70px] border-2 border-slate-700 hover:border-slate-900 focus:border-sky-600 focus:ring-2 focus:ring-sky-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                             />
                                         </div>
 
@@ -4554,7 +4554,7 @@ export default function CRRCallingProcessPage() {
                                                     setWelcomeSaved(false);
                                                 }}
                                             >
-                                                <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-[1.5px] border-slate-400 hover:border-sky-500 focus:border-sky-600 focus:ring-2 focus:ring-sky-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
+                                                <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-sky-600 focus:ring-2 focus:ring-sky-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
                                                     <SelectValue placeholder="Select Status" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -4576,7 +4576,7 @@ export default function CRRCallingProcessPage() {
                                                     disabled={!activeWelcomeGuest || isWelcomeDisabled}
                                                     value={welcomeFollowupDate}
                                                     onChange={(e) => { setWelcomeFollowupDate(e.target.value); setWelcomeSaved(false); }}
-                                                    className="w-[210px] sm:w-[230px] h-10 border-[1.5px] border-slate-400 hover:border-sky-500 focus:border-sky-600 focus:ring-2 focus:ring-sky-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                    className="w-[210px] sm:w-[230px] h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-sky-600 focus:ring-2 focus:ring-sky-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                                 />
                                             </div>
                                         )}
@@ -4592,7 +4592,7 @@ export default function CRRCallingProcessPage() {
                                                     value={welcomeNotDoneRemarks}
                                                     onChange={(e) => { setWelcomeNotDoneRemarks(e.target.value); setWelcomeSaved(false); }}
                                                     placeholder="Reason the welcome call wasn't done / was closed..."
-                                                    className="min-h-[42px] border-[1.5px] border-slate-400 hover:border-sky-500 focus:border-sky-600 focus:ring-2 focus:ring-sky-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 w-full"
+                                                    className="min-h-[42px] border-2 border-slate-700 hover:border-slate-900 focus:border-sky-600 focus:ring-2 focus:ring-sky-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 w-full"
                                                 />
                                             </div>
                                         )}
@@ -4610,7 +4610,7 @@ export default function CRRCallingProcessPage() {
                                                     setWelcomeSaved(false);
                                                 }}
                                             >
-                                                <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-[1.5px] border-slate-400 hover:border-sky-500 focus:border-sky-600 focus:ring-2 focus:ring-sky-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
+                                                <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-sky-600 focus:ring-2 focus:ring-sky-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
                                                     <SelectValue placeholder="Yes / No" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -4723,7 +4723,7 @@ export default function CRRCallingProcessPage() {
                                             value={resultOutcomeRemarks}
                                             onChange={(e) => { setResultOutcomeRemarks(e.target.value); setResultSaved(false); }}
                                             placeholder="Remarks on the result / health progress outcome..."
-                                            className="min-h-[70px] border-[1.5px] border-slate-400 hover:border-purple-500 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 bg-white text-slate-900 placeholder:text-slate-400 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                            className="min-h-[70px] border-2 border-slate-700 hover:border-slate-900 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 bg-white text-slate-900 placeholder:text-slate-500 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                         />
                                     </div>
 
@@ -4743,7 +4743,7 @@ export default function CRRCallingProcessPage() {
                                                     setResultSaved(false);
                                                 }}
                                             >
-                                                <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-[1.5px] border-slate-400 hover:border-purple-500 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
+                                                <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
                                                     <SelectValue placeholder="Select Status" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -4765,7 +4765,7 @@ export default function CRRCallingProcessPage() {
                                                     disabled={isResultDisabled}
                                                     value={resultFollowupDate}
                                                     onChange={(e) => { setResultFollowupDate(e.target.value); setResultSaved(false); }}
-                                                    className="w-[210px] sm:w-[230px] h-10 border-[1.5px] border-slate-400 hover:border-purple-500 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                    className="w-[210px] sm:w-[230px] h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                                 />
                                             </div>
                                         )}
@@ -4781,7 +4781,7 @@ export default function CRRCallingProcessPage() {
                                                     value={resultNotDoneRemarks}
                                                     onChange={(e) => { setResultNotDoneRemarks(e.target.value); setResultSaved(false); }}
                                                     placeholder="Reason the result / progress check wasn't done / was closed..."
-                                                    className="min-h-[42px] border-[1.5px] border-slate-400 hover:border-purple-500 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 w-full"
+                                                    className="min-h-[42px] border-2 border-slate-700 hover:border-slate-900 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 w-full"
                                                 />
                                             </div>
                                         )}
@@ -4799,7 +4799,7 @@ export default function CRRCallingProcessPage() {
                                                     setResultSaved(false);
                                                 }}
                                             >
-                                                <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-[1.5px] border-slate-400 hover:border-purple-500 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
+                                                <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
                                                     <SelectValue placeholder="Yes / No" />
                                                 </SelectTrigger>
                                                 <SelectContent>

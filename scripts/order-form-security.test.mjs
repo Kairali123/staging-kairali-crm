@@ -125,4 +125,11 @@ test('products are synchronized directly from MySQL product_inventory table', ()
   assert.match(route, /inventory:\s*Number\(r\.inventory\)/)
 })
 
+test('users are synchronized directly from MySQL all_users table', () => {
+  assert.match(route, /FROM\s+all_users/i)
+  assert.match(route, /action\s*===\s*'getUsers'/)
+  assert.match(route, /all_users/i)
+})
+
+
 
