@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getPool } from "@/lib/db";
+import { formatDateIST } from "@/lib/lead-date";
 
 // ─── Cache Config ─────────────────────────────────────────────────────────────
 // Each query type gets its own cache slot
@@ -21,26 +22,7 @@ function safeStr(val: any): string {
 }
 
 function safeDate(val: any): string {
-    if (!val) return "";
-    try {
-        if (val instanceof Date) {
-            if (isNaN(val.getTime())) return "";
-            const p = (n: number) => String(n).padStart(2, "0");
-            return `${p(val.getDate())}/${p(val.getMonth() + 1)}/${val.getFullYear()} ${p(val.getHours())}:${p(val.getMinutes())}:${p(val.getSeconds())}`;
-        }
-        const str = String(val).trim();
-        // Already in DD/MM/YYYY format (slashes)
-        if (/^\d{2}\/\d{2}\/\d{4}/.test(str)) return str;
-        // ISO or MySQL datetime YYYY-MM-DD HH:mm:ss
-        const iso = str.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):?(\d{2})?/);
-        if (iso) return `${iso[3]}/${iso[2]}/${iso[1]} ${iso[4]}:${iso[5]}:${iso[6] ?? '00'}`;
-        // DD-MM-YYYY HH:mm or DD-MM-YYYY HH:mm:ss (stored as string with dashes)
-        const dmy = str.match(/^(\d{2})-(\d{2})-(\d{4})[\s,T]?(\d{2})?:?(\d{2})?:?(\d{2})?/);
-        if (dmy) return `${dmy[1]}/${dmy[2]}/${dmy[3]} ${dmy[4] ?? '00'}:${dmy[5] ?? '00'}:${dmy[6] ?? '00'}`;
-        return str;
-    } catch {
-        return "";
-    }
+    return formatDateIST(val, "");
 }
 
 // ─── Row mappers ──────────────────────────────────────────────────────────────

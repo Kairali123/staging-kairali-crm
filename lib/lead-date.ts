@@ -80,3 +80,109 @@ export const formatIST = (date: Date): string => {
   return `${y}-${m}-${d}`;
 };
 
+// Extract date/time parts in Asia/Kolkata (IST, UTC+05:30) timezone
+export function getISTParts(d: Date) {
+  const formatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(d);
+  const map: Record<string, string> = {};
+  for (const p of parts) map[p.type] = p.value;
+  const hh = map.hour === '24' ? '00' : (map.hour || '00');
+  return {
+    day: map.day || '00',
+    month: map.month || '00',
+    year: map.year || '0000',
+    hour: hh,
+    minute: map.minute || '00',
+    second: map.second || '00',
+  };
+}
+
+// Format any date/time value to "DD/MM/YYYY HH:MM:SS" in Asia/Kolkata timezone
+export function formatDateIST(val: any, fallback = ''): string {
+  if (val === null || val === undefined || val === '') return fallback;
+  try {
+    if (val instanceof Date) {
+      if (isNaN(val.getTime())) return fallback;
+      const { day, month, year, hour, minute, second } = getISTParts(val);
+      return `${day}/${month}/${year} ${hour}:${minute}:${second}`;
+    }
+
+    const str = String(val).trim();
+    if (!str) return fallback;
+
+    // If string contains timezone offset or 'Z', parse as Date and format in IST
+    if (/Z$|[+\-]\d{2}:?\d{2}$/i.test(str)) {
+      const d = new Date(str);
+      if (!isNaN(d.getTime())) return formatDateIST(d, fallback);
+    }
+
+    // "YYYY-MM-DD HH:MM:SS" (or with T)
+    const m = str.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/);
+    if (m) {
+      return `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}:${m[6]}`;
+    }
+
+    // "YYYY-MM-DD"
+    const mDateOnly = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (mDateOnly) {
+      return `${mDateOnly[3]}/${mDateOnly[2]}/${mDateOnly[1]} 00:00:00`;
+    }
+
+    // Already "DD/MM/YYYY HH:MM:SS"
+    if (/^\d{2}\/\d{2}\/\d{4}/.test(str)) {
+      return str;
+    }
+
+    return str;
+  } catch {
+    return fallback;
+  }
+}
+
+// Format any date/time value to ISO-like "YYYY-MM-DDTHH:MM:SS" in Asia/Kolkata timezone
+export function formatIsoIST(val: any, fallback = ''): string {
+  if (val === null || val === undefined || val === '') return fallback;
+  try {
+    if (val instanceof Date) {
+      if (isNaN(val.getTime())) return fallback;
+      const { day, month, year, hour, minute, second } = getISTParts(val);
+      return `${year}-${month}-${day}T${hour}:${minute}:${second}`;
+    }
+
+    const str = String(val).trim();
+    if (!str) return fallback;
+
+    // If string contains timezone offset or 'Z', parse as Date and format in IST
+    if (/Z$|[+\-]\d{2}:?\d{2}$/i.test(str)) {
+      const d = new Date(str);
+      if (!isNaN(d.getTime())) return formatIsoIST(d, fallback);
+    }
+
+    // "YYYY-MM-DD HH:MM:SS"
+    const m = str.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/);
+    if (m) {
+      return `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}`;
+    }
+
+    // "DD/MM/YYYY HH:MM:SS"
+    const m2 = str.match(/^(\d{2})\/(\d{2})\/(\d{4})[T ](\d{2}):(\d{2}):(\d{2})/);
+    if (m2) {
+      return `${m2[3]}-${m2[2]}-${m2[1]}T${m2[4]}:${m2[5]}:${m2[6]}`;
+    }
+
+    return str;
+  } catch {
+    return fallback;
+  }
+}
+
+

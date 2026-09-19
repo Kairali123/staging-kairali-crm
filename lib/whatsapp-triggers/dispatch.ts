@@ -14,9 +14,10 @@ export async function dispatchDue(now=Date.now(),io:IO){
   for(const c of s.triggers.filter(t=>t.status==='Active'&&t.nextRun&&Date.parse(t.nextRun)<=now)){
    const scheduledAt=c.nextRun!,slot=Date.parse(scheduledAt);c.nextRun=nextDailyRun(c,now)
    if(s.runs.some(r=>r.triggerId===c.id&&r.scheduledAt===scheduledAt))continue
-   const missed=now-slot>5*60000,id=randomUUID()
+   // Allow up to 30 minutes of grace period for daily reports so 15-min cron ticks don't drop the run
+   const missed=now-slot>30*60000,id=randomUUID()
    const templateName=reportTemplates[c.reportId]?.template||'crm_daily_sales_report_image'
-   s.runs.push({id,triggerId:c.id,triggerName:c.name,scheduledAt,startedAt:new Date(now).toISOString(),status:missed?'Skipped':'Preparing',detail:missed?'Missed run skipped':'Preparing report image',templateName,templateLink:'https://wa.redlava.in/ListTemplate',recipients:c.recipients.map(to=>({to,status:'Pending'}))})
+   s.runs.push({id,triggerId:c.id,triggerName:c.name,scheduledAt,startedAt:new Date(now).toISOString(),status:missed?'Skipped':'Preparing',detail:missed?'Missed run skipped (>2 hours late)':'Preparing report image',templateName,templateLink:'https://wa.redlava.in/ListTemplate',recipients:c.recipients.map(to=>({to,status:'Pending'}))})
    if(!missed)jobs.push({config:{...c},runId:id,date:reportDate(slot)})
   }
   return jobs

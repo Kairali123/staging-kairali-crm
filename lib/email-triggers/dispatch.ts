@@ -13,16 +13,26 @@ const esc=(s:string)=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;
 export async function buildEmail(t:Trigger,at:number){
  let date=localDay(at,'Asia/Kolkata');if(t.period==='Yesterday')date=new Date(Date.parse(date+'T00:00:00Z')-86400000).toISOString().slice(0,10);if(t.period==='Selected date')date=t.previewDate!
  const replace=(s:string)=>s.replaceAll('{{report_date}}',date).replaceAll('{{company_name}}',t.company).replaceAll('{{recipient_name}}','Team')
- let html='',hasData=true
+ let html='',hasData=true,attachments:any[]|undefined
  if(t.bodyType==='Full report in email body'){
   if(t.reportId==='daily-sales-report'){const report=await loadScheduledSales(date);const scope=t.company==='All companies'?'ALL':t.company==='VILARAAG'?'VILLARAAG':t.company;hasData=report.rows.some(r=>scope==='ALL'||r.company===scope)||scopedEmployees(report.calling,scope).length>0;html=exportSalesHTML(report,scope)}
   else{const report=await loadScheduledMarketing(date);const scope=t.company==='All companies'?'all':t.company,selected=report.companies.filter(c=>scope==='all'||c.name===scope);hasData=selected.some(c=>c.totalLeads||c.totalSpend||c.sale);html=reportExportHTML(date,report,{scope,expanded:t.reportDetail==='Include source-wise details'?selected.flatMap(c=>[c.name+'-leads',c.name+'-sales']):[]})}
   const p=(s:string)=>'<div style="padding:18px 24px;white-space:pre-wrap;font:14px/1.8 Arial">'+esc(replace(s))+'</div>'
   html=html.replace(/(<body[^>]*>)/,'$1'+p(t.intro)).replace('</body>',p(t.closing)+'</body>')
+  try{
+   const {renderJPEG}=await import('@/lib/whatsapp-triggers/render')
+   if(typeof renderJPEG==='function'){
+    const image=await renderJPEG(html)
+    if(image&&image.length>0){
+     attachments=[{filename:`Daily-Report-${date}.jpg`,content:image,cid:'report-image'}]
+     html=`<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:16px;background:#f4f6fc;font-family:Arial,sans-serif;"><div style="max-width:1344px;margin:0 auto;text-align:center;"><img src="cid:report-image" alt="Daily Report" style="width:100%;max-width:1344px;height:auto;display:block;margin:0 auto;border-radius:12px;box-shadow:0 4px 24px rgba(30,48,91,0.08);" /></div></body></html>`
+    }
+   }
+  }catch(err){console.warn('[email-trigger] renderJPEG fallback to HTML:',err)}
  }else html='<div style="white-space:pre-wrap;font:14px/1.8 Arial">'+esc(t.bodyType==='Static'?t.body:replace(t.body))+'</div>'
- return {subject:replace(t.subject),html,hasData}
+ return {subject:replace(t.subject),html,hasData,...(attachments?{attachments}:{})}
 }
-export type DispatchDeps={build:typeof buildEmail;send:(t:Trigger,email:{subject:string;html:string})=>Promise<{accepted:number;rejected:number}>}
+export type DispatchDeps={build:typeof buildEmail;send:(t:Trigger,email:{subject:string;html:string;attachments?:any[]})=>Promise<{accepted:number;rejected:number}>}
 const deps:DispatchDeps={build:buildEmail,send:async(t,email)=>{
  const c=marketingMailConfig();if(!c.configured)throw Error('SMTP unavailable')
  const transport=nodemailer.createTransport({host:c.host,port:c.port,secure:c.port===465,auth:{user:c.user!,pass:c.pass!},connectionTimeout:15000,socketTimeout:30000,disableFileAccess:true,disableUrlAccess:true})

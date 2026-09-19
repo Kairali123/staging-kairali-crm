@@ -88,7 +88,8 @@ const pagePermissions: Record<string, string> = {
   // matched. `app/fms/enquiry-reverification/page.tsx` is a real page and the
   // permission is unchanged — only the key is repaired.
   '/fms/enquiry-reverification': 'cold_enquiry_reverification.view',
-  '/new-order-fms/primary-order-form': 'new-order-fms.view',
+  '/new-order-fms': 'new-order-fms.view',
+  '/new-order-fms/primary-order-form': 'primary_order_form.view',
 }
 
 const isRestricted = (pathname: string) => {
@@ -187,6 +188,45 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
         router.replace('/access-denied')
         return
       }
+    }
+
+    // Dedicated check for KAPPL New Order routes
+    if (pathname === '/new-order-fms' || pathname.startsWith('/new-order-fms/')) {
+      if (pathname.startsWith('/new-order-fms/primary-order-form')) {
+        const hasPrimaryAccess =
+          hasPermission('primary_order_form.view') ||
+          hasPermission('primary_order_form.viewSelf') ||
+          hasPermission('primary_order_form.viewAll') ||
+          hasPermission('primary_order_form.edit') ||
+          hasPermission('primary_order_form') ||
+          hasPermission('primary-order-form.view') ||
+          hasPermission('primary-order-form.viewSelf') ||
+          hasPermission('primary-order-form.viewAll') ||
+          hasPermission('primary-order-form.edit') ||
+          hasPermission('primary-order-form')
+        if (!hasPrimaryAccess) {
+          router.replace('/access-denied')
+          return
+        }
+        return
+      }
+
+      const hasFmsAccess =
+        hasPermission('new-order-fms.view') ||
+        hasPermission('new-order-fms.viewSelf') ||
+        hasPermission('new-order-fms.viewAll') ||
+        hasPermission('new-order-fms.edit') ||
+        hasPermission('new-order-fms') ||
+        hasPermission('new_order_fms.view') ||
+        hasPermission('new_order_fms.viewSelf') ||
+        hasPermission('new_order_fms.viewAll') ||
+        hasPermission('new_order_fms.edit') ||
+        hasPermission('new_order_fms')
+      if (!hasFmsAccess) {
+        router.replace('/access-denied')
+        return
+      }
+      return
     }
 
     // Check if current path requires permission

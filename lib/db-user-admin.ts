@@ -38,6 +38,7 @@ export const PERMISSION_MODULE_COLUMNS = [
   'ai_voice_received',
   'ai_voice_summary',
   'new_order_fms',
+  'primary_order_form',
   'riya_sharma',
   'meetings',
   'accounts_tracker',
@@ -146,8 +147,20 @@ export async function syncUserRolePermissions(
   const pool = await getPool()
   const columnValues = mapPermissionsToColumns(permissions)
 
-  const columns = ['email', 'role', ...Object.keys(columnValues)]
-  const values = [cleanEmail, role, ...Object.values(columnValues)]
+  let allowedCols = new Set(Object.keys(columnValues))
+  try {
+    const [existingCols]: any = await pool.query('SHOW COLUMNS FROM user_role_permissions')
+    if (Array.isArray(existingCols) && existingCols.length > 0) {
+      const dbColSet = new Set(existingCols.map((c: any) => String(c.Field).toLowerCase()))
+      allowedCols = new Set(Object.keys(columnValues).filter((col) => dbColSet.has(col.toLowerCase())))
+    }
+  } catch {
+    // If SHOW COLUMNS fails, proceed with all mapped columns
+  }
+
+  const activeColEntries = Object.entries(columnValues).filter(([col]) => allowedCols.has(col))
+  const columns = ['email', 'role', ...activeColEntries.map(([col]) => col)]
+  const values = [cleanEmail, role, ...activeColEntries.map(([, val]) => val)]
 
   const placeholders = columns.map(() => '?').join(', ')
   const updateClause = columns

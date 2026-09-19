@@ -4,9 +4,32 @@ import {reportExportHTML} from '@/lib/marketing-daily-report'
 import {loadScheduledSales} from '@/lib/email-triggers/load-sales'
 import {loadScheduledMarketing} from '@/lib/email-triggers/load-marketing'
 import type {ConfigInput} from './schema'
+
+// Resolve a working browser launch options object, trying multiple paths/channels so the
+// renderer survives on machines where Edge isn't registered in the expected registry path.
+async function launchBrowser() {
+  // 1. Explicit override via environment variable (highest priority)
+  if (process.env.WHATSAPP_CHROMIUM_PATH) {
+    return chromium.launch({ headless: true, executablePath: process.env.WHATSAPP_CHROMIUM_PATH, timeout: 30000 })
+  }
+  // 2. Edge via playwright channel (works when Edge is in the default install location)
+  const candidates: (() => ReturnType<typeof chromium.launch>)[] = [
+    () => chromium.launch({ headless: true, channel: 'msedge', timeout: 30000 }),
+    () => chromium.launch({ headless: true, executablePath: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', timeout: 30000 }),
+    () => chromium.launch({ headless: true, executablePath: 'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe', timeout: 30000 }),
+    () => chromium.launch({ headless: true, executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', timeout: 30000 }),
+    () => chromium.launch({ headless: true, channel: 'chrome', timeout: 30000 }),
+  ]
+  let lastErr: unknown
+  for (const attempt of candidates) {
+    try { return await attempt() } catch (e) { lastErr = e }
+  }
+  throw lastErr ?? Error('No supported browser found. Set WHATSAPP_CHROMIUM_PATH in .env.local.')
+}
+
 // A fresh browser context for document rendering only: no CRM session, cookies or network.
 export async function renderJPEG(html:string){
- const browser=await chromium.launch({headless:true,...(process.env.WHATSAPP_CHROMIUM_PATH?{executablePath:process.env.WHATSAPP_CHROMIUM_PATH}:{channel:'msedge'}),timeout:30000})
+ const browser=await launchBrowser()
  try{
   const context=await browser.newContext({viewport:{width:1400,height:1000},deviceScaleFactor:1,javaScriptEnabled:false,serviceWorkers:'block'})
   await context.route('**/*',route=>route.abort())

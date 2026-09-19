@@ -1,24 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
+import { formatDateIST } from '@/lib/lead-date'
 
 // ─── Helpers (same as route.ts) ─────────────────────────────────────────────
 
 function safeDate(val: any, fallback = ''): string {
-    if (val === null || val === undefined || val === '') return fallback
-    try {
-        const p = (n: number) => String(n).padStart(2, '0')
-        if (val instanceof Date) {
-            if (isNaN(val.getTime())) return fallback
-            return `${p(val.getDate())}/${p(val.getMonth() + 1)}/${val.getFullYear()} ${p(val.getHours())}:${p(val.getMinutes())}:${p(val.getSeconds())}`
-        }
-        const str = String(val).trim()
-        if (!str) return fallback
-        const m = str.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/)
-        if (m) return `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}:${m[6]}`
-        return str
-    } catch {
-        return fallback
-    }
+    return formatDateIST(val, fallback)
 }
 
 function safeStr(val: any): string {

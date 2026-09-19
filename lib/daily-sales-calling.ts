@@ -14,7 +14,8 @@ export function parsePending(rows:unknown[][]):Record<string,PendingCompany>{
 }
 export function callingSummary(data:CallingData|undefined,scope:string){
  const values=data?Object.entries(data.pending).filter(([code])=>scope==='ALL'||scope===code).map(([,v])=>v):[]
- const sum=(key:keyof PendingCompany)=>values.length&&values.every(v=>v[key]!==null)?values.reduce((n,v)=>n+v[key]!,0):null
+ // Sum non-null values; null only when no companies matched at all
+ const sum=(key:keyof PendingCompany)=>{const nonNull=values.filter(v=>v[key]!==null);return nonNull.length?nonNull.reduce((n,v)=>n+v[key]!,0):null}
  const dates=[...new Set(data?.employees.map(r=>r.date).filter(Boolean))];const sameDay=dates.length===1
  const scopedEmp=scopedEmployees(data,scope)
  const appsheet=scope==='ALL'&&sameDay&&data?.employees.length&&data.employees.every(r=>r.appsheet!==null)?data.employees.reduce((n,r)=>n+r.appsheet!,0):employeeTotal(scopedEmp,'appsheet')
@@ -25,6 +26,7 @@ export function callingSummary(data:CallingData|undefined,scope:string){
 }
 export const showCount=(value:number|null|undefined)=>value==null?'—':value.toLocaleString('en-IN')
 
-export function employeeTotal(employees:CallingEmployee[]|undefined,key:"pending"|"appsheet"|"dialer"|"done"){return employees?.length&&employees.every(r=>r[key]!==null)?employees.reduce((sum,r)=>sum+r[key]!,0):null}
+// Sum non-null employee values; null only when the list is empty or all values are null (data truly missing)
+export function employeeTotal(employees:CallingEmployee[]|undefined,key:"pending"|"appsheet"|"dialer"|"done"){if(!employees?.length)return null;const nonNull=employees.filter(r=>r[key]!==null);return nonNull.length?nonNull.reduce((sum,r)=>sum+r[key]!,0):null}
 
 export function scopedEmployees(data:CallingData|undefined,scope:string){return (data?.employees||[]).filter(r=>scope==='ALL'||r.companies?.includes(scope))}
