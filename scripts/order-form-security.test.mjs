@@ -116,3 +116,13 @@ test('P1 Issue #100: server strictly validates statutory PIN code and PAN format
   assert.match(route, /\/\^\[A-Z]\{5\}\[0-9]\{4\}\[A-Z]\$\//)
 })
 
+test('products are synchronized directly from MySQL product_inventory table', () => {
+  assert.match(route, /import\s*\{[^}]*getPool[^}]*\}\s*from\s*['"]@\/lib\/db['"]/)
+  assert.match(route, /FROM\s+product_inventory/i)
+  assert.match(route, /action\s*===\s*'getProducts'\s*\|\|\s*action\s*===\s*'syncProducts'/)
+  assert.match(route, /const sku = String\(r\.sku/)
+  assert.match(route, /price:\s*Number\(r\.price\)/)
+  assert.match(route, /inventory:\s*Number\(r\.inventory\)/)
+})
+
+

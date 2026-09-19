@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getPool } from '@/lib/db'
 import {
   auditOrderFormAction,
   consumeOrderFormRateLimit,
@@ -111,6 +112,75 @@ export async function POST(req: NextRequest) {
   } catch {
     await auditOrderFormAction({ req, user, action, outcome: 'failure', correlationId, targetId: targetId(body), errorCode: 'SECURITY_SERVICE_UNAVAILABLE' })
     return error(503, 'SECURITY_SERVICE_UNAVAILABLE', 'Order security service is temporarily unavailable.', correlationId)
+  }
+
+  if (action === 'getProducts' || action === 'syncProducts') {
+    try {
+      const pool = await getPool()
+      const [rows] = await pool.query(
+        `SELECT id, sku, product, pack, price, inventory, combined, fac_ho, cost_price
+         FROM product_inventory
+         ORDER BY product ASC`
+      )
+      const productRows = Array.isArray(rows) ? (rows as Record<string, unknown>[]) : []
+      const products = productRows.map((r) => {
+        const sku = String(r.sku || '').trim()
+        const id = sku || String(r.id || '')
+        const name = String(r.product || '').trim()
+        const pack = String(r.pack || '').trim()
+        const combined = r.combined
+          ? String(r.combined).trim()
+          : [name, sku, pack].filter(Boolean).join(' · ')
+
+        return {
+          id,
+          sku,
+          name,
+          product: name,
+          pack,
+          packingSize: pack,
+          price: Number(r.price) || 0,
+          inventory: Number(r.inventory) || 0,
+          combined,
+          fac_ho: String(r.fac_ho || '').trim(),
+          cost_price: Number(r.cost_price) || 0,
+        }
+      })
+
+      await auditOrderFormAction({
+        req,
+        user,
+        action,
+        outcome: 'success',
+        correlationId,
+        targetId: targetId(body),
+        durationMs: Date.now() - startedAt,
+      })
+
+      return json(
+        {
+          ok: true,
+          data: {
+            products,
+            syncedAt: new Date().toISOString(),
+          },
+          correlationId,
+        },
+        200
+      )
+    } catch {
+      await auditOrderFormAction({
+        req,
+        user,
+        action,
+        outcome: 'failure',
+        correlationId,
+        targetId: targetId(body),
+        durationMs: Date.now() - startedAt,
+        errorCode: 'DATABASE_ERROR',
+      })
+      return error(500, 'DATABASE_ERROR', 'Failed to retrieve products from database.', correlationId)
+    }
   }
 
   const appsScript = resolveAppsScriptConfig()

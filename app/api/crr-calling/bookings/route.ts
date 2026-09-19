@@ -579,6 +579,8 @@ async function loadBookings(where: string, params: any[], limit: number) {
         const s9DoerName = tracker2?.stage5_doer_name || "";
         const s9ToShow = parseToShow(tracker2?.stage10_to_show ?? tracker2?.stage9_to_show);
 
+        // Flight details and pre-generated driver form links are automatically populated
+        // once planned date is set and do not indicate that a user has submitted driver assignment.
         const hasS9Data = Boolean(
             s9Actual ||
             s9DriverName ||
@@ -587,15 +589,13 @@ async function loadBookings(where: string, params: any[], limit: number) {
             s9PickupDate ||
             s9PickupTime ||
             s9Remarks ||
-            s9FlightDetails ||
             s9AssignStatus ||
-            s9AssignRemarks ||
-            s9DriverLink
+            s9AssignRemarks
         );
 
-        const pickupReq = (s9PickupDate || s9DriverName || s9PickupLocation || s9Planned) ? "Yes" : "";
+        const pickupReq = (s9PickupDate || s9DriverName || s9PickupLocation) ? "yes" : "";
 
-        const s9Saved = (tracker2 && (hasS9Data || pickupReq)) ? {
+        const s9Saved = (tracker2 && hasS9Data) ? {
             pickupRequired: pickupReq,
             driverName: s9DriverName,
             driverContact: s9DriverContact,
@@ -638,15 +638,13 @@ async function loadBookings(where: string, params: any[], limit: number) {
             s10DropDate ||
             s10DropTime ||
             s10Remarks ||
-            s10FlightDetails ||
             s10AssignStatus ||
-            s10AssignRemarks ||
-            s10DriverLink
+            s10AssignRemarks
         );
 
-        const dropReq = (s10DropDate || s10DriverName || s10DropLocation || s10Planned) ? "Yes" : "";
+        const dropReq = (s10DropDate || s10DriverName || s10DropLocation) ? "yes" : "";
 
-        const s10Saved = (tracker2 && (hasS10Data || dropReq)) ? {
+        const s10Saved = (tracker2 && hasS10Data) ? {
             dropRequired: dropReq,
             driverName: s10DriverName,
             driverContact: s10DriverContact,
