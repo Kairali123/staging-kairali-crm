@@ -40,14 +40,25 @@ export async function loadCalling(connection?: any, date?: string): Promise<Call
 
   await Promise.all([
     (async () => {
-      try {
+      const attemptFetch = async () => {
         const r = await fetch(liveURL, { cache: 'no-store', signal: AbortSignal.timeout(20000) })
-        if (!r.ok) throw Error()
+        if (!r.ok) throw Error(`HTTP ${r.status}`)
         const b = await r.json()
-        if (b.success !== true || !Array.isArray(b.data)) throw Error()
-        result.employees = parseEmployees(b.data)
-      } catch {
-        result.warnings.push('Employee calling feed unavailable. Refresh to retry.')
+        if (b.success !== true || !Array.isArray(b.data)) throw Error('Unexpected response shape')
+        return parseEmployees(b.data)
+      }
+      try {
+        result.employees = await attemptFetch()
+      } catch (err1) {
+        console.warn('[loadCalling] Employee feed attempt 1 failed:', err1)
+        // Retry once after a short delay before giving up
+        await new Promise(res => setTimeout(res, 5000))
+        try {
+          result.employees = await attemptFetch()
+        } catch (err2) {
+          console.error('[loadCalling] Employee feed attempt 2 failed:', err2)
+          result.warnings.push('Employee calling feed unavailable. Refresh to retry.')
+        }
       }
     })(),
 
