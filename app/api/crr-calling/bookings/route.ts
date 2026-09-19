@@ -122,13 +122,13 @@ async function loadBookings(where: string, params: any[], limit: number) {
             country, country_code, email, booking_id, days_of_stay, programme_package_name, 
             package_type, room_type, room_category, invoice_amount, booking_taken_by, mid, 
             booking_no, booking_url, uid, booking_status,
-            stage1_call_date_planned, stage1_task_done_actual, stage1_actual_for_next_visit_date,
+            stage1_task_done_actual,
             stage2_planned, stage2_actual, stage2_time_delay, stage2_next_visit_date,
             stage2_should_we_request_ratings, stage2_proof_of_rating, stage2_link,
             stage2_remarks, stage2_status,
-            stage4_rating_request_call_date_planned, stage4_task_done_actual, stage4_remarks_for_next_visit_date,
-            stage6_call_date_planned, stage6_task_done_actual,
-            stage7_call_date_planned, stage7_task_done_actual, stage7_referals_details,
+            stage4_task_done_actual, stage4_remarks_for_next_visit_date,
+            stage6_task_done_actual,
+            stage7_task_done_actual, stage7_referals_details,
             stage8_call_date_planned, stage8_task_done_actual, stage9_doer
         FROM KTAHV_CRR_Process_FMS
     `;
@@ -408,7 +408,7 @@ async function loadBookings(where: string, params: any[], limit: number) {
 
         // Stage 1: Arrival Welcome on Pickup (CrrCalling / CrrProcess - stage_key: ${uid}_Stage1)
         const c1 = findCallingRowForStage(uid, 1, ["Welcome Call"]);
-        const s1Planned = c1?.planned || row.stage1_call_date_planned || null;
+        const s1Planned = c1?.planned || null;
         const s1Actual = c1?.actual || row.stage1_task_done_actual || null;
         const s1ToShow = parseToShow(c1?.to_show);
         const hasS1Data = Boolean(s1Actual || (c1 && (c1.status || c1.outcome_remarks || c1.did_they_achieve_the_outcomes_planned_for)));
@@ -447,7 +447,7 @@ async function loadBookings(where: string, params: any[], limit: number) {
             "Doctor";
 
         // Stage 3: Next Visit Planning & Confirmation (CRR Process stage2_* columns)
-        const s3Planned = row.stage2_planned || row.stage1_actual_for_next_visit_date || null;
+        const s3Planned = row.stage2_planned || null;
         const s3Actual = row.stage2_actual || null;
         const s3Status = row.stage2_status || (s3Actual ? "Done" : "");
         const s3Completed = Boolean(
@@ -494,7 +494,7 @@ async function loadBookings(where: string, params: any[], limit: number) {
 
         // Stage 5: Online Rating & Review Request (CrrCalling / CrrProcess Col AU - stage_key: ${uid}_Stage5)
         const c5 = findCallingRowForStage(uid, 5, ["Rating Request", "rating", "review request"]);
-        const s5Planned = c5?.planned || row.stage4_rating_request_call_date_planned || null;
+        const s5Planned = c5?.planned || null;
         const s5Actual = c5?.actual || row.stage4_task_done_actual || null;
         const s5ToShow = parseToShow(c5?.to_show);
         const hasS5Data = Boolean(s5Actual || (c5 && (c5.status || c5.rating_status || c5.outcome_remarks || c5.remarks_why_not_given_ratings)));
@@ -513,7 +513,7 @@ async function loadBookings(where: string, params: any[], limit: number) {
 
         // Stage 6: Safe Return Confirmation (CrrCalling / CrrProcess Col BA - stage_key: ${uid}_Stage6)
         const c6 = findCallingRowForStage(uid, 6, ["Call after landing", "Safe Return", "Time to Return"]);
-        const s6Planned = c6?.planned || row.stage6_call_date_planned || null;
+        const s6Planned = c6?.planned || null;
         const s6Actual = c6?.actual || row.stage6_task_done_actual || null;
         const s6ToShow = parseToShow(c6?.to_show);
         const hasS6Data = Boolean(s6Actual || (c6 && (c6.status || c6.stay_feedback || c6.outcome_remarks)));
@@ -529,7 +529,7 @@ async function loadBookings(where: string, params: any[], limit: number) {
 
         // Stage 7: Result Tracking & Health Progress Check (CrrCalling / CrrProcess Col BQ - stage_key: ${uid}_Stage7)
         const c7 = findCallingRowForStage(uid, 7, ["Result and Progress Since Return", "Result and Progress"]);
-        const s7Planned = c7?.planned || row.stage7_call_date_planned || null;
+        const s7Planned = c7?.planned || null;
         const s7Actual = c7?.actual || row.stage7_task_done_actual || null;
         const s7ToShow = parseToShow(c7?.to_show);
         const hasS7Data = Boolean(s7Actual || (c7 && (c7.status || c7.outcome_remarks || c7.did_they_achieve_the_outcomes_planned_for)));
@@ -545,7 +545,7 @@ async function loadBookings(where: string, params: any[], limit: number) {
         } : { doer: s7Doer, stageKey: uid ? `${uid}_Stage7` : null };
 
         // Stage 8: Referral Collection & Lead Generation (strictly from ktahv_checkinmasterfms stage5_*)
-        const s8Planned = checkin?.stage5_planned_referral || checkin?.stage5_planned || null;
+        const s8Planned = checkin?.stage5_planned_referral || null;
         const s8Actual = checkin?.stage5_actual_referral || null;
         const s8DoerRemarks = checkin?.stage5_doer_remarks || "";
         const s8ReferralTakenStatus = checkin?.stage5_referral_taken_status || "";

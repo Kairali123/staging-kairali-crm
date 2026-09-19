@@ -323,7 +323,8 @@ test('CRR Query Boundary & Security Contract Suite', async (t) => {
 
     await t.test('14. POST sanitizes fields and strips stageKey before forwarding to GAS', async () => {
         // Stage 1 is scheduled and open (check-in - 1 day is in the past)
-        mockProcessRows = [{ id: 1, uid: 'UID-1001', booking_id: 'BK-1001', check_in_date: '2026-01-05', check_out_date: '2026-01-10', stage1_call_date_planned: '2026-01-04', booking_status: 'Confirmed' }];
+        mockProcessRows = [{ id: 1, uid: 'UID-1001', booking_id: 'BK-1001', check_in_date: '2026-01-05', check_out_date: '2026-01-10', booking_status: 'Confirmed' }];
+        mockCallingRows = [{ id: 1, uid: 'UID-1001', stage_key: 'UID-1001_Stage1', planned: '2026-01-04' }];
         const originalFetch = global.fetch;
         let interceptedBody = null;
         global.fetch = async (url, options) => {
@@ -1003,8 +1004,15 @@ test('CRR Query Boundary & Security Contract Suite', async (t) => {
         };
         try {
             // A. Check-in far in the future: stage 1 (check-in - 1) is not open yet
-            mockProcessRows = [{ id: 1, uid: 'UID-A', booking_id: 'BK-A', check_in_date: '2099-01-10', check_out_date: '2099-01-15', stage1_call_date_planned: '2099-01-09', booking_status: 'Confirmed' }];
+            // A0. Planned only in the old Process fallback column -> not scheduled (no fallback)
+            mockProcessRows = [{ id: 1, uid: 'UID-A', booking_id: 'BK-A', check_in_date: '2026-01-10', check_out_date: '2026-01-15', stage1_call_date_planned: '2026-01-09', booking_status: 'Confirmed' }];
             let r = await post({ bookingId: 'UID-A', stage: 1, fields: { status: 'Done' } });
+            assert.equal(r.status, 409);
+            assert.match(r.json.error, /Planned date is not scheduled/);
+
+            mockProcessRows = [{ id: 1, uid: 'UID-A', booking_id: 'BK-A', check_in_date: '2099-01-10', check_out_date: '2099-01-15', booking_status: 'Confirmed' }];
+            mockCallingRows = [{ id: 1, uid: 'UID-A', stage_key: 'UID-A_Stage1', planned: '2099-01-09' }];
+            r = await post({ bookingId: 'UID-A', stage: 1, fields: { status: 'Done' } });
             assert.equal(r.status, 409);
             assert.match(r.json.error, /opens on 09-Jan-2099/);
 
@@ -1062,7 +1070,8 @@ test('CRR Query Boundary & Security Contract Suite', async (t) => {
         };
         try {
             // Stage 5 opens on check-out; planned date set
-            mockProcessRows = [{ id: 1, uid: 'UID-P', booking_id: 'BK-P', check_in_date: '2026-01-05', check_out_date: '2026-01-10', stage4_rating_request_call_date_planned: '2026-01-12', booking_status: 'Confirmed' }];
+            mockProcessRows = [{ id: 1, uid: 'UID-P', booking_id: 'BK-P', check_in_date: '2026-01-05', check_out_date: '2026-01-10', booking_status: 'Confirmed' }];
+            mockCallingRows = [{ id: 1, uid: 'UID-P', stage_key: 'UID-P_Stage5', planned: '2026-01-12' }];
             const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
 
             let r = await post(5, new File([bytes], 'proof.png', { type: 'image/png' }));
