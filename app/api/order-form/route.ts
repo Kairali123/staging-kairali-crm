@@ -183,6 +183,68 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  if (action === 'getUsers') {
+    try {
+      const pool = await getPool()
+      const [rows] = await pool.query(
+        `SELECT DISTINCT all_users
+         FROM all_users
+         WHERE all_users IS NOT NULL AND TRIM(all_users) != ''
+           AND (status_of_left IS NULL OR status_of_left NOT IN ('Left', 'Resigned', 'Terminated'))
+           AND (date_of_left IS NULL)
+         ORDER BY all_users ASC`
+      )
+      const userRows = Array.isArray(rows) ? (rows as Record<string, unknown>[]) : []
+      let users = userRows
+        .map((r) => String(r.all_users || '').trim())
+        .filter(Boolean)
+
+      if (users.length === 0) {
+        const [fallbackRows] = await pool.query(
+          `SELECT DISTINCT all_users
+           FROM all_users
+           WHERE all_users IS NOT NULL AND TRIM(all_users) != ''
+           ORDER BY all_users ASC`
+        )
+        const fb = Array.isArray(fallbackRows) ? (fallbackRows as Record<string, unknown>[]) : []
+        users = fb.map((r) => String(r.all_users || '').trim()).filter(Boolean)
+      }
+
+      await auditOrderFormAction({
+        req,
+        user,
+        action,
+        outcome: 'success',
+        correlationId,
+        targetId: targetId(body),
+        durationMs: Date.now() - startedAt,
+      })
+
+      return json(
+        {
+          ok: true,
+          data: {
+            users,
+          },
+          correlationId,
+        },
+        200
+      )
+    } catch {
+      await auditOrderFormAction({
+        req,
+        user,
+        action,
+        outcome: 'failure',
+        correlationId,
+        targetId: targetId(body),
+        durationMs: Date.now() - startedAt,
+        errorCode: 'DATABASE_ERROR',
+      })
+      return error(500, 'DATABASE_ERROR', 'Failed to retrieve users from database.', correlationId)
+    }
+  }
+
   const appsScript = resolveAppsScriptConfig()
   if (!appsScript) {
     await auditOrderFormAction({ req, user, action, outcome: 'failure', correlationId, targetId: targetId(body), errorCode: 'NOT_CONFIGURED' })
