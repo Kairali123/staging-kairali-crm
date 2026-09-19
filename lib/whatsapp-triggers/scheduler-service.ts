@@ -1,6 +1,5 @@
 import { readState, transaction } from './store'
 import { dispatchDue } from './dispatch'
-import { buildReportImage } from './render'
 import { sendReport } from './provider'
 import { workerReady } from './schedule'
 
@@ -33,6 +32,7 @@ export async function runSchedulerTick(): Promise<{ processed: number; heartbeat
       s.rendererReady = rendererOk
     })
 
+    const { buildReportImage } = await import('./render')
     const result = await dispatchDue(now, { build: buildReportImage, send: sendReport })
     return { processed: result.processed, heartbeat: new Date(now).toISOString() }
   } catch (err: any) {
@@ -48,7 +48,7 @@ function getGlobal(): any {
 }
 
 export function ensureSchedulerRunning(): { running: boolean; started: boolean } {
-  if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' || process.env.VERCEL) {
     return { running: false, started: false }
   }
 
