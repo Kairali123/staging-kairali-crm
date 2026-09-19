@@ -872,6 +872,39 @@ test('CRR Query Boundary & Security Contract Suite', async (t) => {
         const s11B = guestB.stages.find(s => s.stage === 11);
         assert.equal(s11B.toShow, true);
         assert.equal(s11B.completed, true);
+
+        // Case C: Pre-populated flight details and driver links exist, but no driver assignment has been submitted
+        mockTrackerPart2Rows = [{
+            booking_id: 'BK-999',
+            stage5_planned: '2026-09-05',
+            stage5_actual: null,
+            stage5_pickup_driver_name: null,
+            stage5_arrival_flight_details: 'https://drive.google.com/open?id=test-flight-details',
+            stage5_pickup_assigned_to_driver_link_arrival: 'https://docs.google.com/forms/d/test-form',
+            stage10_to_show: 'false',
+            stage9_planned: '2026-09-10',
+            stage9_actual: null,
+            stage9_driver_name: null,
+            stage9_departure_flight_details: 'https://drive.google.com/open?id=test-flight-departure',
+            stage9_assigned_to_driver_link_departure: 'https://docs.google.com/forms/d/test-departure-form',
+            stage9_to_show: 'false',
+        }];
+
+        const reqC = createMockRequest('http://localhost:3000/api/crr-calling/bookings', 'valid');
+        const resC = await GET(reqC);
+        assert.equal(resC.status, 200);
+        const jsonC = await resC.json();
+        const guestC = jsonC.data[0];
+
+        const s9C = guestC.stages.find(s => s.stage === 9);
+        assert.equal(s9C.toShow, false);
+        assert.equal(s9C.completed, false);
+        assert.equal(s9C.submitted, false, 'Pre-populated arrival flight/link should not mark stage 9 as submitted');
+
+        const s10C = guestC.stages.find(s => s.stage === 10);
+        assert.equal(s10C.toShow, false);
+        assert.equal(s10C.completed, false);
+        assert.equal(s10C.submitted, false, 'Pre-populated departure flight/link should not mark stage 10 as submitted');
     });
 
     await t.test('22. Stage 3 validation: rejects past next visit date or next visit date <= checkout date', async () => {

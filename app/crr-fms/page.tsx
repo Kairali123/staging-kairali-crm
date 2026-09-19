@@ -79,6 +79,8 @@ import {
     ClipboardCheck,
     ClipboardEdit,
     Check,
+    Contact,
+    ExternalLink,
 } from "lucide-react";
 
 /* =========================================================
@@ -3661,45 +3663,18 @@ export default function CRRCallingProcessPage() {
                                 </div>
                             </div> */}
 
-                            {/* Guest and Booking details section — plain/muted, read only */}
-                            <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3 shadow-sm">
-                                <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-                                    <FileText className="h-4 w-4 text-slate-400" />
-                                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">Booking &amp; Guest Details</h4>
-                                    <span className="ml-auto text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">Read Only</span>
-                                </div>
-                                {/* Proportional cols */}
-                                <div className="overflow-x-auto pb-1">
-                                    <div className="grid gap-3 min-w-[700px]" style={{ gridTemplateColumns: "130px 180px 120px 110px 110px 100px 1fr" }}>
-                                        {readonlyFields.map(([label, val]) => (
-                                            <div className="space-y-1 min-w-0" key={label}>
-                                                <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</Label>
-                                                <div className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-xs font-medium text-slate-500 break-words" title={String(val)}>
-                                                    {label === "PI Link" && val ? (
-                                                        <a
-                                                            href={String(val)}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="text-blue-600 hover:text-blue-800 font-semibold underline underline-offset-2"
-                                                        >
-                                                            View PI
-                                                        </a>
-                                                    ) : (
-                                                        val || "—"
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
+                            {/* Guest and Booking details section — clean header and column dividers */}
+                            <ClientBookingDetailsCard
+                                guest={activeGuest}
+                                onViewFullDetails={() => openDetailsModal(activeGuest.id, "Stage Action Details")}
+                            />
 
                             {/* Stage Action Forms — highlighted card */}
-                            <div className="rounded-xl border-2 border-blue-300 bg-blue-50/60 p-5 space-y-4 shadow-sm">
+                            <div className="rounded-xl border-2 border-blue-400 bg-blue-50/70 p-5 space-y-4 shadow-sm">
                                 <div className="flex items-center gap-2 pb-2 border-b border-blue-200">
-                                    <SlidersHorizontal className="h-4 w-4 text-blue-500" />
-                                    <h4 className="text-xs font-bold uppercase tracking-wider text-blue-600">Stage Action</h4>
-                                    <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${isStage3Complete || activeGuest.allComplete ? 'text-slate-500 bg-slate-100' : 'text-blue-400 bg-blue-100'}`}>
+                                    <SlidersHorizontal className="h-4 w-4 text-blue-600" />
+                                    <h4 className="text-xs font-bold uppercase tracking-wider text-blue-700">Stage Action</h4>
+                                    <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${isStage3Complete || activeGuest.allComplete ? 'text-slate-500 bg-slate-100' : 'text-blue-700 bg-blue-100'}`}>
                                         {isStage3Complete || activeGuest.allComplete ? "Read Only" : "Fill in below"}
                                     </span>
                                 </div>
@@ -3718,8 +3693,8 @@ export default function CRRCallingProcessPage() {
                                 <div className="flex gap-4 items-start">
                                     {/* Date — fixed narrow width so it doesn't stretch */}
                                     <div className="space-y-2 w-64 shrink-0">
-                                        <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                            {activeStage.dateLabel} <span className="text-red-500">*</span>
+                                        <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                                            {activeStage.dateLabel} <span className="text-red-500 font-bold">*</span>
                                         </Label>
                                         <Input
                                             type="date"
@@ -3727,7 +3702,7 @@ export default function CRRCallingProcessPage() {
                                             value={modalDate}
                                             disabled={isGuestDisabled}
                                             onChange={(e) => { setModalDate(e.target.value); setModalSaved(false); }}
-                                            className={`h-10 border-blue-200 focus:border-blue-500 bg-white w-full ${isNextVisitDateInvalid ? "border-red-500 focus:border-red-500 ring-1 ring-red-500" : ""}`}
+                                            className={`h-10 border-[1.5px] border-slate-400 hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 w-full ${isNextVisitDateInvalid ? "!border-red-500 !focus:border-red-500 !ring-red-500" : ""}`}
                                         />
                                         {isNextVisitDateInvalid && (
                                             <p className="text-[11px] font-semibold text-red-600 flex items-start gap-1 mt-1 leading-tight">
@@ -3743,15 +3718,15 @@ export default function CRRCallingProcessPage() {
                                     </div>
                                     {/* Remarks — takes remaining width */}
                                     <div className="space-y-2 flex-1">
-                                        <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                            {activeStage.remarkLabel} <span className="text-red-500">*</span>
+                                        <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                                            {activeStage.remarkLabel} <span className="text-red-500 font-bold">*</span>
                                         </Label>
                                         <Textarea
                                             value={modalRemark}
                                             disabled={isGuestDisabled}
                                             onChange={(e) => { setModalRemark(e.target.value); setModalSaved(false); }}
                                             placeholder="Add remarks for this stage..."
-                                            className="min-h-[80px] border-blue-200 focus:border-blue-500 bg-white"
+                                            className="min-h-[80px] border-[1.5px] border-slate-400 hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white text-slate-900 placeholder:text-slate-400 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                         />
                                     </div>
                                 </div>
@@ -3804,175 +3779,144 @@ export default function CRRCallingProcessPage() {
                         </div>
 
                         <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
-                            {/* Prefilled / read-only details — plain, muted, no emphasis */}
-                            <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3 shadow-sm">
-                                <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-                                    <FileText className="h-4 w-4 text-slate-400" />
-                                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">Guest &amp; Booking Details</h4>
-                                    <span className="ml-auto text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">Read Only</span>
-                                </div>
-                                {/* Proportional cols: ID narrow | Name medium | Mobile narrow | Package fills remaining */}
-                                <div className="grid gap-3" style={{ gridTemplateColumns: "160px 200px 150px 220px 1fr" }}>
-                                    {[
-                                        ["Booking ID", activeSafeReturnGuest.bookingId],
-                                        ["Name of Client", activeSafeReturnGuest.name],
-                                        ["Mobile", activeSafeReturnGuest.mobile],
-                                        ["PI Link", activeSafeReturnGuest.piLink],
-                                        ["Programme / Package", activeSafeReturnGuest.programme],
-                                    ].map(([label, val]) => (
-                                        <div className="space-y-1 min-w-0" key={label}>
-                                            <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</Label>
-                                            <div className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-xs font-medium text-slate-500 break-words" title={String(val)}>
-                                                {label === "PI Link" && val ? (
-                                                    <a
-                                                        href={String(val)}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-blue-600 hover:text-blue-800 font-semibold underline underline-offset-2"
-                                                    >
-                                                        View PI
-                                                    </a>
-                                                ) : (
-                                                    val || "—"
-                                                )}
-                                            </div>
+                                {/* Client & Booking Details Card */}
+                                <ClientBookingDetailsCard
+                                    guest={activeSafeReturnGuest}
+                                    onViewFullDetails={() => openDetailsModal(activeSafeReturnGuest.id, "Client & Booking Details")}
+                                />
+
+                                {/* Editable safe-return details — highlighted card, emerald border, light bg */}
+                                <div className="rounded-xl border-2 border-emerald-400 bg-emerald-50/50 p-5 space-y-4 shadow-sm">
+                                    <div className="flex items-center gap-2 pb-2 border-b border-emerald-200">
+                                        <RotateCcw className="h-4 w-4 text-emerald-600" />
+                                        <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-700">Safe Return Call Details</h4>
+                                        <span className={`ml-auto text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${isStage6Complete ? 'text-slate-600 bg-slate-100 border border-slate-200' :
+                                            isStage6Processing ? 'text-amber-800 bg-amber-100 border border-amber-300' :
+                                                'text-emerald-800 bg-emerald-100 border border-emerald-300'
+                                            }`}>
+                                            {isStage6Complete ? "Read Only" : isStage6Processing ? "Processing" : "Fill in the details below"}
+                                        </span>
+                                    </div>
+                                    {activeSafeReturnGuest && s6Lock.isLocked && !isStage6Complete && !isStage6Processing && (
+                                        <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                                            <Clock className="h-4 w-4 shrink-0" />
+                                            {s6Lock.message}
                                         </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Editable safe-return details — highlighted card, emerald border, light bg */}
-                            <div className="rounded-xl border-2 border-emerald-300 bg-emerald-50/60 p-5 space-y-4 shadow-sm">
-                                <div className="flex items-center gap-2 pb-2 border-b border-emerald-200">
-                                    <RotateCcw className="h-4 w-4 text-emerald-500" />
-                                    <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-600">Safe Return Call Details</h4>
-                                    <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${isStage6Complete ? 'text-slate-500 bg-slate-100' :
-                                        isStage6Processing ? 'text-amber-700 bg-amber-100' :
-                                            'text-emerald-400 bg-emerald-100'
-                                        }`}>
-                                        {isStage6Complete ? "Read Only" : isStage6Processing ? "Processing" : "Fill in below"}
-                                    </span>
-                                </div>
-                                {activeSafeReturnGuest && s6Lock.isLocked && !isStage6Complete && !isStage6Processing && (
-                                    <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-                                        <Clock className="h-4 w-4 shrink-0" />
-                                        {s6Lock.message}
-                                    </div>
-                                )}
-                                {isStage6Processing && (
-                                    <div className="flex items-center gap-2 text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-300 rounded-md px-3 py-2">
-                                        <svg className="h-4 w-4 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" /></svg>
-                                        Processing — your submission is being verified. This stage will be marked complete once confirmed.
-                                    </div>
-                                )}
-                                {isStage6Complete && (
-                                    <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-slate-100 border border-slate-200 rounded-md px-3 py-2">
-                                        <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                                        Stage 6 (Safe Return) is complete. Showing saved data in read-only mode.
-                                    </div>
-                                )}
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    {/* Row 1: How was your stay (full width) */}
-                                    <div className="space-y-2 md:col-span-3">
-                                        <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                            How was your stay? Any feedback or suggestions to improve your experience? <span className="text-red-500">*</span>
-                                        </Label>
-                                        <Textarea
-                                            disabled={isSafeReturnDisabled}
-                                            value={safeReturnStayFeedback}
-                                            onChange={(e) => { setSafeReturnStayFeedback(e.target.value); setSafeReturnSaved(false); }}
-                                            placeholder="Guest's feedback / suggestions..."
-                                            className="min-h-[70px] border-emerald-200 focus:border-emerald-500 bg-white"
-                                        />
-                                    </div>
-
-                                    {/* Row 2: Outcome Remarks (full width) */}
-                                    <div className="space-y-2 md:col-span-3">
-                                        <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                            Outcome Remarks <span className="text-red-500">*</span>
-                                        </Label>
-                                        <Textarea
-                                            disabled={isSafeReturnDisabled}
-                                            value={safeReturnOutcomeRemarks}
-                                            onChange={(e) => { setSafeReturnOutcomeRemarks(e.target.value); setSafeReturnSaved(false); }}
-                                            placeholder="Remarks on the safe return call outcome..."
-                                            className="min-h-[70px] border-emerald-200 focus:border-emerald-500 bg-white"
-                                        />
-                                    </div>
-
-
-                                    {/* Status, (conditional) Follow-up Date or Remarks, and Outcome Achieved */}
-                                    <div className="md:col-span-3 flex flex-wrap items-start gap-4 sm:gap-6">
-                                        {/* Status */}
-                                        <div className="space-y-1.5">
-                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
-                                                Status <span className="text-red-500">*</span>
+                                    )}
+                                    {isStage6Processing && (
+                                        <div className="flex items-center gap-2 text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-300 rounded-md px-3 py-2">
+                                            <svg className="h-4 w-4 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" /></svg>
+                                            Processing — your submission is being verified. This stage will be marked complete once confirmed.
+                                        </div>
+                                    )}
+                                    {isStage6Complete && (
+                                        <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-slate-100 border border-slate-200 rounded-md px-3 py-2">
+                                            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                                            Stage 6 (Safe Return) is complete. Showing saved data in read-only mode.
+                                        </div>
+                                    )}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        {/* Row 1: How was your stay (full width) */}
+                                        <div className="space-y-2 md:col-span-3">
+                                            <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                                                How was your stay? Any feedback or suggestions to improve your experience? <span className="text-red-500 font-bold">*</span>
                                             </Label>
-                                            <Select
+                                            <Textarea
                                                 disabled={isSafeReturnDisabled}
-                                                value={safeReturnStatus}
-                                                onValueChange={(val) => {
-                                                    setSafeReturnStatus(val as CallStatus);
-                                                    setSafeReturnSaved(false);
-                                                }}
-                                            >
-                                                <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-emerald-200 focus:border-emerald-500 bg-white text-slate-800">
-                                                    <SelectValue placeholder="Select Status" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="Done">Done</SelectItem>
-                                                    <SelectItem value="Not Done - Close">Not Done - Close</SelectItem>
-                                                    <SelectItem value="Close Follow-up">Close Follow-up</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                                value={safeReturnStayFeedback}
+                                                onChange={(e) => { setSafeReturnStayFeedback(e.target.value); setSafeReturnSaved(false); }}
+                                                placeholder="Guest's feedback / suggestions..."
+                                                className="min-h-[70px] border-[1.5px] border-slate-400 hover:border-emerald-500 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                            />
                                         </div>
 
-                                        {/* When Close Follow-up: Followup Date */}
-                                        {safeReturnStatus === "Close Follow-up" && (
+                                        {/* Row 2: Outcome Remarks (full width) */}
+                                        <div className="space-y-2 md:col-span-3">
+                                            <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                                                Outcome Remarks <span className="text-red-500 font-bold">*</span>
+                                            </Label>
+                                            <Textarea
+                                                disabled={isSafeReturnDisabled}
+                                                value={safeReturnOutcomeRemarks}
+                                                onChange={(e) => { setSafeReturnOutcomeRemarks(e.target.value); setSafeReturnSaved(false); }}
+                                                placeholder="Remarks on the safe return call outcome..."
+                                                className="min-h-[70px] border-[1.5px] border-slate-400 hover:border-emerald-500 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                            />
+                                        </div>
+
+
+                                        {/* Status, (conditional) Follow-up Date or Remarks, and Outcome Achieved */}
+                                        <div className="md:col-span-3 flex flex-wrap items-start gap-4 sm:gap-6">
+                                            {/* Status */}
                                             <div className="space-y-1.5">
-                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
-                                                    Followup Date for the Safe Return Call <span className="text-red-500">*</span>
+                                                <Label className="text-xs font-bold text-slate-800 flex items-center gap-1 whitespace-nowrap">
+                                                    Status <span className="text-red-500 font-bold">*</span>
                                                 </Label>
-                                                <Input
-                                                    type="date"
+                                                <Select
                                                     disabled={isSafeReturnDisabled}
-                                                    value={safeReturnFollowupDate}
-                                                    onChange={(e) => { setSafeReturnFollowupDate(e.target.value); setSafeReturnSaved(false); }}
-                                                    className="w-[210px] sm:w-[230px] h-10 border-emerald-200 focus:border-emerald-500 bg-white"
-                                                />
+                                                    value={safeReturnStatus}
+                                                    onValueChange={(val) => {
+                                                        setSafeReturnStatus(val as CallStatus);
+                                                        setSafeReturnSaved(false);
+                                                    }}
+                                                >
+                                                    <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-[1.5px] border-slate-400 hover:border-emerald-500 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
+                                                        <SelectValue placeholder="Select Status" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="Done">Done</SelectItem>
+                                                        <SelectItem value="Not Done - Close">Not Done - Close</SelectItem>
+                                                        <SelectItem value="Close Follow-up">Close Follow-up</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
                                             </div>
-                                        )}
 
-                                        {/* When Not Done - Close: Remarks */}
-                                        {safeReturnStatus === "Not Done - Close" && (
-                                            <div className="space-y-1.5 flex-1 min-w-[280px]">
-                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
-                                                    Remarks Why Not Done or Close <span className="text-red-500">*</span>
+                                            {/* When Close Follow-up: Followup Date */}
+                                            {safeReturnStatus === "Close Follow-up" && (
+                                                <div className="space-y-1.5">
+                                                    <Label className="text-xs font-bold text-slate-800 flex items-center gap-1 whitespace-nowrap">
+                                                        Followup Date for the Safe Return Call <span className="text-red-500 font-bold">*</span>
+                                                    </Label>
+                                                    <Input
+                                                        type="date"
+                                                        disabled={isSafeReturnDisabled}
+                                                        value={safeReturnFollowupDate}
+                                                        onChange={(e) => { setSafeReturnFollowupDate(e.target.value); setSafeReturnSaved(false); }}
+                                                        className="w-[210px] sm:w-[230px] h-10 border-[1.5px] border-slate-400 hover:border-emerald-500 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                    />
+                                                </div>
+                                            )}
+
+                                            {/* When Not Done - Close: Remarks */}
+                                            {safeReturnStatus === "Not Done - Close" && (
+                                                <div className="space-y-1.5 flex-1 min-w-[280px]">
+                                                    <Label className="text-xs font-bold text-slate-800 flex items-center gap-1 whitespace-nowrap">
+                                                        Remarks Why Not Done or Close <span className="text-red-500 font-bold">*</span>
+                                                    </Label>
+                                                    <Textarea
+                                                        disabled={isSafeReturnDisabled}
+                                                        value={safeReturnNotDoneRemarks}
+                                                        onChange={(e) => { setSafeReturnNotDoneRemarks(e.target.value); setSafeReturnSaved(false); }}
+                                                        placeholder="Reason the safe return call wasn't done / was closed..."
+                                                        className="min-h-[42px] border-[1.5px] border-slate-400 hover:border-emerald-500 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 w-full"
+                                                    />
+                                                </div>
+                                            )}
+
+                                            {/* Did they achieve the outcomes planned for */}
+                                            <div className="space-y-1.5">
+                                                <Label className="text-xs font-bold text-slate-800 flex items-center gap-1 whitespace-nowrap">
+                                                    Did they achieve the outcomes planned for? <span className="text-red-500 font-bold">*</span>
                                                 </Label>
-                                                <Textarea
+                                                <Select
                                                     disabled={isSafeReturnDisabled}
-                                                    value={safeReturnNotDoneRemarks}
-                                                    onChange={(e) => { setSafeReturnNotDoneRemarks(e.target.value); setSafeReturnSaved(false); }}
-                                                    placeholder="Reason the safe return call wasn't done / was closed..."
-                                                    className="min-h-[42px] border-emerald-200 focus:border-emerald-500 bg-white w-full"
-                                                />
-                                            </div>
-                                        )}
-
-                                        {/* Did they achieve the outcomes planned for */}
-                                        <div className="space-y-1.5">
-                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
-                                                Did they achieve the outcomes planned for? <span className="text-red-500">*</span>
-                                            </Label>
-                                            <Select
-                                                disabled={isSafeReturnDisabled}
-                                                value={safeReturnOutcomeAchieved}
-                                                onValueChange={(val) => {
-                                                    setSafeReturnOutcomeAchieved(val as YesNo);
-                                                    setSafeReturnSaved(false);
-                                                }}
-                                            >
-                                                <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-emerald-200 focus:border-emerald-500 bg-white text-slate-800">
+                                                    value={safeReturnOutcomeAchieved}
+                                                    onValueChange={(val) => {
+                                                        setSafeReturnOutcomeAchieved(val as YesNo);
+                                                        setSafeReturnSaved(false);
+                                                    }}
+                                                >
+                                                    <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-[1.5px] border-slate-400 hover:border-emerald-500 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
                                                     <SelectValue placeholder="Yes / No" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -4038,241 +3982,192 @@ export default function CRRCallingProcessPage() {
                         </div>
 
                         <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
-                            {/* Prefilled / read-only details — plain, muted, no emphasis */}
-                            <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3 shadow-sm">
-                                <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-                                    <FileText className="h-4 w-4 text-slate-400" />
-                                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">Guest &amp; Booking Details</h4>
-                                    <span className="ml-auto text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">Read Only</span>
-                                </div>
-                                {/* Proportional cols: ID narrow | Name medium | Mobile narrow | Package fills remaining */}
-                                <div className="grid gap-3" style={{ gridTemplateColumns: "160px 200px 150px 220px 1fr" }}>
-                                    {[
-                                        ["Booking ID", activeRatingGuest.bookingId],
-                                        ["Name of Client", activeRatingGuest.name],
-                                        ["Mobile", activeRatingGuest.mobile],
-                                        ["PI Link", activeRatingGuest.piLink],
-                                        ["Programme / Package", activeRatingGuest.programme],
-                                    ].map(([label, val]) => (
-                                        <div className="space-y-1 min-w-0" key={label}>
-                                            <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</Label>
-                                            <div className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-xs font-medium text-slate-500 break-words" title={String(val)}>
-                                                {label === "PI Link" && val ? (
-                                                    <a
-                                                        href={String(val)}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-blue-600 hover:text-blue-800 font-semibold underline underline-offset-2"
-                                                    >
-                                                        View PI
-                                                    </a>
-                                                ) : (
-                                                    val || "—"
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                                {/* Client & Booking Details Card */}
+                                <ClientBookingDetailsCard
+                                    guest={activeRatingGuest}
+                                    onViewFullDetails={() => openDetailsModal(activeRatingGuest.id, "Client & Booking Details")}
+                                />
 
-                            {/* Editable rating-request details — highlighted card, orange border, light bg */}
-                            <div className="rounded-xl border-2 border-orange-300 bg-orange-50/60 p-5 space-y-4 shadow-sm">
-                                <div className="flex items-center gap-2 pb-2 border-b border-orange-200">
-                                    <Send className="h-4 w-4 text-orange-500" />
-                                    <h4 className="text-xs font-bold uppercase tracking-wider text-orange-600">Rating &amp; Review Details</h4>
-                                    <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${isStage5Complete ? 'text-slate-500 bg-slate-100' :
-                                        isStage5Processing ? 'text-amber-700 bg-amber-100' :
-                                            'text-orange-400 bg-orange-100'
-                                        }`}>
-                                        {isStage5Complete ? "Read Only" : isStage5Processing ? "Processing" : "Fill in below"}
-                                    </span>
-                                </div>
-                                {activeRatingGuest && s5Lock.isLocked && !isStage5Complete && !isStage5Processing && (
-                                    <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-                                        <Clock className="h-4 w-4 shrink-0" />
-                                        {s5Lock.message}
+                                {/* Editable rating-request details — highlighted card, orange border, light bg */}
+                                <div className="rounded-xl border-2 border-orange-400 bg-orange-50/50 p-5 space-y-4 shadow-sm">
+                                    <div className="flex items-center gap-2 pb-2 border-b border-orange-200">
+                                        <Send className="h-4 w-4 text-orange-600" />
+                                        <h4 className="text-xs font-bold uppercase tracking-wider text-orange-700">Rating &amp; Review Details</h4>
+                                        <span className={`ml-auto text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${isStage5Complete ? 'text-slate-600 bg-slate-100 border border-slate-200' :
+                                            isStage5Processing ? 'text-amber-800 bg-amber-100 border border-amber-300' :
+                                                'text-orange-800 bg-orange-100 border border-orange-300'
+                                            }`}>
+                                            {isStage5Complete ? "Read Only" : isStage5Processing ? "Processing" : "Fill in the details below"}
+                                        </span>
                                     </div>
-                                )}
-                                {isStage5Processing && (
-                                    <div className="flex items-center gap-2 text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-300 rounded-md px-3 py-2">
-                                        <svg className="h-4 w-4 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" /></svg>
-                                        Processing — your submission is being verified. This stage will be marked complete once confirmed.
-                                    </div>
-                                )}
-                                {isStage5Complete && (
-                                    <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-slate-100 border border-slate-200 rounded-md px-3 py-2">
-                                        <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                                        Stage 5 (Rating Request) is complete. Showing saved data in read-only mode.
-                                    </div>
-                                )}
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    {/* Row 1: Rating Status | (conditional) Remarks Why Not Given | Proof of Ratings */}
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                            Rating Status <span className="text-red-500">*</span>
-                                        </Label>
-                                        <Select
-                                            disabled={isRatingDisabled}
-                                            value={ratingStatus}
-                                            onValueChange={(val) => {
-                                                setRatingStatus(val as RatingStatus);
-                                                setRatingSaved(false);
-                                            }}
-                                        >
-                                            <SelectTrigger className="h-10 border-orange-200 focus:border-orange-500 bg-white text-slate-800">
-                                                <SelectValue placeholder="Select Status" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="Given">Given</SelectItem>
-                                                <SelectItem value="Not Given">Not Given</SelectItem>
-                                                <SelectItem value="Requested">Requested</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-
-                                    {ratingStatus !== "" && ratingStatus !== "Given" && (
-                                        <div className="space-y-2 md:col-span-2">
-                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                                Remarks Why Not Given Ratings <span className="text-red-500">*</span>
-                                            </Label>
-                                            <Textarea
-                                                disabled={isRatingDisabled}
-                                                value={ratingNotGivenRemarks}
-                                                onChange={(e) => { setRatingNotGivenRemarks(e.target.value); setRatingSaved(false); }}
-                                                placeholder="Reason the guest hasn't given a rating yet..."
-                                                className="min-h-[42px] border-orange-200 focus:border-orange-500 bg-white"
-                                            />
+                                    {activeRatingGuest && s5Lock.isLocked && !isStage5Complete && !isStage5Processing && (
+                                        <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                                            <Clock className="h-4 w-4 shrink-0" />
+                                            {s5Lock.message}
                                         </div>
                                     )}
-
-                                    {ratingStatus === "Given" && (
-                                        <div className="space-y-2 md:col-span-2">
-                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                                Proof Of Ratings <span className="text-red-500">*</span>
-                                            </Label>
-                                            <Input
-                                                type="file"
-                                                accept="image/*,.pdf"
-                                                disabled={isRatingDisabled}
-                                                onChange={(e) => {
-                                                    const file = e.target.files?.[0] || null;
-                                                    setRatingSaved(false);
-                                                    if (file && !isAllowedProofType(file.type)) {
-                                                        setRatingFormError("Proof of Ratings must be an image or a PDF.");
-                                                        setRatingProofFile(null);
-                                                        e.target.value = "";
-                                                        return;
-                                                    }
-                                                    // Photos are compressed on save; other files must already fit
-                                                    if (file && !file.type.startsWith("image/") && file.size > MAX_PROOF_FILE_BYTES) {
-                                                        setRatingFormError(`File is too large. Please upload a file below ${PROOF_FILE_LIMIT_LABEL}.`);
-                                                        setRatingProofFile(null);
-                                                        e.target.value = "";
-                                                        return;
-                                                    }
-                                                    setRatingFormError("");
-                                                    setRatingProofFile(file);
-                                                }}
-                                                className="h-10 border-orange-200 focus:border-orange-500 bg-white file:text-orange-700 file:font-semibold"
-                                            />
-                                            <p className="text-[11px] text-slate-500">
-                                                Upload a photo (JPG/PNG) or PDF below {PROOF_FILE_LIMIT_LABEL}. Photos are compressed automatically.
-                                            </p>
-                                            {(ratingProofFile || ratingExistingProofFileName) && (
-                                                <p className="text-[11px] font-medium text-slate-500 truncate">
-                                                    Selected: {ratingProofFile ? ratingProofFile.name : ratingExistingProofFileName}
-                                                </p>
-                                            )}
+                                    {isStage5Processing && (
+                                        <div className="flex items-center gap-2 text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-300 rounded-md px-3 py-2">
+                                            <svg className="h-4 w-4 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" /></svg>
+                                            Processing — your submission is being verified. This stage will be marked complete once confirmed.
                                         </div>
                                     )}
-
-                                    {/* Row 2: Outcome Remarks (full width) */}
-                                    <div className="space-y-2 md:col-span-3">
-                                        <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                            Outcome Remarks <span className="text-red-500">*</span>
-                                        </Label>
-                                        <Textarea
-                                            disabled={isRatingDisabled}
-                                            value={ratingOutcomeRemarks}
-                                            onChange={(e) => { setRatingOutcomeRemarks(e.target.value); setRatingSaved(false); }}
-                                            placeholder="Remarks on the rating request outcome..."
-                                            className="min-h-[70px] border-orange-200 focus:border-orange-500 bg-white"
-                                        />
-                                    </div>
-
-
-                                    {/* Status, (conditional) Follow-up Date or Remarks, and Outcome Achieved */}
-                                    <div className="md:col-span-3 flex flex-wrap items-start gap-4 sm:gap-6">
-                                        {/* Status */}
-                                        <div className="space-y-1.5">
-                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
-                                                Status <span className="text-red-500">*</span>
+                                    {isStage5Complete && (
+                                        <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-slate-100 border border-slate-200 rounded-md px-3 py-2">
+                                            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                                            Stage 5 (Rating Request) is complete. Showing saved data in read-only mode.
+                                        </div>
+                                    )}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        {/* Row 1: Rating Status | (conditional) Remarks Why Not Given | Proof of Ratings */}
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                                                Rating Status <span className="text-red-500 font-bold">*</span>
                                             </Label>
                                             <Select
                                                 disabled={isRatingDisabled}
-                                                value={ratingCallStatus}
+                                                value={ratingStatus}
                                                 onValueChange={(val) => {
-                                                    setRatingCallStatus(val as CallStatus);
+                                                    setRatingStatus(val as RatingStatus);
                                                     setRatingSaved(false);
                                                 }}
                                             >
-                                                <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-orange-200 focus:border-orange-500 bg-white text-slate-800">
+                                                <SelectTrigger className="h-10 border-[1.5px] border-slate-400 hover:border-orange-500 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
                                                     <SelectValue placeholder="Select Status" />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    <SelectItem value="Done">Done</SelectItem>
-                                                    <SelectItem value="Not Done - Close">Not Done - Close</SelectItem>
-                                                    <SelectItem value="Close Follow-up">Close Follow-up</SelectItem>
+                                                    <SelectItem value="Given">Given</SelectItem>
+                                                    <SelectItem value="Not Given">Not Given</SelectItem>
+                                                    <SelectItem value="Requested">Requested</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                         </div>
 
-                                        {/* When Close Follow-up: Followup Date */}
-                                        {ratingCallStatus === "Close Follow-up" && (
-                                            <div className="space-y-1.5">
-                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
-                                                    Followup Date for the Rating <span className="text-red-500">*</span>
-                                                </Label>
-                                                <Input
-                                                    type="date"
-                                                    disabled={isRatingDisabled}
-                                                    value={ratingFollowupDate}
-                                                    onChange={(e) => { setRatingFollowupDate(e.target.value); setRatingSaved(false); }}
-                                                    className="w-[210px] sm:w-[230px] h-10 border-orange-200 focus:border-orange-500 bg-white"
-                                                />
-                                            </div>
-                                        )}
-
-                                        {/* When Not Done - Close: Remarks */}
-                                        {ratingCallStatus === "Not Done - Close" && (
-                                            <div className="space-y-1.5 flex-1 min-w-[280px]">
-                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
-                                                    Remarks Why Not Done or Close <span className="text-red-500">*</span>
+                                        {ratingStatus !== "" && ratingStatus !== "Given" && (
+                                            <div className="space-y-2 md:col-span-2">
+                                                <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                                                    Remarks Why Not Given Ratings <span className="text-red-500 font-bold">*</span>
                                                 </Label>
                                                 <Textarea
                                                     disabled={isRatingDisabled}
-                                                    value={ratingNotDoneRemarks}
-                                                    onChange={(e) => { setRatingNotDoneRemarks(e.target.value); setRatingSaved(false); }}
-                                                    placeholder="Reason the rating request wasn't done / was closed..."
-                                                    className="min-h-[42px] border-orange-200 focus:border-orange-500 bg-white w-full"
+                                                    value={ratingNotGivenRemarks}
+                                                    onChange={(e) => { setRatingNotGivenRemarks(e.target.value); setRatingSaved(false); }}
+                                                    placeholder="Reason the guest hasn't given a rating yet..."
+                                                    className="min-h-[42px] border-[1.5px] border-slate-400 hover:border-orange-500 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                                 />
                                             </div>
                                         )}
 
-                                        {/* Did they achieve the outcomes planned for */}
-                                        <div className="space-y-1.5">
-                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
-                                                Did they achieve the outcomes planned for? <span className="text-red-500">*</span>
+                                        {ratingStatus === "Given" && (
+                                            <div className="space-y-2 md:col-span-2">
+                                                <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                                                    Proof Of Ratings <span className="text-red-500 font-bold">*</span>
+                                                </Label>
+                                                <Input
+                                                    type="file"
+                                                    accept="image/*,.pdf"
+                                                    disabled={isRatingDisabled}
+                                                    onChange={(e) => {
+                                                        setRatingProofFile(e.target.files?.[0] || null);
+                                                        setRatingSaved(false);
+                                                    }}
+                                                    className="h-10 border-[1.5px] border-slate-400 hover:border-orange-500 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 shadow-sm rounded-lg file:text-orange-700 file:font-semibold disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                />
+                                                {(ratingProofFile || ratingExistingProofFileName) && (
+                                                    <p className="text-[11px] font-medium text-slate-500 truncate">
+                                                        Selected: {ratingProofFile ? ratingProofFile.name : ratingExistingProofFileName}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Row 2: Outcome Remarks (full width) */}
+                                        <div className="space-y-2 md:col-span-3">
+                                            <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                                                Outcome Remarks <span className="text-red-500 font-bold">*</span>
                                             </Label>
-                                            <Select
+                                            <Textarea
                                                 disabled={isRatingDisabled}
-                                                value={ratingOutcomeAchieved}
-                                                onValueChange={(val) => {
-                                                    setRatingOutcomeAchieved(val as YesNo);
-                                                    setRatingSaved(false);
-                                                }}
-                                            >
-                                                <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-orange-200 focus:border-orange-500 bg-white text-slate-800">
+                                                value={ratingOutcomeRemarks}
+                                                onChange={(e) => { setRatingOutcomeRemarks(e.target.value); setRatingSaved(false); }}
+                                                placeholder="Remarks on the rating request outcome..."
+                                                className="min-h-[70px] border-[1.5px] border-slate-400 hover:border-orange-500 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                            />
+                                        </div>
+
+
+                                        {/* Status, (conditional) Follow-up Date or Remarks, and Outcome Achieved */}
+                                        <div className="md:col-span-3 flex flex-wrap items-start gap-4 sm:gap-6">
+                                            {/* Status */}
+                                            <div className="space-y-1.5">
+                                                <Label className="text-xs font-bold text-slate-800 flex items-center gap-1 whitespace-nowrap">
+                                                    Status <span className="text-red-500 font-bold">*</span>
+                                                </Label>
+                                                <Select
+                                                    disabled={isRatingDisabled}
+                                                    value={ratingCallStatus}
+                                                    onValueChange={(val) => {
+                                                        setRatingCallStatus(val as CallStatus);
+                                                        setRatingSaved(false);
+                                                    }}
+                                                >
+                                                    <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-[1.5px] border-slate-400 hover:border-orange-500 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
+                                                        <SelectValue placeholder="Select Status" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="Done">Done</SelectItem>
+                                                        <SelectItem value="Not Done - Close">Not Done - Close</SelectItem>
+                                                        <SelectItem value="Close Follow-up">Close Follow-up</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+
+                                            {/* When Close Follow-up: Followup Date */}
+                                            {ratingCallStatus === "Close Follow-up" && (
+                                                <div className="space-y-1.5">
+                                                    <Label className="text-xs font-bold text-slate-800 flex items-center gap-1 whitespace-nowrap">
+                                                        Followup Date for the Rating <span className="text-red-500 font-bold">*</span>
+                                                    </Label>
+                                                    <Input
+                                                        type="date"
+                                                        disabled={isRatingDisabled}
+                                                        value={ratingFollowupDate}
+                                                        onChange={(e) => { setRatingFollowupDate(e.target.value); setRatingSaved(false); }}
+                                                        className="w-[210px] sm:w-[230px] h-10 border-[1.5px] border-slate-400 hover:border-orange-500 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                    />
+                                                </div>
+                                            )}
+
+                                            {/* When Not Done - Close: Remarks */}
+                                            {ratingCallStatus === "Not Done - Close" && (
+                                                <div className="space-y-1.5 flex-1 min-w-[280px]">
+                                                    <Label className="text-xs font-bold text-slate-800 flex items-center gap-1 whitespace-nowrap">
+                                                        Remarks Why Not Done or Close <span className="text-red-500 font-bold">*</span>
+                                                    </Label>
+                                                    <Textarea
+                                                        disabled={isRatingDisabled}
+                                                        value={ratingNotDoneRemarks}
+                                                        onChange={(e) => { setRatingNotDoneRemarks(e.target.value); setRatingSaved(false); }}
+                                                        placeholder="Reason the rating request wasn't done / was closed..."
+                                                        className="min-h-[42px] border-[1.5px] border-slate-400 hover:border-orange-500 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 w-full"
+                                                    />
+                                                </div>
+                                            )}
+
+                                            {/* Did they achieve the outcomes planned for */}
+                                            <div className="space-y-1.5">
+                                                <Label className="text-xs font-bold text-slate-800 flex items-center gap-1 whitespace-nowrap">
+                                                    Did they achieve the outcomes planned for? <span className="text-red-500 font-bold">*</span>
+                                                </Label>
+                                                <Select
+                                                    disabled={isRatingDisabled}
+                                                    value={ratingOutcomeAchieved}
+                                                    onValueChange={(val) => {
+                                                        setRatingOutcomeAchieved(val as YesNo);
+                                                        setRatingSaved(false);
+                                                    }}
+                                                >
+                                                    <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-[1.5px] border-slate-400 hover:border-orange-500 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
                                                     <SelectValue placeholder="Yes / No" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -4338,50 +4233,19 @@ export default function CRRCallingProcessPage() {
                         </div>
 
                         <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
-                            {/* Prefilled / read-only details — plain, muted, no emphasis */}
-                            <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3 shadow-sm">
-                                <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-                                    <FileText className="h-4 w-4 text-slate-400" />
-                                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">Booking &amp; Guest Details</h4>
-                                    <span className="ml-auto text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">Read Only</span>
-                                </div>
-                                {/* Proportional cols: ID narrow | Name medium | Mobile narrow | Package fills remaining */}
-                                <div className="grid gap-3" style={{ gridTemplateColumns: "160px 200px 150px 220px 1fr" }}>
-                                    {[
-                                        ["Booking ID", activeFeedbackGuest.bookingId],
-                                        ["Name of Client", activeFeedbackGuest.name],
-                                        ["Mobile", activeFeedbackGuest.mobile],
-                                        ["PI Link", activeFeedbackGuest.piLink],
-                                        ["Programme / Package", activeFeedbackGuest.programme],
-                                    ].map(([label, val]) => (
-                                        <div className="space-y-1 min-w-0" key={label}>
-                                            <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</Label>
-                                            <div className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-xs font-medium text-slate-500 break-words" title={String(val)}>
-                                                {label === "PI Link" && val ? (
-                                                    <a
-                                                        href={String(val)}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-blue-600 hover:text-blue-800 font-semibold underline underline-offset-2"
-                                                    >
-                                                        View PI
-                                                    </a>
-                                                ) : (
-                                                    val || "—"
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                            {/* Client & Booking Details Card */}
+                            <ClientBookingDetailsCard
+                                guest={activeFeedbackGuest}
+                                onViewFullDetails={() => openDetailsModal(activeFeedbackGuest.id, "Client & Booking Details")}
+                            />
 
                             {/* Feedback details card — editable with prefilled remarks from backend */}
-                            <div className="rounded-xl border-2 border-amber-300 bg-amber-50/60 p-5 space-y-4 shadow-sm">
+                            <div className="rounded-xl border-2 border-amber-400 bg-amber-50/50 p-5 space-y-4 shadow-sm">
                                 <div className="flex items-center gap-2 pb-2 border-b border-amber-200">
-                                    <Star className="h-4 w-4 text-amber-500" />
-                                    <h4 className="text-xs font-bold uppercase tracking-wider text-amber-600">Feedback &amp; Outcome Details</h4>
-                                    <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${isFeedbackDisabled ? 'text-slate-500 bg-slate-100' : 'text-amber-600 bg-amber-100'}`}>
-                                        {isFeedbackDisabled ? "Read Only" : "Fill in below"}
+                                    <Star className="h-4 w-4 text-amber-600" />
+                                    <h4 className="text-xs font-bold uppercase tracking-wider text-amber-700">Feedback &amp; Outcome Details</h4>
+                                    <span className={`ml-auto text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${isFeedbackDisabled ? 'text-slate-600 bg-slate-100 border border-slate-200' : 'text-amber-800 bg-amber-100 border border-amber-300'}`}>
+                                        {isFeedbackDisabled ? "Read Only" : "Fill in the details below"}
                                     </span>
                                 </div>
                                 {activeFeedbackGuest && s4Lock.isLocked && (
@@ -4393,7 +4257,7 @@ export default function CRRCallingProcessPage() {
                                 <div className="grid grid-cols-1 gap-4">
                                     {/* Row 1: Feedback Taking URL */}
                                     <div className="space-y-2">
-                                        <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                                        <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
                                             Feedback Taking URL
                                         </Label>
                                         <div className="flex items-center gap-2 flex-wrap">
@@ -4414,15 +4278,15 @@ export default function CRRCallingProcessPage() {
 
                                     {/* Row 2: Doer Remarks — editable textarea prefilled with backend/saved remarks */}
                                     <div className="space-y-2">
-                                        <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                            Doer Remarks <span className="text-red-500">*</span>
+                                        <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                                            Doer Remarks <span className="text-red-500 font-bold">*</span>
                                         </Label>
                                         <Textarea
                                             value={feedbackDoerRemarks}
                                             disabled={isFeedbackDisabled}
                                             onChange={(e) => { setFeedbackDoerRemarks(e.target.value); setFeedbackSaved(false); }}
                                             placeholder="Remarks from the doer regarding the feedback / outcome..."
-                                            className="min-h-[90px] border-amber-200 focus:border-amber-500 bg-white"
+                                            className="min-h-[90px] border-[1.5px] border-slate-400 hover:border-amber-500 focus:border-amber-600 focus:ring-2 focus:ring-amber-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                         />
                                     </div>
                                 </div>
@@ -4481,53 +4345,22 @@ export default function CRRCallingProcessPage() {
                         </div>
 
                         <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
-                            {/* Prefilled / read-only details — plain, muted, no emphasis */}
-                            <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3 shadow-sm">
-                                <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-                                    <FileText className="h-4 w-4 text-slate-400" />
-                                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">Guest &amp; Booking Details</h4>
-                                    <span className="ml-auto text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">Read Only</span>
-                                </div>
-                                {/* Proportional cols: ID narrow | Name medium | Mobile narrow | Package fills remaining */}
-                                <div className="grid gap-3" style={{ gridTemplateColumns: "160px 200px 150px 220px 1fr" }}>
-                                    {[
-                                        ["Booking ID", activeReferralGuest.bookingId],
-                                        ["Name of Client", activeReferralGuest.name],
-                                        ["Mobile", activeReferralGuest.mobile],
-                                        ["PI Link", activeReferralGuest.piLink],
-                                        ["Programme / Package", activeReferralGuest.programme],
-                                    ].map(([label, val]) => (
-                                        <div className="space-y-1 min-w-0" key={label}>
-                                            <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</Label>
-                                            <div className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-xs font-medium text-slate-500 break-words" title={String(val)}>
-                                                {label === "PI Link" && val ? (
-                                                    <a
-                                                        href={String(val)}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-blue-600 hover:text-blue-800 font-semibold underline underline-offset-2"
-                                                    >
-                                                        View PI
-                                                    </a>
-                                                ) : (
-                                                    val || "—"
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                            {/* Client & Booking Details Card */}
+                            <ClientBookingDetailsCard
+                                guest={activeReferralGuest}
+                                onViewFullDetails={() => openDetailsModal(activeReferralGuest.id, "Client & Booking Details")}
+                            />
 
                             {/* Referral details card — non-edited if data exists, editable if pending */}
                             {(() => {
                                 const hasData = Boolean(isStage8Complete || (referralDoerRemarks && referralDoerRemarks.trim() !== "") || (referralTakenStatus && referralTakenStatus.trim() !== ""));
                                 return (
-                                    <div className="rounded-xl border-2 border-green-300 bg-green-50/60 p-5 space-y-4 shadow-sm">
-                                        <div className="flex items-center gap-2 pb-2 border-b border-green-200">
-                                            <Users className="h-4 w-4 text-green-500" />
-                                            <h4 className="text-xs font-bold uppercase tracking-wider text-green-600">Referral Collection Details</h4>
-                                            <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${hasData ? 'text-slate-500 bg-slate-100' : 'text-green-600 bg-green-100'}`}>
-                                                {hasData ? "Read Only" : "Fill in below"}
+                                    <div className="rounded-xl border-2 border-emerald-400 bg-emerald-50/50 p-5 space-y-4 shadow-sm">
+                                        <div className="flex items-center gap-2 pb-2 border-b border-emerald-200">
+                                            <Users className="h-4 w-4 text-emerald-600" />
+                                            <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-700">Referral Collection Details</h4>
+                                            <span className={`ml-auto text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${hasData ? 'text-slate-600 bg-slate-100 border border-slate-200' : 'text-emerald-800 bg-emerald-100 border border-emerald-300'}`}>
+                                                {hasData ? "Read Only" : "Fill in the details below"}
                                             </span>
                                         </div>
                                         {activeReferralGuest && s8Lock.isLocked && !isStage8Complete && (
@@ -4540,7 +4373,7 @@ export default function CRRCallingProcessPage() {
                                             {/* Row 1: Referral Taking URL — hidden once data exists or while the stage is not open */}
                                             {!hasData && !s8Lock.isLocked && (
                                                 <div className="space-y-2">
-                                                    <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                                                    <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
                                                         Referral Taking URL
                                                     </Label>
                                                     <div className="flex items-center gap-2 flex-wrap">
@@ -4548,7 +4381,7 @@ export default function CRRCallingProcessPage() {
                                                             href={buildReferralFormUrl(activeReferralGuest.bookingId)}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
-                                                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-green-600 hover:bg-green-700 rounded-md px-3 py-2 shadow-sm transition-colors"
+                                                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-md px-3 py-2 shadow-sm transition-colors"
                                                         >
                                                             <Send className="h-3.5 w-3.5" />
                                                             Open Referral Form for {activeReferralGuest.bookingId}
@@ -4562,11 +4395,11 @@ export default function CRRCallingProcessPage() {
 
                                             {/* Row 2: Referral Taken Status */}
                                             <div className="space-y-2">
-                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                                    Referral Taken Status {!hasData && <span className="text-red-500">*</span>}
+                                                <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                                                    Referral Taken Status {!hasData && <span className="text-red-500 font-bold">*</span>}
                                                 </Label>
                                                 {hasData ? (
-                                                    <div className="bg-white border border-green-200 rounded-md p-3 text-xs font-medium text-slate-700">
+                                                    <div className="bg-white border border-slate-200 rounded-md p-3 text-xs font-medium text-slate-700">
                                                         {referralTakenStatus || "Not Taken"}
                                                     </div>
                                                 ) : (
@@ -4575,18 +4408,18 @@ export default function CRRCallingProcessPage() {
                                                         disabled={isReferralDisabled}
                                                         onChange={(e) => { setReferralTakenStatus(e.target.value); setReferralSaved(false); }}
                                                         placeholder="e.g. Referral given, Follow-up needed, Declined..."
-                                                        className="h-10 border-green-200 focus:border-green-500 bg-white"
+                                                        className="h-10 border-[1.5px] border-slate-400 hover:border-emerald-500 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                                     />
                                                 )}
                                             </div>
 
                                             {/* Row 3: Doer Remarks */}
                                             <div className="space-y-2">
-                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                                    Doer Remarks {!hasData && <span className="text-red-500">*</span>}
+                                                <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                                                    Doer Remarks {!hasData && <span className="text-red-500 font-bold">*</span>}
                                                 </Label>
                                                 {hasData ? (
-                                                    <div className="bg-white border border-green-200 rounded-md p-3.5 text-xs font-medium text-slate-700 leading-relaxed whitespace-pre-wrap min-h-[60px]">
+                                                    <div className="bg-white border border-slate-200 rounded-md p-3.5 text-xs font-medium text-slate-700 leading-relaxed whitespace-pre-wrap min-h-[60px]">
                                                         {referralDoerRemarks || "No remarks entered"}
                                                     </div>
                                                 ) : (
@@ -4595,7 +4428,7 @@ export default function CRRCallingProcessPage() {
                                                         disabled={isReferralDisabled}
                                                         onChange={(e) => { setReferralDoerRemarks(e.target.value); setReferralSaved(false); }}
                                                         placeholder="Remarks from the doer regarding the referral collection..."
-                                                        className="min-h-[90px] border-green-200 focus:border-green-500 bg-white"
+                                                        className="min-h-[90px] border-[1.5px] border-slate-400 hover:border-emerald-500 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                                     />
                                                 )}
                                             </div>
@@ -4657,50 +4490,19 @@ export default function CRRCallingProcessPage() {
                             </div>
 
                             <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
-                                {/* Prefilled / read-only details — plain, muted, no emphasis */}
-                                <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3 shadow-sm">
-                                    <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-                                        <FileText className="h-4 w-4 text-slate-400" />
-                                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">Guest &amp; Booking Details</h4>
-                                        <span className="ml-auto text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">Read Only</span>
-                                    </div>
-                                    {/* Proportional cols: ID narrow | Name medium | Mobile narrow | Package fills remaining */}
-                                    <div className="grid gap-3" style={{ gridTemplateColumns: "160px 200px 150px 220px 1fr" }}>
-                                        {[
-                                            ["Booking ID", activeWelcomeGuest.bookingId],
-                                            ["Name of Client", activeWelcomeGuest.name],
-                                            ["Mobile", activeWelcomeGuest.mobile],
-                                            ["PI Link", activeWelcomeGuest.piLink],
-                                            ["Programme / Package", activeWelcomeGuest.programme],
-                                        ].map(([label, val]) => (
-                                            <div className="space-y-1 min-w-0" key={label}>
-                                                <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</Label>
-                                                <div className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-xs font-medium text-slate-500 break-words" title={String(val)}>
-                                                    {label === "PI Link" && val ? (
-                                                        <a
-                                                            href={String(val)}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="text-blue-600 hover:text-blue-800 font-semibold underline underline-offset-2"
-                                                        >
-                                                            View PI
-                                                        </a>
-                                                    ) : (
-                                                        val || "—"
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
+                                {/* Client & Booking Details Card */}
+                                <ClientBookingDetailsCard
+                                    guest={activeWelcomeGuest}
+                                    onViewFullDetails={() => openDetailsModal(activeWelcomeGuest.id, "Client & Booking Details")}
+                                />
 
                                 {/* Editable welcome-call details — highlighted card, sky border, light bg */}
-                                <div className="rounded-xl border-2 border-sky-300 bg-sky-50/60 p-5 space-y-4 shadow-sm">
+                                <div className="rounded-xl border-2 border-sky-400 bg-sky-50/50 p-5 space-y-4 shadow-sm">
                                     <div className="flex items-center gap-2 pb-2 border-b border-sky-200">
-                                        <Home className="h-4 w-4 text-sky-500" />
-                                        <h4 className="text-xs font-bold uppercase tracking-wider text-sky-600">Welcome Call Details</h4>
-                                        <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${isWelcomeDisabled ? 'text-slate-500 bg-slate-100' : 'text-sky-400 bg-sky-100'}`}>
-                                            {isWelcomeDisabled ? "Read Only" : "Fill in below"}
+                                        <Home className="h-4 w-4 text-sky-600" />
+                                        <h4 className="text-xs font-bold uppercase tracking-wider text-sky-700">Welcome Call Details</h4>
+                                        <span className={`ml-auto text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${isWelcomeDisabled ? 'text-slate-600 bg-slate-100 border border-slate-200' : 'text-sky-800 bg-sky-100 border border-sky-300'}`}>
+                                            {isWelcomeDisabled ? "Read Only" : "Fill in the details below"}
                                         </span>
                                     </div>
                                     {activeWelcomeGuest && s1Lock.isLocked && !isStage1Complete && !isStage1Processing && (
@@ -4724,15 +4526,15 @@ export default function CRRCallingProcessPage() {
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         {/* Row 1: Outcome Remarks (full width) */}
                                         <div className="space-y-2 md:col-span-3">
-                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                                Outcome Remarks <span className="text-red-500">*</span>
+                                            <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                                                Outcome Remarks <span className="text-red-500 font-bold">*</span>
                                             </Label>
                                             <Textarea
                                                 disabled={!activeWelcomeGuest || isWelcomeDisabled}
                                                 value={welcomeOutcomeRemarks}
                                                 onChange={(e) => { setWelcomeOutcomeRemarks(e.target.value); setWelcomeSaved(false); }}
                                                 placeholder="Remarks on the pickup / welcome call outcome..."
-                                                className="min-h-[70px] border-sky-200 focus:border-sky-500 bg-white"
+                                                className="min-h-[70px] border-[1.5px] border-slate-400 hover:border-sky-500 focus:border-sky-600 focus:ring-2 focus:ring-sky-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                             />
                                         </div>
 
@@ -4741,8 +4543,8 @@ export default function CRRCallingProcessPage() {
                                     <div className="md:col-span-3 flex flex-wrap items-start gap-4 sm:gap-6">
                                         {/* Status */}
                                         <div className="space-y-1.5">
-                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
-                                                Status <span className="text-red-500">*</span>
+                                            <Label className="text-xs font-bold text-slate-800 flex items-center gap-1 whitespace-nowrap">
+                                                Status <span className="text-red-500 font-bold">*</span>
                                             </Label>
                                             <Select
                                                 disabled={!activeWelcomeGuest || isWelcomeDisabled}
@@ -4752,7 +4554,7 @@ export default function CRRCallingProcessPage() {
                                                     setWelcomeSaved(false);
                                                 }}
                                             >
-                                                <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-sky-200 focus:border-sky-500 bg-white text-slate-800">
+                                                <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-[1.5px] border-slate-400 hover:border-sky-500 focus:border-sky-600 focus:ring-2 focus:ring-sky-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
                                                     <SelectValue placeholder="Select Status" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -4766,15 +4568,15 @@ export default function CRRCallingProcessPage() {
                                         {/* When Close Follow-up: Followup Date */}
                                         {welcomeStatus === "Close Follow-up" && (
                                             <div className="space-y-1.5">
-                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
-                                                    Followup Date for the Welcome Call <span className="text-red-500">*</span>
+                                                <Label className="text-xs font-bold text-slate-800 flex items-center gap-1 whitespace-nowrap">
+                                                    Followup Date for the Welcome Call <span className="text-red-500 font-bold">*</span>
                                                 </Label>
                                                 <Input
                                                     type="date"
                                                     disabled={!activeWelcomeGuest || isWelcomeDisabled}
                                                     value={welcomeFollowupDate}
                                                     onChange={(e) => { setWelcomeFollowupDate(e.target.value); setWelcomeSaved(false); }}
-                                                    className="w-[210px] sm:w-[230px] h-10 border-sky-200 focus:border-sky-500 bg-white"
+                                                    className="w-[210px] sm:w-[230px] h-10 border-[1.5px] border-slate-400 hover:border-sky-500 focus:border-sky-600 focus:ring-2 focus:ring-sky-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                                 />
                                             </div>
                                         )}
@@ -4782,23 +4584,23 @@ export default function CRRCallingProcessPage() {
                                         {/* When Not Done - Close: Remarks */}
                                         {welcomeStatus === "Not Done - Close" && (
                                             <div className="space-y-1.5 flex-1 min-w-[280px]">
-                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
-                                                    Remarks Why Not Done or Close <span className="text-red-500">*</span>
+                                                <Label className="text-xs font-bold text-slate-800 flex items-center gap-1 whitespace-nowrap">
+                                                    Remarks Why Not Done or Close <span className="text-red-500 font-bold">*</span>
                                                 </Label>
                                                 <Textarea
                                                     disabled={!activeWelcomeGuest || isWelcomeDisabled}
                                                     value={welcomeNotDoneRemarks}
                                                     onChange={(e) => { setWelcomeNotDoneRemarks(e.target.value); setWelcomeSaved(false); }}
                                                     placeholder="Reason the welcome call wasn't done / was closed..."
-                                                    className="min-h-[42px] border-sky-200 focus:border-sky-500 bg-white w-full"
+                                                    className="min-h-[42px] border-[1.5px] border-slate-400 hover:border-sky-500 focus:border-sky-600 focus:ring-2 focus:ring-sky-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 w-full"
                                                 />
                                             </div>
                                         )}
 
                                         {/* Did they achieve the outcomes planned for */}
                                         <div className="space-y-1.5">
-                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
-                                                Did they achieve the outcomes planned for? <span className="text-red-500">*</span>
+                                            <Label className="text-xs font-bold text-slate-800 flex items-center gap-1 whitespace-nowrap">
+                                                Did they achieve the outcomes planned for? <span className="text-red-500 font-bold">*</span>
                                             </Label>
                                             <Select
                                                 disabled={!activeWelcomeGuest || isWelcomeDisabled}
@@ -4808,7 +4610,7 @@ export default function CRRCallingProcessPage() {
                                                     setWelcomeSaved(false);
                                                 }}
                                             >
-                                                <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-sky-200 focus:border-sky-500 bg-white text-slate-800">
+                                                <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-[1.5px] border-slate-400 hover:border-sky-500 focus:border-sky-600 focus:ring-2 focus:ring-sky-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
                                                     <SelectValue placeholder="Yes / No" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -4874,50 +4676,20 @@ export default function CRRCallingProcessPage() {
                         </div>
 
                         <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
-                            {/* Prefilled / read-only details — plain, muted, no emphasis */}
-                            <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3 shadow-sm">
-                                <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-                                    <FileText className="h-4 w-4 text-slate-400" />
-                                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">Guest &amp; Booking Details</h4>
-                                    <span className="ml-auto text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">Read Only</span>
-                                </div>
-                                <div className="grid gap-3" style={{ gridTemplateColumns: "160px 200px 150px 220px 1fr" }}>
-                                    {[
-                                        ["Booking ID", activeResultProgressGuest.bookingId],
-                                        ["Name of Client", activeResultProgressGuest.name],
-                                        ["Mobile", activeResultProgressGuest.mobile],
-                                        ["PI Link", activeResultProgressGuest.piLink],
-                                        ["Programme / Package", activeResultProgressGuest.programme],
-                                    ].map(([label, val]) => (
-                                        <div className="space-y-1 min-w-0" key={label}>
-                                            <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</Label>
-                                            <div className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-xs font-medium text-slate-500 break-words" title={String(val)}>
-                                                {label === "PI Link" && val ? (
-                                                    <a
-                                                        href={String(val)}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-blue-600 hover:text-blue-800 font-semibold underline underline-offset-2"
-                                                    >
-                                                        View PI
-                                                    </a>
-                                                ) : (
-                                                    val || "—"
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                            {/* Prefilled / read-only details — clean header and column dividers */}
+                            <ClientBookingDetailsCard
+                                guest={activeResultProgressGuest}
+                                onViewFullDetails={() => openDetailsModal(activeResultProgressGuest.id, "Result & Health Progress Details")}
+                            />
 
                             {/* Editable result / progress details — highlighted card, purple border, light bg */}
-                            <div className="rounded-xl border-2 border-purple-300 bg-purple-50/60 p-5 space-y-4 shadow-sm">
+                            <div className="rounded-xl border-2 border-purple-400 bg-purple-50/70 p-5 space-y-4 shadow-sm">
                                 <div className="flex items-center gap-2 pb-2 border-b border-purple-200">
-                                    <TrendingUp className="h-4 w-4 text-purple-500" />
-                                    <h4 className="text-xs font-bold uppercase tracking-wider text-purple-600">Result &amp; Health Progress Details</h4>
+                                    <TrendingUp className="h-4 w-4 text-purple-600" />
+                                    <h4 className="text-xs font-bold uppercase tracking-wider text-purple-700">Result &amp; Health Progress Details</h4>
                                     <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${isStage7Complete ? 'text-slate-500 bg-slate-100' :
                                         isStage7Processing ? 'text-amber-700 bg-amber-100' :
-                                            'text-purple-400 bg-purple-100'
+                                            'text-purple-700 bg-purple-100'
                                         }`}>
                                         {isStage7Complete ? "Read Only" : isStage7Processing ? "Processing" : "Fill in below"}
                                     </span>
@@ -4943,15 +4715,15 @@ export default function CRRCallingProcessPage() {
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     {/* Row 1: Outcome Remarks (full width) */}
                                     <div className="space-y-2 md:col-span-3">
-                                        <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                            Outcome Remarks <span className="text-red-500">*</span>
+                                        <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                                            Outcome Remarks <span className="text-red-500 font-bold">*</span>
                                         </Label>
                                         <Textarea
                                             disabled={isResultDisabled}
                                             value={resultOutcomeRemarks}
                                             onChange={(e) => { setResultOutcomeRemarks(e.target.value); setResultSaved(false); }}
                                             placeholder="Remarks on the result / health progress outcome..."
-                                            className="min-h-[70px] border-purple-200 focus:border-purple-500 bg-white"
+                                            className="min-h-[70px] border-[1.5px] border-slate-400 hover:border-purple-500 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 bg-white text-slate-900 placeholder:text-slate-400 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                         />
                                     </div>
 
@@ -4960,8 +4732,8 @@ export default function CRRCallingProcessPage() {
                                     <div className="md:col-span-3 flex flex-wrap items-start gap-4 sm:gap-6">
                                         {/* Status */}
                                         <div className="space-y-1.5">
-                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
-                                                Status <span className="text-red-500">*</span>
+                                            <Label className="text-xs font-bold text-slate-800 flex items-center gap-1 whitespace-nowrap">
+                                                Status <span className="text-red-500 font-bold">*</span>
                                             </Label>
                                             <Select
                                                 disabled={isResultDisabled}
@@ -4971,7 +4743,7 @@ export default function CRRCallingProcessPage() {
                                                     setResultSaved(false);
                                                 }}
                                             >
-                                                <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-purple-200 focus:border-purple-500 bg-white text-slate-800">
+                                                <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-[1.5px] border-slate-400 hover:border-purple-500 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
                                                     <SelectValue placeholder="Select Status" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -4985,15 +4757,15 @@ export default function CRRCallingProcessPage() {
                                         {/* When Close Follow-up: Followup Date */}
                                         {resultStatus === "Close Follow-up" && (
                                             <div className="space-y-1.5">
-                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
-                                                    Followup Date for Result Tracking &amp; Health Progress <span className="text-red-500">*</span>
+                                                <Label className="text-xs font-bold text-slate-800 flex items-center gap-1 whitespace-nowrap">
+                                                    Followup Date for Result Tracking &amp; Health Progress <span className="text-red-500 font-bold">*</span>
                                                 </Label>
                                                 <Input
                                                     type="date"
                                                     disabled={isResultDisabled}
                                                     value={resultFollowupDate}
                                                     onChange={(e) => { setResultFollowupDate(e.target.value); setResultSaved(false); }}
-                                                    className="w-[210px] sm:w-[230px] h-10 border-purple-200 focus:border-purple-500 bg-white"
+                                                    className="w-[210px] sm:w-[230px] h-10 border-[1.5px] border-slate-400 hover:border-purple-500 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                                 />
                                             </div>
                                         )}
@@ -5001,23 +4773,23 @@ export default function CRRCallingProcessPage() {
                                         {/* When Not Done - Close: Remarks */}
                                         {resultStatus === "Not Done - Close" && (
                                             <div className="space-y-1.5 flex-1 min-w-[280px]">
-                                                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
-                                                    Remarks Why Not Done or Close <span className="text-red-500">*</span>
+                                                <Label className="text-xs font-bold text-slate-800 flex items-center gap-1 whitespace-nowrap">
+                                                    Remarks Why Not Done or Close <span className="text-red-500 font-bold">*</span>
                                                 </Label>
                                                 <Textarea
                                                     disabled={isResultDisabled}
                                                     value={resultNotDoneRemarks}
                                                     onChange={(e) => { setResultNotDoneRemarks(e.target.value); setResultSaved(false); }}
                                                     placeholder="Reason the result / progress check wasn't done / was closed..."
-                                                    className="min-h-[42px] border-purple-200 focus:border-purple-500 bg-white w-full"
+                                                    className="min-h-[42px] border-[1.5px] border-slate-400 hover:border-purple-500 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 w-full"
                                                 />
                                             </div>
                                         )}
 
                                         {/* Did they achieve the outcomes planned for */}
                                         <div className="space-y-1.5">
-                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1 whitespace-nowrap">
-                                                Did they achieve the outcomes planned for? <span className="text-red-500">*</span>
+                                            <Label className="text-xs font-bold text-slate-800 flex items-center gap-1 whitespace-nowrap">
+                                                Did they achieve the outcomes planned for? <span className="text-red-500 font-bold">*</span>
                                             </Label>
                                             <Select
                                                 disabled={isResultDisabled}
@@ -5027,7 +4799,7 @@ export default function CRRCallingProcessPage() {
                                                     setResultSaved(false);
                                                 }}
                                             >
-                                                <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-purple-200 focus:border-purple-500 bg-white text-slate-800">
+                                                <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-[1.5px] border-slate-400 hover:border-purple-500 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
                                                     <SelectValue placeholder="Yes / No" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -5092,42 +4864,11 @@ export default function CRRCallingProcessPage() {
                         </div>
 
                         <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
-                            {/* Prefilled / read-only details — plain, muted, no emphasis */}
-                            <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3 shadow-sm">
-                                <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-                                    <FileText className="h-4 w-4 text-slate-400" />
-                                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">Guest &amp; Booking Details</h4>
-                                    <span className="ml-auto text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">Read Only</span>
-                                </div>
-                                {/* Proportional cols: ID narrow | Name medium | Mobile narrow | Package fills remaining */}
-                                <div className="grid gap-3" style={{ gridTemplateColumns: "160px 200px 150px 220px 1fr" }}>
-                                    {[
-                                        ["Booking ID", activeCallGuest.bookingId],
-                                        ["Name of Client", activeCallGuest.name],
-                                        ["Mobile", activeCallGuest.mobile],
-                                        ["PI Link", activeCallGuest.piLink],
-                                        ["Programme / Package", activeCallGuest.programme],
-                                    ].map(([label, val]) => (
-                                        <div className="space-y-1 min-w-0" key={label}>
-                                            <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</Label>
-                                            <div className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-xs font-medium text-slate-500 break-words" title={String(val)}>
-                                                {label === "PI Link" && val ? (
-                                                    <a
-                                                        href={String(val)}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-blue-600 hover:text-blue-800 font-semibold underline underline-offset-2"
-                                                    >
-                                                        View PI
-                                                    </a>
-                                                ) : (
-                                                    val || "—"
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                            {/* Prefilled / read-only details — clean header and column dividers */}
+                            <ClientBookingDetailsCard
+                                guest={activeCallGuest}
+                                onViewFullDetails={() => openDetailsModal(activeCallGuest.id, "Stage 2 Details")}
+                            />
 
                             {/* Stage 2 Details from checkinmasterfms */}
                             {activeCallGuest && (() => {
@@ -5264,20 +5005,21 @@ export default function CRRCallingProcessPage() {
                                 </div>
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                     {fullDetailsFields.map(([label, val]) => (
-                                        <div className="space-y-1 min-w-0" key={label}>
-                                            <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</Label>
-                                            <div className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-xs font-medium text-slate-500 break-words" title={String(val)}>
+                                        <div className="bg-slate-50/80 border border-slate-200/80 rounded-lg p-2.5 space-y-0.5" key={label}>
+                                            <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 block">{label}</span>
+                                            <div className="text-xs font-bold text-slate-900 break-words">
                                                 {label === "PI Link" && val ? (
                                                     <a
                                                         href={String(val)}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
-                                                        className="text-blue-600 hover:text-blue-800 font-semibold underline underline-offset-2"
+                                                        className="text-blue-600 hover:text-blue-800 font-semibold underline underline-offset-2 inline-flex items-center gap-1"
                                                     >
-                                                        View PI
+                                                        <span>View PI</span>
+                                                        <ExternalLink className="h-3 w-3" />
                                                     </a>
                                                 ) : (
-                                                    val || "—"
+                                                    String(val || "—")
                                                 )}
                                             </div>
                                         </div>
@@ -5339,5 +5081,86 @@ export default function CRRCallingProcessPage() {
                 stageUsers={responsiblePersonList}
             />
         </DashboardLayout>
+    );
+}
+
+function ClientBookingDetailsCard({
+    guest,
+    onViewFullDetails,
+}: {
+    guest: Guest;
+    onViewFullDetails?: () => void;
+}) {
+    return (
+        <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3.5 shadow-sm">
+            <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                    <div className="p-1 rounded-md bg-slate-100 border border-slate-200/60 flex items-center justify-center">
+                        <Contact className="h-4 w-4 text-slate-600" />
+                    </div>
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-800 tracking-tight">
+                        Client &amp; Booking Details
+                    </h4>
+                </div>
+                {onViewFullDetails && (
+                    <button
+                        type="button"
+                        onClick={onViewFullDetails}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-blue-600 bg-slate-100/90 hover:bg-slate-200/80 border border-slate-200 px-3 py-1 rounded-md transition-colors cursor-pointer"
+                    >
+                        <span>View Full Details</span>
+                        <ExternalLink className="h-3.5 w-3.5 text-slate-500" />
+                    </button>
+                )}
+            </div>
+
+            <div className="overflow-x-auto pb-0.5">
+                <div className="grid gap-3 min-w-[700px]" style={{ gridTemplateColumns: "150px 180px 140px 130px 1fr" }}>
+                    {/* Booking ID */}
+                    <div className="space-y-1 min-w-0 pr-4 border-r border-slate-200">
+                        <p className="text-[11px] font-medium text-slate-400">Booking ID</p>
+                        <p className="text-xs font-bold text-slate-900 break-words">{guest.bookingId || "—"}</p>
+                    </div>
+
+                    {/* Client Name */}
+                    <div className="space-y-1 min-w-0 pr-4 border-r border-slate-200">
+                        <p className="text-[11px] font-medium text-slate-400">Client Name</p>
+                        <p className="text-xs font-bold text-slate-900 break-words">{guest.name || "—"}</p>
+                    </div>
+
+                    {/* Mobile */}
+                    <div className="space-y-1 min-w-0 pr-4 border-r border-slate-200">
+                        <p className="text-[11px] font-medium text-slate-400">Mobile</p>
+                        <p className="text-xs font-bold text-slate-900 break-words">{guest.mobile || "—"}</p>
+                    </div>
+
+                    {/* PI Link */}
+                    <div className="space-y-1 min-w-0 pr-4 border-r border-slate-200">
+                        <p className="text-[11px] font-medium text-slate-400">PI Link</p>
+                        <div className="text-xs font-bold text-slate-900 break-words">
+                            {guest.piLink ? (
+                                <a
+                                    href={guest.piLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:text-blue-800 font-semibold underline underline-offset-2 inline-flex items-center gap-1"
+                                >
+                                    <span>View PI</span>
+                                    <ExternalLink className="h-3 w-3" />
+                                </a>
+                            ) : (
+                                "—"
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Programme / Package */}
+                    <div className="space-y-1 min-w-0">
+                        <p className="text-[11px] font-medium text-slate-400">Programme / Package</p>
+                        <p className="text-xs font-bold text-slate-900 break-words">{guest.programme || "—"}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
     );
 }

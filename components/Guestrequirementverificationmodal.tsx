@@ -1,5 +1,5 @@
 import React, { useState, type ReactNode } from "react";
-import { ClipboardCheck, X, FileText, Send, Loader2 } from "lucide-react";
+import { ClipboardCheck, X, FileText, Send, Loader2, Contact, ExternalLink } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import type { Guest } from "@/types/crr";
 
@@ -32,12 +32,12 @@ const LOCKED_DETAILS = {
     package: "Holistic Treatment For Rejuvenation & Detoxification-Double",
 };
 
-const SECTION_THEME = { bg: "#eef4ff", border: "#cddcfb", head: "#1d4ed8" };
+const SECTION_THEME = { bg: "#eff6ff", border: "#93c5fd", head: "#1d4ed8" };
 
 function Label({ required, children }: { required?: boolean; children: ReactNode }) {
     return (
-        <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>
-            {children} {required && <span style={{ color: "#ef4444" }}>*</span>}
+        <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#1e293b", marginBottom: 6 }}>
+            {children} {required && <span style={{ color: "#ef4444", fontWeight: 700 }}>*</span>}
         </label>
     );
 }
@@ -46,11 +46,13 @@ const selectStyle: React.CSSProperties = {
     width: "100%",
     padding: "10px 12px",
     borderRadius: 10,
-    border: "1px solid #e5e7eb",
+    border: "1.5px solid #94a3b8",
     background: "#ffffff",
     fontSize: 14,
-    color: "#1f2937",
+    color: "#0f172a",
     outline: "none",
+    fontWeight: 500,
+    boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
 };
 
 const inputStyle = { ...selectStyle };
@@ -66,10 +68,11 @@ const readonlyBoxStyle = {
     width: "100%",
     padding: "10px 12px",
     borderRadius: 10,
-    border: "1px solid #d1d5db",
-    background: "#e5e7eb",
+    border: "1px solid #cbd5e1",
+    background: "#f8fafc",
     fontSize: 14,
-    color: "#6b7280",
+    color: "#334155",
+    fontWeight: 600,
 };
 
 const row2 = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 };
@@ -322,70 +325,71 @@ export default function GuestRequirementVerificationModal({ open = true, onClose
                             Stage 11 is complete. Showing saved data in read-only mode.
                         </div>
                     )}
-                    {/* Readonly: Guest & Booking Details */}
+                    {/* Readonly: Client & Booking Details */}
                     <div
                         style={{
-                            background: "#f9fafb",
-                            border: "1px solid #e5e7eb",
+                            background: "#ffffff",
+                            border: "1px solid #e2e8f0",
                             borderRadius: 14,
-                            padding: "16px 18px 18px",
+                            padding: "16px 20px",
                             marginBottom: 16,
+                            boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
                         }}
                     >
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 10, marginBottom: 12, borderBottom: "1px solid #f1f5f9" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <FileText size={15} color="#4b5563" />
-                                <span style={{ fontSize: 13, fontWeight: 700, color: "#374151", letterSpacing: 0.3 }}>
-                                    GUEST & BOOKING DETAILS
+                                <div style={{ padding: 4, borderRadius: 6, background: "#f1f5f9", border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                    <Contact size={15} color="#475569" />
+                                </div>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: "#1e293b", letterSpacing: 0.2 }}>
+                                    Client &amp; Booking Details
                                 </span>
                             </div>
-                            <span
-                                style={{
-                                    fontSize: 11,
-                                    fontWeight: 600,
-                                    color: "#6b7280",
-                                    background: "#e5e7eb",
-                                    padding: "2px 8px",
-                                    borderRadius: 6,
-                                }}
-                            >
-                                Read Only
-                            </span>
                         </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1.4fr", columnGap: 16, rowGap: 14 }}>
-                            <div>
-                                <p style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", margin: "0 0 4px", letterSpacing: 0.3 }}>
-                                    BOOKING ID
+                        <div style={{ display: "grid", gridTemplateColumns: "150px 180px 140px 130px 1fr", gap: 16, overflowX: "auto" }}>
+                            <div style={{ paddingRight: 14, borderRight: "1px solid #e2e8f0" }}>
+                                <p style={{ fontSize: 11, fontWeight: 500, color: "#94a3b8", margin: "0 0 4px" }}>
+                                    Booking ID
                                 </p>
-                                <div style={readonlyBoxStyle}>{details.bookingId}</div>
+                                <p style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", margin: 0, wordBreak: "break-word" }}>{details.bookingId || "—"}</p>
                             </div>
-                            <div>
-                                <p style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", margin: "0 0 4px", letterSpacing: 0.3 }}>
-                                    NAME OF CLIENT
+                            <div style={{ paddingRight: 14, borderRight: "1px solid #e2e8f0" }}>
+                                <p style={{ fontSize: 11, fontWeight: 500, color: "#94a3b8", margin: "0 0 4px" }}>
+                                    Client Name
                                 </p>
-                                <div style={readonlyBoxStyle}>{details.nameOfClient}</div>
+                                <p style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", margin: 0, wordBreak: "break-word" }}>{details.nameOfClient || "—"}</p>
                             </div>
-                            <div>
-                                <p style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", margin: "0 0 4px", letterSpacing: 0.3 }}>
-                                    MOBILE
+                            <div style={{ paddingRight: 14, borderRight: "1px solid #e2e8f0" }}>
+                                <p style={{ fontSize: 11, fontWeight: 500, color: "#94a3b8", margin: "0 0 4px" }}>
+                                    Mobile
                                 </p>
-                                <div style={readonlyBoxStyle}>{details.mobile}</div>
+                                <p style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", margin: 0, wordBreak: "break-word" }}>{details.mobile || "—"}</p>
                             </div>
-                            <div>
-                                <p style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", margin: "0 0 4px", letterSpacing: 0.3 }}>
-                                    PI LINK
+                            <div style={{ paddingRight: 14, borderRight: "1px solid #e2e8f0" }}>
+                                <p style={{ fontSize: 11, fontWeight: 500, color: "#94a3b8", margin: "0 0 4px" }}>
+                                    PI Link
                                 </p>
-                                <div style={{ ...readonlyBoxStyle, color: "#2563eb" }}>
-                                    <a href={details.piLink} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb", textDecoration: "underline" }}>
-                                        View PI
-                                    </a>
+                                <div style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>
+                                    {details.piLink && details.piLink !== "#" ? (
+                                        <a
+                                            href={details.piLink}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            style={{ color: "#2563eb", fontWeight: 600, textDecoration: "underline", display: "inline-flex", alignItems: "center", gap: 4 }}
+                                        >
+                                            <span>View PI</span>
+                                            <ExternalLink size={12} />
+                                        </a>
+                                    ) : (
+                                        <span style={{ color: "#0f172a" }}>—</span>
+                                    )}
                                 </div>
                             </div>
                             <div>
-                                <p style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", margin: "0 0 4px", letterSpacing: 0.3 }}>
-                                    PROGRAMME / PACKAGE
+                                <p style={{ fontSize: 11, fontWeight: 500, color: "#94a3b8", margin: "0 0 4px" }}>
+                                    Programme / Package
                                 </p>
-                                <div style={readonlyBoxStyle}>{details.package}</div>
+                                <p style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", margin: 0, wordBreak: "break-word" }}>{details.package || "—"}</p>
                             </div>
                         </div>
                     </div>
