@@ -323,7 +323,8 @@ test('CRR Query Boundary & Security Contract Suite', async (t) => {
 
     await t.test('14. POST sanitizes fields and strips stageKey before forwarding to GAS', async () => {
         // Stage 1 is scheduled and open (check-in - 1 day is in the past)
-        mockProcessRows = [{ id: 1, uid: 'UID-1001', booking_id: 'BK-1001', check_in_date: '2026-01-05', check_out_date: '2026-01-10', stage1_call_date_planned: '2026-01-04', booking_status: 'Confirmed' }];
+        mockProcessRows = [{ id: 1, uid: 'UID-1001', booking_id: 'BK-1001', check_in_date: '2026-01-05', check_out_date: '2026-01-10', booking_status: 'Confirmed' }];
+        mockCallingRows = [{ id: 1, uid: 'UID-1001', stage_key: 'UID-1001_Stage1', planned: '2026-01-04' }];
         const originalFetch = global.fetch;
         let interceptedBody = null;
         global.fetch = async (url, options) => {
@@ -1003,8 +1004,15 @@ test('CRR Query Boundary & Security Contract Suite', async (t) => {
         };
         try {
             // A. Check-in far in the future: stage 1 (check-in - 1) is not open yet
-            mockProcessRows = [{ id: 1, uid: 'UID-A', booking_id: 'BK-A', check_in_date: '2099-01-10', check_out_date: '2099-01-15', stage1_call_date_planned: '2099-01-09', booking_status: 'Confirmed' }];
+            // A0. Planned only in the old Process fallback column -> not scheduled (no fallback)
+            mockProcessRows = [{ id: 1, uid: 'UID-A', booking_id: 'BK-A', check_in_date: '2026-01-10', check_out_date: '2026-01-15', stage1_call_date_planned: '2026-01-09', booking_status: 'Confirmed' }];
             let r = await post({ bookingId: 'UID-A', stage: 1, fields: { status: 'Done' } });
+            assert.equal(r.status, 409);
+            assert.match(r.json.error, /Planned date is not scheduled/);
+
+            mockProcessRows = [{ id: 1, uid: 'UID-A', booking_id: 'BK-A', check_in_date: '2099-01-10', check_out_date: '2099-01-15', booking_status: 'Confirmed' }];
+            mockCallingRows = [{ id: 1, uid: 'UID-A', stage_key: 'UID-A_Stage1', planned: '2099-01-09' }];
+            r = await post({ bookingId: 'UID-A', stage: 1, fields: { status: 'Done' } });
             assert.equal(r.status, 409);
             assert.match(r.json.error, /opens on 09-Jan-2099/);
 
@@ -1038,6 +1046,53 @@ test('CRR Query Boundary & Security Contract Suite', async (t) => {
             assert.equal(r.status, 404);
 
             assert.equal(dispatched, 1, 'only the allowed save (B) may reach GAS');
+        } finally {
+            global.fetch = originalFetch;
+        }
+    });
+
+    await t.test('25. Stage 5 proof file: multipart upload is forwarded to GAS as base64; other stages and oversize files are refused (issue #162)', async () => {
+        const originalFetch = global.fetch;
+        let gasBody = null;
+        global.fetch = async (url, init) => {
+            gasBody = JSON.parse(init.body);
+            return new Response(JSON.stringify({ success: true }), { status: 200 });
+        };
+        const post = async (stage, file) => {
+            const req = createMockRequest('http://localhost:3000/api/crr-calling/bookings', 'valid', 'admin', ['all']);
+            const form = new FormData();
+            form.set('bookingId', 'UID-P');
+            form.set('stage', String(stage));
+            form.set('fields', JSON.stringify({ ratingStatus: 'Given', proofFileName: 'old.png', stageKey: 'x' }));
+            form.set('file', file, file.name);
+            const res = await POST(new NextRequest(req.url, { method: 'POST', headers: { cookie: req.headers.get('cookie') }, body: form }));
+            return { status: res.status, json: await res.json() };
+        };
+        try {
+            // Stage 5 opens on check-out; planned date set
+            mockProcessRows = [{ id: 1, uid: 'UID-P', booking_id: 'BK-P', check_in_date: '2026-01-05', check_out_date: '2026-01-10', booking_status: 'Confirmed' }];
+            mockCallingRows = [{ id: 1, uid: 'UID-P', stage_key: 'UID-P_Stage5', planned: '2026-01-12' }];
+            const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+
+            let r = await post(5, new File([bytes], 'proof.png', { type: 'image/png' }));
+            assert.equal(r.status, 200);
+            assert.equal(gasBody.fields.proofFileBase64, Buffer.from(bytes).toString('base64'));
+            assert.equal(gasBody.fields.proofMimeType, 'image/png');
+            assert.equal(gasBody.fields.proofFileName, 'proof.png');
+            assert.equal(gasBody.fields.stageKey, undefined);
+
+            gasBody = null;
+            r = await post(1, new File([bytes], 'proof.png', { type: 'image/png' }));
+            assert.equal(r.status, 400);
+            assert.match(r.json.error, /only supported for Stage 5/);
+
+            r = await post(5, new File([bytes], 'notes.txt', { type: 'text/plain' }));
+            assert.equal(r.status, 400);
+
+            r = await post(5, new File([new Uint8Array(4_400_001)], 'big.pdf', { type: 'application/pdf' }));
+            assert.equal(r.status, 413);
+            assert.match(r.json.error, /below 4\.5 MB/);
+            assert.equal(gasBody, null, 'refused uploads must not reach GAS');
         } finally {
             global.fetch = originalFetch;
         }

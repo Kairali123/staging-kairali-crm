@@ -120,3 +120,12 @@ export function stageBlockReason(stageNo: number, g: StageGateInput, today: stri
     if (status === "Processing") return "This stage is already submitted and awaiting confirmation.";
     return stageDateLock(stageNo, g, today);
 }
+
+// Stage 5 "Proof of Ratings" upload. Vercel rejects request bodies over 4.5 MB,
+// so the file itself stays a little under that to leave room for the form fields.
+export const MAX_PROOF_FILE_BYTES = 4_400_000;
+export const PROOF_FILE_LIMIT_LABEL = "4.5 MB";
+
+export function isAllowedProofType(mimeType: string): boolean {
+    return mimeType.startsWith("image/") || mimeType === "application/pdf";
+}
