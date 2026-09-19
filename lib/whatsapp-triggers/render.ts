@@ -14,6 +14,25 @@ async function launchBrowser() {
   } catch {
     throw new Error('Playwright is not available in this environment. Headless rendering is disabled.')
   }
+
+  // In serverless environments (Vercel/Lambda), use @sparticuz/chromium which bundles
+  // a precompiled Chromium binary that works without a local browser installation.
+  const isServerless = !!(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.AWS_EXECUTION_ENV)
+  if (isServerless) {
+    try {
+      const sparticuz = await import('@sparticuz/chromium')
+      const executablePath = await sparticuz.default.executablePath()
+      return chromium.launch({
+        args: sparticuz.default.args,
+        executablePath,
+        headless: true,
+        timeout: 60000,
+      })
+    } catch (e) {
+      console.warn('[render] @sparticuz/chromium failed, trying local browsers:', e)
+    }
+  }
+
   // 1. Explicit override via environment variable (highest priority)
   if (process.env.WHATSAPP_CHROMIUM_PATH) {
     return chromium.launch({ headless: true, executablePath: process.env.WHATSAPP_CHROMIUM_PATH, timeout: 30000 })
