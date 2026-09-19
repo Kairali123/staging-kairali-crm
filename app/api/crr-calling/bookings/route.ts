@@ -8,7 +8,7 @@ import {
 } from "@/lib/authz";
 
 import { getPool } from "@/lib/db";
-import { istToday, stageBlockReason } from "@/lib/crr-stage-rules";
+import { MAX_PROOF_FILE_BYTES, PROOF_FILE_LIMIT_LABEL, isAllowedProofType, istToday, stageBlockReason } from "@/lib/crr-stage-rules";
 import type { StageInfo } from "@/types/crr";
 
 const GAS_BOOKINGS_URL =
@@ -871,8 +871,21 @@ export async function POST(req: NextRequest) {
         const user = session.user;
 
         let body;
+        // Stage 5 proof uploads arrive as multipart (bookingId, stage, fields JSON, file)
+        let proofFile: File | null = null;
         try {
-            body = await req.json();
+            if ((req.headers.get("content-type") || "").includes("multipart/form-data")) {
+                const form = await req.formData();
+                const file = form.get("file");
+                proofFile = file instanceof File && file.size > 0 ? file : null;
+                body = {
+                    bookingId: form.get("bookingId"),
+                    stage: Number(form.get("stage")),
+                    fields: JSON.parse(String(form.get("fields") ?? "{}")),
+                };
+            } else {
+                body = await req.json();
+            }
         } catch {
             return NextResponse.json(
                 { success: false, error: "Malformed JSON payload" },
@@ -912,6 +925,27 @@ export async function POST(req: NextRequest) {
                 { success: false, error: "Missing or invalid fields object" },
                 { status: 400 }
             );
+        }
+
+        if (proofFile) {
+            if (stage !== 5) {
+                return NextResponse.json(
+                    { success: false, error: "File upload is only supported for Stage 5 Proof of Ratings" },
+                    { status: 400 }
+                );
+            }
+            if (!isAllowedProofType(proofFile.type)) {
+                return NextResponse.json(
+                    { success: false, error: "Proof of Ratings must be an image or a PDF" },
+                    { status: 400 }
+                );
+            }
+            if (proofFile.size > MAX_PROOF_FILE_BYTES) {
+                return NextResponse.json(
+                    { success: false, error: `File is too large. Please upload a file below ${PROOF_FILE_LIMIT_LABEL}.` },
+                    { status: 413 }
+                );
+            }
         }
 
         // Determine elevated permissions from the authenticated session.
@@ -1030,6 +1064,7 @@ export async function POST(req: NextRequest) {
             bookingId,
             stage,
             fields,
+            proofFile: proofFile ? { name: proofFile.name, type: proofFile.type, size: proofFile.size } : null,
             adminOverride: isAdminRole,
         });
 
@@ -1047,6 +1082,12 @@ export async function POST(req: NextRequest) {
                 continue;
             }
             sanitizedFields[key] = value;
+        }
+        if (proofFile) {
+            // GAS decodes this and saves it to Drive. Added after the request log above, so base64 is never logged.
+            sanitizedFields.proofFileBase64 = Buffer.from(await proofFile.arrayBuffer()).toString("base64");
+            sanitizedFields.proofMimeType = proofFile.type;
+            sanitizedFields.proofFileName = proofFile.name;
         }
 
         let resolvedBookingId = bookingId;

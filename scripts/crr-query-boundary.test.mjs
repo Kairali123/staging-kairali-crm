@@ -1042,4 +1042,50 @@ test('CRR Query Boundary & Security Contract Suite', async (t) => {
             global.fetch = originalFetch;
         }
     });
+
+    await t.test('25. Stage 5 proof file: multipart upload is forwarded to GAS as base64; other stages and oversize files are refused (issue #162)', async () => {
+        const originalFetch = global.fetch;
+        let gasBody = null;
+        global.fetch = async (url, init) => {
+            gasBody = JSON.parse(init.body);
+            return new Response(JSON.stringify({ success: true }), { status: 200 });
+        };
+        const post = async (stage, file) => {
+            const req = createMockRequest('http://localhost:3000/api/crr-calling/bookings', 'valid', 'admin', ['all']);
+            const form = new FormData();
+            form.set('bookingId', 'UID-P');
+            form.set('stage', String(stage));
+            form.set('fields', JSON.stringify({ ratingStatus: 'Given', proofFileName: 'old.png', stageKey: 'x' }));
+            form.set('file', file, file.name);
+            const res = await POST(new NextRequest(req.url, { method: 'POST', headers: { cookie: req.headers.get('cookie') }, body: form }));
+            return { status: res.status, json: await res.json() };
+        };
+        try {
+            // Stage 5 opens on check-out; planned date set
+            mockProcessRows = [{ id: 1, uid: 'UID-P', booking_id: 'BK-P', check_in_date: '2026-01-05', check_out_date: '2026-01-10', stage4_rating_request_call_date_planned: '2026-01-12', booking_status: 'Confirmed' }];
+            const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+
+            let r = await post(5, new File([bytes], 'proof.png', { type: 'image/png' }));
+            assert.equal(r.status, 200);
+            assert.equal(gasBody.fields.proofFileBase64, Buffer.from(bytes).toString('base64'));
+            assert.equal(gasBody.fields.proofMimeType, 'image/png');
+            assert.equal(gasBody.fields.proofFileName, 'proof.png');
+            assert.equal(gasBody.fields.stageKey, undefined);
+
+            gasBody = null;
+            r = await post(1, new File([bytes], 'proof.png', { type: 'image/png' }));
+            assert.equal(r.status, 400);
+            assert.match(r.json.error, /only supported for Stage 5/);
+
+            r = await post(5, new File([bytes], 'notes.txt', { type: 'text/plain' }));
+            assert.equal(r.status, 400);
+
+            r = await post(5, new File([new Uint8Array(4_400_001)], 'big.pdf', { type: 'application/pdf' }));
+            assert.equal(r.status, 413);
+            assert.match(r.json.error, /below 4\.5 MB/);
+            assert.equal(gasBody, null, 'refused uploads must not reach GAS');
+        } finally {
+            global.fetch = originalFetch;
+        }
+    });
 });
