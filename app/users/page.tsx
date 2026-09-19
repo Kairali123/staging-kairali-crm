@@ -1308,6 +1308,9 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
   const [currentPassword, setCurrentPassword] = useState<string>(user.currentPassword || "")
   const [showCurrentPassword, setShowCurrentPassword] = useState(false)
   const [copiedPassword, setCopiedPassword] = useState(false)
+  const [isSendingEmail, setIsSendingEmail] = useState(false)
+  const [emailSent, setEmailSent] = useState(false)
+  const [sendEmailOnReset, setSendEmailOnReset] = useState(true)
 
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -1362,6 +1365,38 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
     setTimeout(() => setCopiedPassword(false), 2000)
   }
 
+  const handleSendEmailCredentials = async () => {
+    if (!currentPassword) {
+      toast.error("No password available to send")
+      return
+    }
+    if (!user.email) {
+      toast.error("User does not have an email address on file")
+      return
+    }
+
+    setIsSendingEmail(true)
+    try {
+      const res = await fetch(`/api/admin/users/${encodeURIComponent(user.id)}/send-credentials`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: currentPassword }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        setEmailSent(true)
+        toast.success(data.message || `Credentials sent to ${user.email}`)
+        setTimeout(() => setEmailSent(false), 3000)
+      } else {
+        toast.error(data.error || "Failed to send credentials email")
+      }
+    } catch {
+      toast.error("An error occurred while sending credentials email")
+    } finally {
+      setIsSendingEmail(false)
+    }
+  }
+
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault()
     if (newPassword.length < 6) {
@@ -1378,7 +1413,7 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
       const res = await fetch(`/api/admin/users/${encodeURIComponent(user.id)}/reset-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ newPassword }),
+        body: JSON.stringify({ newPassword, sendEmail: sendEmailOnReset }),
       })
       const data = await res.json()
 
@@ -1387,7 +1422,7 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
       }
 
       toast.success(
-        `Password updated for ${user.name}! The user will receive an instant real-time alert and be redirected to login.`,
+        data.message || `Password updated for ${user.name}! The user will receive an instant real-time alert and be redirected to login.`,
         { duration: 5000 }
       )
       setCurrentPassword(newPassword.trim())
@@ -1539,29 +1574,14 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
                 <div className="rounded-2xl border border-purple-100 bg-purple-50/40 p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <KeyRound className="h-4 w-4 text-purple-600" />
-                      <span className="text-sm font-semibold text-gray-900">Current Password</span>
-                      <span className="rounded-full bg-purple-100 px-2.5 py-0.5 text-[11px] font-semibold text-purple-700">
-                        Super Admin Access
-                      </span>
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-purple-100 text-purple-600">
+                        <KeyRound className="h-3.5 w-3.5" />
+                      </div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-purple-950">Current Password</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleCopyPassword}
-                      className="flex items-center gap-1.5 text-xs font-semibold text-purple-700 hover:text-purple-800 hover:bg-purple-100/70 px-2.5 py-1 rounded-md transition-colors"
-                    >
-                      {copiedPassword ? (
-                        <>
-                          <Check className="h-3.5 w-3.5 text-emerald-600" />
-                          <span className="text-emerald-600">Copied</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-3.5 w-3.5" />
-                          <span>Copy</span>
-                        </>
-                      )}
-                    </button>
+                    <span className="rounded-full bg-purple-100 px-2.5 py-0.5 text-[11px] font-semibold text-purple-700 shrink-0">
+                      Super Admin Access
+                    </span>
                   </div>
 
                   <div className="relative">
@@ -1570,7 +1590,7 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
                       readOnly
                       value={currentPassword || ""}
                       placeholder={isLoadingDetails ? "Loading password…" : "No password set"}
-                      className="h-10 w-full rounded-xl border border-purple-100 bg-white px-3.5 pr-10 text-sm font-medium tracking-wide text-gray-800 shadow-2xs focus:outline-hidden select-all"
+                      className="h-10 w-full rounded-xl border border-purple-200/80 bg-white px-3.5 pr-10 text-sm font-mono font-medium tracking-wide text-gray-800 shadow-2xs focus:outline-hidden select-all"
                     />
                     <button
                       type="button"
@@ -1585,84 +1605,160 @@ function SecurityManagementModal({ user, onClose, onUpdated }: SecurityModalProp
                       )}
                     </button>
                   </div>
+
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={handleSendEmailCredentials}
+                      disabled={isSendingEmail || !currentPassword}
+                      className="flex-1 flex items-center justify-center gap-2 h-9 text-xs font-semibold rounded-xl border border-purple-200 bg-white text-purple-700 hover:bg-purple-50 hover:border-purple-300 transition-all disabled:opacity-50 shadow-2xs"
+                      title="Send login credentials and CRM link to user's email"
+                    >
+                      {isSendingEmail ? (
+                        <>
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin text-purple-700" />
+                          <span>Sending to Email…</span>
+                        </>
+                      ) : emailSent ? (
+                        <>
+                          <Check className="h-3.5 w-3.5 text-emerald-600" />
+                          <span className="text-emerald-700 font-semibold">Sent to Email!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Mail className="h-3.5 w-3.5 text-purple-600" />
+                          <span>Send to Email</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleCopyPassword}
+                      className="flex items-center justify-center gap-1.5 h-9 px-4 text-xs font-semibold rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-2xs"
+                      title="Copy password to clipboard"
+                    >
+                      {copiedPassword ? (
+                        <>
+                          <Check className="h-3.5 w-3.5 text-emerald-600" />
+                          <span className="text-emerald-700 font-semibold">Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-3.5 w-3.5 text-gray-500" />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               )}
 
-              <div className="pt-1">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">
-                  Change / Reset Password
-                </p>
-              </div>
+              {isSuperAdmin ? (
+                <>
+                  <div className="pt-1">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                      Change / Reset Password
+                    </p>
+                  </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-gray-700">New Password</Label>
-                <div className="relative">
-                  <Input
-                    type={showNewPassword ? "text" : "password"}
-                    placeholder="Enter new password (min. 6 characters)"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="h-10 rounded-lg text-sm pr-10"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowNewPassword((prev) => !prev)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
-                    title={showNewPassword ? "Hide password" : "Show password"}
-                  >
-                    {showNewPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </button>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-gray-700">New Password</Label>
+                    <div className="relative">
+                      <Input
+                        type={showNewPassword ? "text" : "password"}
+                        placeholder="Enter new password (min. 6 characters)"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="h-10 rounded-lg text-sm pr-10"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword((prev) => !prev)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
+                        title={showNewPassword ? "Hide password" : "Show password"}
+                      >
+                        {showNewPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-gray-700">Confirm New Password</Label>
+                    <div className="relative">
+                      <Input
+                        type={showConfirmPassword ? "text" : "password"}
+                        placeholder="Re-enter new password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="h-10 rounded-lg text-sm pr-10"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword((prev) => !prev)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
+                        title={showConfirmPassword ? "Hide password" : "Show password"}
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2 pt-1">
+                    <Checkbox
+                      id="sendEmailOnReset"
+                      checked={sendEmailOnReset}
+                      onCheckedChange={(checked) => setSendEmailOnReset(!!checked)}
+                    />
+                    <Label htmlFor="sendEmailOnReset" className="text-xs text-gray-600 font-medium cursor-pointer">
+                      Email updated credentials and CRM login link to user ({user.email})
+                    </Label>
+                  </div>
+
+                  <div className="pt-2 flex justify-end gap-2">
+                    <Button type="button" variant="outline" onClick={onClose} className="h-9 rounded-lg">
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={isUpdatingPassword}
+                      className="h-9 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold gap-1.5 shadow-sm"
+                    >
+                      {isUpdatingPassword ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <KeyRound className="h-4 w-4" />
+                      )}
+                      {isUpdatingPassword ? "Updating…" : "Update Password & Invalidate Sessions"}
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <div className="rounded-xl border border-gray-200 bg-gray-50/80 p-5 text-center space-y-1.5 mt-2">
+                  <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-400">
+                    <Lock className="h-4 w-4" />
+                  </div>
+                  <p className="text-xs font-semibold text-gray-800">Password Management Restricted</p>
+                  <p className="text-[11px] text-gray-500 max-w-sm mx-auto">
+                    Only Super Administrators have permission to view or change employee passwords and share credentials.
+                  </p>
+                  <div className="pt-2 flex justify-end">
+                    <Button type="button" variant="outline" onClick={onClose} className="h-9 rounded-lg">
+                      Close
+                    </Button>
+                  </div>
                 </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-gray-700">Confirm New Password</Label>
-                <div className="relative">
-                  <Input
-                    type={showConfirmPassword ? "text" : "password"}
-                    placeholder="Re-enter new password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="h-10 rounded-lg text-sm pr-10"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword((prev) => !prev)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
-                    title={showConfirmPassword ? "Hide password" : "Show password"}
-                  >
-                    {showConfirmPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              <div className="pt-2 flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={onClose} className="h-9 rounded-lg">
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={isUpdatingPassword}
-                  className="h-9 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold gap-1.5 shadow-sm"
-                >
-                  {isUpdatingPassword ? (
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <KeyRound className="h-4 w-4" />
-                  )}
-                  {isUpdatingPassword ? "Updating…" : "Update Password & Invalidate Sessions"}
-                </Button>
-              </div>
+              )}
             </form>
           )}
 
@@ -1825,6 +1921,34 @@ export const PAGE_PERMISSIONS_MODULES: PagePermissionModule[] = [
     category: "Core Workspace",
     actions: ["view", "edit", "delete", "manage", "create", "assign"],
     description: "Lead pipelines, qualifications & agent allocations",
+  },
+  {
+    key: "lead_search",
+    label: "Lead Search Dashboard",
+    category: "Core Workspace",
+    actions: ["view", "viewAll", "edit", "viewSelf"],
+    description: "Search leads and view customer journey timeline",
+  },
+  {
+    key: "good_lead_leakage",
+    label: "Good Lead Leakage",
+    category: "Core Workspace",
+    actions: ["view", "viewAll", "edit", "viewSelf"],
+    description: "Good lead leakage report & analytics",
+  },
+  {
+    key: "client_database",
+    label: "Client Database",
+    category: "Core Workspace",
+    actions: ["view", "viewAll", "edit", "viewSelf"],
+    description: "Centralized client database search, filters & export",
+  },
+  {
+    key: "client_database_upload",
+    label: "Client Database Upload",
+    category: "Core Workspace",
+    actions: ["view", "viewAll", "edit", "viewSelf"],
+    description: "Bulk client data upload, validation & category mapping",
   },
   {
     key: "employee",
@@ -2095,6 +2219,13 @@ export const PAGE_PERMISSIONS_MODULES: PagePermissionModule[] = [
     category: "AI Voice & DialShree",
     actions: ["view", "edit", "delete", "manage", "create", "viewSelf", "viewAll"],
     description: "AI calling analytics & qualification summaries",
+  },
+  {
+    key: "voicecall_kserve_lead_lost",
+    label: "KServe Lead Lost Tracker",
+    category: "AI Voice & DialShree",
+    actions: ["view", "viewAll", "edit", "viewSelf"],
+    description: "Track unmatched and lost leads sent to KServe AI voice",
   },
 
   // 5. Marketing & PPC Analytics
@@ -2754,6 +2885,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "calls_report.view", "sales_report.view", "sales_calling.view",
     "marketing.view", "marketing_funnel.view", "marketing_google_report.view", "marketing_facebook_report.view", "google_adword_report.view",
     "fms.view", "team.view", "villa_raag.view", "ktahv_booking_form.view", "crr_fms.view", "task_fms.view", "cold_enquiry_reverification.view", "new-order-fms.view", "primary_order_form.view", "primary_order_form.edit", "mr-fms.view",
+    "lead_search.view", "lead_search.viewAll", "lead_search.edit", "good_lead_leakage.view", "good_lead_leakage.viewAll", "client_database.view", "client_database.viewAll", "client_database.edit", "client_database_upload.view", "voicecall_kserve_lead_lost.view", "voicecall_kserve_lead_lost.viewAll",
     "deal_assistant.view", "ai_voice_menu.view", "dialshree_menu.view", "dialshree_received.view", "dialshree_sent.view", "accounts_tracker.view", "partners.view", "meetings.view", "portal_hub.view", "sales_target_portal.view", "call_recording_portal.view", "doctor_portal.view", "partner_onboard_form.view"
   ],
   sales_manager: [

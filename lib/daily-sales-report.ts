@@ -42,136 +42,182 @@ export function exportSalesHTML(report:DailySalesReport,scope:string){
  const contributors=salesContributors(rows)
  const totalSales=rows.reduce((n,r)=>n+r.sales,0),totalCollection=rows.reduce((n,r)=>n+r.collection,0)
  const totalUnverified=rows.reduce((n,r)=>n+r.unverified,0),totalCancelled=rows.reduce((n,r)=>n+r.cancelled,0)
- const palette=['#4f6de0','#9270cf','#31a2ad','#e4a04d','#dc7d9b','#6788a8']
- // Build an email-safe donut chart using QuickChart.io (img tag, works in Gmail/Outlook).
- // SVG is stripped by most email clients, so we use a PNG image from a chart URL service.
- const donutChartHTML = buildSalesDonutSvg(report, scope) || `<div style="width:190px;margin:0 auto;text-align:center;padding:32px 0;color:#64748b;font-size:13px">No sales</div>`
- const contributorRows=contributors.map((r,i)=>{
-  const fraction=totalSales>0?r.sales/totalSales:0,pct=(fraction*100).toFixed(1),color=palette[i%palette.length]
-  return `<tr><td style="text-align:left"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};margin-right:8px;vertical-align:middle"></span><strong>${esc(r.agent)}</strong></td><td style="text-align:right">${money(r.sales)}</td><td style="text-align:right;font-weight:bold;color:#294995">${pct}%</td><td style="text-align:left;width:140px"><div style="background:#eef2ff;border-radius:4px;height:8px;width:100%;overflow:hidden"><div style="background:${color};height:8px;width:${pct}%;border-radius:4px"></div></div></td></tr>`
- }).join('')
- const contributorHTML=`<section class="contributors"><div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px"><div><span style="font-size:10px;letter-spacing:1.6px;color:#4338ca;font-weight:700;text-transform:uppercase;display:block;margin-bottom:4px">SALES CONTRIBUTION</span><h2 style="margin:0 0 4px;font-size:20px">Sales by contributor</h2><p style="margin:0;color:#64748b;font-size:12px">${contributors.length} active agent${contributors.length===1?'':'s'} with positive sales · ${scope==='ALL'?'All companies':esc(companies[scope as Company])}</p></div><div style="text-align:right"><span style="font-size:11px;color:#64748b;display:block">Total contributing sales</span><strong style="font-size:18px;color:#1e305b">${money(totalSales)}</strong></div></div><div class="contributorLayout"><div class="contributorChart">${donutChartHTML}</div><div class="contributorTableWrap"><table class="contributorTable"><thead><tr><th style="text-align:left">Employee</th><th style="text-align:right">Total Sales (INR)</th><th style="text-align:right">Contribution</th><th style="text-align:left">Share</th></tr></thead><tbody>${contributorRows||'<tr><td colspan="4" style="text-align:center;padding:18px;color:#64748b">No positive sales contributors recorded for this date.</td></tr>'}</tbody><tfoot><tr><td style="text-align:left">Grand total</td><td style="text-align:right">${money(totalSales)}</td><td style="text-align:right">${totalSales>0?'100%':'—'}</td><td></td></tr></tfoot></table></div></div></section>`
- const callingCards = [
-  {
-   label: 'AppSheet Pending',
-   value: showCount(summary.pendingAppsheet),
-   note: 'AppSheet Pending · AppSheet total',
-   isPending: true,
-   breakdown: [
-    { name: 'KPPL', code: 'KAPPL', count: showCount(report.calling?.pending?.KAPPL?.appsheet ?? 0) },
-    { name: 'KTAHV', code: 'KTAHV', count: showCount(report.calling?.pending?.KTAHV?.appsheet ?? 0) },
-    { name: 'Villaraag', code: 'VILLARAAG', count: showCount(report.calling?.pending?.VILLARAAG?.appsheet ?? 0) },
-   ],
-  },
-  {
-   label: 'Pending leads National (Hopper)',
-   value: showCount(summary.pendingNational),
-   note: 'DialerPending · National total',
-   isPending: true,
-   breakdown: [
-    { name: 'KPPL', code: 'KAPPL', count: showCount(report.calling?.pending?.KAPPL?.national ?? 0) },
-    { name: 'KTAHV', code: 'KTAHV', count: showCount(report.calling?.pending?.KTAHV?.national ?? 0) },
-    { name: 'Villaraag', code: 'VILLARAAG', count: showCount(report.calling?.pending?.VILLARAAG?.national ?? 0) },
-   ],
-  },
-  {
-   label: 'Pending leads International (Hopper)',
-   value: showCount(summary.pendingInternational),
-   note: 'DialerPending · International total',
-   isPending: true,
-   breakdown: [
-    { name: 'KPPL', code: 'KAPPL', count: showCount(report.calling?.pending?.KAPPL?.international ?? 0) },
-    { name: 'KTAHV', code: 'KTAHV', count: showCount(report.calling?.pending?.KTAHV?.international ?? 0) },
-    { name: 'Villaraag', code: 'VILLARAAG', count: showCount(report.calling?.pending?.VILLARAAG?.international ?? 0) },
-   ],
-  },
-  {
-   label: 'Calls Done (AppSheet)',
-   value: showCount(summary.appsheet),
-   note: scope === 'ALL' ? 'Live · column AI' : 'Employee totals · ' + scope,
-   isPending: false,
-   breakdown: [
-    { name: 'KPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KAPPL'), 'appsheet') ?? 0) },
-    { name: 'KTAHV', code: 'KTAHV', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KTAHV'), 'appsheet') ?? 0) },
-    { name: 'Villaraag', code: 'VILLARAAG', count: showCount(employeeTotal(scopedEmployees(report.calling, 'VILLARAAG'), 'appsheet') ?? 0) },
-   ],
-  },
-  {
-   label: 'Calls Done (Dialer)',
-   value: showCount(summary.dialer),
-   note: scope === 'ALL' ? 'Live · column M' : 'Employee totals · ' + scope,
-   isPending: false,
-   breakdown: [
-    { name: 'KPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KAPPL'), 'dialer') ?? 0) },
-    { name: 'KTAHV', code: 'KTAHV', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KTAHV'), 'dialer') ?? 0) },
-    { name: 'Villaraag', code: 'VILLARAAG', count: showCount(employeeTotal(scopedEmployees(report.calling, 'VILLARAAG'), 'dialer') ?? 0) },
-   ],
-  },
-  {
-   label: 'Total Calls Done',
-   value: showCount(summary.done),
-   note: 'All channels · AppSheet + Dialer',
-   isPending: false,
-   breakdown: [
-    { name: 'KPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KAPPL'), 'done') ?? 0) },
-    { name: 'KTAHV', code: 'KTAHV', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KTAHV'), 'done') ?? 0) },
-    { name: 'Villaraag', code: 'VILLARAAG', count: showCount(employeeTotal(scopedEmployees(report.calling, 'VILLARAAG'), 'done') ?? 0) },
-   ],
-  },
- ]
+  const palette=['#4f6de0','#9270cf','#31a2ad','#e4a04d','#dc7d9b','#6788a8']
+  const donutChartUrl = totalSales > 0 ? ('https://quickchart.io/chart?w=190&h=190&bkg=transparent&c=' + encodeURIComponent(JSON.stringify({
+    type: 'doughnut',
+    data: {
+      labels: contributors.filter(c => c.sales > 0).map(c => c.agent),
+      datasets: [{
+        data: contributors.filter(c => c.sales > 0).map(c => c.sales),
+        backgroundColor: contributors.filter(c => c.sales > 0).map((_, i) => palette[i % palette.length]),
+        borderWidth: 2,
+        borderColor: '#ffffff'
+      }]
+    },
+    options: {
+      cutoutPercentage: 65,
+      legend: { display: false },
+      plugins: {
+        datalabels: { display: false },
+        doughnutlabel: {
+          labels: [
+            { text: 'Sales', font: { size: 12, family: 'Arial' }, color: '#64748b' },
+            { text: String(contributors.length), font: { size: 22, family: 'Arial', weight: 'bold' }, color: '#1e305b' },
+            { text: 'contributors', font: { size: 11, family: 'Arial' }, color: '#64748b' }
+          ]
+        }
+      }
+    }
+  }))) : ''
+  const donutChartHTML = totalSales > 0
+    ? `<div style="width:190px;margin:0 auto;text-align:center"><img src="${donutChartUrl}" width="190" height="190" alt="ALL CONTRIBUTORS · Sales contribution donut chart" style="display:block;margin:0 auto;border:0;outline:none;" /></div>`
+    : `<div style="width:190px;margin:0 auto;text-align:center;padding:32px 0;color:#64748b;font-size:13px">No sales</div>`
+  const contributorRows=contributors.map((r,i)=>{
+   const fraction=totalSales>0?r.sales/totalSales:0,pct=(fraction*100).toFixed(1),color=palette[i%palette.length]
+   return `<tr><td style="text-align:left;padding:11px 9px;border-bottom:1px solid #e5eaf4"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};margin-right:8px;vertical-align:middle"></span><strong>${esc(r.agent)}</strong></td><td style="text-align:right;padding:11px 9px;border-bottom:1px solid #e5eaf4">${money(r.sales)}</td><td style="text-align:right;padding:11px 9px;border-bottom:1px solid #e5eaf4;font-weight:bold;color:#294995">${pct}%</td><td style="text-align:left;width:140px;padding:11px 9px;border-bottom:1px solid #e5eaf4"><div style="background:#eef2ff;border-radius:4px;height:8px;width:100%;overflow:hidden"><div style="background:${color};height:8px;width:${pct}%;border-radius:4px"></div></div></td></tr>`
+  }).join('')
+  const contributorHTML=`<section class="contributors" style="background:white;padding:24px;margin-top:20px;border:1px solid #e0e5f1;border-radius:12px"><div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px"><div><span style="font-size:10px;letter-spacing:1.6px;color:#4338ca;font-weight:700;text-transform:uppercase;display:block;margin-bottom:4px">SALES CONTRIBUTION</span><h2 style="margin:0 0 4px;font-size:20px;color:#1e305b">Sales by contributor</h2><p style="margin:0;color:#64748b;font-size:12px">${contributors.length} active agent${contributors.length===1?'':'s'} with positive sales · ${scope==='ALL'?'All companies':esc(companies[scope as Company])}</p></div><div style="text-align:right"><span style="font-size:11px;color:#64748b;display:block">Total contributing sales</span><strong style="font-size:18px;color:#1e305b">${money(totalSales)}</strong></div></div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse"><tr><td width="220" align="center" valign="middle" style="width:220px;text-align:center;vertical-align:middle;padding-right:24px">${donutChartHTML}</td><td valign="top" style="vertical-align:top"><table class="contributorTable" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse"><thead><tr style="background:#eef2ff"><th style="text-align:left;padding:11px 9px;border-bottom:1px solid #e5eaf4;font-size:12px;color:#24324b">Employee</th><th style="text-align:right;padding:11px 9px;border-bottom:1px solid #e5eaf4;font-size:12px;color:#24324b">Total Sales (INR)</th><th style="text-align:right;padding:11px 9px;border-bottom:1px solid #e5eaf4;font-size:12px;color:#24324b">Contribution</th><th style="text-align:left;padding:11px 9px;border-bottom:1px solid #e5eaf4;font-size:12px;color:#24324b;width:140px">Share</th></tr></thead><tbody>${contributorRows||'<tr><td colspan="4" style="text-align:center;padding:18px;color:#64748b">No positive sales contributors recorded for this date.</td></tr>'}</tbody><tfoot><tr style="font-weight:bold;background:#eef2ff"><td style="text-align:left;padding:11px 9px">Grand total</td><td style="text-align:right;padding:11px 9px">${money(totalSales)}</td><td style="text-align:right;padding:11px 9px">${totalSales>0?'100%':'—'}</td><td style="padding:11px 9px"></td></tr></tfoot></table></td></tr></table></section>`
+  const callingCards = [
+   {
+    label: 'AppSheet Pending',
+    value: showCount(summary.pendingAppsheet),
+    note: 'AppSheet Pending · AppSheet total',
+    isPending: true,
+    breakdown: [
+     { name: 'KPPL', code: 'KAPPL', count: showCount(report.calling?.pending?.KAPPL?.appsheet ?? 0) },
+     { name: 'KTAHV', code: 'KTAHV', count: showCount(report.calling?.pending?.KTAHV?.appsheet ?? 0) },
+     { name: 'Villaraag', code: 'VILLARAAG', count: showCount(report.calling?.pending?.VILLARAAG?.appsheet ?? 0) },
+    ],
+   },
+   {
+    label: 'Pending leads National (Hopper)',
+    value: showCount(summary.pendingNational),
+    note: 'DialerPending · National total',
+    isPending: true,
+    breakdown: [
+     { name: 'KPPL', code: 'KAPPL', count: showCount(report.calling?.pending?.KAPPL?.national ?? 0) },
+     { name: 'KTAHV', code: 'KTAHV', count: showCount(report.calling?.pending?.KTAHV?.national ?? 0) },
+     { name: 'Villaraag', code: 'VILLARAAG', count: showCount(report.calling?.pending?.VILLARAAG?.national ?? 0) },
+    ],
+   },
+   {
+    label: 'Pending leads International (Hopper)',
+    value: showCount(summary.pendingInternational),
+    note: 'DialerPending · International total',
+    isPending: true,
+    breakdown: [
+     { name: 'KPPL', code: 'KAPPL', count: showCount(report.calling?.pending?.KAPPL?.international ?? 0) },
+     { name: 'KTAHV', code: 'KTAHV', count: showCount(report.calling?.pending?.KTAHV?.international ?? 0) },
+     { name: 'Villaraag', code: 'VILLARAAG', count: showCount(report.calling?.pending?.VILLARAAG?.international ?? 0) },
+    ],
+   },
+   {
+    label: 'Calls Done (AppSheet)',
+    value: showCount(summary.appsheet),
+    note: scope === 'ALL' ? 'Live · column AI' : 'Employee totals · ' + scope,
+    isPending: false,
+    breakdown: [
+     { name: 'KPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KAPPL'), 'appsheet') ?? 0) },
+     { name: 'KTAHV', code: 'KTAHV', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KTAHV'), 'appsheet') ?? 0) },
+     { name: 'Villaraag', code: 'VILLARAAG', count: showCount(employeeTotal(scopedEmployees(report.calling, 'VILLARAAG'), 'appsheet') ?? 0) },
+    ],
+   },
+   {
+    label: 'Calls Done (Dialer)',
+    value: showCount(summary.dialer),
+    note: scope === 'ALL' ? 'Live · column M' : 'Employee totals · ' + scope,
+    isPending: false,
+    breakdown: [
+     { name: 'KPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KAPPL'), 'dialer') ?? 0) },
+     { name: 'KTAHV', code: 'KTAHV', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KTAHV'), 'dialer') ?? 0) },
+     { name: 'Villaraag', code: 'VILLARAAG', count: showCount(employeeTotal(scopedEmployees(report.calling, 'VILLARAAG'), 'dialer') ?? 0) },
+    ],
+   },
+   {
+    label: 'Total Calls Done',
+    value: showCount(summary.done),
+    note: 'All channels · AppSheet + Dialer',
+    isPending: false,
+    breakdown: [
+     { name: 'KPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KAPPL'), 'done') ?? 0) },
+     { name: 'KTAHV', code: 'KTAHV', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KTAHV'), 'done') ?? 0) },
+     { name: 'Villaraag', code: 'VILLARAAG', count: showCount(employeeTotal(scopedEmployees(report.calling, 'VILLARAAG'), 'done') ?? 0) },
+    ],
+   },
+  ]
 
- const pendingModeLabel = report.calling?.pendingMode === 'database' ? 'Database'
-  : report.calling?.pendingMode === 'snapshot' ? 'Sheet snapshot (DialerPending)'
-  : report.calling?.pendingMode === 'live' ? 'Live (DialerPending)'
-  : (report.calling?.pendingMode || 'Unavailable')
- const pendingModeBadge = report.calling?.pendingMode === 'live' ? '🟢 Live' : report.calling?.pendingMode === 'database' ? '⚪ Database' : '🟡 Snapshot'
- const pendingDateLabel = report.calling?.pendingCapturedAt ? (new Date(report.calling.pendingCapturedAt).toLocaleString('en-GB',{timeZone:'Asia/Kolkata'}) + ' IST') : 'unavailable'
- const callsDoneDateLabel = summary.dates.join(', ') || 'unavailable'
+  const pendingModeLabel = report.calling?.pendingMode === 'database' ? 'Database'
+   : report.calling?.pendingMode === 'snapshot' ? 'Sheet snapshot (DialerPending)'
+   : report.calling?.pendingMode === 'live' ? 'Live (DialerPending)'
+   : (report.calling?.pendingMode || 'Unavailable')
+  const pendingModeBadge = report.calling?.pendingMode === 'live' ? '🟢 Live' : report.calling?.pendingMode === 'database' ? '⚪ Database' : '🟡 Snapshot'
+  const pendingDateLabel = report.calling?.pendingCapturedAt ? (new Date(report.calling.pendingCapturedAt).toLocaleString('en-GB',{timeZone:'Asia/Kolkata'}) + ' IST') : 'unavailable'
+  const callsDoneDateLabel = summary.dates.join(', ') || 'unavailable'
 
- const callingCardsHTML = `<div class="callingGrid" style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin:16px 0 24px">
-  ${callingCards.map(c => {
-   const bg = c.isPending ? '#fff8ed' : '#edf7ff'
-   const borderTop = c.isPending ? '3px solid #d89a38' : '3px solid #458ecc'
-   const border = c.isPending ? '1px solid #f2e2c8' : '1px solid #cfe5f8'
-   const numColor = c.isPending ? '#9b620d' : '#256a9c'
-   const dividerColor = c.isPending ? '#fde68a' : '#bfdbfe'
-   return `<div style="background:${bg};border:${border};border-top:${borderTop};border-radius:12px;padding:16px 12px;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box">
-    <div>
-     <span style="font-size:11px;color:#52627f;font-weight:600;display:block">${esc(c.label)}</span>
-     <strong style="display:block;font:26px Georgia,serif;font-weight:700;color:${numColor};margin:10px 0 6px">${esc(c.value)}</strong>
-     <small style="font-size:9px;color:#6e7c94;display:block;margin-bottom:14px;line-height:1.4">${esc(c.note)}</small>
+  const callingCardsHTML = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;table-layout:fixed;border-collapse:separate;border-spacing:10px 0;margin:16px 0 24px">
+   <tr>
+   ${callingCards.map(c => {
+    const bg = c.isPending ? '#fff8ed' : '#edf7ff'
+    const borderTop = c.isPending ? '3px solid #d89a38' : '3px solid #458ecc'
+    const border = c.isPending ? '1px solid #f2e2c8' : '1px solid #cfe5f8'
+    const numColor = c.isPending ? '#9b620d' : '#256a9c'
+    const dividerColor = c.isPending ? '#fde68a' : '#bfdbfe'
+    return `<td valign="top" width="16.66%" style="width:16.66%;vertical-align:top;background:${bg};border:${border};border-top:${borderTop};border-radius:12px;padding:14px 10px;box-sizing:border-box">
+     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;height:100%">
+      <tr>
+       <td valign="top" style="vertical-align:top;padding-bottom:12px">
+        <span style="font-size:11px;color:#52627f;font-weight:600;display:block;line-height:1.3;min-height:28px">${esc(c.label)}</span>
+        <strong style="display:block;font-size:26px;font-family:Georgia,serif;font-weight:700;color:${numColor};margin:8px 0 4px">${esc(c.value)}</strong>
+        <small style="font-size:9px;color:#6e7c94;display:block;line-height:1.3">${esc(c.note)}</small>
+       </td>
+      </tr>
+      <tr>
+       <td valign="bottom" style="vertical-align:bottom;border-top:1px solid ${dividerColor};padding-top:8px">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%">
+         <tr>
+          ${c.breakdown.map((b, idx) => {
+           const isDim = scope !== 'ALL' && scope !== b.code
+           const borderLeft = idx > 0 ? `border-left:1px solid ${dividerColor};` : ''
+           return `<td width="33%" align="center" valign="middle" style="width:33%;text-align:center;padding:2px 2px;${borderLeft}${isDim ? 'opacity:0.4;' : ''}">
+            <span style="font-size:10px;font-weight:600;color:#24324b;display:block;margin-bottom:2px">${esc(b.name)}</span>
+            <strong style="font-size:15px;font-family:Georgia,serif;font-weight:700;color:${numColor};display:block;margin:0">${esc(b.count)}</strong>
+           </td>`
+          }).join('')}
+         </tr>
+        </table>
+       </td>
+      </tr>
+     </table>
+    </td>`
+   }).join('')}
+   </tr>
+  </table>`
+
+  const callingHeaders=['Employee','AppSheet pending','AppSheet done','Dialer done','Total done','Completion %','Updated (IST)']
+  const callingThStyles=[
+    'text-align:left;background:#eef2ff;padding:11px 9px;border-bottom:1px solid #e5eaf4;font-size:12px;color:#24324b',
+    'text-align:right;background:#fff0f1;color:#a8384b;padding:11px 9px;border-bottom:1px solid #e5eaf4;font-size:12px;font-weight:bold',
+    'text-align:right;background:#eaf8ee;color:#277548;padding:11px 9px;border-bottom:1px solid #e5eaf4;font-size:12px;font-weight:bold',
+    'text-align:right;background:#eaf8ee;color:#277548;padding:11px 9px;border-bottom:1px solid #e5eaf4;font-size:12px;font-weight:bold',
+    'text-align:right;background:#eaf8ee;color:#277548;padding:11px 9px;border-bottom:1px solid #e5eaf4;font-size:12px;font-weight:bold',
+    'text-align:right;background:#eef2ff;padding:11px 9px;border-bottom:1px solid #e5eaf4;font-size:12px;color:#24324b',
+    'text-align:right;background:#eef2ff;padding:11px 9px;border-bottom:1px solid #e5eaf4;font-size:12px;color:#24324b'
+  ]
+  const callingHTML=`<section style="background:white;padding:24px;margin-top:20px;border:1px solid #e0e5f1;border-radius:12px">
+   <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:14px">
+    <div><span style="font-size:10px;letter-spacing:1.6px;color:#4338ca;font-weight:700;text-transform:uppercase;display:block;margin-bottom:4px">DAILY CALLING ACTIVITY</span><h2 style="margin:0 0 4px;font-size:20px;color:#1e305b">Calling overview</h2></div>
+    <div style="text-align:right;font-size:11px;line-height:1.7;color:#64748b">
+     <span><strong style="font-weight:600">${pendingModeBadge}</strong> · ${esc(scope==='ALL'?'all companies':scope)} · ${esc(pendingDateLabel)}</span><br>
+     <span>Calls done: Live · ${esc(callsDoneDateLabel)}</span>
     </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;border-top:1px solid ${dividerColor};padding-top:10px;margin-top:auto">
-     ${c.breakdown.map((b, idx) => {
-      const isDim = scope !== 'ALL' && scope !== b.code
-      const borderLeft = idx > 0 ? `border-left:1px solid ${dividerColor};` : ''
-      return `<div style="flex:1;text-align:center;padding:2px 4px;${borderLeft}${isDim ? 'opacity:0.4;' : ''}">
-       <span style="font-size:11px;font-weight:600;color:#24324b;display:block;margin-bottom:4px">${esc(b.name)}</span>
-       <strong style="font:17px Georgia,serif;font-weight:700;color:${numColor};display:block;margin:0">${esc(b.count)}</strong>
-      </div>`
-     }).join('')}
-    </div>
-   </div>`
-  }).join('')}
- </div>`
-
- const callingHeaders=['Employee','AppSheet pending','AppSheet done','Dialer done','Total done','Completion %','Updated (IST)']
- const callingThStyles=['text-align:left;background:#eef2ff','text-align:right;background:#fff0f1;color:#a8384b','text-align:right;background:#eaf8ee;color:#277548','text-align:right;background:#eaf8ee;color:#277548','text-align:right;background:#eaf8ee;color:#277548','text-align:right;background:#eef2ff','text-align:right;background:#eef2ff']
- const callingHTML=`<section>
-  <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:14px">
-   <div><span style="font-size:10px;letter-spacing:1.6px;color:#4338ca;font-weight:700;text-transform:uppercase;display:block;margin-bottom:4px">DAILY CALLING ACTIVITY</span><h2 style="margin:0 0 4px;font-size:20px;color:#1e305b">Calling overview</h2></div>
-   <div style="text-align:right;font-size:11px;line-height:1.7;color:#64748b">
-    <span><strong style="font-weight:600">${pendingModeBadge}</strong> · ${esc(scope==='ALL'?'all companies':scope)} · ${esc(pendingDateLabel)}</span><br>
-    <span>Calls done: Live · ${esc(callsDoneDateLabel)}</span>
    </div>
-  </div>
-  ${callingCardsHTML}
-  <h2 style="margin:26px 0 6px;font-size:18px;color:#1e305b">Employee calling activity · ${esc(scope==='ALL'?'ALL':scope)}</h2>
-  <p style="margin:0 0 14px;color:#64748b;font-size:12px">Employees filtered by registered CRM company. Calling values retain their source dates.</p>
-  <table class="calling"><thead><tr>${callingHeaders.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${employees.map(r=>(()=>{const _ep=r.pending??0,_ed=r.done??0,_eDen=_ed+_ep,empRate=(_eDen>0&&r.pending!==null&&r.done!==null)?Math.round(_ed/_eDen*100):null,empRateStr=empRate===null?'—':empRate+'%',empRateColor=empRate===null?'#64748b':empRate>=70?'#16a34a':empRate>=40?'#d97706':'#dc2626',rowBg=r.done===0?'style="background:#fef9f9"':'',pendOverride=_ep>50?'style="background:#fff7ed"':'';return`<tr ${rowBg}><td>${esc(r.name)}</td><td ${pendOverride}>${showCount(r.pending)}</td><td>${showCount(r.appsheet)}</td><td>${showCount(r.dialer)}</td><td>${showCount(r.done)}</td><td style="color:${empRateColor}">${empRateStr}</td><td class="muted">${esc(r.updatedAt)}</td></tr>`})()).join('')}</tbody><tfoot><tr style="font-weight:bold;background:#eef2ff"><td>Grand total</td><td>${showCount(employeeTotal(employees,'pending'))}</td><td>${showCount(employeeTotal(employees,'appsheet'))}</td><td>${showCount(employeeTotal(employees,'dialer'))}</td><td>${showCount(employeeTotal(employees,'done'))}</td><td>—</td><td>All employees</td></tr></tfoot></table>
- </section>`
+   ${callingCardsHTML}
+   <h2 style="margin:26px 0 6px;font-size:18px;color:#1e305b">Employee calling activity · ${esc(scope==='ALL'?'ALL':scope)}</h2>
+   <p style="margin:0 0 14px;color:#64748b;font-size:12px">Employees filtered by registered CRM company. Calling values retain their source dates.</p>
+   <table class="calling" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse"><thead><tr>${callingHeaders.map((x,idx)=>`<th style="${callingThStyles[idx]}">${x}</th>`).join('')}</tr></thead><tbody>${employees.map(r=>(()=>{const _ep=r.pending??0,_ed=r.done??0,_eDen=_ed+_ep,empRate=(_eDen>0&&r.pending!==null&&r.done!==null)?Math.round(_ed/_eDen*100):null,empRateStr=empRate===null?'—':empRate+'%',empRateColor=empRate===null?'#64748b':empRate>=70?'#16a34a':empRate>=40?'#d97706':'#dc2626',rowBg=r.done===0?'background:#fef9f9;':'',pendBg=_ep>50?'background:#fff7ed;color:#c2410c;':'background:#fff0f1;color:#a8384b;';return`<tr style="${rowBg}"><td style="text-align:left;padding:11px 9px;border-bottom:1px solid #e5eaf4">${esc(r.name)}</td><td style="text-align:right;padding:11px 9px;border-bottom:1px solid #e5eaf4;${pendBg}font-weight:600">${showCount(r.pending)}</td><td style="text-align:right;padding:11px 9px;border-bottom:1px solid #e5eaf4;background:#eaf8ee;color:#277548">${showCount(r.appsheet)}</td><td style="text-align:right;padding:11px 9px;border-bottom:1px solid #e5eaf4;background:#eaf8ee;color:#277548">${showCount(r.dialer)}</td><td style="text-align:right;padding:11px 9px;border-bottom:1px solid #e5eaf4;background:#eaf8ee;color:#277548;font-weight:600">${showCount(r.done)}</td><td style="text-align:right;padding:11px 9px;border-bottom:1px solid #e5eaf4;color:${empRateColor};font-weight:600">${empRateStr}</td><td style="text-align:right;padding:11px 9px;border-bottom:1px solid #e5eaf4;color:#64748b">${esc(r.updatedAt)}</td></tr>`})()).join('')}</tbody><tfoot><tr style="font-weight:bold;background:#eef2ff"><td style="text-align:left;padding:11px 9px">Grand total</td><td style="text-align:right;padding:11px 9px;background:#fff0f1;color:#a8384b">${showCount(employeeTotal(employees,'pending'))}</td><td style="text-align:right;padding:11px 9px;background:#eaf8ee;color:#277548">${showCount(employeeTotal(employees,'appsheet'))}</td><td style="text-align:right;padding:11px 9px;background:#eaf8ee;color:#277548">${showCount(employeeTotal(employees,'dialer'))}</td><td style="text-align:right;padding:11px 9px;background:#eaf8ee;color:#277548">${showCount(employeeTotal(employees,'done'))}</td><td style="text-align:right;padding:11px 9px">—</td><td style="text-align:right;padding:11px 9px">All employees</td></tr></tfoot></table>
+  </section>`
 
- return `<!doctype html><html><head><meta charset="utf-8"><title>Daily Sales Report Alert · ${esc(report.date)}</title><style>body{margin:0;background:#f4f6fc;color:#24324b;font:14px Arial}main{padding:28px;max-width:1344px;margin:auto}header{background:#1e305b;color:white;padding:30px;border-radius:16px}h1{font:34px Georgia}h2{font-size:20px}section{background:white;padding:24px;margin-top:20px;border:1px solid #e0e5f1;border-radius:12px}table{width:100%;border-collapse:collapse}th,td{text-align:right;padding:13px 9px;border-bottom:1px solid #e5eaf4}th:first-child,td:first-child{text-align:left}.calling th:nth-child(2),.calling td:nth-child(2){background:#fff0f1;color:#a8384b}.calling td:nth-child(2){font-weight:600}.calling th:nth-child(3),.calling th:nth-child(4),.calling th:nth-child(5),.calling td:nth-child(3),.calling td:nth-child(4){background:#eaf8ee;color:#277548}.calling td:nth-child(5){background:#eaf8ee;color:#277548;font-weight:600}tfoot{background:#eef2ff;font-weight:bold}th{font-size:12px;background:#eef2ff}p{line-height:1.6}.muted{color:#64748b}footer{font-size:12px;line-height:1.8;margin-top:20px}.contributorLayout{display:flex;flex-wrap:wrap;align-items:center;gap:24px}.contributorChart{flex:0 0 240px;text-align:center;margin:auto}.contributorTableWrap{flex:1;min-width:320px;overflow-x:auto}.contributorTable{width:100%;border-collapse:collapse}@media(max-width:1100px){.callingGrid{grid-template-columns:repeat(4,minmax(0,1fr))!important}}@media(max-width:650px){.callingGrid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}@page{size:A4 landscape;margin:10mm}@media print{*{print-color-adjust:exact;-webkit-print-color-adjust:exact}main{padding:0}tr{break-inside:avoid}}</style></head><body><main><header><div>KAIRALI GROUP · SALES BRIEFING</div><h1>Daily Sales Report Alert</h1><p>${esc(dayLabel(report.date))} · IST<br>${scope==='ALL'?'All companies':esc(companies[scope as Company])}</p><h2>Sales value ${money(totalSales)} · Collection ${money(totalCollection)}</h2><p>Unverified ${money(totalUnverified)} · Cancelled ${money(totalCancelled)} · Sales contributors ${contributors.length}</p></header>${callingHTML}${contributorHTML}${codes.map(code=>`<section><h2>${esc(companies[code as Company])}</h2><table><thead><tr>${['Agent Name','Sales Quantity','UnVerified Sales Value','Collection Amount','Cancelled Qty','Cancelled Value'].map(t=>`<th>${t}</th>`).join('')}</tr></thead><tbody>${rows.filter(r=>r.company===code).map(r=>`<tr><td>${esc(r.agent)}</td><td>${showCount(r.conversions)}</td><td>${money(r.sales)}</td><td>${money(r.collection)}</td><td>${showCount(r.cancelledCount)}</td><td>${money(r.cancelled)}</td></tr>`).join('')||'<tr><td colspan="6">No sales or collection activity for this date.</td></tr>'}</tbody><tfoot><tr><td>Grand total</td><td>${showCount(rows.filter(r=>r.company===code).reduce((n,r)=>n+r.conversions,0))}</td><td>${money(rows.filter(r=>r.company===code).reduce((n,r)=>n+r.sales,0))}</td><td>${money(rows.filter(r=>r.company===code).reduce((n,r)=>n+r.collection,0))}</td><td>${showCount(rows.filter(r=>r.company===code).reduce((n,r)=>n+(r.cancelledCount||0),0))}</td><td>${money(rows.filter(r=>r.company===code).reduce((n,r)=>n+r.cancelled,0))}</td></tr></tfoot></table></section>`).join('')}<footer>Prepared for Sales Team & Management · Generated ${esc(report.generatedAt)} · Amounts in INR</footer></main></body></html>`
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Daily Sales Report Alert · ${esc(report.date)}</title><style>body{margin:0;background:#f4f6fc;color:#24324b;font:14px Arial}main{padding:28px;max-width:1344px;margin:auto}header{background:#1e305b;color:white;padding:30px;border-radius:16px}h1{font:34px Georgia}h2{font-size:20px}section{background:white;padding:24px;margin-top:20px;border:1px solid #e0e5f1;border-radius:12px}table{width:100%;border-collapse:collapse}th,td{text-align:right;padding:13px 9px;border-bottom:1px solid #e5eaf4}th:first-child,td:first-child{text-align:left}.calling th:nth-child(2),.calling td:nth-child(2){background:#fff0f1;color:#a8384b}.calling td:nth-child(2){font-weight:600}.calling th:nth-child(3),.calling th:nth-child(4),.calling th:nth-child(5),.calling td:nth-child(3),.calling td:nth-child(4){background:#eaf8ee;color:#277548}.calling td:nth-child(5){background:#eaf8ee;color:#277548;font-weight:600}tfoot{background:#eef2ff;font-weight:bold}th{font-size:12px;background:#eef2ff}p{line-height:1.6}.muted{color:#64748b}footer{font-size:12px;line-height:1.8;margin-top:20px}.contributorLayout{display:flex;flex-wrap:wrap;align-items:center;gap:24px}.contributorChart{flex:0 0 240px;text-align:center;margin:auto}.contributorTableWrap{flex:1;min-width:320px;overflow-x:auto}.contributorTable{width:100%;border-collapse:collapse}@page{size:A4 landscape;margin:10mm}@media print{*{print-color-adjust:exact;-webkit-print-color-adjust:exact}main{padding:0}tr{break-inside:avoid}}</style></head><body><main><header style="background:#1e305b;color:white;padding:30px;border-radius:16px"><div style="font-size:11px;letter-spacing:1.6px;color:#93c5fd;font-weight:700;text-transform:uppercase;margin-bottom:6px">KAIRALI GROUP · SALES BRIEFING</div><h1 style="margin:0 0 10px;font-size:34px;font-family:Georgia,serif">Daily Sales Report Alert</h1><p style="margin:0 0 16px;color:#cbd5e1;font-size:14px;line-height:1.6">${esc(dayLabel(report.date))} · IST<br>${scope==='ALL'?'All companies':esc(companies[scope as Company])}</p><h2 style="margin:0 0 6px;font-size:20px;color:white">Sales value ${money(totalSales)} · Collection ${money(totalCollection)}</h2><p style="margin:0;color:#cbd5e1;font-size:13px">Unverified ${money(totalUnverified)} · Cancelled ${money(totalCancelled)} · Sales contributors ${contributors.length}</p></header>${callingHTML}${contributorHTML}${codes.map(code=>`<section><h2>${esc(companies[code as Company])}</h2><table><thead><tr>${['Agent Name','Sales Quantity','UnVerified Sales Value','Collection Amount','Cancelled Qty','Cancelled Value'].map(t=>`<th>${t}</th>`).join('')}</tr></thead><tbody>${rows.filter(r=>r.company===code).map(r=>`<tr><td>${esc(r.agent)}</td><td>${showCount(r.conversions)}</td><td>${money(r.sales)}</td><td>${money(r.collection)}</td><td>${showCount(r.cancelledCount)}</td><td>${money(r.cancelled)}</td></tr>`).join('')||'<tr><td colspan="6">No sales or collection activity for this date.</td></tr>'}</tbody><tfoot><tr><td>Grand total</td><td>${showCount(rows.filter(r=>r.company===code).reduce((n,r)=>n+r.conversions,0))}</td><td>${money(rows.filter(r=>r.company===code).reduce((n,r)=>n+r.sales,0))}</td><td>${money(rows.filter(r=>r.company===code).reduce((n,r)=>n+r.collection,0))}</td><td>${showCount(rows.filter(r=>r.company===code).reduce((n,r)=>n+(r.cancelledCount||0),0))}</td><td>${money(rows.filter(r=>r.company===code).reduce((n,r)=>n+r.cancelled,0))}</td></tr></tfoot></table></section>`).join('')}<footer>Prepared for Sales Team & Management · Generated ${esc(report.generatedAt)} · Amounts in INR</footer></main></body></html>`
 }
 
 export function buildSalesDonutSvg(report:DailySalesReport,scope:string):string{

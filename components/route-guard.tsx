@@ -90,6 +90,10 @@ const pagePermissions: Record<string, string> = {
   '/fms/enquiry-reverification': 'cold_enquiry_reverification.view',
   '/new-order-fms': 'new-order-fms.view',
   '/new-order-fms/primary-order-form': 'primary_order_form.view',
+  '/lead-search': 'lead_search.view',
+  '/client-database': 'client_database.view',
+  '/client-database/upload': 'client_database_upload.view',
+  '/voicecall/kserve-lead-lost': 'voicecall_kserve_lead_lost.view',
 }
 
 const isRestricted = (pathname: string) => {
@@ -223,6 +227,71 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
         hasPermission('new_order_fms.edit') ||
         hasPermission('new_order_fms')
       if (!hasFmsAccess) {
+        router.replace('/access-denied')
+        return
+      }
+      return
+    }
+
+    // Dedicated check for Lead Search
+    if (pathname === '/lead-search' || pathname.startsWith('/lead-search/')) {
+      const hasAccess =
+        hasPermission('lead_search.view') ||
+        hasPermission('lead_search.viewSelf') ||
+        hasPermission('lead_search.viewAll') ||
+        hasPermission('lead_search.edit') ||
+        hasPermission('lead_search') ||
+        hasPermission('leads.view')
+      if (!hasAccess) {
+        router.replace('/access-denied')
+        return
+      }
+      return
+    }
+
+    // Dedicated check for Client Database Upload
+    if (pathname === '/client-database/upload' || pathname.startsWith('/client-database/upload/')) {
+      const hasAccess =
+        hasPermission('client_database_upload.view') ||
+        hasPermission('client_database_upload.viewSelf') ||
+        hasPermission('client_database_upload.viewAll') ||
+        hasPermission('client_database_upload.edit') ||
+        hasPermission('client_database_upload') ||
+        hasPermission('client_database.edit') ||
+        hasPermission('client_database.viewAll')
+      if (!hasAccess) {
+        router.replace('/access-denied')
+        return
+      }
+      return
+    }
+
+    // Dedicated check for Client Database
+    if (pathname === '/client-database' || (pathname.startsWith('/client-database/') && !pathname.startsWith('/client-database/upload'))) {
+      const hasAccess =
+        hasPermission('client_database.view') ||
+        hasPermission('client_database.viewSelf') ||
+        hasPermission('client_database.viewAll') ||
+        hasPermission('client_database.edit') ||
+        hasPermission('client_database')
+      if (!hasAccess) {
+        router.replace('/access-denied')
+        return
+      }
+      return
+    }
+
+    // Dedicated check for KServe Lead Lost Tracker
+    if (pathname === '/voicecall/kserve-lead-lost' || pathname.startsWith('/voicecall/kserve-lead-lost/')) {
+      const hasAccess =
+        hasPermission('voicecall_kserve_lead_lost.view') ||
+        hasPermission('voicecall_kserve_lead_lost.viewSelf') ||
+        hasPermission('voicecall_kserve_lead_lost.viewAll') ||
+        hasPermission('voicecall_kserve_lead_lost.edit') ||
+        hasPermission('voicecall_kserve_lead_lost') ||
+        hasPermission('kserve_lead_lost.view') ||
+        hasPermission('ai_voice_menu.view')
+      if (!hasAccess) {
         router.replace('/access-denied')
         return
       }

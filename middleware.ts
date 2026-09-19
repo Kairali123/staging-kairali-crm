@@ -287,6 +287,8 @@ const exemptApiPaths = new Set([
   '/api/cron/sales-call-audit-daily-email',
   '/api/cron/whatsapp-triggers', // Handler verifies an independent local worker secret.
   '/api/cron/email-triggers', // Handler verifies local worker secret; hosted execution is disabled.
+  '/api/cron/kserve-lost-alert',
+  '/api/kserve-alert-preview',
 ])
 
 // No active API prefix exemptions. `/api/meetings/*` stays behind the signed

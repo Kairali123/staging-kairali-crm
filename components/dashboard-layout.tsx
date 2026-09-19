@@ -58,6 +58,7 @@ import {
   StickyNote,
   Sparkles,
   Cpu,
+  Upload,
 } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
@@ -93,6 +94,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [voiceCallExpanded, setVoiceCallExpanded] = useState(false)
   const [dialShreeExpanded, setDialShreeExpanded] = useState(false)
   const [kapplNewOrderExpanded, setKapplNewOrderExpanded] = useState(false)
+  const [leadManagementExpanded, setLeadManagementExpanded] = useState(false)
+  const [clientDatabaseExpanded, setClientDatabaseExpanded] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isClearingCache, setIsClearingCache] = useState(false)
   const [meetingsExpanded, setMeetingsExpanded] = useState(false)
@@ -131,13 +134,24 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   useEffect(() => {
     if (pathname.startsWith("/fms")) setFmsExpanded(true)
     if (pathname.startsWith("/employee")) setEmployeeExpanded(true)
-    if (pathname.startsWith("/marketing") || pathname === "/google-adword-reports" || pathname === "/good-lead-leakage") setMarketingExpanded(true)
+    if (pathname.startsWith("/marketing") || pathname === "/google-adword-reports") setMarketingExpanded(true)
     if (pathname.startsWith("/doctor-consultation")) setDoctorConsultationExpanded(true)
     if (pathname.startsWith("/sales") || pathname.startsWith("/sales-calling")) setSalesExpanded(true)
-    if (pathname.startsWith("/voicecall")) setVoiceCallExpanded(true)
+    if (pathname.startsWith("/voicecall") && pathname !== "/voicecall/kserve-lead-lost") setVoiceCallExpanded(true)
     if (pathname.startsWith("/dialShree") || pathname.startsWith("/dialshree")) setDialShreeExpanded(true)
     if (pathname.startsWith("/meetings")) setMeetingsExpanded(true)
     if (pathname.startsWith("/new-order-fms")) setKapplNewOrderExpanded(true)
+    if (
+      pathname.startsWith("/leads") ||
+      pathname.startsWith("/lead-search") ||
+      pathname.startsWith("/good-lead-leakage") ||
+      pathname === "/voicecall/kserve-lead-lost"
+    ) {
+      setLeadManagementExpanded(true)
+    }
+    if (pathname.startsWith("/client-database")) {
+      setClientDatabaseExpanded(true)
+    }
     if (pathname.startsWith("/settings")) {
       setSettingsExpanded(true)
       setAutomationExpanded(true)
@@ -188,7 +202,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "Calls Report", href: "/calls/reports", icon: PhoneCall, permission: "calls_report.view" },
     { name: "Sales Call Audit", href: "/sales-call-audit", icon: UserCheck, permission: "sales_call_audit.view" },
     { name: "Sales Reports", icon: IndianRupee, permission: "sales_report.view" },
-    { name: "Leads Assignment", href: "/leads/assign", icon: Shuffle, permission: "leads.view" },
+    { name: "Lead Management", icon: Users, permission: "leads.view" },
+    { name: "Client Database", icon: Database, permission: "client_database.view" },
     { name: "AI Deal Assistant", href: "/deal-assistant", icon: Sparkles, permission: "deal_assistant.view" },
     // { name: "K-Serve Billing Auditor", href: "/ksereve-billing-auditer", icon: FileText, permission: "bill_fms.view" },
     { name: "AI Voice Lead Qual.", icon: Phone, permission: "ai_voice_menu.view" },
@@ -204,13 +219,22 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "FMS Pending Bottleneck Tracker", href: "/fms/pending-tasks", icon: FileText, permission: "task_fms.view" },
     { name: "Cold Enquiry Reverification", href: "/fms/enquiry-reverification", icon: FileText, permission: "cold_enquiry_reverification.view" },
   ]
+  const clientDatabaseSubMenu = [
+    { name: "Client Database", href: "/client-database", icon: Database, permission: "client_database.view" },
+    { name: "Client Database Upload", href: "/client-database/upload", icon: Upload, permission: "client_database_upload.view" },
+  ]
+  const leadManagementSubMenu = [
+    { name: "Leads Assignment", href: "/leads/assign", icon: Shuffle, permission: "leads.assign" },
+    { name: "Lead Search Dashboard", href: "/lead-search", icon: Search, permission: "lead_search.view" },
+    { name: "Good Lead Leakage", href: "/good-lead-leakage", icon: Search, permission: "good_lead_leakage.view" },
+    { name: "K-Serve Lead Lost", href: "/voicecall/kserve-lead-lost", icon: PhoneCall, permission: "voicecall_kserve_lead_lost.view" },
+  ]
   const kapplNewOrderSubMenu = [
     { name: "New Order FMS", href: "/new-order-fms", icon: FileText, permission: "new-order-fms.view" },
     { name: "Primary Order Form", href: "/new-order-fms/primary-order-form", icon: FileText, permission: "primary_order_form.view" },
   ]
 
   const marketingSubMenu = [
-    { name: "Good Lead Leakage", href: "/good-lead-leakage", icon: Search, permission: "good_lead_leakage.view", description: "Good lead leakage report" },
     { name: "Marketing Daily Report", href: "/marketing-daily-report", icon: Search, permission: "marketing_daily_report.view", description: "Marketing daily report" },
     { name: "Google PPC Reports", href: "/marketing/google-ppc", icon: Search, description: "Google PPC ads reports", permission: "marketing_google_report.view" },
     { name: "Facebook PPC Reports", href: "/marketing/facebook-ppc", icon: Search, description: "Facebook PPC ads reports", permission: "marketing_facebook_report.view" },
@@ -303,6 +327,84 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     )
   }
 
+  const hasLeadsAssignPermission = () => {
+    if (isSuperAdmin || user?.permissions?.includes("all") || user?.role === "admin") return true
+    return (
+      hasPermission("leads.assign") ||
+      hasPermission("leads.view") ||
+      hasPermission("leads") ||
+      hasPermission("leads_assignment.view")
+    )
+  }
+
+  const hasLeadSearchPermission = () => {
+    if (isSuperAdmin || user?.permissions?.includes("all") || user?.role === "admin") return true
+    return (
+      hasPermission("lead_search.view") ||
+      hasPermission("lead_search.viewSelf") ||
+      hasPermission("lead_search.viewAll") ||
+      hasPermission("lead_search.edit") ||
+      hasPermission("lead_search") ||
+      hasPermission("leads.view")
+    )
+  }
+
+  const hasClientDatabasePermission = () => {
+    if (isSuperAdmin || user?.permissions?.includes("all") || user?.role === "admin") return true
+    return (
+      hasPermission("client_database.view") ||
+      hasPermission("client_database.viewSelf") ||
+      hasPermission("client_database.viewAll") ||
+      hasPermission("client_database.edit") ||
+      hasPermission("client_database")
+    )
+  }
+
+  const hasClientDatabaseUploadPermission = () => {
+    if (isSuperAdmin || user?.permissions?.includes("all") || user?.role === "admin") return true
+    return (
+      hasPermission("client_database_upload.view") ||
+      hasPermission("client_database_upload.viewSelf") ||
+      hasPermission("client_database_upload.viewAll") ||
+      hasPermission("client_database_upload.edit") ||
+      hasPermission("client_database_upload") ||
+      hasPermission("client_database.edit") ||
+      hasPermission("client_database.viewAll")
+    )
+  }
+
+  const hasGoodLeadLeakagePermission = () => {
+    if (isSuperAdmin || user?.permissions?.includes("all") || user?.role === "admin") return true
+    return (
+      hasPermission("good_lead_leakage.view") ||
+      hasPermission("marketing.view") ||
+      hasPermission("leads.view") ||
+      hasPermission("good_lead_leakage")
+    )
+  }
+
+  const hasKserveLeadLostPermission = () => {
+    if (isSuperAdmin || user?.permissions?.includes("all") || user?.role === "admin") return true
+    return (
+      hasPermission("voicecall_kserve_lead_lost.view") ||
+      hasPermission("voicecall_kserve_lead_lost.viewSelf") ||
+      hasPermission("voicecall_kserve_lead_lost.viewAll") ||
+      hasPermission("voicecall_kserve_lead_lost.edit") ||
+      hasPermission("voicecall_kserve_lead_lost") ||
+      hasPermission("kserve_lead_lost.view") ||
+      hasPermission("ai_voice_menu.view")
+    )
+  }
+
+  const hasLeadManagementPermission = () => {
+    return (
+      hasLeadsAssignPermission() ||
+      hasLeadSearchPermission() ||
+      hasGoodLeadLeakagePermission() ||
+      hasKserveLeadLostPermission()
+    )
+  }
+
   const filteredNavigation = navigation.filter((item: any) => {
     if (item.superAdminOnly) {
       return isSuperAdmin
@@ -312,6 +414,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     }
     if (item.name === "KAPPL New Order") {
       return hasNewOrderFmsPermission() || hasPrimaryOrderFormPermission()
+    }
+    if (item.name === "Lead Management") {
+      return hasLeadManagementPermission()
+    }
+    if (item.name === "Client Database") {
+      return hasClientDatabasePermission() || hasClientDatabaseUploadPermission()
     }
     return user?.permissions?.includes("all") || (item.permission && hasPermission(item.permission))
   })
@@ -337,6 +445,16 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     searchableItems.push({ name: "Automation Settings", href: "/settings/automation", description: "Automation settings and modules hub", icon: Cpu })
     searchableItems.push({ name: "Email Triggers", href: "/settings/automation/email-triggers", description: "Scheduled email trigger configuration", icon: Mail })
     searchableItems.push({ name: "WhatsApp Triggers", href: "/settings/automation/whatsapp", description: "WhatsApp report image trigger configuration", icon: Mail })
+  }
+  if (hasLeadManagementPermission()) {
+    if (hasLeadsAssignPermission()) searchableItems.push({ name: "Leads Assignment", href: "/leads/assign", description: "Leads Assignment", icon: Shuffle })
+    if (hasLeadSearchPermission()) searchableItems.push({ name: "Lead Search Dashboard", href: "/lead-search", description: "Lead Search Dashboard", icon: Search })
+    if (hasGoodLeadLeakagePermission()) searchableItems.push({ name: "Good Lead Leakage", href: "/good-lead-leakage", description: "Good lead leakage report", icon: Search })
+    if (hasKserveLeadLostPermission()) searchableItems.push({ name: "K-Serve Lead Lost", href: "/voicecall/kserve-lead-lost", description: "K-Serve lead lost tracker", icon: PhoneCall })
+  }
+  if (hasClientDatabasePermission() || hasClientDatabaseUploadPermission()) {
+    if (hasClientDatabasePermission()) searchableItems.push({ name: "Client Database", href: "/client-database", description: "Client Database records", icon: Database })
+    if (hasClientDatabaseUploadPermission()) searchableItems.push({ name: "Client Database Upload", href: "/client-database/upload", description: "Client Database Upload", icon: Upload })
   }
 
   const searchResults = debouncedQuery.length > 0
@@ -464,6 +582,116 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       )
     }
 
+    if (item.name === "Lead Management") {
+      const isLeadsAssignRoute = pathname.startsWith("/leads/assign")
+      const isLeadSearchRoute = pathname.startsWith("/lead-search")
+      const isGoodLeadLeakageRoute = pathname.startsWith("/good-lead-leakage")
+      const isKserveLeadLostRoute = pathname === "/voicecall/kserve-lead-lost"
+      const isActive = (hasLeadsAssignPermission() && isLeadsAssignRoute) ||
+                       (hasLeadSearchPermission() && isLeadSearchRoute) ||
+                       (hasGoodLeadLeakagePermission() && isGoodLeadLeakageRoute) ||
+                       (hasKserveLeadLostPermission() && isKserveLeadLostRoute)
+
+      const visibleSubMenu = leadManagementSubMenu.filter((subItem) => {
+        if (subItem.href === "/leads/assign") return hasLeadsAssignPermission()
+        if (subItem.href === "/lead-search") return hasLeadSearchPermission()
+        if (subItem.href === "/good-lead-leakage") return hasGoodLeadLeakagePermission()
+        if (subItem.href === "/voicecall/kserve-lead-lost") return hasKserveLeadLostPermission()
+        return hasPermission(subItem.permission) || hasPermission("all")
+      })
+      if (visibleSubMenu.length === 0) return null
+
+      return (
+        <div key={item.name}>
+          <button
+            onClick={() => setLeadManagementExpanded(!leadManagementExpanded)}
+            className={`group flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${isActive
+              ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md"
+              : "text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"
+              }`}
+          >
+            <item.icon className={`mr-3 h-5 w-5 ${isActive ? "text-white" : "text-blue-500"}`} />
+            {item.name}
+            {leadManagementExpanded ? (
+              <ChevronDown className={`ml-auto h-4 w-4 ${isActive ? "text-white" : "text-gray-500"}`} />
+            ) : (
+              <ChevronRight className={`ml-auto h-4 w-4 ${isActive ? "text-white" : "text-gray-500"}`} />
+            )}
+          </button>
+          {leadManagementExpanded && (
+            <div className="ml-6 mt-2 space-y-1">
+              {visibleSubMenu.map((subItem) => (
+                <Link
+                  key={subItem.name}
+                  href={subItem.href}
+                  className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${pathname === subItem.href
+                    ? "bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 border-l-4 border-blue-500 shadow-sm font-semibold"
+                    : "text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"
+                    }`}
+                  onClick={() => isMobile && setSidebarOpen(false)}
+                >
+                  <subItem.icon className={`mr-3 h-4 w-4 ${pathname === subItem.href ? "text-blue-600" : "text-gray-400"}`} />
+                  {subItem.name}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    if (item.name === "Client Database") {
+      const isUploadRoute = pathname.startsWith("/client-database/upload")
+      const isClientDbRoute = pathname === "/client-database" || (pathname.startsWith("/client-database") && !isUploadRoute)
+      const isActive = (hasClientDatabaseUploadPermission() && isUploadRoute) ||
+                       (hasClientDatabasePermission() && isClientDbRoute)
+
+      const visibleSubMenu = clientDatabaseSubMenu.filter((subItem) => {
+        if (subItem.href === "/client-database") return hasClientDatabasePermission()
+        if (subItem.href === "/client-database/upload") return hasClientDatabaseUploadPermission()
+        return hasPermission(subItem.permission) || hasPermission("all")
+      })
+      if (visibleSubMenu.length === 0) return null
+
+      return (
+        <div key={item.name}>
+          <button
+            onClick={() => setClientDatabaseExpanded(!clientDatabaseExpanded)}
+            className={`group flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${isActive
+              ? "bg-gradient-to-r from-teal-500 to-teal-600 text-white shadow-md"
+              : "text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"
+              }`}
+          >
+            <item.icon className={`mr-3 h-5 w-5 ${isActive ? "text-white" : "text-teal-600"}`} />
+            {item.name}
+            {clientDatabaseExpanded ? (
+              <ChevronDown className={`ml-auto h-4 w-4 ${isActive ? "text-white" : "text-gray-500"}`} />
+            ) : (
+              <ChevronRight className={`ml-auto h-4 w-4 ${isActive ? "text-white" : "text-gray-500"}`} />
+            )}
+          </button>
+          {clientDatabaseExpanded && (
+            <div className="ml-6 mt-2 space-y-1">
+              {visibleSubMenu.map((subItem) => (
+                <Link
+                  key={subItem.name}
+                  href={subItem.href}
+                  className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${pathname === subItem.href
+                    ? "bg-gradient-to-r from-teal-50 to-teal-100 text-teal-700 border-l-4 border-teal-500 shadow-sm font-semibold"
+                    : "text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"
+                    }`}
+                  onClick={() => isMobile && setSidebarOpen(false)}
+                >
+                  <subItem.icon className={`mr-3 h-4 w-4 ${pathname === subItem.href ? "text-teal-600" : "text-gray-400"}`} />
+                  {subItem.name}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      )
+    }
+
     if (item.name === "AI Voice Lead Qual.") {
       const voiceSubMenu = [
         { name: "Sent", href: "/voicecall/data/sent", icon: Phone, permission: "ai_voice_sent.view" },
@@ -472,7 +700,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         { name: "Non-Qualified", href: "/voicecall/non-qualified", icon: Phone, permission: "ai_voice_non_qualified.view" },
         { name: "K-Serve Billing Auditor", href: "/ksereve-billing-auditer", icon: FileText, permission: "bill_fms.view" },
       ]
-      const isActive = pathname.startsWith("/voicecall")
+      const isActive = pathname.startsWith("/voicecall") && pathname !== "/voicecall/kserve-lead-lost"
       return (
         <div key={item.name}>
           <button
@@ -741,6 +969,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       "Doctor Consultation": "text-teal-600",
       "Booking PI Review Tracker": "text-indigo-600",
       "Doctor Consultation Report": "text-teal-600",
+      "Lead Search Dashboard": "text-blue-500",
+      "Client Database": "text-blue-600",
+      "Client Database Upload": "text-indigo-600",
+      "KServe Lead Lost": "text-rose-600",
       Settings: "text-slate-600",
       Automation: "text-indigo-600",
     }

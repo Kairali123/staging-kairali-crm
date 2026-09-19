@@ -1,0 +1,89 @@
+import { NextResponse } from 'next/server'
+import { getPool } from '@/lib/db'
+
+export async function GET(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url)
+    const type = searchParams.get('type') // 'emails' | 'phones' | 'template'
+    const category = searchParams.get('category') || ''
+    const subCategory = searchParams.get('subCategory') || ''
+
+    const pool = await getPool()
+
+    if (type === 'template') {
+      const csvHeader = 'Name,Phone,Email,Alternate Phone,Category,Sub Category,Source Sheet,City State,Remarks\n'
+      const sampleRow = 'Rahul Sharma,9876543210,rahul@example.com,9876543211,KTAHV Hospital,IPD Patient,Google Drive Upload,Delhi,Interested in wellness packages\n'
+      const csvContent = csvHeader + sampleRow
+
+      return new NextResponse(csvContent, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': 'attachment; filename="client_upload_template.csv"',
+        },
+      })
+    }
+
+    let whereClause = 'WHERE 1=1'
+    const queryParams: any[] = []
+
+    if (category && category !== 'ALL') {
+      whereClause += ' AND category = ?'
+      queryParams.push(category)
+    }
+
+    if (subCategory && subCategory !== 'ALL') {
+      whereClause += ' AND sub_category = ?'
+      queryParams.push(subCategory)
+    }
+
+    if (type === 'emails') {
+      whereClause += " AND email IS NOT NULL AND email != ''"
+      const [rows]: any = await pool.query(
+        `SELECT DISTINCT email, name, category, sub_category, source_sheet FROM client_database ${whereClause} ORDER BY email ASC`,
+        queryParams
+      )
+
+      const lines = ['Email ID,Client Name,Category,Sub Category,Source']
+      for (const r of rows) {
+        lines.push(`"${r.email}","${r.name || ''}","${r.category || ''}","${r.sub_category || ''}","${r.source_sheet || ''}"`)
+      }
+      const csvContent = lines.join('\n')
+
+      return new NextResponse(csvContent, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="client_email_ids_${Date.now()}.csv"`,
+        },
+      })
+    }
+
+    if (type === 'phones') {
+      whereClause += " AND phone IS NOT NULL AND phone != ''"
+      const [rows]: any = await pool.query(
+        `SELECT DISTINCT phone, name, category, sub_category, source_sheet FROM client_database ${whereClause} ORDER BY phone ASC`,
+        queryParams
+      )
+
+      const lines = ['Phone Number,Client Name,Category,Sub Category,Source']
+      for (const r of rows) {
+        lines.push(`"${r.phone}","${r.name || ''}","${r.category || ''}","${r.sub_category || ''}","${r.source_sheet || ''}"`)
+      }
+      const csvContent = lines.join('\n')
+
+      return new NextResponse(csvContent, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="client_phone_numbers_${Date.now()}.csv"`,
+        },
+      })
+    }
+
+    return NextResponse.json({ success: false, error: 'Invalid export type specified.' }, { status: 400 })
+  } catch (err: any) {
+    console.error('[API client-database export]', err)
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 })
+  }
+}
