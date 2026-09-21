@@ -7,6 +7,7 @@ import {
 } from "@/lib/authz";
 import { getPool } from "@/lib/db";
 import { CALLING_STAGES, findCallingRowForStage, indexCallingRows, parseToShow } from "@/lib/crr-calling-rows";
+import { MAX_POLL_BOOKINGS } from "@/lib/crr-poll";
 
 // Status-only companion to /api/crr-calling/bookings. The CRR-FMS page polls this
 // while a stage sits in "Processing" (submitted, waiting on the external system to
@@ -17,27 +18,28 @@ export const dynamic = "force-dynamic";
 
 const NO_STORE_HEADERS = { "Cache-Control": "private, no-store" };
 
-// Bounds the query regardless of what a client sends.
-const MAX_BOOKINGS = 50;
+// Bounds the query regardless of what a client sends; the client chunks to the
+// same constant, so a well-behaved caller never trips this.
+const MAX_BOOKINGS = MAX_POLL_BOOKINGS;
 
 interface RequestedBooking {
     bookingId: string;
     uid: string;
 }
 
-function parseBookings(raw: unknown): RequestedBooking[] | null {
-    if (!Array.isArray(raw)) return null;
-    if (raw.length > MAX_BOOKINGS) return null;
-    const out: RequestedBooking[] = [];
+function parseBookings(raw: unknown): { bookings: RequestedBooking[] } | { error: string } {
+    if (!Array.isArray(raw)) return { error: "'bookings' must be an array" };
+    if (raw.length > MAX_BOOKINGS) return { error: `'bookings' holds ${raw.length} entries, over the ${MAX_BOOKINGS} limit` };
+    const bookings: RequestedBooking[] = [];
     for (const item of raw) {
-        if (!item || typeof item !== "object") return null;
+        if (!item || typeof item !== "object") return { error: "each entry must be an object" };
         const bookingId = String((item as any).bookingId ?? "").trim();
         const uid = String((item as any).uid ?? "").trim();
-        if (!bookingId || bookingId.length > 64) return null;
-        if (uid.length > 64) return null;
-        out.push({ bookingId, uid });
+        if (!bookingId) return { error: "each entry needs a non-empty bookingId" };
+        if (bookingId.length > 64 || uid.length > 64) return { error: "bookingId and uid are limited to 64 characters" };
+        bookings.push({ bookingId, uid });
     }
-    return out;
+    return { bookings };
 }
 
 export async function POST(req: NextRequest) {
@@ -81,13 +83,14 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        const bookings = parseBookings(body?.bookings);
-        if (!bookings) {
+        const parsed = parseBookings(body?.bookings);
+        if ("error" in parsed) {
             return NextResponse.json(
-                { success: false, error: `'bookings' must be an array of at most ${MAX_BOOKINGS} { bookingId, uid } entries` },
+                { success: false, error: parsed.error },
                 { status: 400, headers: NO_STORE_HEADERS }
             );
         }
+        const { bookings } = parsed;
         if (bookings.length === 0) {
             return NextResponse.json({ success: true, data: [] }, { headers: NO_STORE_HEADERS });
         }

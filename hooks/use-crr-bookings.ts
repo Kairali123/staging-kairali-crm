@@ -6,6 +6,7 @@ import { METADATA_KEYS, PROOF_FILE_LIMIT_LABEL, isCancelledStatus, stageStatusOf
 import {
     FOCUS_REFETCH_THROTTLE_MS,
     POLL_GIVE_UP_MS,
+    chunk,
     hasToShowFlip,
     nextPollDelay,
     processingTargets,
@@ -455,15 +456,23 @@ export function useCrrBookings(from?: string, to?: string) {
         const timer = setTimeout(async () => {
             if (cancelled) return;
             try {
-                const res = await fetch("/api/crr-calling/stage-status", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ bookings: targets }),
-                    cache: "no-store",
-                });
-                const json = await res.json();
+                // Chunked: the route caps one request, and a busy page can easily
+                // have more bookings waiting than that cap allows.
+                const batches = await Promise.all(
+                    chunk(targets).map(async (bookings) => {
+                        const res = await fetch("/api/crr-calling/stage-status", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ bookings }),
+                            cache: "no-store",
+                        });
+                        const json = await res.json();
+                        return res.ok && json.success ? (json.data || []) : [];
+                    })
+                );
+                const rows = batches.flat();
                 if (cancelled) return;
-                if (res.ok && json.success && hasToShowFlip(guestsRef.current, json.data || [], lockedGuestIdRef.current)) {
+                if (hasToShowFlip(guestsRef.current, rows, lockedGuestIdRef.current)) {
                     pollAttemptRef.current = 0;
                     pollStartedAtRef.current = null;
                     await fetchBookings(true, lockedGuestIdRef.current);

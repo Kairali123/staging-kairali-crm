@@ -18,6 +18,17 @@ export const POLL_GIVE_UP_MS = 10 * 60_000;
 // Refetch on tab focus at most this often, so alt-tabbing does not hammer the API.
 export const FOCUS_REFETCH_THROTTLE_MS = 30_000;
 
+// Bounds one request. The client chunks to this size and the route rejects anything
+// larger, so the two cannot disagree about the limit.
+export const MAX_POLL_BOOKINGS = 50;
+
+export function chunk<T>(items: T[], size: number = MAX_POLL_BOOKINGS): T[][] {
+    if (size < 1) throw new Error("chunk size must be at least 1");
+    const out: T[][] = [];
+    for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+    return out;
+}
+
 export function nextPollDelay(attempt: number): number {
     if (attempt < 0) return POLL_DELAYS_MS[0];
     return POLL_DELAYS_MS[Math.min(attempt, POLL_DELAYS_MS.length - 1)];

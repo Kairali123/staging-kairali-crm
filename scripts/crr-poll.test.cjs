@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {load}=require('./daily-sales-report.test.cjs');
-const {nextPollDelay,processingTargets,hasToShowFlip,POLL_DELAYS_MS}=load('lib/crr-poll.ts');
+const {nextPollDelay,processingTargets,hasToShowFlip,chunk,POLL_DELAYS_MS,MAX_POLL_BOOKINGS}=load('lib/crr-poll.ts');
 
 const guest=(id,bookingId,statuses,stages)=>({id,bookingId,uid:`U${id}`,stageStatus:statuses,stages});
 
@@ -32,4 +32,15 @@ test('a flip is detected only when the server disagrees with what the client hol
  assert.equal(hasToShowFlip(guests,[{bookingId:'NOPE',toShow:{5:true}}]),false,'unknown booking');
  assert.equal(hasToShowFlip(guests,[{bookingId:'B1',toShow:{5:true}}],1),false,'locked row never triggers a refetch');
  assert.equal(hasToShowFlip(guests,[{bookingId:'B1'}]),false,'missing toShow is not a flip');
+});
+
+test('requests are chunked so a busy page never exceeds the route cap',()=>{
+ const targets=Array.from({length:MAX_POLL_BOOKINGS*2+3},(_,i)=>({bookingId:`B${i}`,uid:`U${i}`}));
+ const batches=chunk(targets);
+ assert.equal(batches.length,3);
+ assert.ok(batches.every(b=>b.length<=MAX_POLL_BOOKINGS),'no batch over the cap');
+ assert.equal(batches.flat().length,targets.length,'nothing dropped');
+ assert.deepEqual(batches.flat(),targets,'order preserved');
+ assert.deepEqual(chunk([]),[],'empty stays empty');
+ assert.throws(()=>chunk(targets,0),'a zero size would loop forever');
 });
