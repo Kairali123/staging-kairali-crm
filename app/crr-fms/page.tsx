@@ -4483,7 +4483,7 @@ export default function CRRCallingProcessPage() {
                                             </div>
 
                                             {/* Row 2 (if YES): only show the referral taking url and close button */}
-                                            {(guestAllowedReferral === "yes" || (isReadOnly && (referralTakenStatus === "Yes" || guestAllowedReferral === "yes"))) && !s8Lock.isLocked && (
+                                            {(guestAllowedReferral === "yes" || (isReadOnly && referralTakenStatus === "Yes")) && !s8Lock.isLocked && (
                                                 <div className="space-y-2 p-4 bg-white/80 border border-emerald-300 rounded-lg shadow-sm">
                                                     <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
                                                         Referral Taking URL
@@ -4506,7 +4506,7 @@ export default function CRRCallingProcessPage() {
                                             )}
 
                                             {/* Row 3 (if NO): enable remarks so that user assigned stage 8 can fill remarks and then save */}
-                                            {(guestAllowedReferral === "no" || (isReadOnly && (referralTakenStatus === "No" || guestAllowedReferral === "no" || Boolean(referralDoerRemarks)))) && (
+                                            {(guestAllowedReferral === "no" || (isReadOnly && (referralTakenStatus === "No" || Boolean(referralDoerRemarks)))) && (
                                                 <div className="space-y-2">
                                                     <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
                                                         Remarks {!isReadOnly && <span className="text-red-500 font-bold">*</span>}
