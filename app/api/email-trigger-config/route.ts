@@ -4,7 +4,9 @@ import { getSessionUser } from '@/lib/authz'
 import { marketingMailConfig } from '@/lib/marketing-report-email'
 import { triggerSchema } from '@/lib/email-triggers/schema'
 import { readState, transaction } from '@/lib/email-triggers/store'
+import { removeTrigger, auditSeedSuppressed, TriggerDeleteError } from '@/lib/email-triggers/delete'
 import { nextRun } from '@/lib/email-triggers/schedule'
+import { emailReportTemplates, canonicalTemplateName } from '@/lib/email-report-template'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -34,7 +36,7 @@ export async function GET(req: NextRequest) {
   if (!authorized(req)) return NextResponse.json({ error: 'Administrator access required' }, { status: 403, headers })
   try {
     let state = await readState()
-    if (!state.triggers.some(t => t.reportId === 'sales-call-audit')) {
+    if (!state.triggers.some(t => t.reportId === 'sales-call-audit') && !auditSeedSuppressed(state)) {
       try {
         state = await transaction(s => {
           if (!s.triggers.some(t => t.reportId === 'sales-call-audit')) {
@@ -42,10 +44,10 @@ export async function GET(req: NextRequest) {
             s.triggers.push({
               id: randomUUID(),
               revision: 1,
-              name: 'Daily HR Email Template - Agent-wise Call Audit',
+              name: emailReportTemplates['sales-call-audit'].name,
               reportId: 'sales-call-audit',
-              source: 'Daily HR Email Template',
-              template: 'Daily HR Email Template',
+              source: emailReportTemplates['sales-call-audit'].name,
+              template: emailReportTemplates['sales-call-audit'].name,
               department: 'HR',
               company: 'All companies',
               to: 'ho.hr@kairali.com',
@@ -104,8 +106,11 @@ export async function GET(req: NextRequest) {
         console.warn('[email-trigger-config] Scheduler service start skipped:', err)
       }
     }
+    // Triggers saved under a previous template name are shown under the current one.
+    const triggers = state.triggers.map(t => ({ ...t, source: canonicalTemplateName(t.source) as typeof t.source, template: canonicalTemplateName(t.template) }))
     return NextResponse.json({
       ...state,
+      triggers,
       smtpReady: marketingMailConfig().configured,
       workerReady: isWorkerReady(state.heartbeat),
       sender: marketingMailConfig().user || '',
@@ -162,5 +167,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ trigger: saved }, { headers })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Unable to save configuration' }, { status: 400, headers })
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  if (!authorized(req)) return NextResponse.json({ error: 'Administrator access required' }, { status: 403, headers })
+  if (req.headers.get('origin') !== req.nextUrl.origin) return NextResponse.json({ error: 'Invalid origin' }, { status: 403, headers })
+
+  const id = req.nextUrl.searchParams.get('id') || ''
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return NextResponse.json({ error: 'Invalid trigger id' }, { status: 400, headers })
+  const rev = req.nextUrl.searchParams.get('revision')
+  const revision = rev !== null && /^\d+$/.test(rev) ? Number(rev) : undefined
+
+  try {
+    const removed = await transaction(s => removeTrigger(s, id, revision))
+    return NextResponse.json({ deleted: removed.id, name: removed.name }, { headers })
+  } catch (e) {
+    const status = e instanceof TriggerDeleteError ? e.status : 400
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Unable to delete trigger' }, { status, headers })
   }
 }

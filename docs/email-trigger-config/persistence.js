@@ -1,6 +1,8 @@
 // Production-shaped local persistence. No browser credential or report HTML is stored.
+let pendingDelete=null,deleteBusy=false,deleteTimer=null;
 let initializedPersistence=false,storageReady=false,smtpReady=false,workerReady=false,actualSender='',savedRuns=[],savePending=false;
 const beforePersistentDraw=draw,beforePersistentSubmit=$('#triggerForm').onsubmit;
+function canonicalTrigger(t){const known=reportCatalog[t.reportId];if(!known)return {...t,result:t.lastResult};const same=n=>n===known.name||(known.aliases||[]).includes(n);return {...t,source:same(t.source)?known.name:t.source,template:same(t.template)?known.name:t.template,result:t.lastResult}}
 function normalizeDraft(){draft.retry='No retries';draft.missed='Skip missed run';draft.attachment='None';draft.mode='Same email to all recipients';if(!['Always send','Only when data is available'].includes(draft.condition))draft.condition='Always send';draft.replyTo||='';if(draft.replyTo==='support@example.com')draft.replyTo='';draft.intro||='';draft.closing||='';draft.reportId=selectedReportId();draft.period||='Yesterday';draft.reportDetail||='Full report';draft.interval=String(draft.interval||'6');if(draft.period!=='Selected date'||!draft.previewDate)delete draft.previewDate;}
 function showServiceStatus(error=''){
  const badge=document.querySelector('.prototype');badge.textContent=error||(!storageReady?'Storage unavailable':!smtpReady?'SMTP not configured':!workerReady?'Worker offline':'Scheduler ready');badge.style.background=storageReady&&smtpReady&&workerReady?'#e4f4e9':'#fff0db';
@@ -15,6 +17,7 @@ draw=function(){beforePersistentDraw();if(!linkedHost)return;normalizeDraft();co
  if(step===2)document.querySelectorAll('.scheduleCard p').forEach(p=>p.textContent='Schedule is stored on the server. Active configurations send while the background worker is online.');
  const cards=document.querySelectorAll('#details .scheduleCard');if(step===1)cards.forEach(c=>{c.innerHTML='<strong>Fresh report generated at every run</strong><p>Choose Today or Yesterday for a rolling report. Selected date stays fixed. Add recipients, set the schedule, then save as Active to begin sending.</p>'});
  const submit=$('#triggerForm button[type="submit"]');submit.textContent=savePending?'Saving…':draft.status==='Active'?'Save & activate':'Save configuration';submit.disabled=savePending||!storageReady;
+ const del=$('#deleteTrigger');if(del)del.classList.toggle('hidden',!(typeof editId==='string'&&triggers.some(t=>t.id===editId)));
  window.postHeight?.();
 };
 $('#triggerForm').onsubmit=e=>{if(!linkedHost)return beforePersistentSubmit(e);e.preventDefault();if(savePending)return;collect();normalizeDraft();if(!storageReady){toast('Storage unavailable. Configuration has not been saved.');return}
@@ -28,18 +31,30 @@ window.addEventListener('message',event=>{if(event.source!==window.parent||windo
  if(m?.type==='email-config-init'){
   if(initializedPersistence)return;initializedPersistence=true;
   storageReady=!!m.state;smtpReady=!!m.state?.smtpReady;workerReady=!!m.state?.workerReady;actualSender=m.state?.sender||'';savedRuns=m.state?.runs||[];
-  const unsaved={...draft,replyTo:''};triggers=(m.state?.triggers||[]).map(t=>({...t,result:t.lastResult}));
+  const unsaved={...draft,replyTo:''};triggers=(m.state?.triggers||[]).map(canonicalTrigger);
   $('#editor').close();if(m.autoCreate){const existing=triggers.find(t=>t.reportId===m.report);if(existing){openEditor(existing.id);step=1;draw()}else{const known=reportCatalog[m.report],isAudit=m.report==='sales-call-audit',isSales=m.report==='daily-sales-report';draft={...seedTrigger,id:Date.now(),reportId:m.report,name:(known?known.name:m.report)+' · Scheduled email',template:known?known.name:m.report,source:known?known.name:m.report,bodyType:'Full report in email body',company:m.scope==='ALL'?'All companies':m.scope==='VILLARAAG'?'VILARAAG':m.scope||'All companies',subject:isAudit?'[Daily HR Quality Audit Report] - Agent-wise Call Audit ({{report_date}})':(known?known.name:m.report)+' | {{report_date}} | {{company_name}}',to:isAudit?'ho.hr@kairali.com':'',cc:'',bcc:'',replyTo:'',status:'Draft',department:isSales?'Sales':isAudit?'HR':'Marketing',period:'Selected date',previewDate:m.date||MarketingReport.yesterdayIST(),reportDetail:'Full report',start:new Date().toISOString().slice(0,10)};editId=null;step=1;normalizeDraft();draw();$('#editor').showModal()}}
   $('#new').onclick=()=>{draft={...seedTrigger,id:Date.now(),name:'New email trigger',to:'',cc:'',bcc:'',replyTo:'',status:'Draft',reportId:'daily-sales-report',source:'Daily Sales Report Alert',template:'Daily Sales Report Alert',bodyType:'Full report in email body',period:'Yesterday',reportDetail:'Full report',start:new Date().toISOString().slice(0,10)};editId=null;step=0;normalizeDraft();draw();$('#editor').showModal()};
   document.querySelector('#listTabs [data-tab="History"]').classList.remove('hidden');renderRuns();render();showServiceStatus(m.error);
  }else if(m?.type==='email-config-saved'){
   savePending=false;if(m.error){toast(m.error);draw();return}const item={...m.trigger,result:m.trigger.lastResult};const exists=triggers.some(t=>t.id===item.id);triggers=exists?triggers.map(t=>t.id===item.id?item:t):[item,...triggers];$('#editor').close();render();toast(item.status==='Active'?'Saved and activated. Next send: '+new Date(item.nextRun).toLocaleString():'Configuration saved on server.');
+ }else if(m?.type==='email-config-deleted'){finishDelete(m)
  }else if(m?.type==='email-config-storage-error'){storageReady=false;showServiceStatus(m.error);toast(m.error)}
 });
+function resetDeleteDialog(){deleteBusy=false;clearTimeout(deleteTimer);const c=$('#cdConfirm');c.disabled=false;c.textContent='Delete trigger';$('#cdCancel').disabled=false}
+function askDelete(id){const t=triggers.find(x=>x.id===id);if(!t)return;pendingDelete=t;resetDeleteDialog();$('#cdError').textContent='';$('#cdText').textContent='“'+t.name+'” will be permanently removed'+(t.status==='Active'?' and its scheduled sends will stop immediately.':'.')+' Past send history is kept. This cannot be undone.';$('#confirmDelete').showModal();$('#cdCancel').focus()}
+function finishDelete(m){if(!pendingDelete||m.id!==pendingDelete.id)return;const name=pendingDelete.name;resetDeleteDialog();if(m.error){$('#cdError').textContent=m.error;return}
+ triggers=triggers.filter(t=>t.id!==m.id);pendingDelete=null;$('#confirmDelete').close();if(editId===m.id)$('#editor').close();render();toast('Deleted “'+name+'”.')}
+$('#cdCancel').onclick=()=>{if(deleteBusy)return;pendingDelete=null;$('#confirmDelete').close()};
+$('#confirmDelete').addEventListener('cancel',e=>{if(deleteBusy)e.preventDefault()});
+$('#confirmDelete').addEventListener('close',()=>{if(!deleteBusy)pendingDelete=null});
+$('#cdConfirm').onclick=()=>{if(deleteBusy||!pendingDelete)return;deleteBusy=true;$('#cdError').textContent='';$('#cdConfirm').disabled=true;$('#cdConfirm').textContent='Deleting…';$('#cdCancel').disabled=true;
+ deleteTimer=setTimeout(()=>finishDelete({id:pendingDelete&&pendingDelete.id,error:'Delete could not be confirmed. Reload before retrying.'}),15000);
+ window.parent.postMessage({type:'email-config-delete',id:pendingDelete.id,revision:pendingDelete.revision},'*')};
+$('#deleteTrigger').onclick=()=>{if(typeof editId==='string')askDelete(editId)};
 // Existing row buttons use numeric IDs in the demo; persisted IDs are UUIDs.
-$('#rows').onclick=e=>{const b=e.target.closest('[data-edit]');if(!b)return;const id=linkedHost?b.dataset.edit:+b.dataset.edit;openEditor(id)};
+$('#rows').onclick=e=>{const d=e.target.closest('[data-delete]');if(d&&linkedHost){askDelete(d.dataset.delete);return}const b=e.target.closest('[data-edit]');if(!b)return;const id=linkedHost?b.dataset.edit:+b.dataset.edit;openEditor(id)};
 
 const beforePersistentRender=render;
-render=function(){beforePersistentRender();if(!linkedHost)return;document.querySelectorAll('#rows tr').forEach(row=>{const id=row.querySelector('[data-edit]')?.dataset.edit,t=triggers.find(x=>x.id===id);if(t&&row.cells[2])row.cells[2].insertAdjacentHTML('beforeend','<small>'+(t.nextRun?'Next: '+esc(new Date(t.nextRun).toLocaleString()):'No scheduled send')+'</small>')});window.postHeight?.();};
-window.addEventListener('message',event=>{if(event.source!==window.parent||window.parent===window||event.data?.type!=='email-config-state')return;const m=event.data;if(!m.state){showServiceStatus(m.error);return}smtpReady=m.state.smtpReady;workerReady=m.state.workerReady;savedRuns=m.state.runs;triggers=m.state.triggers.map(t=>({...t,result:t.lastResult}));render();renderRuns();showServiceStatus()});
+render=function(){beforePersistentRender();if(!linkedHost)return;document.querySelectorAll('#rows tr').forEach(row=>{const id=row.querySelector('[data-edit]')?.dataset.edit,t=triggers.find(x=>x.id===id);if(t){const edit=row.querySelector('[data-edit]');if(edit&&!row.querySelector('[data-delete]'))edit.insertAdjacentHTML('afterend','<button type="button" class="rowdelete" data-delete="'+esc(t.id)+'" aria-label="Delete '+esc(t.name)+'" title="Delete trigger"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14M10 11v6m4-6v6"/></svg></button>')}if(t&&row.cells[2])row.cells[2].insertAdjacentHTML('beforeend','<small>'+(t.nextRun?'Next: '+esc(new Date(t.nextRun).toLocaleString()):'No scheduled send')+'</small>')});window.postHeight?.();};
+window.addEventListener('message',event=>{if(event.source!==window.parent||window.parent===window||event.data?.type!=='email-config-state')return;const m=event.data;if(!m.state){showServiceStatus(m.error);return}smtpReady=m.state.smtpReady;workerReady=m.state.workerReady;savedRuns=m.state.runs;triggers=m.state.triggers.map(canonicalTrigger);render();renderRuns();showServiceStatus()});
 const refreshState=setInterval(()=>{if(linkedHost&&!savePending)window.parent.postMessage({type:'email-config-refresh'},'*')},30000);

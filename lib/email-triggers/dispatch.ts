@@ -18,8 +18,9 @@ export async function buildEmail(t:Trigger,at:number){
   if(t.reportId==='daily-sales-report'){const report=await loadScheduledSales(date);const scope=t.company==='All companies'?'ALL':t.company==='VILARAAG'?'VILLARAAG':t.company;hasData=report.rows.some(r=>scope==='ALL'||r.company===scope)||scopedEmployees(report.calling,scope).length>0;html=exportSalesHTML(report,scope)}
   else if(t.reportId==='sales-call-audit'){const {buildSalesCallAuditReport}=await import('@/lib/sales-call-audit-report');const {renderAuditReportEmail}=await import('@/lib/sales-call-audit-email-render');const {data}=await buildSalesCallAuditReport(date);hasData=data.employees.length>0;const rendered=renderAuditReportEmail({date:data.auditDate,displayDate:data.displayDate,metrics:data.metrics,employees:data.employees});html=rendered.html}
   else{const report=await loadScheduledMarketing(date);const scope=t.company==='All companies'?'all':t.company,selected=report.companies.filter(c=>scope==='all'||c.name===scope);hasData=selected.some(c=>c.totalLeads||c.totalSpend||c.sale);html=reportExportHTML(date,report,{scope,expanded:t.reportDetail==='Include source-wise details'?selected.flatMap(c=>[c.name+'-leads',c.name+'-sales']):[]})}
-  const p=(s:string)=>'<div style="padding:18px 24px;white-space:pre-wrap;font:14px/1.8 Arial">'+esc(replace(s))+'</div>'
-  html=html.replace(/(<body[^>]*>)/,'$1'+p(t.intro)).replace('</body>',p(t.closing)+'</body>')
+  const p=(s:string)=>(s||'').trim()?'<div style="padding:18px 24px;white-space:pre-wrap;font:14px/1.8 Arial">'+esc(replace(s))+'</div>':''
+  // Reports with in-layout markers keep the note inside their centered column; others get it around <body>.
+  html=html.includes('<!--email-intro-->')?html.replace('<!--email-intro-->',()=>p(t.intro)).replace('<!--email-closing-->',()=>p(t.closing)):html.replace(/(<body[^>]*>)/,'$1'+p(t.intro)).replace('</body>',p(t.closing)+'</body>')
   if(t.reportId!=='sales-call-audit'){
    try{
     const {renderJPEG}=await import('@/lib/whatsapp-triggers/render')

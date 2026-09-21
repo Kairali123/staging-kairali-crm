@@ -53,3 +53,35 @@ test('sales-call-audit trigger validates against schema and rejects mismatch',()
   assert.equal(invalid.success,false);
 });
 
+test('audit template is renamed everywhere yet legacy saved names still validate and normalise',()=>{
+  const schema=env.load('lib/email-triggers/schema.ts').triggerSchema,tpl=env.load('lib/email-report-template.ts');
+  const NEW='Daily Call Audit Pass/Fail Report Email Template';
+  assert.equal(tpl.emailReportTemplates['sales-call-audit'].name,NEW);
+  const audit={...base,name:'Audit',reportId:'sales-call-audit',department:'HR',company:'All companies',to:'ho.hr@kairali.com',cc:'',bcc:'',subject:'S',body:'',bodyType:'Full report in email body',intro:'',closing:'',period:'Yesterday',reportDetail:'Full report',status:'Draft',attachment:'None',mode:'Same email to all recipients',condition:'Always send',retry:'No retries',missed:'Skip missed run',replyTo:''};
+  for(const name of [NEW,'Daily HR Email Template','Sales Call Audit Report']){
+    const r=schema.safeParse({...audit,source:name,template:name});
+    assert.equal(r.success,true,name);
+    assert.equal(r.data.source,NEW);
+    assert.equal(r.data.template,NEW);
+  }
+  assert.equal(schema.safeParse({...audit,source:'Daily Sales Report Alert',template:'x'}).success,false);
+  assert.equal(tpl.canonicalTemplateName('Marketing Daily Report'),'Marketing Daily Report');
+});
+
+test('deleting a trigger removes only it, keeps run history and enforces safety checks',()=>{
+  const {removeTrigger,auditSeedSuppressed}=env.load('lib/email-triggers/delete.ts');
+  const trig=(id,reportId='daily-sales-report',revision=3)=>({id,revision,reportId,name:id});
+  const mk=()=>({version:1,triggers:[trig('a'),trig('b','sales-call-audit'),trig('c','sales-call-audit')],runs:[{id:'r1',triggerId:'a',status:'Accepted'}]});
+
+  let s=mk();const removed=removeTrigger(s,'a',3);
+  assert.equal(removed.id,'a');assert.equal(JSON.stringify(s.triggers.map(t=>t.id)),'["b","c"]');assert.equal(s.runs.length,1);assert.equal(s.seedSuppressed,undefined);
+
+  s=mk();assert.throws(()=>removeTrigger(s,'zzz'),e=>e.status===404);
+  assert.throws(()=>removeTrigger(s,'a',2),e=>e.status===409);assert.equal(s.triggers.length,3);
+  s.runs.push({id:'r2',triggerId:'a',status:'Sending'});
+  assert.throws(()=>removeTrigger(s,'a'),e=>e.status===409&&/in progress/.test(e.message));assert.equal(s.triggers.length,3);
+
+  // The auto-created audit trigger must not come back after the last audit trigger is deleted.
+  s=mk();removeTrigger(s,'b');assert.equal(auditSeedSuppressed(s),false);
+  removeTrigger(s,'c');assert.equal(auditSeedSuppressed(s),true);assert.equal(JSON.stringify(s.seedSuppressed),'["sales-call-audit"]');
+});

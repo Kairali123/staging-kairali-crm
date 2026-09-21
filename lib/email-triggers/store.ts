@@ -3,7 +3,7 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { Trigger, Run } from './schema'
 
-export type State = { version: 1; triggers: Trigger[]; runs: Run[]; heartbeat?: string }
+export type State = { version: 1; triggers: Trigger[]; runs: Run[]; heartbeat?: string; seedSuppressed?: string[] }
 
 function hasDbConfig(): boolean {
   return Boolean(process.env.DB_HOST && process.env.DB_NAME && process.env.DB_USER)
@@ -127,6 +127,11 @@ async function syncTabular(conn: any, state: State) {
       ]
     )
   }
+
+  // Deleted triggers must leave the mirror too; run history rows are kept.
+  const liveIds = state.triggers.map(t => t.id)
+  if (liveIds.length) await conn.query('DELETE FROM email_triggers WHERE id NOT IN (?)', [liveIds])
+  else await conn.query('DELETE FROM email_triggers')
 
   const recentRuns = (state.runs || []).slice(-50)
   for (const r of recentRuns) {
