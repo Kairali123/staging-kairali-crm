@@ -86,7 +86,7 @@ export function exportSalesHTML(report:DailySalesReport,scope:string){
       border: '2px solid #fcd34d',
       titleColor: '#b45309',
       breakdown: [
-       { name: 'KPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KAPPL'), 'pending') ?? 0), color: '#be185d' },
+       { name: 'KAPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KAPPL'), 'pending') ?? 0), color: '#be185d' },
        { name: 'KTAHV', code: 'KTAHV', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KTAHV'), 'pending') ?? 0), color: '#059669' },
        { name: 'VILLA RAAG', code: 'VILLARAAG', count: showCount(employeeTotal(scopedEmployees(report.calling, 'VILLARAAG'), 'pending') ?? 0), color: '#d97706' },
       ],
@@ -99,7 +99,7 @@ export function exportSalesHTML(report:DailySalesReport,scope:string){
      border: '2px solid #fdba74',
      titleColor: '#c2410c',
      breakdown: [
-      { name: 'KPPL', code: 'KAPPL', count: showCount(report.calling?.pending?.KAPPL?.national ?? 0), color: '#be185d' },
+      { name: 'KAPPL', code: 'KAPPL', count: showCount(report.calling?.pending?.KAPPL?.national ?? 0), color: '#be185d' },
       { name: 'KTAHV', code: 'KTAHV', count: showCount(report.calling?.pending?.KTAHV?.national ?? 0), color: '#059669' },
       { name: 'VILLA RAAG', code: 'VILLARAAG', count: showCount(report.calling?.pending?.VILLARAAG?.national ?? 0), color: '#d97706' },
      ],
@@ -112,7 +112,7 @@ export function exportSalesHTML(report:DailySalesReport,scope:string){
      border: '2px solid #c4b5fd',
      titleColor: '#6d28d9',
      breakdown: [
-      { name: 'KPPL', code: 'KAPPL', count: showCount(report.calling?.pending?.KAPPL?.international ?? 0), color: '#be185d' },
+      { name: 'KAPPL', code: 'KAPPL', count: showCount(report.calling?.pending?.KAPPL?.international ?? 0), color: '#be185d' },
       { name: 'KTAHV', code: 'KTAHV', count: showCount(report.calling?.pending?.KTAHV?.international ?? 0), color: '#059669' },
       { name: 'VILLA RAAG', code: 'VILLARAAG', count: showCount(report.calling?.pending?.VILLARAAG?.international ?? 0), color: '#d97706' },
      ],
@@ -125,7 +125,7 @@ export function exportSalesHTML(report:DailySalesReport,scope:string){
      border: '2px solid #93c5fd',
      titleColor: '#1d4ed8',
      breakdown: [
-      { name: 'KPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KAPPL'), 'appsheet') ?? 0), color: '#be185d' },
+      { name: 'KAPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KAPPL'), 'appsheet') ?? 0), color: '#be185d' },
       { name: 'KTAHV', code: 'KTAHV', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KTAHV'), 'appsheet') ?? 0), color: '#059669' },
       { name: 'VILLA RAAG', code: 'VILLARAAG', count: showCount(employeeTotal(scopedEmployees(report.calling, 'VILLARAAG'), 'appsheet') ?? 0), color: '#d97706' },
      ],
@@ -138,7 +138,7 @@ export function exportSalesHTML(report:DailySalesReport,scope:string){
      border: '2px solid #67e8f9',
      titleColor: '#0e7490',
      breakdown: [
-      { name: 'KPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KAPPL'), 'dialer') ?? 0), color: '#be185d' },
+      { name: 'KAPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KAPPL'), 'dialer') ?? 0), color: '#be185d' },
       { name: 'KTAHV', code: 'KTAHV', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KTAHV'), 'dialer') ?? 0), color: '#059669' },
       { name: 'VILLA RAAG', code: 'VILLARAAG', count: showCount(employeeTotal(scopedEmployees(report.calling, 'VILLARAAG'), 'dialer') ?? 0), color: '#d97706' },
      ],
@@ -151,7 +151,7 @@ export function exportSalesHTML(report:DailySalesReport,scope:string){
      border: '2px solid #6ee7b7',
      titleColor: '#047857',
      breakdown: [
-      { name: 'KPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KAPPL'), 'done') ?? 0), color: '#be185d' },
+      { name: 'KAPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KAPPL'), 'done') ?? 0), color: '#be185d' },
       { name: 'KTAHV', code: 'KTAHV', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KTAHV'), 'done') ?? 0), color: '#059669' },
       { name: 'VILLA RAAG', code: 'VILLARAAG', count: showCount(employeeTotal(scopedEmployees(report.calling, 'VILLARAAG'), 'done') ?? 0), color: '#d97706' },
      ],
