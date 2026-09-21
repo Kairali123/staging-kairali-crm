@@ -156,7 +156,7 @@ export async function POST(req: Request) {
       totalSheetsCount = allSheetsData.length
     }
 
-    const [countRes]: any = await pool.query('SELECT COUNT(*) as cnt FROM client_database')
+    const [countRes]: any = await pool.query('SELECT COALESCE(MAX(CAST(SUBSTRING(unique_client_id, 8) AS UNSIGNED)), 0) as cnt FROM client_database')
     let currentCount = countRes[0]?.cnt || 0
 
     // Load all existing contacts into memory for O(1) deduplication (prevents N+1 query slowdowns on huge files)

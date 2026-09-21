@@ -46,13 +46,19 @@ export default function ClientUploadPage() {
   const [uploading, setUploading] = useState(false)
   const [uploadResult, setUploadResult] = useState<UploadResult|null>(null)
   const [uploadError, setUploadError] = useState<string|null>(null)
+  
+  const [bulkEmailForm, setBulkEmailForm] = useState({ emails: '', source_sheet: '', category: 'Others', sub_category: 'Others' })
+  const [bulkEmailSubmitting, setBulkEmailSubmitting] = useState(false)
+  const [bulkEmailSuccess, setBulkEmailSuccess] = useState<string|null>(null)
+  const [bulkEmailError, setBulkEmailError] = useState<string|null>(null)
   const [dragOver, setDragOver] = useState(false)
 
   const subCategories = hierarchy.find(h => h.category === form.category)?.subCategories || []
+  const bulkEmailSubCategories = hierarchy.find(h => h.category === bulkEmailForm.category)?.subCategories || []
 
   const fetchHierarchy = useCallback(async () => {
     try {
-      const res = await fetch('/api/client-database/hierarchy')
+      const res = await fetch('/api/client-database/categories')
       const data = await res.json()
       if (data.success && data.hierarchy) {
         setHierarchy(data.hierarchy)
@@ -75,6 +81,19 @@ export default function ClientUploadPage() {
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.name.trim()) { setFormError('Client Name is required.'); return }
+    if (!form.phone.trim() && !form.email.trim()) { setFormError('At least one contact method (Phone or Email) is required.'); return }
+    
+    if (form.phone.trim() && !/^\+?[\d\s-]{8,}$/.test(form.phone.trim())) {
+      setFormError('Invalid phone number format.')
+      return
+    }
+    if (form.email.trim() && !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(form.email.trim())) {
+      setFormError('Invalid email address format.')
+      return
+    }
+    if (!form.category) { setFormError('Category is required.'); return }
+    if (!form.sub_category) { setFormError('Sub Category is required.'); return }
+
     setFormSubmitting(true); setFormError(null); setFormSuccess(null)
     try {
       const res = await fetch('/api/client-database', {
@@ -93,6 +112,48 @@ export default function ClientUploadPage() {
     } catch (err: any) {
       setFormError(err.message || 'Network error.')
     } finally { setFormSubmitting(false) }
+  }
+
+  const handleBulkEmailSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!bulkEmailForm.emails.trim()) { setBulkEmailError('Please enter at least one email address.'); return }
+    if (!bulkEmailForm.source_sheet.trim()) { setBulkEmailError('Source/Sheet Name is compulsory.'); return }
+    
+    setBulkEmailSubmitting(true); setBulkEmailError(null); setBulkEmailSuccess(null)
+    
+    const rawEmails = bulkEmailForm.emails.split(/[\s,]+/).map(e => e.trim()).filter(Boolean)
+    const validEmails = rawEmails.filter(email => /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email))
+    
+    if (validEmails.length === 0) {
+      setBulkEmailError('No valid email addresses found.')
+      setBulkEmailSubmitting(false)
+      return
+    }
+
+    try {
+      const headers = TEMPLATE_HEADERS.join(',')
+      const cat = bulkEmailForm.category || 'Others'
+      const sub = bulkEmailForm.sub_category || 'Others'
+      const rows = validEmails.map(email => `Client,,${email},,${cat},${sub},"${bulkEmailForm.source_sheet.replace(/"/g, '""')}",,,,`)
+      const csv = [headers, ...rows].join('\n')
+      
+      const file = new File([new Blob([csv], { type: 'text/csv' })], 'bulk_emails.csv', { type: 'text/csv' })
+      const formData = new FormData()
+      formData.append('file', file)
+      
+      const res = await fetch('/api/client-database/upload', {
+        method: 'POST', body: formData
+      })
+      const data = await res.json()
+      if (data.success) {
+        setBulkEmailSuccess(`Successfully processed! Added: ${data.stats.added}, Duplicates/Rejected: ${data.stats.rejected}`)
+        setBulkEmailForm(f => ({ ...f, emails: '', source_sheet: '' }))
+      } else {
+        setBulkEmailError(data.error || 'Failed to upload emails.')
+      }
+    } catch (err: any) {
+      setBulkEmailError(err.message || 'Network error.')
+    } finally { setBulkEmailSubmitting(false) }
   }
 
   const handleDownloadTemplate = () => {
@@ -235,6 +296,69 @@ export default function ClientUploadPage() {
             </div>
           </form>
         </section>
+
+        {/* SECTION 1.5: Bulk Email Upload */}
+        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
+            <Mail className="h-4 w-4 text-indigo-600" />
+            <h2 className="text-sm font-bold text-slate-800">Bulk Email Upload</h2>
+            <span className="text-[11px] text-slate-400">Comma-separated emails</span>
+          </div>
+          <form onSubmit={handleBulkEmailSubmit} className="p-6 space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <label className={labelCls}>Emails (comma separated)</label>
+                <textarea rows={4} placeholder="example1@mail.com, example2@mail.com" value={bulkEmailForm.emails}
+                  onChange={e=>setBulkEmailForm(f=>({...f,emails:e.target.value}))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y" />
+              </div>
+              <div className="md:col-span-2">
+                <label className={labelCls}>Source / Sheet Name *</label>
+                <input type="text" placeholder="e.g. Email Campaign Q3" value={bulkEmailForm.source_sheet}
+                  onChange={e=>setBulkEmailForm(f=>({...f,source_sheet:e.target.value}))} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Category</label>
+                <select value={bulkEmailForm.category}
+                  onChange={(e) => {
+                    const cat = e.target.value
+                    const sub = hierarchy.find(h => h.category === cat)?.subCategories[0] || 'General'
+                    setBulkEmailForm(f => ({ ...f, category: cat, sub_category: sub }))
+                  }}
+                  className={inputCls}>
+                  {hierarchy.map(h => <option key={h.category} value={h.category}>{h.category}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Sub-Category</label>
+                <select value={bulkEmailForm.sub_category}
+                  onChange={e=>setBulkEmailForm(f=>({...f,sub_category:e.target.value}))} className={inputCls}>
+                  {bulkEmailSubCategories.map(sub => <option key={sub} value={sub}>{sub}</option>)}
+                </select>
+              </div>
+            </div>
+            
+            {bulkEmailSuccess && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs">
+                <CheckCircle className="h-4 w-4 flex-shrink-0 mt-0.5" /><span>{bulkEmailSuccess}</span>
+              </div>
+            )}
+            {bulkEmailError && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs">
+                <XCircle className="h-4 w-4 flex-shrink-0 mt-0.5" /><span>{bulkEmailError}</span>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-2">
+              <button type="submit" disabled={bulkEmailSubmitting}
+                className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 rounded-lg shadow-sm transition-all">
+                {bulkEmailSubmitting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                {bulkEmailSubmitting ? 'Uploading...' : 'Upload Emails'}
+              </button>
+            </div>
+          </form>
+        </section>
+
 
         {/* SECTION 2: Bulk Upload */}
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">

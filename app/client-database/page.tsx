@@ -26,6 +26,10 @@ import {
   ArrowUpDown,
   StopCircle,
   Clock,
+  Edit,
+  Trash2,
+  UserMinus,
+  UserCheck,
 } from 'lucide-react'
 
 interface Client {
@@ -44,7 +48,9 @@ interface Client {
   country: string | null
   remarks: string | null
   created_at: string
+  is_unsubscribed?: boolean
 }
+
 
 interface CategoryHierarchyItem {
   category: string
@@ -72,6 +78,7 @@ export default function ClientDatabasePage() {
   const [selectedCategory, setSelectedCategory] = useState('ALL')
   const [selectedSubCategory, setSelectedSubCategory] = useState('ALL')
   const [selectedSource, setSelectedSource] = useState('ALL')
+  const [unsubscribedFilter, setUnsubscribedFilter] = useState<'ALL'|'UNSUBSCRIBED'|'SUBSCRIBED'>('ALL')
   const [page, setPage] = useState(1)
   const [pagination, setPagination] = useState({ page: 1, limit: 25, total: 0, totalPages: 1 })
 
@@ -90,6 +97,11 @@ export default function ClientDatabasePage() {
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [uploadModalOpen, setUploadModalOpen] = useState(false)
   const [logsModalOpen, setLogsModalOpen] = useState(false)
+  const [exportModalOpen, setExportModalOpen] = useState(false)
+  const [exportType, setExportType] = useState<'emails'|'phones'|'both'>('emails')
+  const [exportCategories, setExportCategories] = useState<string[]>(['ALL'])
+  const [exportSubCategories, setExportSubCategories] = useState<string[]>(['ALL'])
+  const [exportExcludeUnsub, setExportExcludeUnsub] = useState(true)
 
   // Notification state
   const [notice, setNotice] = useState<string | null>(null)
@@ -159,6 +171,8 @@ export default function ClientDatabasePage() {
         sortField,
         sortOrder,
       })
+      if (unsubscribedFilter === 'UNSUBSCRIBED') params.append('unsubscribedOnly', 'true')
+      if (unsubscribedFilter === 'SUBSCRIBED') params.append('unsubscribedOnly', 'false')
       const res = await fetch(`/api/client-database?${params.toString()}`)
       const data = await res.json()
       if (data.success) {
@@ -174,7 +188,7 @@ export default function ClientDatabasePage() {
     } finally {
       setLoading(false)
     }
-  }, [page, search, selectedCategory, selectedSubCategory, selectedSource, sortField, sortOrder])
+  }, [page, search, selectedCategory, selectedSubCategory, selectedSource, sortField, sortOrder, unsubscribedFilter])
 
   // Fetch category hierarchy
   const fetchHierarchy = async () => {
@@ -221,6 +235,111 @@ export default function ClientDatabasePage() {
       console.error('Failed to fetch sync logs', err)
     }
   }
+  const [editClient, setEditClient] = useState<Client | null>(null)
+  const [editFormData, setEditFormData] = useState<any>({})
+
+  useEffect(() => {
+    if (editClient) {
+      setEditFormData({
+        name: editClient.name,
+        phone: editClient.phone || '',
+        email: editClient.email || '',
+        category: editClient.category,
+        sub_category: editClient.sub_category || 'General',
+      })
+    }
+  }, [editClient])
+
+  useEffect(() => {
+    if (editClient) {
+      const subs = hierarchy.find(h => h.category === editFormData.category)?.subCategories || []
+      if (!subs.includes(editFormData.sub_category)) {
+        setEditFormData((f: any) => ({ ...f, sub_category: subs[0] || 'General' }))
+      }
+    }
+  }, [editFormData.category, hierarchy, editClient])
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editClient) return
+    if (!editFormData.name.trim()) { setError('Client Name is required.'); return }
+    if (!editFormData.phone.trim() && !editFormData.email.trim()) { setError('At least one contact method (Phone or Email) is required.'); return }
+    if (editFormData.phone.trim() && !/^\+?[\d\s-]{8,}$/.test(editFormData.phone.trim())) {
+      setError('Invalid phone number format.')
+      return
+    }
+    if (editFormData.email.trim() && !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(editFormData.email.trim())) {
+      setError('Invalid email address format.')
+      return
+    }
+
+    setFormSubmitting(true)
+    setError(null)
+    setNotice(null)
+    try {
+      const res = await fetch(`/api/client-database/${editClient.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editFormData),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setNotice('Client updated successfully!')
+        setEditClient(null)
+        fetchClients()
+      } else {
+        setError(data.error || 'Failed to update client.')
+      }
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setFormSubmitting(false)
+    }
+  }
+
+  const handleDeleteClient = async (id: number, name: string) => {
+    if (!window.confirm(`Are you absolutely sure you want to delete client: ${name}?\nThis action cannot be undone.`)) return;
+    if (!window.confirm(`DOUBLE CONFIRMATION:\nPlease confirm again to permanently delete ${name}.`)) return;
+    
+    try {
+      const res = await fetch(`/api/client-database/${id}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (data.success) {
+        setNotice(`Deleted client ${name}`)
+        fetchClients()
+      } else {
+        setError(data.error || 'Failed to delete client')
+      }
+    } catch (err: any) {
+      setError(err.message)
+    }
+  }
+
+  const handleToggleUnsubscribe = async (client: Client) => {
+    if (!client.is_unsubscribed) {
+      if (!window.confirm(`Are you sure you want to UNSUBSCRIBE ${client.name}?`)) return;
+      if (!window.confirm(`DOUBLE CONFIRMATION: Please confirm again to mark ${client.name} as unsubscribed.`)) return;
+    } else {
+      if (!window.confirm(`Are you sure you want to RE-SUBSCRIBE ${client.name}?`)) return;
+    }
+
+    try {
+      const res = await fetch(`/api/client-database/${client.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_unsubscribed: !client.is_unsubscribed })
+      })
+      const data = await res.json()
+      if (data.success) {
+        setNotice(`Client ${client.name} is now ${!client.is_unsubscribed ? 'unsubscribed' : 'subscribed'}.`)
+        fetchClients()
+      } else {
+        setError(data.error || 'Failed to update status')
+      }
+    } catch (err: any) {
+      setError(err.message)
+    }
+  }
 
   // Initial load
   useEffect(() => {
@@ -233,9 +352,28 @@ export default function ClientDatabasePage() {
     fetchClients()
   }, [fetchClients])
 
+  useEffect(() => {
+    const subs = hierarchy.find(h => h.category === formData.category)?.subCategories || []
+    setFormData(f => ({ ...f, sub_category: subs[0] || '' }))
+  }, [formData.category, hierarchy])
+
   // Handle Add Client Form Submit
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    if (!formData.name.trim()) { setError('Client Name is required.'); return }
+    if (!formData.phone.trim() && !formData.email.trim()) { setError('At least one contact method (Phone or Email) is required.'); return }
+    if (formData.phone.trim() && !/^\+?[\d\s-]{8,}$/.test(formData.phone.trim())) {
+      setError('Invalid phone number format.')
+      return
+    }
+    if (formData.email.trim() && !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(formData.email.trim())) {
+      setError('Invalid email address format.')
+      return
+    }
+    if (!formData.category) { setError('Category is required.'); return }
+    if (!formData.sub_category) { setError('Sub Category is required.'); return }
+
     setFormSubmitting(true)
     setError(null)
     setNotice(null)
@@ -537,7 +675,7 @@ export default function ClientDatabasePage() {
         )}
 
         {/* KPI Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
           <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
             <div>
               <p className="text-[11px] font-medium text-slate-500">Total Central Clients</p>
@@ -587,6 +725,16 @@ export default function ClientDatabasePage() {
               <Layers className="h-4 w-4" />
             </div>
           </div>
+
+          <div className="bg-white p-4 rounded-xl border border-red-200/80 shadow-sm flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-medium text-red-500">Unsubscribed</p>
+              <p className="text-xl font-bold text-red-700 mt-0.5">{(kpis?.unsubscribedCount ?? 0).toLocaleString()}</p>
+            </div>
+            <div className="h-9 w-9 rounded-lg bg-red-50 text-red-600 flex items-center justify-center">
+              <UserMinus className="h-4 w-4" />
+            </div>
+          </div>
         </div>
 
         {/* Exporters Banner Bar */}
@@ -602,21 +750,13 @@ export default function ClientDatabasePage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <a
-              href={`/api/client-database/export?type=emails&category=${selectedCategory}&subCategory=${selectedSubCategory}`}
+            <button
+              onClick={() => setExportModalOpen(true)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 rounded-lg text-white transition-all shadow-sm"
             >
               <Download className="h-3.5 w-3.5" />
-              Email IDs CSV
-            </a>
-
-            <a
-              href={`/api/client-database/export?type=phones&category=${selectedCategory}&subCategory=${selectedSubCategory}`}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 rounded-lg text-white transition-all shadow-sm"
-            >
-              <Download className="h-3.5 w-3.5" />
-              Phones CSV (WhatsApp/SMS)
-            </a>
+              Custom Data Export
+            </button>
 
             <a
               href="/api/client-database/export?type=template"
@@ -665,9 +805,24 @@ export default function ClientDatabasePage() {
               </select>
             </div>
             
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-slate-400" />
-              <span className="text-xs font-medium text-slate-600">Filter using column headers below</span>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-1.5 cursor-pointer text-xs font-medium text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors">
+                <input 
+                  type="checkbox" 
+                  checked={unsubscribedFilter === 'UNSUBSCRIBED'}
+                  onChange={(e) => {
+                    setUnsubscribedFilter(e.target.checked ? 'UNSUBSCRIBED' : 'ALL')
+                    setPage(1)
+                  }}
+                  className="rounded border-slate-300 text-red-600 focus:ring-red-500"
+                />
+                <span className="text-red-600">Show Unsubscribed Only</span>
+              </label>
+
+              <div className="hidden sm:flex items-center gap-2">
+                <Filter className="h-4 w-4 text-slate-400" />
+                <span className="text-xs font-medium text-slate-600">Use column headers to filter</span>
+              </div>
             </div>
           </div>
 
@@ -739,6 +894,7 @@ export default function ClientDatabasePage() {
                       Added {sortField === 'created_at' ? (sortOrder === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-40" />}
                     </button>
                   </th>
+                  <th className="py-3 px-4 align-top pt-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
@@ -764,9 +920,16 @@ export default function ClientDatabasePage() {
                     return (
                       <tr key={c.id} className="hover:bg-slate-50/80 transition-colors">
                         <td className="py-3 px-4 font-mono font-semibold text-blue-600">{c.unique_client_id}</td>
-                        <td className="py-3 px-4 font-medium text-slate-900">{c.name}</td>
+                        <td className="py-3 px-4 font-medium text-slate-900">
+                          <div className="flex items-center gap-2">
+                            <span className={c.is_unsubscribed ? 'line-through text-slate-400' : ''}>{c.name}</span>
+                            {c.is_unsubscribed && <span className="px-1.5 py-0.5 bg-red-100 text-red-700 text-[10px] font-bold rounded-sm">UNSUBSCRIBED</span>}
+                          </div>
+                        </td>
                         <td className="py-3 px-4 font-mono">{c.phone || '-'}</td>
-                        <td className="py-3 px-4">{c.email || '-'}</td>
+                        <td className="py-3 px-4">
+                          <span className={c.is_unsubscribed ? 'line-through text-slate-400' : ''}>{c.email || '-'}</span>
+                        </td>
                         <td className="py-3 px-4">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
                             {c.category}
@@ -791,6 +954,19 @@ export default function ClientDatabasePage() {
                         <td className="py-3 px-4 text-slate-500">{c.city_state || '-'}</td>
                         <td className="py-3 px-4 text-slate-500">{c.country || '-'}</td>
                         <td className="py-3 px-4 text-slate-400 text-[11px]">{c.created_at ? new Date(c.created_at).toLocaleDateString('en-IN') : '-'}</td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button onClick={() => setEditClient(c)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            <button onClick={() => handleToggleUnsubscribe(c)} className={`p-1.5 rounded-lg transition-colors ${c.is_unsubscribed ? 'text-emerald-600 hover:bg-emerald-50' : 'text-orange-600 hover:bg-orange-50'}`} title={c.is_unsubscribed ? "Re-subscribe" : "Unsubscribe"}>
+                              {c.is_unsubscribed ? <UserCheck className="h-4 w-4" /> : <UserMinus className="h-4 w-4" />}
+                            </button>
+                            <button onClick={() => handleDeleteClient(c.id, c.name)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     );
                   })
@@ -1011,6 +1187,112 @@ export default function ClientDatabasePage() {
       )}
 
       {/* Upload Template Modal */}
+
+      {/* Edit Client Modal */}
+      {editClient && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-lg w-full p-6 relative">
+            <button
+              onClick={() => setEditClient(null)}
+              className="absolute right-4 top-4 text-slate-400 hover:text-slate-600"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <h3 className="text-lg font-bold text-slate-900 mb-4">Edit Client Details</h3>
+            <form onSubmit={handleEditSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">Full Name *</label>
+                <input
+                  required
+                  type="text"
+                  value={editFormData.name}
+                  onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Rahul Sharma"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">Phone Number</label>
+                  <input
+                    type="text"
+                    value={editFormData.phone}
+                    onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="9876543210"
+                  />
+                </div>
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">Email Address</label>
+                  <input
+                    type="email"
+                    value={editFormData.email}
+                    onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="rahul@example.com"
+                  />
+                </div>
+              </div>
+
+              {/* Category & SubCategory Dropdowns */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">Category *</label>
+                  <select
+                    value={editFormData.category}
+                    onChange={(e) => {
+                      const newCat = e.target.value
+                      const firstSub = hierarchy.find((h) => h.category === newCat)?.subCategories[0] || 'General'
+                      setEditFormData({ ...editFormData, category: newCat, sub_category: firstSub })
+                    }}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white font-medium"
+                  >
+                    {hierarchy.map((h) => (
+                      <option key={h.category} value={h.category}>
+                        {h.category}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">Sub Category *</label>
+                  <select
+                    value={editFormData.sub_category}
+                    onChange={(e) => setEditFormData({ ...editFormData, sub_category: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white font-medium"
+                  >
+                    {(hierarchy.find(h => h.category === editFormData.category)?.subCategories || ['General']).map((sub) => (
+                      <option key={sub} value={sub}>
+                        {sub}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t mt-4">
+                <button
+                  type="button"
+                  onClick={() => setEditClient(null)}
+                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={formSubmitting}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold disabled:opacity-50"
+                >
+                  {formSubmitting ? 'Updating...' : 'Update Client'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       {uploadModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-lg w-full p-6 relative">
@@ -1306,6 +1588,101 @@ export default function ClientDatabasePage() {
           </div>
         </div>
       )}
+
+      {/* Custom Export Modal */}
+      {exportModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-lg w-full p-6 relative">
+            <button
+              onClick={() => setExportModalOpen(false)}
+              className="absolute right-4 top-4 text-slate-400 hover:text-slate-600"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <h3 className="text-lg font-bold text-slate-900 mb-1">Custom Data Export</h3>
+            <p className="text-xs text-slate-500 mb-4">Select what data to include in your CSV download.</p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block font-medium text-slate-700 mb-1.5 text-sm">Export Type</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button onClick={() => setExportType('emails')} className={`py-2 text-xs font-semibold rounded-lg border ${exportType === 'emails' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-600'}`}>Email IDs</button>
+                  <button onClick={() => setExportType('phones')} className={`py-2 text-xs font-semibold rounded-lg border ${exportType === 'phones' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-600'}`}>Phones</button>
+                  <button onClick={() => setExportType('both')} className={`py-2 text-xs font-semibold rounded-lg border ${exportType === 'both' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-600'}`}>All Data</button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1.5 text-sm">Categories</label>
+                  <select 
+                    multiple 
+                    size={5}
+                    value={exportCategories}
+                    onChange={(e) => {
+                      const opts = Array.from(e.target.selectedOptions, o => o.value)
+                      const newCats = opts.includes('ALL') ? ['ALL'] : opts
+                      setExportCategories(newCats)
+                      setExportSubCategories(['ALL'])
+                    }}
+                    className="w-full text-xs border-slate-200 rounded-lg p-2 bg-slate-50 border focus:bg-white"
+                  >
+                    <option value="ALL">-- ALL CATEGORIES --</option>
+                    {hierarchy.map(h => <option key={h.category} value={h.category}>{h.category}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1.5 text-sm">Sub-Categories</label>
+                  <select 
+                    multiple 
+                    size={5}
+                    value={exportSubCategories}
+                    onChange={(e) => {
+                      const opts = Array.from(e.target.selectedOptions, o => o.value)
+                      setExportSubCategories(opts.includes('ALL') ? ['ALL'] : opts)
+                    }}
+                    className="w-full text-xs border-slate-200 rounded-lg p-2 bg-slate-50 border focus:bg-white"
+                  >
+                    <option value="ALL">-- ALL SUB-CATEGORIES --</option>
+                    {Array.from(new Set(
+                      (exportCategories.includes('ALL') 
+                        ? hierarchy 
+                        : hierarchy.filter(h => exportCategories.includes(h.category))
+                      ).flatMap(h => h.subCategories)
+                    )).sort().map(sub => <option key={sub} value={sub}>{sub}</option>)}
+                  </select>
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">Hold Cmd (Mac) or Ctrl (Windows) to select multiple options.</p>
+
+              <div className="flex items-center gap-2 mt-4 p-3 bg-red-50 border border-red-100 rounded-lg">
+                <input 
+                  type="checkbox" 
+                  id="excludeUnsub"
+                  checked={exportExcludeUnsub}
+                  onChange={(e) => setExportExcludeUnsub(e.target.checked)}
+                  className="rounded border-red-300 text-red-600 focus:ring-red-500 h-4 w-4"
+                />
+                <label htmlFor="excludeUnsub" className="text-sm font-medium text-red-800 cursor-pointer">
+                  Exclude Unsubscribed Contacts
+                </label>
+              </div>
+
+              <div className="flex justify-end pt-4 mt-2">
+                <a
+                  href={`/api/client-database/export?type=${exportType}&category=${encodeURIComponent(exportCategories.join(','))}&subCategory=${encodeURIComponent(exportSubCategories.join(','))}&excludeUnsubscribed=${exportExcludeUnsub}`}
+                  onClick={() => setTimeout(() => setExportModalOpen(false), 500)}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors"
+                >
+                  <Download className="h-4 w-4" /> Download CSV
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </DashboardLayout>
   )
 }

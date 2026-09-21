@@ -39,6 +39,10 @@ export async function ensureClientDatabaseTables(pool: mysql.Pool): Promise<void
       await pool.query(`ALTER TABLE client_database ADD COLUMN source_sheet_url VARCHAR(500) NULL AFTER source_sheet`)
     } catch (e) {}
 
+    try {
+      await pool.query(`ALTER TABLE client_database ADD COLUMN is_unsubscribed BOOLEAN DEFAULT FALSE AFTER remarks`)
+    } catch (e) {}
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS client_upload_logs (
         id INT AUTO_INCREMENT PRIMARY KEY,

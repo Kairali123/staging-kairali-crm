@@ -27,60 +27,84 @@ export async function POST(req: Request) {
 
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
-    const content = buffer.toString('utf-8')
+    const fileName = file.name.toLowerCase()
 
-    // Parse CSV lines
-    const lines = content.split(/\r?\n/).filter((l) => l.trim().length > 0)
-    if (lines.length <= 1) {
-      return NextResponse.json({ success: false, error: 'CSV file is empty or missing data rows.' }, { status: 400 })
+    // Use SheetJS for Excel files; proper quoted-CSV parser for .csv
+    let allRows: string[][] = []
+    if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+      const XLSX = require('xlsx')
+      const workbook = XLSX.read(buffer, { type: 'buffer', cellText: false, cellDates: true })
+      const sheet = workbook.Sheets[workbook.SheetNames[0]]
+      // header:1 => array-of-arrays; raw:false converts numbers/dates to strings; defval='' fills empty cells
+      const rawRows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' })
+      allRows = rawRows.map((row: any[]) => row.map((cell: any) => String(cell ?? '').trim()))
+    } else {
+      // CSV: handle quoted fields that may contain commas
+      const text = buffer.toString('utf-8')
+      const rawLines = text.split(/\r?\n/).filter((l: string) => l.trim().length > 0)
+      allRows = rawLines.map((line: string) => {
+        const cols: string[] = []
+        let cur = '', inQ = false
+        for (let ci = 0; ci < line.length; ci++) {
+          const ch = line[ci]
+          if (ch === '"') { inQ = !inQ }
+          else if (ch === ',' && !inQ) { cols.push(cur.trim()); cur = '' }
+          else { cur += ch }
+        }
+        cols.push(cur.trim())
+        return cols
+      })
     }
 
-    const headers = lines[0].split(',').map((h) => h.trim().replace(/^"|"$/g, '').toLowerCase())
-    
+    if (allRows.length <= 1) {
+      return NextResponse.json({ success: false, error: 'File is empty or has no data rows.' }, { status: 400 })
+    }
+
+    const headers = allRows[0].map((h: string) => h.replace(/^"|"$/g, '').toLowerCase())
+
     // Find index of standard columns
-    const idxName = headers.findIndex((h) => h.includes('name'))
-    const idxPhone = headers.findIndex((h) => h.includes('phone') || h.includes('mobile'))
-    const idxEmail = headers.findIndex((h) => h.includes('email'))
-    const idxAltPhone = headers.findIndex((h) => h.includes('alt') || h.includes('secondary'))
-    const idxCategory = headers.findIndex((h) => h === 'category')
-    const idxSubCategory = headers.findIndex((h) => h.includes('sub') || h.includes('sub category') || h.includes('subcategory'))
-    const idxSource = headers.findIndex((h) => h.includes('source'))
-    const idxAddress = headers.findIndex((h) => h.includes('address') || h.includes('street'))
-    const idxCity = headers.findIndex((h) => h.includes('city') || h.includes('state'))
-    const idxCountry = headers.findIndex((h) => h.includes('country') || h.includes('nation'))
-    const idxRemarks = headers.findIndex((h) => h.includes('remark') || h.includes('note'))
+    const idxName = headers.findIndex((h: string) => h.includes('name'))
+    const idxPhone = headers.findIndex((h: string) => h.includes('phone') || h.includes('mobile'))
+    const idxEmail = headers.findIndex((h: string) => h.includes('email'))
+    const idxAltPhone = headers.findIndex((h: string) => h.includes('alt') || h.includes('secondary'))
+    const idxCategory = headers.findIndex((h: string) => h === 'category')
+    const idxSubCategory = headers.findIndex((h: string) => h.includes('sub') || h.includes('sub category') || h.includes('subcategory'))
+    const idxSource = headers.findIndex((h: string) => h.includes('source'))
+    const idxAddress = headers.findIndex((h: string) => h.includes('address') || h.includes('street'))
+    const idxCity = headers.findIndex((h: string) => h.includes('city') || h.includes('state'))
+    const idxCountry = headers.findIndex((h: string) => h.includes('country') || h.includes('nation'))
+    const idxRemarks = headers.findIndex((h: string) => h.includes('remark') || h.includes('note'))
 
     const pool = await getPool()
     await ensureClientDatabaseTables(pool)
     const categoryHierarchy = await fetchCategoryHierarchyFromSheet()
 
-    // Fetch current client ID count
-    const [countRes]: any = await pool.query('SELECT COUNT(*) as cnt FROM client_database')
+    // Fetch highest existing client ID to avoid duplicates on deletion
+    const [countRes]: any = await pool.query('SELECT COALESCE(MAX(CAST(SUBSTRING(unique_client_id, 8) AS UNSIGNED)), 0) as cnt FROM client_database')
     let currentCount = countRes[0]?.cnt || 0
 
     let addedCount = 0
     let rejectedCount = 0
     const rejectionReasons: { row: number; reason: string; data: string }[] = []
 
-    for (let i = 1; i < lines.length; i++) {
-      const rowStr = lines[i]
-      const cols = rowStr.split(',').map((c) => c.trim().replace(/^"|"$/g, ''))
-      
-      const rawName = idxName !== -1 ? cols[idxName] : cols[0]
-      const rawPhone = idxPhone !== -1 ? cols[idxPhone] : cols[1]
-      const rawEmail = idxEmail !== -1 ? cols[idxEmail] : cols[2]
-      const rawAltPhone = idxAltPhone !== -1 ? cols[idxAltPhone] : ''
-      const rawCategory = idxCategory !== -1 ? cols[idxCategory] : ''
-      const rawSubCategory = idxSubCategory !== -1 ? cols[idxSubCategory] : ''
-      const rawSource = idxSource !== -1 ? cols[idxSource] : file.name
-      const rawAddress = idxAddress !== -1 ? cols[idxAddress] : ''
-      const rawCity = idxCity !== -1 ? cols[idxCity] : ''
-      const rawCountry = idxCountry !== -1 ? cols[idxCountry] : 'India'
-      const rawRemarks = idxRemarks !== -1 ? cols[idxRemarks] : ''
+    for (let i = 1; i < allRows.length; i++) {
+      const cols = allRows[i].map((c: string) => c.replace(/^"|"$/g, '').trim())
+
+      const rawName = (idxName !== -1 ? cols[idxName] : cols[0])?.substring(0, 255)
+      const rawPhone = (idxPhone !== -1 ? cols[idxPhone] : cols[1])?.substring(0, 50)
+      const rawEmail = (idxEmail !== -1 ? cols[idxEmail] : cols[2])?.substring(0, 255)
+      const rawAltPhone = (idxAltPhone !== -1 ? cols[idxAltPhone] : '')?.substring(0, 50)
+      const rawCategory = (idxCategory !== -1 ? cols[idxCategory] : '')?.substring(0, 255)
+      const rawSubCategory = (idxSubCategory !== -1 ? cols[idxSubCategory] : '')?.substring(0, 255)
+      const rawSource = (idxSource !== -1 ? cols[idxSource] : file.name)?.substring(0, 255)
+      const rawAddress = (idxAddress !== -1 ? cols[idxAddress] : '') // Text column, no strict limit needed
+      const rawCity = (idxCity !== -1 ? cols[idxCity] : '')?.substring(0, 255)
+      const rawCountry = (idxCountry !== -1 ? cols[idxCountry] : 'India')?.substring(0, 100)
+      const rawRemarks = (idxRemarks !== -1 ? cols[idxRemarks] : '') // Text column
 
       if (!rawName || (!rawPhone && !rawEmail)) {
         rejectedCount++
-        rejectionReasons.push({ row: i + 1, reason: 'Missing name or contact method', data: rowStr })
+        rejectionReasons.push({ row: i + 1, reason: 'Missing name or contact method', data: cols.join(',') })
         continue
       }
 
@@ -93,7 +117,7 @@ export async function POST(req: Request) {
       }
       if (hasInternalEmail) {
         rejectedCount++
-        rejectionReasons.push({ row: i + 1, reason: 'Internal employee email domain excluded', data: rowStr })
+        rejectionReasons.push({ row: i + 1, reason: 'Internal employee email domain excluded', data: cols.join(',') })
         continue
       }
 
@@ -204,7 +228,7 @@ export async function POST(req: Request) {
           addedCount++
         } else {
           rejectedCount++
-          rejectionReasons.push({ row: i + 1, reason: `Duplicate (kept existing richer record ${existingRecord.unique_client_id})`, data: rowStr })
+          rejectionReasons.push({ row: i + 1, reason: `Duplicate (kept existing richer record ${existingRecord.unique_client_id})`, data: cols.join(',') })
         }
         continue
       }

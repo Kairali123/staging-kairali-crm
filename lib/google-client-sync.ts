@@ -117,15 +117,24 @@ export async function fetchCategoryHierarchyFromSheet(sheetId = DEFAULT_CATEGORY
     for (let r = 1; r < rows.length; r++) {
       const row = rows[r]
       const catName = (row[0] || '').trim()
-      const subName = (row[1] || '').trim()
+      const rawSubName = (row[1] || '').trim()
 
       if (!catName) continue
 
       if (!catMap.has(catName)) {
         catMap.set(catName, [])
       }
-      if (subName && !catMap.get(catName)!.includes(subName)) {
-        catMap.get(catName)!.push(subName)
+      
+      if (rawSubName) {
+        // Split by comma in case multiple subcategories are entered in a single cell
+        const subs = rawSubName.split(',').map(s => s.trim()).filter(Boolean)
+        const existingSubs = catMap.get(catName)!
+        
+        for (const sub of subs) {
+          if (!existingSubs.includes(sub)) {
+            existingSubs.push(sub)
+          }
+        }
       }
     }
 
