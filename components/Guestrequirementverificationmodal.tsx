@@ -5,25 +5,6 @@ import type { Guest } from "@/types/crr";
 
 const DOCTORS = ["Dr Deepu John", "Ashikha Raj", "Dr. Rahul R", "Dr. Akhila Oommen", "ANAGHA S"];
 
-const DOCTOR_EMAIL_MAP: Record<string, string> = {
-    "Dr Deepu John": "drdeepu@ktahv.com",
-    "Ashikha Raj": "ashikha@ktahv.com",
-    "Dr. Rahul R": "drrahul@ktahv.com",
-    "Dr. Akhila Oommen": "drakhila@ktahv.com",
-    "ANAGHA S": "anagha@ktahv.com",
-};
-
-export function getDoctorEmail(doctorName?: string | null): string {
-    if (!doctorName) return "doctor@ktahv.com";
-    if (DOCTOR_EMAIL_MAP[doctorName]) return DOCTOR_EMAIL_MAP[doctorName];
-    if (doctorName.includes("@")) return doctorName;
-    const slug = doctorName.toLowerCase().replace(/^dr\.?\s*/i, "").trim().replace(/\s+/g, ".");
-    return slug ? `${slug}@ktahv.com` : "doctor@ktahv.com";
-}
-
-// Fallbacks if no user is logged in
-const ASSIGNED_DOCTOR = "Dr Deepu John";
-
 const LOCKED_DETAILS = {
     bookingId: "KTAHV-PMS-5453",
     nameOfClient: "MR. ARUN AGARWAL",
@@ -116,11 +97,9 @@ export default function GuestRequirementVerificationModal({ open = true, onClose
     const [isSubmitting, setIsSubmitting] = useState(false);
     const activeDoctor = doctorAssignStatus === "change" && changedDoctor
         ? changedDoctor
-        : (saved?.doctorAssignedToClient || ASSIGNED_DOCTOR);
+        : (saved?.doctorAssignedToClient || "");
 
-    // Prevent guest email from leaking into doctor email field
-    const savedEmailIsDoctor = saved?.email && saved.email !== guest?.email && (saved.email.includes("@ktahv.com") || !saved.email.includes("@gmail.com"));
-    const doctorEmail = savedEmailIsDoctor ? saved.email : getDoctorEmail(activeDoctor);
+    const doctorEmail = saved?.email || "";
 
     if (!open) return null;
 
@@ -136,7 +115,7 @@ export default function GuestRequirementVerificationModal({ open = true, onClose
         setIsSubmitting(true);
         const timestamp = saved?.timestamp || getTimestamp(); // captured at click time or use existing
         onSubmit({
-            doctorAssignedToClient: saved?.doctorAssignedToClient || ASSIGNED_DOCTOR,
+            doctorAssignedToClient: activeDoctor,
             email: doctorEmail,
             timestamp,
             doctorAssignStatus,
@@ -411,11 +390,11 @@ export default function GuestRequirementVerificationModal({ open = true, onClose
                         <div style={{ ...row2, marginBottom: 16 }}>
                             <div>
                                 <Label required>Doctor Assigned to the Client</Label>
-                                <div style={readonlyBoxStyle}>{saved?.doctorAssignedToClient || ASSIGNED_DOCTOR}</div>
+                                <div style={readonlyBoxStyle}>{activeDoctor || "—"}</div>
                             </div>
                             <div>
                                 <Label required>E-Mail</Label>
-                                <div style={readonlyBoxStyle}>{doctorEmail}</div>
+                                <div style={readonlyBoxStyle}>{doctorEmail || "—"}</div>
                             </div>
                         </div>
 

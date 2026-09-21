@@ -37,6 +37,7 @@ export interface StageInfo {
     submitted?: boolean;             // true if stage has saved/submitted data in MySQL
     savedData?: Record<string, string | number | null> | null; // saved form values for prefill
     stageKey?: string | null;        // KTAHV_CRR_Calling_FMS.stage_key (e.g. ${uid}_Stage1)
+    autoClosed?: string | null;      // stages 9/10/11: why the stage closed without being worked
 }
 
 export interface Guest {

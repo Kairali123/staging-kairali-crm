@@ -56,6 +56,25 @@ export function toYmd(v: string | null | undefined): string | null {
     return `${m[3]}-${String(mi + 1).padStart(2, "0")}-${m[1].padStart(2, "0")}`;
 }
 
+// Stages 9/10/11 can no longer be performed once the booking's own check-in
+// (9, 11) or check-out (10) date has passed with no planned date ever set.
+// They close on their own; the reason replaces a blank "Complete".
+export function autoCloseReason(
+    plannedVal: unknown,
+    gateVal: unknown,
+    label: string,
+    today: string = istToday()
+): string | null {
+    if (plannedVal || !gateVal) return null;
+    let gate = typeof gateVal === "string" ? toYmd(gateVal) : null;
+    if (!gate) {
+        const d = gateVal instanceof Date ? gateVal : new Date(String(gateVal));
+        if (isNaN(d.getTime())) return null;
+        gate = istToday(d);
+    }
+    return gate < today ? `Auto-closed: ${label} date passed without a planned date.` : null;
+}
+
 function shiftYmd(ymd: string, days: number): string {
     const [y, m, d] = ymd.split("-").map(Number);
     return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
@@ -116,7 +135,7 @@ export function stageDateLock(stageNo: number, g: StageGateInput, today: string 
 export function stageBlockReason(stageNo: number, g: StageGateInput, today: string = istToday()): string | null {
     if (isCancelledStatus(g.bookingStatus)) return "This booking is cancelled.";
     const status = stageStatusOf(stageNo, g.info);
-    if (status === "Complete") return "This stage is already completed.";
+    if (status === "Complete") return g.info?.autoClosed || "This stage is already completed.";
     if (status === "Processing") return "This stage is already submitted and awaiting confirmation.";
     return stageDateLock(stageNo, g, today);
 }

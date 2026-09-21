@@ -8,7 +8,7 @@ import {
 } from "@/lib/authz";
 
 import { getPool } from "@/lib/db";
-import { MAX_PROOF_FILE_BYTES, PROOF_FILE_LIMIT_LABEL, isAllowedProofType, istToday, stageBlockReason } from "@/lib/crr-stage-rules";
+import { MAX_PROOF_FILE_BYTES, PROOF_FILE_LIMIT_LABEL, autoCloseReason, isAllowedProofType, istToday, stageBlockReason } from "@/lib/crr-stage-rules";
 import type { StageInfo } from "@/types/crr";
 
 const GAS_BOOKINGS_URL =
@@ -91,22 +91,6 @@ function isLockedDate(plannedVal: any, todayStr?: string): boolean {
     return currentTodayStr < plannedStr;
 }
 
-const DOCTOR_EMAIL_MAP: Record<string, string> = {
-    "Dr Deepu John": "drdeepu@ktahv.com",
-    "Ashikha Raj": "ashikha@ktahv.com",
-    "Dr. Rahul R": "drrahul@ktahv.com",
-    "Dr. Akhila Oommen": "drakhila@ktahv.com",
-    "ANAGHA S": "anagha@ktahv.com",
-};
-
-function getDoctorEmail(doctorName?: string | null): string {
-    if (!doctorName) return "doctor@ktahv.com";
-    if (DOCTOR_EMAIL_MAP[doctorName]) return DOCTOR_EMAIL_MAP[doctorName];
-    if (doctorName.includes("@")) return doctorName;
-    const slug = doctorName.toLowerCase().replace(/^dr\.?\s*/i, "").trim().replace(/\s+/g, ".");
-    return slug ? `${slug}@ktahv.com` : "doctor@ktahv.com";
-}
-
 const NO_STORE_HEADERS = { "Cache-Control": "private, no-store" };
 
 // Loads CRR bookings with their per-stage info. `where` filters KTAHV_CRR_Process_FMS;
@@ -176,7 +160,7 @@ async function loadBookings(where: string, params: any[], limit: number) {
                         client_arrival_data_upload_remarks, departure_planned, departure_actual,
                         departure_doer_name, client_departure_data_upload_remarks,
                         doctor_assigned_to_the_client, stage11_change_the_doctor_if_required,
-                        stage11_planned, stage11_actual, stage11_status, stage11_timestamp, updated_at,
+                        stage11_planned, stage11_actual, stage11_status, stage11_timestamp, stage11_email, updated_at,
                         stage11_to_show
                  FROM ktahv_guest_tracker
                  WHERE booking_id IN (?)`,
@@ -681,14 +665,14 @@ async function loadBookings(where: string, params: any[], limit: number) {
         // Planned/actual come from the tracker's own stage11_* columns.
         // Two-phase: complete only when (actual or submitted data) + to_show=true.
         const s11Planned = tracker?.stage11_planned || null;
-        const s11Doctor = tracker?.doctor_assigned_to_the_client || tracker?.stage11_change_the_doctor_if_required || row.stage9_doer || "";
+        const s11Doctor = tracker?.doctor_assigned_to_the_client || tracker?.stage11_change_the_doctor_if_required || "";
         const s11Actual = tracker?.stage11_actual || null;
         const s11ToShow = parseToShow(tracker?.stage11_to_show);
         const hasS11Data = Boolean(s11Actual || s11Doctor || tracker?.stage11_status);
         const s11Completed = (!s11Planned && !hasS11Data) ? true : (Boolean(s11Actual || hasS11Data) && s11ToShow);
         const s11Saved = tracker ? {
             doctorAssignedToClient: s11Doctor,
-            email: getDoctorEmail(s11Doctor),
+            email: tracker?.stage11_email || "",
             timestamp: formatTimestamp(tracker?.stage11_timestamp || tracker?.updated_at),
             doctorAssignStatus: tracker?.stage11_status || (s11Doctor ? "Assigned" : ""),
             changedDoctor: tracker?.stage11_change_the_doctor_if_required || "",
@@ -706,6 +690,10 @@ async function loadBookings(where: string, params: any[], limit: number) {
         const s8Completed = Boolean(s8Actual || (s8DoerRemarks && s8DoerRemarks.trim() !== "") || (s8ReferralTakenStatus && s8ReferralTakenStatus.trim() !== ""));
         const s8ActualDateDisplay = formatDMYDate(s8Actual) || (s8Completed ? formatDMYDate(checkin?.updated_at || checkin?.booking_date_time || s8Planned) : null);
 
+        const s9AutoClosed = autoCloseReason(s9Planned, row.check_in_date, "Check-in", todayStr);
+        const s10AutoClosed = autoCloseReason(s10Planned, row.check_out_date, "Check-out", todayStr);
+        const s11AutoClosed = autoCloseReason(s11Planned, row.check_in_date, "Check-in", todayStr);
+
         const stages = [
             // Stage 1: completed only when (actual or submitted data) + to_show=true; toShow & submitted fed through for Processing state
             { stage: 1, available: true, locked: isLockedDate(s1Planned, todayStr), plannedDate: formatDMYDate(s1Planned), completed: Boolean(s1Actual || hasS1Data) && s1ToShow, toShow: s1ToShow, submitted: hasS1Data, actualDate: formatDMYDate(s1Actual) || (hasS1Data ? formatDMYDate(c1?.updated_at || c1?.timestamp) : null), savedData: s1Saved, stageKey: c1?.stage_key || (uid ? `${uid}_Stage1` : null) },
@@ -720,9 +708,9 @@ async function loadBookings(where: string, params: any[], limit: number) {
             { stage: 7, available: true, locked: isLockedDate(s7Planned, todayStr), plannedDate: formatDMYDate(s7Planned), completed: Boolean(s7Actual || hasS7Data) && s7ToShow, toShow: s7ToShow, submitted: hasS7Data, actualDate: formatDMYDate(s7Actual) || (hasS7Data ? formatDMYDate(c7?.updated_at || c7?.timestamp) : null), savedData: s7Saved, stageKey: c7?.stage_key || (uid ? `${uid}_Stage7` : null) },
             { stage: 8, available: true, locked: isLockedDate(s8Planned, todayStr), plannedDate: formatDMYDate(s8Planned), completed: s8Completed, actualDate: s8ActualDateDisplay, savedData: s8Saved, stageKey: uid ? `${uid}_Stage8` : null },
             // Stages 9, 10, 11 — two-phase with to_show
-            { stage: 9, available: true, locked: isLockedDate(s9Planned, todayStr), plannedDate: formatDMYDate(s9Planned), completed: Boolean(s9Actual || hasS9Data) && s9ToShow, toShow: s9ToShow, submitted: hasS9Data, actualDate: formatDMYDate(s9Actual), savedData: s9Saved, stageKey: uid ? `${uid}_Stage9` : null },
-            { stage: 10, available: true, locked: isLockedDate(s10Planned, todayStr), plannedDate: formatDMYDate(s10Planned), completed: Boolean(s10Actual || hasS10Data) && s10ToShow, toShow: s10ToShow, submitted: hasS10Data, actualDate: formatDMYDate(s10Actual), savedData: s10Saved, stageKey: uid ? `${uid}_Stage10` : null },
-            { stage: 11, available: true, locked: isLockedDate(s11Planned, todayStr), plannedDate: formatDMYDate(s11Planned), completed: s11Completed, toShow: s11ToShow, submitted: hasS11Data, actualDate: formatDMYDate(s11Actual), savedData: s11Saved, stageKey: uid ? `${uid}_Stage11` : null },
+            { stage: 9, available: true, locked: isLockedDate(s9Planned, todayStr), plannedDate: formatDMYDate(s9Planned), completed: (Boolean(s9Actual || hasS9Data) && s9ToShow) || Boolean(s9AutoClosed), autoClosed: s9AutoClosed, toShow: s9ToShow, submitted: hasS9Data, actualDate: formatDMYDate(s9Actual), savedData: s9Saved, stageKey: uid ? `${uid}_Stage9` : null },
+            { stage: 10, available: true, locked: isLockedDate(s10Planned, todayStr), plannedDate: formatDMYDate(s10Planned), completed: (Boolean(s10Actual || hasS10Data) && s10ToShow) || Boolean(s10AutoClosed), autoClosed: s10AutoClosed, toShow: s10ToShow, submitted: hasS10Data, actualDate: formatDMYDate(s10Actual), savedData: s10Saved, stageKey: uid ? `${uid}_Stage10` : null },
+            { stage: 11, available: true, locked: isLockedDate(s11Planned, todayStr), plannedDate: formatDMYDate(s11Planned), completed: s11Completed || Boolean(s11AutoClosed), autoClosed: s11AutoClosed, toShow: s11ToShow, submitted: hasS11Data, actualDate: formatDMYDate(s11Actual), savedData: s11Saved, stageKey: uid ? `${uid}_Stage11` : null },
         ];
 
         return {
