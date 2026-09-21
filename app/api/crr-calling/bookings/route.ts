@@ -9,6 +9,7 @@ import {
 
 import { getPool } from "@/lib/db";
 import { MAX_PROOF_FILE_BYTES, PROOF_FILE_LIMIT_LABEL, autoCloseReason, isAllowedProofType, istToday, stageBlockReason } from "@/lib/crr-stage-rules";
+import { findCallingRowForStage, indexCallingRows, parseToShow } from "@/lib/crr-calling-rows";
 import type { StageInfo } from "@/types/crr";
 
 const GAS_BOOKINGS_URL =
@@ -62,15 +63,6 @@ function formatDMYDate(val: any): string {
     const year = parts.find((p) => p.type === "year")?.value || "";
 
     return `${day}-${month}-${year}`;
-}
-
-function parseToShow(val: any): boolean {
-    if (val === true || val === 1) return true;
-    if (typeof val === "string") {
-        const lower = val.trim().toLowerCase();
-        return lower === "true" || lower === "1";
-    }
-    return false;
 }
 
 function formatTimestamp(val: any): string {
@@ -302,83 +294,9 @@ async function loadBookings(where: string, params: any[], limit: number) {
         }
     }
 
-    // Build CrrCalling indices: by stage_key (case-insensitive) and by UID -> list of calling rows
-    const callingStageKeyMap = new Map<string, any>();
-    const callingIndex = new Map<string, any[]>();
-    for (const row of callingRows) {
-        if (row.stage_key) {
-            const sk = String(row.stage_key).trim().toLowerCase();
-            if (sk) {
-                callingStageKeyMap.set(sk, row); // last match wins (ordered by id ASC)
-            }
-        }
-        if (row.uid) {
-            const k = String(row.uid).trim();
-            if (!callingIndex.has(k)) {
-                callingIndex.set(k, []);
-            }
-            callingIndex.get(k)!.push(row);
-        }
-    }
-
-    // Helper to find latest CrrCalling row matching a purpose keyword (legacy fallback)
-    const findCallingRow = (uid: string, keyword: string) => {
-        const list = callingIndex.get(uid) || [];
-        const kw = keyword.toLowerCase();
-        let found: any = null;
-        for (const item of list) {
-            if (String(item.call_purpose || "").toLowerCase().includes(kw)) {
-                found = item; // last match wins
-            }
-        }
-        return found;
-    };
-
-    // Helper to find CrrCalling row for a specific UI stage:
-    // Priority 1: match by stage_key column (e.g. ${uid}_Stage1, ${uid}_Stage5, etc.)
-    // Priority 2: fallback to purpose keyword matching for backwards compatibility
-    const findCallingRowForStage = (uid: string, stageNum: number, fallbackKeywords: string[] = []) => {
-        const trimmedUid = String(uid || "").trim();
-        if (!trimmedUid) return null;
-
-        // 1. Direct match by stage_key: `${uid}_Stage${stageNum}` (case-insensitive)
-        const targetKey = `${trimmedUid.toLowerCase()}_stage${stageNum}`;
-        if (callingStageKeyMap.has(targetKey)) {
-            return callingStageKeyMap.get(targetKey);
-        }
-
-        // Check if any row for this uid has matching stage_key
-        const list = callingIndex.get(trimmedUid) || [];
-        for (let i = list.length - 1; i >= 0; i--) {
-            const item = list[i];
-            if (item.stage_key) {
-                const itemKey = String(item.stage_key).trim().toLowerCase();
-                if (itemKey === targetKey || itemKey === `stage${stageNum}`) {
-                    return item;
-                }
-            }
-        }
-
-        // 2. Fallback: match by call_purpose keywords (only for rows without a conflicting stage_key)
-        for (const kw of fallbackKeywords) {
-            const kwLower = kw.toLowerCase();
-            const list = callingIndex.get(trimmedUid) || [];
-            for (let i = list.length - 1; i >= 0; i--) {
-                const item = list[i];
-                if (item.stage_key) {
-                    const itemKey = String(item.stage_key).trim().toLowerCase();
-                    if (itemKey !== targetKey && itemKey !== `stage${stageNum}`) {
-                        continue; // row belongs to a different stage, do not steal
-                    }
-                }
-                if (String(item.call_purpose || "").toLowerCase().includes(kwLower)) {
-                    return item;
-                }
-            }
-        }
-
-        return null;
-    };
+    // Which KTAHV_CRR_Calling_FMS row backs each UI stage — shared with the
+    // stage-status poll so both agree on the row a stage is waiting on.
+    const callingRowIndex = indexCallingRows<any>(callingRows);
 
     // Precompute today's date in IST once for the entire batch rather than recomputing per row/stage
     const todayStr = getISTDateString(new Date());
@@ -406,7 +324,7 @@ async function loadBookings(where: string, params: any[], limit: number) {
         const notCheckedInYet = bookingId !== "" && !checkedInReservationIds.has(bookingId.toLowerCase());
 
         // Stage 1: Arrival Welcome on Pickup (CrrCalling / CrrProcess - stage_key: ${uid}_Stage1)
-        const c1 = findCallingRowForStage(uid, 1, ["Welcome Call"]);
+        const c1 = findCallingRowForStage(callingRowIndex, uid, 1);
         const s1Planned = c1?.planned || null;
         const s1Actual = c1?.actual || row.stage1_task_done_actual || null;
         const s1ToShow = parseToShow(c1?.to_show);
@@ -492,7 +410,7 @@ async function loadBookings(where: string, params: any[], limit: number) {
         };
 
         // Stage 5: Online Rating & Review Request (CrrCalling / CrrProcess Col AU - stage_key: ${uid}_Stage5)
-        const c5 = findCallingRowForStage(uid, 5, ["Rating Request", "rating", "review request"]);
+        const c5 = findCallingRowForStage(callingRowIndex, uid, 5);
         const s5Planned = c5?.planned || null;
         const s5Actual = c5?.actual || row.stage4_task_done_actual || null;
         const s5ToShow = parseToShow(c5?.to_show);
@@ -511,7 +429,7 @@ async function loadBookings(where: string, params: any[], limit: number) {
         } : null;
 
         // Stage 6: Safe Return Confirmation (CrrCalling / CrrProcess Col BA - stage_key: ${uid}_Stage6)
-        const c6 = findCallingRowForStage(uid, 6, ["Call after landing", "Safe Return", "Time to Return"]);
+        const c6 = findCallingRowForStage(callingRowIndex, uid, 6);
         const s6Planned = c6?.planned || null;
         const s6Actual = c6?.actual || row.stage6_task_done_actual || null;
         const s6ToShow = parseToShow(c6?.to_show);
@@ -527,7 +445,7 @@ async function loadBookings(where: string, params: any[], limit: number) {
         } : null;
 
         // Stage 7: Result Tracking & Health Progress Check (CrrCalling / CrrProcess Col BQ - stage_key: ${uid}_Stage7)
-        const c7 = findCallingRowForStage(uid, 7, ["Result and Progress Since Return", "Result and Progress"]);
+        const c7 = findCallingRowForStage(callingRowIndex, uid, 7);
         const s7Planned = c7?.planned || null;
         const s7Actual = c7?.actual || row.stage7_task_done_actual || null;
         const s7ToShow = parseToShow(c7?.to_show);

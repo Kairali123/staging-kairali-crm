@@ -392,7 +392,7 @@ export default function CRRCallingProcessPage() {
     const apiFrom = dateRangeStart ? dateRangeStart.toISOString().slice(0, 10) : undefined;
     const apiTo = dateRangeEnd ? dateRangeEnd.toISOString().slice(0, 10) : undefined;
 
-    const { guests, setGuests, loading: guestsLoading, isRevalidating, error: guestsError, refetch: refetchGuests, stageUsers } = useCrrBookings(apiFrom, apiTo);
+    const { guests, setGuests, loading: guestsLoading, isRevalidating, error: guestsError, refetch: refetchGuests, stageUsers, setLockedGuestId } = useCrrBookings(apiFrom, apiTo);
 
     // ---------- REAL ROLE (from auth) — no manual switching, ever ----------
     const { user } = useAuth();
@@ -806,6 +806,18 @@ export default function CRRCallingProcessPage() {
 
     // "View All Stages / Stage Data" modal
     const [activeViewGuestId, setActiveViewGuestId] = useState<number | null>(null);
+
+    // Whichever guest a modal is currently showing. Background refreshes skip this row
+    // so an open form is never reset underneath the user mid-entry.
+    const openModalGuestId =
+        activeGuestId ?? activeCallGuestId ?? activeWelcomeGuestId ?? activeSafeReturnGuestId ??
+        activeFeedbackGuestId ?? activeReferralGuestId ?? activeRatingGuestId ??
+        activeResultProgressGuestId ?? activeDriverArrivalGuestId ?? activeDriverDepartureGuestId ??
+        activeRequirementVerificationGuestId ?? activeDetailsGuestId ?? activeViewGuestId ?? null;
+
+    useEffect(() => {
+        setLockedGuestId(openModalGuestId);
+    }, [openModalGuestId, setLockedGuestId]);
     const [activeViewStage, setActiveViewStage] = useState<number>(1);
     const activeViewGuest = guests.find((g) => g.id === activeViewGuestId) || null;
 
