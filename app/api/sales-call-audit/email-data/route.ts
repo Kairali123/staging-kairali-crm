@@ -3,6 +3,7 @@ import { getPool } from "@/lib/db"
 import { getSalesCallAuditScope, getSessionUser, hasSalesCallAuditPageAccess } from "@/lib/authz"
 import { isReportSentForDate } from "@/lib/sales-call-audit-tracker"
 import { buildSalesCallAuditReport, type SalesCallAuditReportMetrics } from "@/lib/sales-call-audit-report"
+import { renderAuditReportEmail } from "@/lib/sales-call-audit-email-render"
 
 export const dynamic = "force-dynamic"
 
@@ -32,6 +33,8 @@ export interface SalesCallAuditEmailData {
   metrics: SalesCallAuditReportMetrics
   isMailSent?: boolean
   employees: AgentAuditMetric[]
+  html?: string
+  subject?: string
 }
 
 export async function GET(req: NextRequest) {
@@ -87,11 +90,28 @@ export async function GET(req: NextRequest) {
     // 2. Same report the email sends (lib/sales-call-audit-report)
     const { source, data } = await buildSalesCallAuditReport(selectedDate || "")
 
+    let renderedHtml = ""
+    let renderedSubject = ""
+    if (data.employees.length > 0) {
+      const rendered = renderAuditReportEmail({
+        date: data.auditDate,
+        displayDate: data.displayDate,
+        metrics: data.metrics,
+        employees: data.employees,
+      })
+      renderedHtml = rendered.html
+      renderedSubject = rendered.subject
+    }
+
     return NextResponse.json({
       success: true,
       source,
+      html: renderedHtml,
+      subject: renderedSubject,
       data: {
         ...data,
+        html: renderedHtml,
+        subject: renderedSubject,
         displayDate: selectedDate ? data.displayDate : "No Date Selected",
         availableDates,
         isMailSent: selectedDate ? isReportSentForDate(selectedDate) : false,

@@ -77,74 +77,86 @@ export function exportSalesHTML(report:DailySalesReport,scope:string){
    return `<tr><td style="text-align:left;padding:11px 9px;border-bottom:1px solid #e5eaf4"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};margin-right:8px;vertical-align:middle"></span><strong>${esc(r.agent)}</strong></td><td style="text-align:right;padding:11px 9px;border-bottom:1px solid #e5eaf4">${money(r.sales)}</td><td style="text-align:right;padding:11px 9px;border-bottom:1px solid #e5eaf4;font-weight:bold;color:#294995">${pct}%</td><td style="text-align:left;width:140px;padding:11px 9px;border-bottom:1px solid #e5eaf4"><div style="background:#eef2ff;border-radius:4px;height:8px;width:100%;overflow:hidden"><div style="background:${color};height:8px;width:${pct}%;border-radius:4px"></div></div></td></tr>`
   }).join('')
   const contributorHTML=`<section class="contributors" style="background:white;padding:24px;margin-top:20px;border:1px solid #e0e5f1;border-radius:12px"><div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px"><div><span style="font-size:10px;letter-spacing:1.6px;color:#4338ca;font-weight:700;text-transform:uppercase;display:block;margin-bottom:4px">SALES CONTRIBUTION</span><h2 style="margin:0 0 4px;font-size:20px;color:#1e305b">Sales by contributor</h2><p style="margin:0;color:#64748b;font-size:12px">${contributors.length} active agent${contributors.length===1?'':'s'} with positive sales · ${scope==='ALL'?'All companies':esc(companies[scope as Company])}</p></div><div style="text-align:right"><span style="font-size:11px;color:#64748b;display:block">Total contributing sales</span><strong style="font-size:18px;color:#1e305b">${money(totalSales)}</strong></div></div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse"><tr><td width="220" align="center" valign="middle" style="width:220px;text-align:center;vertical-align:middle;padding-right:24px">${donutChartHTML}</td><td valign="top" style="vertical-align:top"><table class="contributorTable" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse"><thead><tr style="background:#eef2ff"><th style="text-align:left;padding:11px 9px;border-bottom:1px solid #e5eaf4;font-size:12px;color:#24324b">Employee</th><th style="text-align:right;padding:11px 9px;border-bottom:1px solid #e5eaf4;font-size:12px;color:#24324b">Total Sales (INR)</th><th style="text-align:right;padding:11px 9px;border-bottom:1px solid #e5eaf4;font-size:12px;color:#24324b">Contribution</th><th style="text-align:left;padding:11px 9px;border-bottom:1px solid #e5eaf4;font-size:12px;color:#24324b;width:140px">Share</th></tr></thead><tbody>${contributorRows||'<tr><td colspan="4" style="text-align:center;padding:18px;color:#64748b">No positive sales contributors recorded for this date.</td></tr>'}</tbody><tfoot><tr style="font-weight:bold;background:#eef2ff"><td style="text-align:left;padding:11px 9px">Grand total</td><td style="text-align:right;padding:11px 9px">${money(totalSales)}</td><td style="text-align:right;padding:11px 9px">${totalSales>0?'100%':'—'}</td><td style="padding:11px 9px"></td></tr></tfoot></table></td></tr></table></section>`
-  const callingCards = [
-   {
-    label: 'AppSheet Pending',
-    value: showCount(summary.pendingAppsheet),
-    note: 'AppSheet Pending · AppSheet total',
-    isPending: true,
-    breakdown: [
-     { name: 'KPPL', code: 'KAPPL', count: showCount(report.calling?.pending?.KAPPL?.appsheet ?? 0) },
-     { name: 'KTAHV', code: 'KTAHV', count: showCount(report.calling?.pending?.KTAHV?.appsheet ?? 0) },
-     { name: 'Villaraag', code: 'VILLARAAG', count: showCount(report.calling?.pending?.VILLARAAG?.appsheet ?? 0) },
-    ],
-   },
-   {
-    label: 'Pending leads National (Hopper)',
-    value: showCount(summary.pendingNational),
-    note: 'DialerPending · National total',
-    isPending: true,
-    breakdown: [
-     { name: 'KPPL', code: 'KAPPL', count: showCount(report.calling?.pending?.KAPPL?.national ?? 0) },
-     { name: 'KTAHV', code: 'KTAHV', count: showCount(report.calling?.pending?.KTAHV?.national ?? 0) },
-     { name: 'Villaraag', code: 'VILLARAAG', count: showCount(report.calling?.pending?.VILLARAAG?.national ?? 0) },
-    ],
-   },
-   {
-    label: 'Pending leads International (Hopper)',
-    value: showCount(summary.pendingInternational),
-    note: 'DialerPending · International total',
-    isPending: true,
-    breakdown: [
-     { name: 'KPPL', code: 'KAPPL', count: showCount(report.calling?.pending?.KAPPL?.international ?? 0) },
-     { name: 'KTAHV', code: 'KTAHV', count: showCount(report.calling?.pending?.KTAHV?.international ?? 0) },
-     { name: 'Villaraag', code: 'VILLARAAG', count: showCount(report.calling?.pending?.VILLARAAG?.international ?? 0) },
-    ],
-   },
-   {
-    label: 'Calls Done (AppSheet)',
-    value: showCount(summary.appsheet),
-    note: scope === 'ALL' ? 'Live · column AI' : 'Employee totals · ' + scope,
-    isPending: false,
-    breakdown: [
-     { name: 'KPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KAPPL'), 'appsheet') ?? 0) },
-     { name: 'KTAHV', code: 'KTAHV', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KTAHV'), 'appsheet') ?? 0) },
-     { name: 'Villaraag', code: 'VILLARAAG', count: showCount(employeeTotal(scopedEmployees(report.calling, 'VILLARAAG'), 'appsheet') ?? 0) },
-    ],
-   },
-   {
-    label: 'Calls Done (Dialer)',
-    value: showCount(summary.dialer),
-    note: scope === 'ALL' ? 'Live · column M' : 'Employee totals · ' + scope,
-    isPending: false,
-    breakdown: [
-     { name: 'KPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KAPPL'), 'dialer') ?? 0) },
-     { name: 'KTAHV', code: 'KTAHV', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KTAHV'), 'dialer') ?? 0) },
-     { name: 'Villaraag', code: 'VILLARAAG', count: showCount(employeeTotal(scopedEmployees(report.calling, 'VILLARAAG'), 'dialer') ?? 0) },
-    ],
-   },
-   {
-    label: 'Total Calls Done',
-    value: showCount(summary.done),
-    note: 'All channels · AppSheet + Dialer',
-    isPending: false,
-    breakdown: [
-     { name: 'KPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KAPPL'), 'done') ?? 0) },
-     { name: 'KTAHV', code: 'KTAHV', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KTAHV'), 'done') ?? 0) },
-     { name: 'Villaraag', code: 'VILLARAAG', count: showCount(employeeTotal(scopedEmployees(report.calling, 'VILLARAAG'), 'done') ?? 0) },
-    ],
-   },
-  ]
+   const callingCards = [
+     {
+      label: 'AppSheet Pending',
+      value: showCount(summary.pendingAppsheet),
+      note: scope === 'ALL' ? 'AppSheet Pending · Employee totals' : 'Employee totals · ' + scope,
+      bg: 'rgba(254, 243, 199, 0.45)',
+      border: '2px solid #fcd34d',
+      titleColor: '#b45309',
+      breakdown: [
+       { name: 'KPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KAPPL'), 'pending') ?? 0), color: '#be185d' },
+       { name: 'KTAHV', code: 'KTAHV', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KTAHV'), 'pending') ?? 0), color: '#059669' },
+       { name: 'VILLA RAAG', code: 'VILLARAAG', count: showCount(employeeTotal(scopedEmployees(report.calling, 'VILLARAAG'), 'pending') ?? 0), color: '#d97706' },
+      ],
+     },
+    {
+     label: 'Pending leads National (Hopper)',
+     value: showCount(summary.pendingNational),
+     note: 'DialerPending · National total',
+     bg: 'rgba(255, 237, 213, 0.45)',
+     border: '2px solid #fdba74',
+     titleColor: '#c2410c',
+     breakdown: [
+      { name: 'KPPL', code: 'KAPPL', count: showCount(report.calling?.pending?.KAPPL?.national ?? 0), color: '#be185d' },
+      { name: 'KTAHV', code: 'KTAHV', count: showCount(report.calling?.pending?.KTAHV?.national ?? 0), color: '#059669' },
+      { name: 'VILLA RAAG', code: 'VILLARAAG', count: showCount(report.calling?.pending?.VILLARAAG?.national ?? 0), color: '#d97706' },
+     ],
+    },
+    {
+     label: 'Pending leads International (Hopper)',
+     value: showCount(summary.pendingInternational),
+     note: 'DialerPending · International total',
+     bg: 'rgba(245, 243, 255, 0.55)',
+     border: '2px solid #c4b5fd',
+     titleColor: '#6d28d9',
+     breakdown: [
+      { name: 'KPPL', code: 'KAPPL', count: showCount(report.calling?.pending?.KAPPL?.international ?? 0), color: '#be185d' },
+      { name: 'KTAHV', code: 'KTAHV', count: showCount(report.calling?.pending?.KTAHV?.international ?? 0), color: '#059669' },
+      { name: 'VILLA RAAG', code: 'VILLARAAG', count: showCount(report.calling?.pending?.VILLARAAG?.international ?? 0), color: '#d97706' },
+     ],
+    },
+    {
+     label: 'Calls Done (AppSheet)',
+     value: showCount(summary.appsheet),
+     note: scope === 'ALL' ? 'Live · column AI' : 'Employee totals · ' + scope,
+     bg: 'rgba(239, 246, 255, 0.55)',
+     border: '2px solid #93c5fd',
+     titleColor: '#1d4ed8',
+     breakdown: [
+      { name: 'KPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KAPPL'), 'appsheet') ?? 0), color: '#be185d' },
+      { name: 'KTAHV', code: 'KTAHV', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KTAHV'), 'appsheet') ?? 0), color: '#059669' },
+      { name: 'VILLA RAAG', code: 'VILLARAAG', count: showCount(employeeTotal(scopedEmployees(report.calling, 'VILLARAAG'), 'appsheet') ?? 0), color: '#d97706' },
+     ],
+    },
+    {
+     label: 'Calls Done (Dialer)',
+     value: showCount(summary.dialer),
+     note: scope === 'ALL' ? 'Live · column M' : 'Employee totals · ' + scope,
+     bg: 'rgba(236, 254, 255, 0.55)',
+     border: '2px solid #67e8f9',
+     titleColor: '#0e7490',
+     breakdown: [
+      { name: 'KPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KAPPL'), 'dialer') ?? 0), color: '#be185d' },
+      { name: 'KTAHV', code: 'KTAHV', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KTAHV'), 'dialer') ?? 0), color: '#059669' },
+      { name: 'VILLA RAAG', code: 'VILLARAAG', count: showCount(employeeTotal(scopedEmployees(report.calling, 'VILLARAAG'), 'dialer') ?? 0), color: '#d97706' },
+     ],
+    },
+    {
+     label: 'Total Calls Done',
+     value: showCount(summary.done),
+     note: 'All channels · AppSheet + Dialer',
+     bg: 'rgba(236, 253, 245, 0.55)',
+     border: '2px solid #6ee7b7',
+     titleColor: '#047857',
+     breakdown: [
+      { name: 'KPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KAPPL'), 'done') ?? 0), color: '#be185d' },
+      { name: 'KTAHV', code: 'KTAHV', count: showCount(employeeTotal(scopedEmployees(report.calling, 'KTAHV'), 'done') ?? 0), color: '#059669' },
+      { name: 'VILLA RAAG', code: 'VILLARAAG', count: showCount(employeeTotal(scopedEmployees(report.calling, 'VILLARAAG'), 'done') ?? 0), color: '#d97706' },
+     ],
+    },
+   ]
 
   const pendingModeLabel = report.calling?.pendingMode === 'database' ? 'Database'
    : report.calling?.pendingMode === 'snapshot' ? 'Sheet snapshot (DialerPending)'
@@ -154,44 +166,42 @@ export function exportSalesHTML(report:DailySalesReport,scope:string){
   const pendingDateLabel = report.calling?.pendingCapturedAt ? (new Date(report.calling.pendingCapturedAt).toLocaleString('en-GB',{timeZone:'Asia/Kolkata'}) + ' IST') : 'unavailable'
   const callsDoneDateLabel = summary.dates.join(', ') || 'unavailable'
 
-  const callingCardsHTML = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;table-layout:fixed;border-collapse:separate;border-spacing:10px 0;margin:16px 0 24px">
-   <tr>
-   ${callingCards.map(c => {
-    const bg = c.isPending ? '#fff8ed' : '#edf7ff'
-    const borderTop = c.isPending ? '3px solid #d89a38' : '3px solid #458ecc'
-    const border = c.isPending ? '1px solid #f2e2c8' : '1px solid #cfe5f8'
-    const numColor = c.isPending ? '#9b620d' : '#256a9c'
-    const dividerColor = c.isPending ? '#fde68a' : '#bfdbfe'
-    return `<td valign="top" width="16.66%" style="width:16.66%;vertical-align:top;background:${bg};border:${border};border-top:${borderTop};border-radius:12px;padding:14px 10px;box-sizing:border-box">
-     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;height:100%">
-      <tr>
-       <td valign="top" style="vertical-align:top;padding-bottom:12px">
-        <span style="font-size:11px;color:#52627f;font-weight:600;display:block;line-height:1.3;min-height:28px">${esc(c.label)}</span>
-        <strong style="display:block;font-size:26px;font-family:Georgia,serif;font-weight:700;color:${numColor};margin:8px 0 4px">${esc(c.value)}</strong>
-        <small style="font-size:9px;color:#6e7c94;display:block;line-height:1.3">${esc(c.note)}</small>
-       </td>
-      </tr>
-      <tr>
-       <td valign="bottom" style="vertical-align:bottom;border-top:1px solid ${dividerColor};padding-top:8px">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%">
-         <tr>
-          ${c.breakdown.map((b, idx) => {
+  const callingCardsHTML = `<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin:16px 0 24px;box-shadow:0 4px 16px rgba(15,23,42,0.05)">
+   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;table-layout:fixed;border-collapse:separate;border-spacing:10px 0">
+    <tr>
+    ${callingCards.map(c => {
+     return `<td valign="top" width="16.66%" style="width:16.66%;vertical-align:top;background:${c.bg};border:${c.border};border-radius:10px;padding:12px 10px;box-sizing:border-box">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;height:100%">
+       <tr>
+        <td valign="top" style="vertical-align:top;padding-bottom:10px">
+         <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:${c.titleColor};display:block;line-height:1.3;min-height:26px">${esc(c.label)}</span>
+         <strong style="display:block;font-size:24px;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-weight:700;color:#0f172a;margin:6px 0 4px">${esc(c.value)}</strong>
+         <small style="font-size:9.5px;color:#64748b;display:block;line-height:1.3">${esc(c.note)}</small>
+        </td>
+       </tr>
+       <tr>
+        <td valign="bottom" style="vertical-align:bottom;border-top:1px solid rgba(148,163,184,0.3);padding-top:8px">
+         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%">
+          ${c.breakdown.map(b => {
            const isDim = scope !== 'ALL' && scope !== b.code
-           const borderLeft = idx > 0 ? `border-left:1px solid ${dividerColor};` : ''
-           return `<td width="33%" align="center" valign="middle" style="width:33%;text-align:center;padding:2px 2px;${borderLeft}${isDim ? 'opacity:0.4;' : ''}">
-            <span style="font-size:10px;font-weight:600;color:#24324b;display:block;margin-bottom:2px">${esc(b.name)}</span>
-            <strong style="font-size:15px;font-family:Georgia,serif;font-weight:700;color:${numColor};display:block;margin:0">${esc(b.count)}</strong>
-           </td>`
+           return `<tr>
+            <td style="padding:2px 0;font-size:10px;font-weight:600;color:${b.color};${isDim ? 'opacity:0.4;' : ''}">
+             ${esc(b.name)}:
+            </td>
+            <td align="right" style="padding:2px 0;font-size:10.5px;font-weight:700;color:${b.color};text-align:right;${isDim ? 'opacity:0.4;' : ''}">
+             ${esc(b.count)}
+            </td>
+           </tr>`
           }).join('')}
-         </tr>
-        </table>
-       </td>
-      </tr>
-     </table>
-    </td>`
-   }).join('')}
-   </tr>
-  </table>`
+         </table>
+        </td>
+       </tr>
+      </table>
+     </td>`
+    }).join('')}
+    </tr>
+   </table>
+  </div>`
 
   const callingHeaders=['Employee','AppSheet pending','AppSheet done','Dialer done','Total done','Completion %','Updated (IST)']
   const callingThStyles=[

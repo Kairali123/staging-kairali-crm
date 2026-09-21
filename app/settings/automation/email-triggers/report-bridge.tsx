@@ -66,13 +66,30 @@ export default function EmailConfigBridge({ document: documentHtml }: { document
       const id = message.report as EmailReportId
       const scope = Object.hasOwn(companies, message.scope || '') ? message.scope : 'ALL'
       try {
-        const endpoint = id === 'daily-sales-report' ? '/api/daily-sales-report-alert' : '/api/marketing-daily-report'
-        const response = await fetch(endpoint + '?' + new URLSearchParams({ date: message.date }), { signal: current.signal, cache: 'no-store' })
-        const data = await response.json()
-        if (!response.ok) throw new Error(data.error || 'Report unavailable')
         let html: string
-        if (id === 'daily-sales-report') html = exportSalesHTML(data as DailySalesReport, scope)
-        else {
+        if (id === 'daily-sales-report') {
+          const response = await fetch('/api/daily-sales-report-alert?' + new URLSearchParams({ date: message.date }), { signal: current.signal, cache: 'no-store' })
+          const data = await response.json()
+          if (!response.ok) throw new Error(data.error || 'Report unavailable')
+          html = exportSalesHTML(data as DailySalesReport, scope)
+        } else if (id === 'sales-call-audit') {
+          const response = await fetch('/api/sales-call-audit/email-data?' + new URLSearchParams({ date: message.date }), { signal: current.signal, cache: 'no-store' })
+          const data = await response.json()
+          if (!response.ok || !data.success) throw new Error(data.error || 'Report unavailable')
+          html = data.html || data.data?.html || ''
+          if (!html && data.data) {
+            const { renderAuditReportEmail } = await import('@/lib/sales-call-audit-email-render')
+            html = renderAuditReportEmail({
+              date: data.data.auditDate,
+              displayDate: data.data.displayDate,
+              metrics: data.data.metrics,
+              employees: data.data.employees,
+            }).html
+          }
+        } else {
+          const response = await fetch('/api/marketing-daily-report?' + new URLSearchParams({ date: message.date }), { signal: current.signal, cache: 'no-store' })
+          const data = await response.json()
+          if (!response.ok) throw new Error(data.error || 'Report unavailable')
           const report = data as ReportData
           const normalizedScope = scope === 'ALL' ? 'all' : scope === 'VILLARAAG' ? 'VILARAAG' : scope
           const expanded = message.details === 'Include source-wise details' ? report.companies.filter(c => normalizedScope === 'all' || c.name === normalizedScope).flatMap(c => [c.name + '-leads', c.name + '-sales']) : []

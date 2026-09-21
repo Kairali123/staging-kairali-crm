@@ -19,9 +19,10 @@ test('employee column mapping preserves source date and errors without exposing 
  assert.equal(bad.done,null);
  assert.equal(callingSummary({pending:{},employees:[row]},'KTAHV').appsheet,null);
  assert.equal(callingSummary({pending:{},employees:[row]},'ALL').appsheet,17);
+ assert.equal(callingSummary({pending:{},employees:[row]},'ALL').pendingAppsheet,39);
 });
 
-test('company employee filter and totals exclude other companies without inventing zero for missing values',()=>{const {scopedEmployees,employeeTotal}=load('lib/daily-sales-calling.ts');const data={employees:[{name:'A',companies:['KTAHV'],pending:4},{name:'B',companies:['KAPPL'],pending:8},{name:'C',pending:null}]};assert.equal(scopedEmployees(data,'KTAHV').length,1);assert.equal(employeeTotal(scopedEmployees(data,'KTAHV'),'pending'),4);assert.equal(scopedEmployees(data,'ALL').length,3);assert.equal(employeeTotal(scopedEmployees(data,'ALL'),'pending'),null);assert.equal(scopedEmployees(data,'VILLARAAG').length,0)})
+test('company employee filter and totals exclude other companies without inventing zero for missing values',()=>{const {scopedEmployees,employeeTotal}=load('lib/daily-sales-calling.ts');const data={employees:[{name:'A',companies:['KTAHV'],pending:4},{name:'B',companies:['KAPPL'],pending:8},{name:'C',pending:null}]};assert.equal(scopedEmployees(data,'KTAHV').length,1);assert.equal(employeeTotal(scopedEmployees(data,'KTAHV'),'pending'),4);assert.equal(scopedEmployees(data,'ALL').length,3);assert.equal(employeeTotal(scopedEmployees(data,'ALL'),'pending'),12);assert.equal(employeeTotal([{name:'C',pending:null}],'pending'),null);assert.equal(scopedEmployees(data,'VILLARAAG').length,0)})
 
 test('booking-date sales remain gross while CW cancellations use their own selected day',async()=>{const {bookingAmounts,cancellationDates}=load('lib/daily-sales-bookings.ts');const rows=await bookingAmounts([{agent:'A',bookingDate:'2026-09-14',currency:'INR',amount:100,records:1}],[{agent:'A',bookingDate:'2026-09-01',currency:'INR',amount:40,records:1}]);assert.equal(rows.reduce((n,r)=>n+r.verified,0),100);assert.equal(rows.reduce((n,r)=>n+r.cancelled,0),40);await assert.rejects(()=>bookingAmounts([{agent:'A',bookingDate:'2026-09-14',currency:'UNKNOWN',amount:100,records:1}],[]))})
 
@@ -43,4 +44,31 @@ test('loadCalling checks database first and falls back to DialerPending sheet sn
  assert.ok(fallbackResult.pending.KTAHV.national>0);
  assert.ok(fallbackResult.pending.VILLARAAG.national>0);
  assert.ok(fallbackResult.pending.KAPPL.national>0);
+});
+
+test('mapEmployeeCompanies resolves companies from userlogin and all_users formats correctly',()=>{
+ const {mapEmployeeCompanies,parseEmployeeCompany}=load('lib/daily-sales-calling.ts');
+ assert.equal(parseEmployeeCompany('KTAHV - HO'),'KTAHV');
+ assert.equal(parseEmployeeCompany('KAPPL- FACTORY'),'KAPPL');
+ assert.equal(parseEmployeeCompany('KAPPL- HO'),'KAPPL');
+ assert.equal(parseEmployeeCompany('UNKNOWN'),null);
+
+ const employees=[
+   {name:'Pawan Kamra',pending:11,appsheet:3,dialer:0,done:3,date:'2026-09-21',updatedAt:'',campaign:''},
+   {name:'Dhaneshwar Chaturvedi',pending:453,appsheet:0,dialer:0,done:0,date:'2026-09-21',updatedAt:'',campaign:''},
+   {name:'Bhuvaneshwari',pending:52,appsheet:0,dialer:0,done:0,date:'2026-09-21',updatedAt:'',campaign:''},
+   {name:'Zaki Ahmed',pending:45,appsheet:9,dialer:0,done:9,date:'2026-09-21',updatedAt:'',campaign:''}
+ ];
+ const records=[
+   {user_name:'Pawan Kamra',company:'KTAHV',company_name:'KTAHV'},
+   {user_name:'Dhaneshwar Chaturvedi',company:'KAPPL- HO',company_name:'KAIRALI PRODUCTS (HO)'},
+   {user_name:'Bhuvaneshwari',company:'KAPPL- FACTORY',company_name:'KAIRALI PRODUCTS FACTORY'},
+   {user_name:'Zaki Ahmed',company:'KAPPL',company_name:'KAPPL'}
+ ];
+ const valid={KTAHV:'Healing Village',VILLARAAG:'Villa Raag',KAPPL:'Products'};
+ mapEmployeeCompanies(employees,records,valid);
+ assert.deepEqual(employees[0].companies,['KTAHV']);
+ assert.deepEqual(employees[1].companies,['KAPPL']);
+ assert.deepEqual(employees[2].companies,['KAPPL']);
+ assert.deepEqual(employees[3].companies,['KAPPL']);
 });

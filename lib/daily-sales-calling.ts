@@ -21,7 +21,8 @@ export function callingSummary(data:CallingData|undefined,scope:string){
  const appsheet=scope==='ALL'&&sameDay&&data?.employees.length&&data.employees.every(r=>r.appsheet!==null)?data.employees.reduce((n,r)=>n+r.appsheet!,0):employeeTotal(scopedEmp,'appsheet')
  const dialer=employeeTotal(scopedEmp,'dialer')
  const done=employeeTotal(scopedEmp,'done')
- const pendingAppsheet=sum('appsheet')
+ const empPending=employeeTotal(scopedEmp,'pending')
+ const pendingAppsheet=empPending!==null?empPending:sum('appsheet')
  return {pendingAppsheet,pendingNational:sum('national'),pendingInternational:sum('international'),appsheet,dialer,done,dates}
 }
 export const showCount=(value:number|null|undefined)=>value==null?'—':value.toLocaleString('en-IN')
@@ -30,3 +31,34 @@ export const showCount=(value:number|null|undefined)=>value==null?'—':value.to
 export function employeeTotal(employees:CallingEmployee[]|undefined,key:"pending"|"appsheet"|"dialer"|"done"){if(!employees?.length)return null;const nonNull=employees.filter(r=>r[key]!==null);return nonNull.length?nonNull.reduce((sum,r)=>sum+r[key]!,0):null}
 
 export function scopedEmployees(data:CallingData|undefined,scope:string){return (data?.employees||[]).filter(r=>scope==='ALL'||r.companies?.includes(scope))}
+
+export function parseEmployeeCompany(raw: unknown): string | null {
+  if (!raw) return null
+  const s = String(raw).toUpperCase().trim()
+  if (s.includes('KTAHV') || s.includes('HEALING VILLAGE')) return 'KTAHV'
+  if (s.includes('KAPPL') || s.includes('PRODUCTS')) return 'KAPPL'
+  if (s.includes('VILLARAAG') || s.includes('VILLA RAAG')) return 'VILLARAAG'
+  if (s.includes('KAC') || s.includes('CENTRE') || s.includes('CENTER')) return 'KAC'
+  return null
+}
+
+export function mapEmployeeCompanies(
+  employees: CallingEmployee[],
+  companyRecords: { user_name?: string; company?: string; company_name?: string }[],
+  validCompanies: Record<string, string>
+) {
+  for (const employee of employees) {
+    const empName = employee.name.trim().toLowerCase()
+    let matches = companyRecords.filter(r => (r.user_name || '').trim().toLowerCase() === empName)
+    if (!matches.length) {
+      matches = companyRecords.filter(r => {
+        const u = (r.user_name || '').trim().toLowerCase()
+        return u && (u.startsWith(empName.split(' ')[0]) || empName.startsWith(u.split(' ')[0]))
+      })
+    }
+    const resolved = matches
+      .map(r => parseEmployeeCompany(r.company) || parseEmployeeCompany(r.company_name))
+      .filter((c): c is string => Boolean(c && (Object.hasOwn(validCompanies, c) || c === 'KAC')))
+    employee.companies = [...new Set(resolved)]
+  }
+}

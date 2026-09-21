@@ -48,7 +48,7 @@ export async function loadCalling(connection?: any, date?: string): Promise<Call
             const [rows] = await connection.query(
               "SELECT employees, captured_at FROM calling_employee_snapshot WHERE id = 1 AND captured_at >= NOW() - INTERVAL 2 HOUR LIMIT 1"
             ) as any[]
-            if (Array.isArray(rows) && rows.length > 0) {
+            if (Array.isArray(rows) && rows.length > 0 && typeof rows[0]?.employees === 'string') {
               const parsed = JSON.parse(rows[0].employees)
               if (Array.isArray(parsed) && parsed.length > 0) {
                 result.employees = parsed
