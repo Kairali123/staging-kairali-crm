@@ -16,3 +16,40 @@ test.after(()=>env.cleanup());
 
 test('late missed runs skip instead of sending stale email',()=>withRunner(async({store,runner,now})=>{let sends=0;await runner.dispatchDue(now+3600000,{build:async()=>({hasData:true,html:'',subject:''}),send:async()=>{sends++;return {accepted:1,rejected:0}}});assert.equal(sends,0);assert.equal((await store.readState()).runs[0].status,'Skipped')}));
 test('report generation failure never reaches SMTP',()=>withRunner(async({store,runner,now})=>{let sends=0;await runner.dispatchDue(now,{build:async()=>{throw Error('data source down')},send:async()=>{sends++;return {accepted:1,rejected:0}}});assert.equal(sends,0);assert.equal((await store.readState()).runs[0].status,'Failed')}));
+
+test('sales-call-audit trigger validates against schema and rejects mismatch',()=>{
+  const schema=env.load('lib/email-triggers/schema.ts').triggerSchema;
+  const validAuditTrigger={
+    ...base,
+    name:'Sales Call Audit · Daily HR Email',
+    reportId:'sales-call-audit',
+    source:'Daily HR Email Template',
+    template:'Daily HR Email Template',
+    department:'HR',
+    company:'All companies',
+    to:'ho.hr@kairali.com',
+    cc:'',
+    bcc:'',
+    subject:'[Daily HR Quality Audit Report] - Agent-wise Call Audit ({{report_date}})',
+    body:'',
+    bodyType:'Full report in email body',
+    intro:'',
+    closing:'',
+    period:'Today',
+    reportDetail:'Full report',
+    status:'Active',
+    attachment:'None',
+    mode:'Same email to all recipients',
+    condition:'Always send',
+    retry:'No retries',
+    missed:'Skip missed run',
+    replyTo:''
+  };
+  const res=schema.safeParse(validAuditTrigger);
+  assert.equal(res.success,true);
+
+  const mismatched={...validAuditTrigger,source:'Marketing Daily Report'};
+  const invalid=schema.safeParse(mismatched);
+  assert.equal(invalid.success,false);
+});
+

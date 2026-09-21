@@ -5,6 +5,7 @@ import { combineSales, companies, type SaleDetail, type CollectionDetail } from 
 import { reportWindow, salesSQL } from '@/lib/daily-sales-report-query'
 import { bookingSQL, cancellationSQL, cancellationDates, bookingAmounts, type BookingAggregate } from '@/lib/daily-sales-bookings'
 import { loadCalling } from '@/lib/daily-sales-calling-server'
+import { mapEmployeeCompanies } from '@/lib/daily-sales-calling'
 export const dynamic='force-dynamic'
 export const runtime='nodejs'
 export const maxDuration = 60
@@ -31,7 +32,11 @@ export async function GET(req:NextRequest){
   const [bookings]=await connection.query({sql:bookingSQL,timeout:20000},window)
   const [cancellations]=await connection.query({sql:cancellationSQL,timeout:20000},window)
   const calls: Record<string,unknown>[]=[]
-  const [employeeCompanies]=await connection.query('SELECT user_name, company, company_name FROM userlogin')
+  const [employeeCompanies]=await connection.query(`
+    SELECT user_name, company, company_name FROM userlogin
+    UNION ALL
+    SELECT all_users AS user_name, company, company_type AS company_name FROM all_users
+  `)
   let ktahvRawDetails: any[] = []
   try {
     const [rows] = await connection.query({
@@ -302,10 +307,7 @@ export async function GET(req:NextRequest){
   report.cancellationSnapshotAt=sourceDates.capturedAt
   report.warnings.push(`KTAHV cancellations use AM status and CW dates from a verified Sheet snapshot captured ${sourceDates.capturedAt}; SQL CW dates have a known day/month sync mismatch. New cancellations after this snapshot need a refresh of the source snapshot.`)
   const calling=await loadCalling(connection, date)
-  for(const employee of calling.employees){
-   const matches=(employeeCompanies as {user_name:string;company:string;company_name:string}[]).filter(r=>r.user_name?.trim().toLowerCase()===employee.name.toLowerCase())
-   employee.companies=[...new Set(matches.flatMap(r=>[r.company,r.company_name].flatMap(value=>(value||'').toUpperCase().split(/[,;|]/).map(x=>x.trim()).filter(x=>Object.hasOwn(companies,x)))))]
-  }
+   mapEmployeeCompanies(calling.employees, employeeCompanies as {user_name?:string;company?:string;company_name?:string}[], companies)
   const unmapped=calling.employees.filter(r=>!r.companies?.length).length
   if(unmapped)calling.warnings.push(`${unmapped} employees have no matched CRM company; visible under All companies only.`)
   return NextResponse.json({...report,calling,rows:report.rows.filter(r=>company==='ALL'||r.company===company)},{headers})

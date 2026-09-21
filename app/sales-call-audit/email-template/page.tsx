@@ -11,6 +11,7 @@ import {
   Printer,
   RefreshCw,
   Send,
+  SlidersHorizontal,
   TableProperties,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -241,6 +242,18 @@ export default function SalesCallAuditEmailTemplatePage() {
                   <Send className="mr-2 h-4 w-4" />
                 )}
                 {sendingEmail ? "Sending..." : "Send to ho.hr@kairali.com"}
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                className="bg-white/10 text-white border-white/20 hover:bg-white/20 backdrop-blur-sm shadow-sm"
+              >
+                <Link href={`/settings/automation/email-triggers?report=sales-call-audit${selectedDate ? `&date=${encodeURIComponent(selectedDate)}` : ""}`}>
+                  <SlidersHorizontal className="mr-2 h-4 w-4" />
+                  Manage Automation
+                </Link>
               </Button>
 
               <Button

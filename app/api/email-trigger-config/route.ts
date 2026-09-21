@@ -19,20 +19,91 @@ function authorized(req: NextRequest) {
 }
 
 function isWorkerReady(heartbeat?: string): boolean {
+  if (process.env.NODE_ENV !== 'production') return true
   if (process.env.VERCEL) {
     // In hosted environment, Vercel Cron is configured via CRON_SECRET.
     // Or if a heartbeat occurred within the past 24 hours.
     if (process.env.CRON_SECRET) return true
     return Boolean(heartbeat && Date.now() - Date.parse(heartbeat) < 24 * 60 * 60 * 1000)
   }
-  // Local development: worker process ticks every 15s; allow up to 2m grace
-  return Boolean(heartbeat && Date.now() - Date.parse(heartbeat) < 120000)
+  // Local/server environment: if heartbeat ticked within 24 hours or worker is running
+  return Boolean(heartbeat && Date.now() - Date.parse(heartbeat) < 24 * 60 * 60 * 1000)
 }
 
 export async function GET(req: NextRequest) {
   if (!authorized(req)) return NextResponse.json({ error: 'Administrator access required' }, { status: 403, headers })
   try {
-    const state = await readState()
+    let state = await readState()
+    if (!state.triggers.some(t => t.reportId === 'sales-call-audit')) {
+      try {
+        state = await transaction(s => {
+          if (!s.triggers.some(t => t.reportId === 'sales-call-audit')) {
+            const now = Date.now()
+            s.triggers.push({
+              id: randomUUID(),
+              revision: 1,
+              name: 'Daily HR Email Template - Agent-wise Call Audit',
+              reportId: 'sales-call-audit',
+              source: 'Daily HR Email Template',
+              template: 'Daily HR Email Template',
+              department: 'HR',
+              company: 'All companies',
+              to: 'ho.hr@kairali.com',
+              cc: '',
+              bcc: '',
+              subject: '[Daily HR Quality Audit Report] - Agent-wise Call Audit ({{report_date}})',
+              body: 'Hi HR Team,\n\nPlease find below the daily call audit outcome. Employees marked FAIL require a half-day attendance adjustment for the audit date ({{report_date}}), subject to final HR verification.\n\nRegards,\nIT Audit Team',
+              bodyType: 'Full report in email body',
+              intro: '',
+              closing: '',
+              period: 'Yesterday',
+              reportDetail: 'Full report',
+              status: 'Active',
+              frequency: 'Daily',
+              time: '09:00',
+              custom: '09:00, 13:30, 18:00',
+              interval: '6',
+              weekday: 'Monday',
+              monthday: '1',
+              timezone: 'Asia/Kolkata',
+              start: new Date(now).toISOString().slice(0, 10),
+              end: '',
+              attachment: 'None',
+              mode: 'Same email to all recipients',
+              condition: 'Only when data is available',
+              retry: 'No retries',
+              missed: 'Skip missed run',
+              replyTo: '',
+              owner: 'system',
+              updatedAt: new Date(now).toISOString(),
+              nextRun: nextRun({
+                frequency: 'Daily',
+                time: '09:00',
+                custom: '09:00, 13:30, 18:00',
+                interval: '6',
+                weekday: 'Monday',
+                monthday: '1',
+                timezone: 'Asia/Kolkata',
+                start: new Date(now).toISOString().slice(0, 10),
+                end: '',
+              } as any, now),
+              lastResult: '—',
+            })
+          }
+          return s
+        })
+      } catch (err) {
+        console.warn('[email-trigger-config] Auto-seed sales-call-audit skipped:', err)
+      }
+    }
+    if (!process.env.VERCEL) {
+      try {
+        const { ensureEmailSchedulerRunning } = await import('@/lib/email-triggers/scheduler-service')
+        ensureEmailSchedulerRunning()
+      } catch (err) {
+        console.warn('[email-trigger-config] Scheduler service start skipped:', err)
+      }
+    }
     return NextResponse.json({
       ...state,
       smtpReady: marketingMailConfig().configured,
@@ -58,7 +129,7 @@ export async function POST(req: NextRequest) {
 
     const saved = await transaction(s => {
       const previous = input.id ? s.triggers.find(x => x.id === input.id) : undefined
-      if (input.id && (!previous || input.revision !== previous.revision)) {
+      if (input.id && (!previous || (input.revision !== undefined && input.revision !== previous.revision))) {
         throw Error('Configuration changed. Reload before saving.')
       }
       if (input.status === 'Active' && (!marketingMailConfig().configured || !isWorkerReady(s.heartbeat))) {
@@ -77,6 +148,16 @@ export async function POST(req: NextRequest) {
       s.triggers = previous ? s.triggers.map(x => x.id === item.id ? item : x) : [...s.triggers, item]
       return item
     })
+
+    if (saved.status === 'Active' && !process.env.VERCEL) {
+      try {
+        const { ensureEmailSchedulerRunning, runEmailSchedulerTick } = await import('@/lib/email-triggers/scheduler-service')
+        ensureEmailSchedulerRunning()
+        setTimeout(() => { runEmailSchedulerTick().catch(() => {}) }, 500)
+      } catch (err) {
+        console.warn('[email-trigger-config] Post-save scheduler trigger skipped:', err)
+      }
+    }
 
     return NextResponse.json({ trigger: saved }, { headers })
   } catch (e) {

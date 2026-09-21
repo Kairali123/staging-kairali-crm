@@ -48,7 +48,7 @@ function DailySalesReportAlertContent(){
  return <main className={styles.shell}>
   <nav className={styles.breadcrumb}><Link href="/sales/reports"><ArrowLeft size={15}/> Sales Report</Link><span>/ Daily Sales Report Alert</span></nav>
   <header className={styles.hero}><div className={styles.brand}>KAIRALI GROUP <span> / </span> DAILY SALES BRIEFING</div><div className={styles.heroTop}><div><h1>Daily Sales Report Alert</h1><p className={styles.date}><CalendarDays size={17}/>{dayLabel(date)} <small>IST</small></p><p className={styles.scope}>{scope==='ALL'?'All companies · Healing Village, Villa Raag & KAPPL':companies[scope as Company]}</p></div>
-  <div className={styles.controls}><label>Report date<input aria-label="Report date" type="date" value={date} max={todayIST()} onChange={e=>{if(e.target.value)reload(e.target.value)}}/></label><label>Company<select aria-label="Company" value={scope} onChange={e=>{setScope(e.target.value);setDialog(null)}}><option value="ALL">All companies</option>{Object.entries(companies).map(([code,name])=><option key={code} value={code}>{code} · {name}</option>)}</select></label><button type="button" className={styles.pdfButton} disabled={!report||loading||busy} onClick={()=>void action('print')} title="View / Save as PDF"><Download size={14}/> Save PDF</button><details className={styles.menu}><summary><Download size={15}/>Export & Share<ChevronDown size={14}/></summary><div>{[['print','Print / Save PDF'],['jpg','Download JPG'],['html','Download HTML'],['email','Email template'],['whatsapp','WhatsApp share']].map(([kind,label])=><button key={kind} disabled={!report||loading||busy} onClick={e=>{e.currentTarget.closest('details')!.open=false;void action(kind)}}>{label}</button>)}</div></details></div></div>
+   <div className={styles.controls}>{/* <label>Report date<input aria-label="Report date" type="date" value={date} max={todayIST()} onChange={e=>{if(e.target.value)reload(e.target.value)}}/></label> */}<label>Company<select aria-label="Company" value={scope} onChange={e=>{setScope(e.target.value);setDialog(null)}}><option value="ALL">All companies</option>{Object.entries(companies).map(([code,name])=><option key={code} value={code}>{code} · {name}</option>)}</select></label><button type="button" className={styles.pdfButton} disabled={!report||loading||busy} onClick={()=>void action('print')} title="View / Save as PDF"><Download size={14}/> Save PDF</button><details className={styles.menu}><summary><Download size={15}/>Export & Share<ChevronDown size={14}/></summary><div>{[['print','Print / Save PDF'],['jpg','Download JPG'],['html','Download HTML'],['email','Email template'],['whatsapp','WhatsApp share']].map(([kind,label])=><button key={kind} disabled={!report||loading||busy} onClick={e=>{e.currentTarget.closest('details')!.open=false;void action(kind)}}>{label}</button>)}</div></details></div></div>
   <div className={styles.heroStats}><div><span>SALES VALUE</span><strong>{report?money(totalSales):'—'}</strong><small>KTAHV by booking date</small></div><div><span>COLLECTION AMOUNT</span><strong>{report?money(totalCollection):'—'}</strong><small>Payments received</small></div><div><span>UNVERIFIED SALES</span><strong>{report?money(total('unverified')):'—'}</strong><small>Awaiting verification</small></div><div><span>CANCELLED VALUE</span><strong>{report?money(total('cancelled')):'—'}</strong><small>Reported separately</small></div><div><span>SALES CONTRIBUTORS</span><strong>{report?contributors.length:'—'}</strong><small>Agents with positive sales</small></div></div></header>
   <div className={styles.toolbar}><span><i/> {loading?'Loading SQL report…':report?'SQL connected · Partial calling coverage':'Report unavailable'}</span><button disabled={loading} onClick={()=>reload()}><RefreshCw size={14}/>Refresh</button></div>
   {report?.cancellationSnapshotAt&&<p className={styles.sourceNote}>KTAHV cancellation dates · Sheet snapshot {new Date(report.cancellationSnapshotAt).toLocaleString('en-GB',{timeZone:'Asia/Kolkata'})} IST</p>}
@@ -56,99 +56,105 @@ function DailySalesReportAlertContent(){
   {loading&&<div role="status" className={styles.loading}>Preparing the daily sales briefing…</div>}
   {report&&<><div className={styles.callingHeading}><h2>Calling overview</h2><p>Pending totals: {scope==='ALL'?'all companies':scope} · {calling?.pendingMode==='database'?'Database':calling?.pendingMode==='snapshot'?'Sheet snapshot (DialerPending)':calling?.pendingMode==='live'?'Live (DialerPending)':'Unavailable'} · {calling?.pendingCapturedAt?new Date(calling.pendingCapturedAt).toLocaleString('en-GB',{timeZone:'Asia/Kolkata'})+' IST':'unavailable'}<br/>Calls done: Live sheet · {summary.dates.join(', ')||'unavailable'} · employee totals cover all companies</p></div>
    {(() => {
-     const callingCards = calling ? [
-       {
-         label: 'AppSheet Pending',
-         value: showCount(summary.pendingAppsheet),
-         note: 'AppSheet Pending · AppSheet total',
-         isPending: true,
-         breakdown: [
-           { name: 'KPPL', code: 'KAPPL', count: showCount(calling.pending?.KAPPL?.appsheet ?? 0) },
-           { name: 'KTAHV', code: 'KTAHV', count: showCount(calling.pending?.KTAHV?.appsheet ?? 0) },
-           { name: 'Villaraag', code: 'VILLARAAG', count: showCount(calling.pending?.VILLARAAG?.appsheet ?? 0) },
-         ],
-       },
-       {
-         label: 'Pending leads National (Hopper)',
-         value: showCount(summary.pendingNational),
-         note: 'DialerPending · National total',
-         isPending: true,
-         breakdown: [
-           { name: 'KPPL', code: 'KAPPL', count: showCount(calling.pending?.KAPPL?.national ?? 0) },
-           { name: 'KTAHV', code: 'KTAHV', count: showCount(calling.pending?.KTAHV?.national ?? 0) },
-           { name: 'Villaraag', code: 'VILLARAAG', count: showCount(calling.pending?.VILLARAAG?.national ?? 0) },
-         ],
-       },
-       {
-         label: 'Pending leads International (Hopper)',
-         value: showCount(summary.pendingInternational),
-         note: 'DialerPending · International total',
-         isPending: true,
-         breakdown: [
-           { name: 'KPPL', code: 'KAPPL', count: showCount(calling.pending?.KAPPL?.international ?? 0) },
-           { name: 'KTAHV', code: 'KTAHV', count: showCount(calling.pending?.KTAHV?.international ?? 0) },
-           { name: 'Villaraag', code: 'VILLARAAG', count: showCount(calling.pending?.VILLARAAG?.international ?? 0) },
-         ],
-       },
-       {
-         label: 'Calls Done (AppSheet)',
-         value: showCount(summary.appsheet),
-         note: scope === 'ALL' ? 'Live · column AI' : 'Employee totals · ' + scope,
-         isPending: false,
-         breakdown: [
-           { name: 'KPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(calling, 'KAPPL'), 'appsheet') ?? 0) },
-           { name: 'KTAHV', code: 'KTAHV', count: showCount(employeeTotal(scopedEmployees(calling, 'KTAHV'), 'appsheet') ?? 0) },
-           { name: 'Villaraag', code: 'VILLARAAG', count: showCount(employeeTotal(scopedEmployees(calling, 'VILLARAAG'), 'appsheet') ?? 0) },
-         ],
-       },
-       {
-         label: 'Calls Done (Dialer)',
-         value: showCount(summary.dialer),
-         note: scope === 'ALL' ? 'Live · column M' : 'Employee totals · ' + scope,
-         isPending: false,
-         breakdown: [
-           { name: 'KPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(calling, 'KAPPL'), 'dialer') ?? 0) },
-           { name: 'KTAHV', code: 'KTAHV', count: showCount(employeeTotal(scopedEmployees(calling, 'KTAHV'), 'dialer') ?? 0) },
-           { name: 'Villaraag', code: 'VILLARAAG', count: showCount(employeeTotal(scopedEmployees(calling, 'VILLARAAG'), 'dialer') ?? 0) },
-         ],
-       },
-       {
-         label: 'Total Calls Done',
-         value: showCount(summary.done),
-         note: 'All channels · AppSheet + Dialer',
-         isPending: false,
-         breakdown: [
-           { name: 'KPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(calling, 'KAPPL'), 'done') ?? 0) },
-           { name: 'KTAHV', code: 'KTAHV', count: showCount(employeeTotal(scopedEmployees(calling, 'KTAHV'), 'done') ?? 0) },
-           { name: 'Villaraag', code: 'VILLARAAG', count: showCount(employeeTotal(scopedEmployees(calling, 'VILLARAAG'), 'done') ?? 0) },
-         ],
-       },
-     ] : []
-     return (
-       <div className={styles.metrics}>
-         {callingCards.map(card => (
-           <article key={card.label} className={card.isPending ? styles.pendingMetric : styles.doneMetric}>
-             <span>{card.label}</span>
-             <strong>{card.value}</strong>
-             <small>{card.note}</small>
-             <div className={styles.companyBreakdown}>
-               {card.breakdown.map(b => (
-                 <div
-                   key={b.name}
-                   className={`${card.isPending ? styles.breakdownCol : styles.breakdownColDone} ${scope !== 'ALL' && scope !== b.code ? styles.dimCol : ''}`}
-                 >
-                   <span className={styles.breakdownCompany}>{b.name}</span>
-                   <strong className={card.isPending ? styles.breakdownCount : styles.breakdownCountDone}>
-                     {b.count}
-                   </strong>
-                 </div>
-               ))}
-             </div>
-           </article>
-         ))}
-       </div>
-     )
-   })()}
+      const callingCards = calling ? [
+        {
+          label: 'AppSheet Pending',
+          value: showCount(summary.pendingAppsheet),
+          note: scope === 'ALL' ? 'AppSheet Pending · Employee totals' : 'Employee totals · ' + scope,
+          theme: styles.cardAmber,
+          breakdown: [
+            { name: 'KPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(calling, 'KAPPL'), 'pending') ?? 0), color: '#be185d' },
+            { name: 'KTAHV', code: 'KTAHV', count: showCount(employeeTotal(scopedEmployees(calling, 'KTAHV'), 'pending') ?? 0), color: '#059669' },
+            { name: 'VILLA RAAG', code: 'VILLARAAG', count: showCount(employeeTotal(scopedEmployees(calling, 'VILLARAAG'), 'pending') ?? 0), color: '#d97706' },
+          ],
+        },
+        {
+          label: 'Pending leads National (Hopper)',
+          value: showCount(summary.pendingNational),
+          note: 'DialerPending · National total',
+          theme: styles.cardOrange,
+          breakdown: [
+            { name: 'KPPL', code: 'KAPPL', count: showCount(calling.pending?.KAPPL?.national ?? 0), color: '#be185d' },
+            { name: 'KTAHV', code: 'KTAHV', count: showCount(calling.pending?.KTAHV?.national ?? 0), color: '#059669' },
+            { name: 'VILLA RAAG', code: 'VILLARAAG', count: showCount(calling.pending?.VILLARAAG?.national ?? 0), color: '#d97706' },
+          ],
+        },
+        {
+          label: 'Pending leads International (Hopper)',
+          value: showCount(summary.pendingInternational),
+          note: 'DialerPending · International total',
+          theme: styles.cardViolet,
+          breakdown: [
+            { name: 'KPPL', code: 'KAPPL', count: showCount(calling.pending?.KAPPL?.international ?? 0), color: '#be185d' },
+            { name: 'KTAHV', code: 'KTAHV', count: showCount(calling.pending?.KTAHV?.international ?? 0), color: '#059669' },
+            { name: 'VILLA RAAG', code: 'VILLARAAG', count: showCount(calling.pending?.VILLARAAG?.international ?? 0), color: '#d97706' },
+          ],
+        },
+        {
+          label: 'Calls Done (AppSheet)',
+          value: showCount(summary.appsheet),
+          note: scope === 'ALL' ? 'Live · column AI' : 'Employee totals · ' + scope,
+          theme: styles.cardBlue,
+          breakdown: [
+            { name: 'KPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(calling, 'KAPPL'), 'appsheet') ?? 0), color: '#be185d' },
+            { name: 'KTAHV', code: 'KTAHV', count: showCount(employeeTotal(scopedEmployees(calling, 'KTAHV'), 'appsheet') ?? 0), color: '#059669' },
+            { name: 'VILLA RAAG', code: 'VILLARAAG', count: showCount(employeeTotal(scopedEmployees(calling, 'VILLARAAG'), 'appsheet') ?? 0), color: '#d97706' },
+          ],
+        },
+        {
+          label: 'Calls Done (Dialer)',
+          value: showCount(summary.dialer),
+          note: scope === 'ALL' ? 'Live · column M' : 'Employee totals · ' + scope,
+          theme: styles.cardCyan,
+          breakdown: [
+            { name: 'KPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(calling, 'KAPPL'), 'dialer') ?? 0), color: '#be185d' },
+            { name: 'KTAHV', code: 'KTAHV', count: showCount(employeeTotal(scopedEmployees(calling, 'KTAHV'), 'dialer') ?? 0), color: '#059669' },
+            { name: 'VILLA RAAG', code: 'VILLARAAG', count: showCount(employeeTotal(scopedEmployees(calling, 'VILLARAAG'), 'dialer') ?? 0), color: '#d97706' },
+          ],
+        },
+        {
+          label: 'Total Calls Done',
+          value: showCount(summary.done),
+          note: 'All channels · AppSheet + Dialer',
+          theme: styles.cardEmerald,
+          breakdown: [
+            { name: 'KPPL', code: 'KAPPL', count: showCount(employeeTotal(scopedEmployees(calling, 'KAPPL'), 'done') ?? 0), color: '#be185d' },
+            { name: 'KTAHV', code: 'KTAHV', count: showCount(employeeTotal(scopedEmployees(calling, 'KTAHV'), 'done') ?? 0), color: '#059669' },
+            { name: 'VILLA RAAG', code: 'VILLARAAG', count: showCount(employeeTotal(scopedEmployees(calling, 'VILLARAAG'), 'done') ?? 0), color: '#d97706' },
+          ],
+        },
+      ] : []
+      return (
+        <div className={styles.callingCardsContainer}>
+          <div className={styles.callingCardsGrid}>
+            {callingCards.map(card => (
+              <div key={card.label} className={`${styles.kpiCard} ${card.theme}`}>
+                <div>
+                  <div className={styles.kpiCardTitle}>{card.label}</div>
+                  <div className={styles.kpiCardValue}>{card.value}</div>
+                  <div className={styles.kpiCardNote}>{card.note}</div>
+                </div>
+                <div className={styles.kpiCardBreakdown}>
+                  {card.breakdown.map(b => (
+                    <div
+                      key={b.name}
+                      className={`${styles.kpiCardRow} ${scope !== 'ALL' && scope !== b.code ? styles.dimCol : ''}`}
+                    >
+                      <span className={styles.kpiCardLabel} style={{ color: b.color }}>
+                        {b.name}:
+                      </span>
+                      <span className={styles.kpiCardCount} style={{ color: b.color }}>
+                        {b.count}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )
+    })()}
   <section className={styles.company}><header><div><span className={styles.tag}>{scope==='ALL'?'ALL COMPANIES':scope}</span><h2>Employee calling activity</h2><p>Employees by registered company · Latest calling activity</p></div></header><div className={styles.tableScroll}><table className={styles.callingTable}><thead><tr><th rowSpan={2}>Employee</th><th colSpan={2} className={styles.appsheetGroup}>AppSheet</th><th className={styles.dialerGroup}>Dialer</th><th rowSpan={2} className={styles.doneGroup}>Total calls done</th><th rowSpan={2}>Last updated (IST)</th></tr><tr><th>Pending leads</th><th>Calls done</th><th>Calls done</th></tr></thead><tbody>{employees.map(r=><tr key={r.name}><td>{r.name}</td><td>{showCount(r.pending)}</td><td>{showCount(r.appsheet)}</td><td>{showCount(r.dialer)}</td><td className={styles.sale}>{showCount(r.done)}</td><td>{r.updatedAt}</td></tr>)}</tbody><tfoot><tr><td>Grand total</td>{(['pending','appsheet','dialer','done'] as const).map(key=><td key={key}>{showCount(employeeTotal(employees,key))}</td>)}<td>All employees</td></tr></tfoot></table></div>{!employees.length&&<p className={styles.empty}>No calling employees available for this company.</p>}</section>
     <div className={styles.content}><div className={styles.tables}>{codes.map(code=>{const agents=rows.filter(r=>r.company===code);return <section key={code} className={styles.company}><header><div><span className={styles.tag}>{code}</span><h2>{companies[code as Company]}</h2><p>Agent performance · {dayLabel(date)}</p></div><div className={styles.companyTotal}><span>Sales value</span><strong>{money(agents.reduce((n,r)=>n+r.sales,0))}</strong></div></header><div className={styles.tableScroll}><table><thead><tr>{['Agent Name','Sales Quantity','UnVerified Sales Value','Collection Amount','Cancelled Qty','Cancelled Value'].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{agents.map(r=><tr key={r.agent}><td><span className={styles.avatar}>{r.agent.split(' ').map(x=>x[0]).slice(0,2).join('')}</span>{r.agent}</td><td>{r.conversions>0?<button type="button" className={styles.quantityLink} onClick={()=>setSalesModal({agent:r.agent,company:r.company,items:r.salesDetails||[]})} title={`Click to view ${r.conversions} sales record(s)`}>{r.conversions}</button>:<span className={styles.quantityMuted}>—</span>}</td><td className={r.sales>0?styles.sale:undefined}>{money(r.sales)}</td><td>{r.collection>0?<button type="button" className={styles.collectionLink} onClick={()=>setCollectionModal({agent:r.agent,company:r.company,items:r.collectionDetails||[]})} title={`Click to view ${r.collectionCount||1} collection receipt(s)`}>{money(r.collection)}</button>:<span className={styles.quantityMuted}>{money(0)}</span>}</td><td>{r.cancelledCount>0?r.cancelledCount:<span className={styles.quantityMuted}>—</span>}</td><td>{money(r.cancelled)}</td></tr>)}</tbody><tfoot><tr><td>Grand total</td><td>{showCount(agents.reduce((n,r)=>n+r.conversions,0))}</td><td>{money(agents.reduce((n,r)=>n+r.sales,0))}</td><td>{money(agents.reduce((n,r)=>n+(r.collection||0),0))}</td><td>{showCount(agents.reduce((n,r)=>n+(r.cancelledCount||0),0))}</td><td>{money(agents.reduce((n,r)=>n+r.cancelled,0))}</td></tr></tfoot></table></div>{!agents.length&&<p className={styles.empty}>No sales found for this date.</p>}</section>})}</div>
   <ContributionChart key={scope+date} contributors={contributors}/></div><footer className={styles.footer}>Prepared for Sales Team & Management <span>INR · IST · Updated {new Date(report.generatedAt).toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit'})} IST</span></footer></>}
