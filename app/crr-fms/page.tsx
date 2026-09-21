@@ -1011,10 +1011,11 @@ export default function CRRCallingProcessPage() {
     }, [rows, statusFilter]);
 
     // Not CheckedIn Yet rows: records whose booking_id has no match in ktahv_checkinmasterfms.
-    // These are excluded from Pending and Completed to prevent dual-display.
+    // These are excluded from Pending and Completed to prevent dual-display. Cancelled
+    // bookings belong to the Cancelled table only, matching the counts loop's precedence.
     const notCheckedInYetRows = useMemo(() => {
         if (statusFilter === "complete" || statusFilter === "cancelled") return [];
-        return rows.filter((g) => g.notCheckedInYet === true);
+        return rows.filter((g) => g.notCheckedInYet === true && !isBookingCancelled(g));
     }, [rows, statusFilter]);
 
     // Pending pagination derived
