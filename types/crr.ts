@@ -60,6 +60,9 @@ export interface Guest {
     mid: string;
     uid: string;
     bookingStatus: string;
+    /** True when this record's booking_id has no matching reservation_id in ktahv_checkinmasterfms.
+     *  Such records are held in the "Not CheckedIn Yet" state and excluded from Pending/Completed. */
+    notCheckedInYet?: boolean;
     currentStage: number; // 1-8
     allComplete: boolean;
     stageStatus: StageStatus[]; // length 11

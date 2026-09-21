@@ -272,6 +272,16 @@ async function loadBookings(where: string, params: any[], limit: number) {
         }
     }
 
+    // 5a. Build a Set of all reservation_ids currently in ktahv_checkinmasterfms (for this batch).
+    // Reuses chkRows already fetched above — zero additional DB queries.
+    // Primary key: booking_id (lowercase) matched against reservation_id (lowercase).
+    const checkedInReservationIds = new Set<string>();
+    for (const chk of chkRows) {
+        if (chk.reservation_id) {
+            checkedInReservationIds.add(String(chk.reservation_id).trim().toLowerCase());
+        }
+    }
+
     // 5b. Parse Permission-Based Stage Users
     const permRows = permResult[0] || [];
     if (permRows.length > 0) {
@@ -405,6 +415,11 @@ async function loadBookings(where: string, params: any[], limit: number) {
             checkinMap.get(uid.toLowerCase());
 
         const bookingTakenBy = String(row.booking_taken_by || "").trim();
+
+        // Not-CheckedIn-Yet gate: true when this booking_id has NO matching reservation_id
+        // in ktahv_checkinmasterfms for the current batch. Detection is zero-cost — reuses
+        // checkedInReservationIds built from the already-fetched chkRows above.
+        const notCheckedInYet = bookingId !== "" && !checkedInReservationIds.has(bookingId.toLowerCase());
 
         // Stage 1: Arrival Welcome on Pickup (CrrCalling / CrrProcess - stage_key: ${uid}_Stage1)
         const c1 = findCallingRowForStage(uid, 1, ["Welcome Call"]);
@@ -733,9 +748,63 @@ async function loadBookings(where: string, params: any[], limit: number) {
             uid: row.uid || "",
             bookingStatus: row.booking_status || "Confirmed",
             rowNumber: row.id || idx + 1,
+            notCheckedInYet,
             stages,
         };
     });
+
+    // 7. Maintain not_checkedin_yet table:
+    //    - Upsert records whose booking_id is NOT in ktahv_checkinmasterfms.
+    //    - Delete records whose booking_id IS now in ktahv_checkinmasterfms (they've checked in).
+    //    Runs fire-and-forget (not awaited) so it never blocks the GET response.
+    //    Errors are logged but do not surface to the caller.
+    void (async () => {
+        try {
+            const toUpsert = data.filter((d: any) => d.notCheckedInYet === true);
+            const toDelete  = data.filter((d: any) => d.notCheckedInYet === false && d.bookingId);
+
+            // Upsert batch: INSERT … ON DUPLICATE KEY UPDATE keeps the row fresh
+            if (toUpsert.length > 0) {
+                const upsertValues = toUpsert.map((d: any) => [
+                    // Find the original processRow to get process_id (d.rowNumber = row.id)
+                    d.rowNumber,         // process_id
+                    d.bookingId,         // booking_id (UNIQUE KEY — duplicate safe)
+                    d.uid || null,
+                    d.clientName || null,
+                    // Pass raw dates from processRows (these are already strings from DB)
+                    processRows.find((r: any) => r.id === d.rowNumber)?.check_in_date ?? null,
+                    processRows.find((r: any) => r.id === d.rowNumber)?.check_out_date ?? null,
+                    d.bookingStatus || null,
+                ]);
+
+                await pool.query(
+                    `INSERT INTO not_checkedin_yet
+                        (process_id, booking_id, uid, client_name, check_in_date, check_out_date, booking_status)
+                     VALUES ?
+                     ON DUPLICATE KEY UPDATE
+                        process_id    = VALUES(process_id),
+                        uid           = VALUES(uid),
+                        client_name   = VALUES(client_name),
+                        check_in_date = VALUES(check_in_date),
+                        check_out_date = VALUES(check_out_date),
+                        booking_status = VALUES(booking_status),
+                        updated_at    = CURRENT_TIMESTAMP`,
+                    [upsertValues]
+                );
+            }
+
+            // Delete batch: remove records that have since checked in
+            if (toDelete.length > 0) {
+                const nowCheckedInIds = toDelete.map((d: any) => d.bookingId);
+                await pool.query(
+                    `DELETE FROM not_checkedin_yet WHERE booking_id IN (?)`,
+                    [nowCheckedInIds]
+                );
+            }
+        } catch (maintErr) {
+            console.warn("[crr-calling/bookings] not_checkedin_yet maintenance error (non-fatal):", maintErr);
+        }
+    })();
 
     return { data, stageUsers };
 }
