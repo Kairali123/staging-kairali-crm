@@ -22,7 +22,7 @@ export default function EmailConfigBridge({ document }: { document: string }) {
         try {
           const response = await fetch('/api/email-trigger-config', { cache: 'no-store' })
           const state = await response.json()
-          send({ type: 'email-config-init', report: Object.hasOwn(emailReportTemplates, report) ? report : 'daily-sales-report', autoCreate: Object.hasOwn(emailReportTemplates, report), scope: query.get('scope') || 'ALL', date: query.get('date') || '', state: response.ok ? state : null, error: response.ok ? '' : state.error })
+          send({ type: 'email-config-init', templates: emailReportTemplates, report: Object.hasOwn(emailReportTemplates, report) ? report : 'daily-sales-report', autoCreate: Object.hasOwn(emailReportTemplates, report), scope: query.get('scope') || 'ALL', date: query.get('date') || '', state: response.ok ? state : null, error: response.ok ? '' : state.error })
         } catch { send({ type: 'email-config-storage-error', error: 'Unable to load saved configuration' }) }
       }
       if (message?.type === 'email-config-refresh') {
@@ -31,6 +31,16 @@ export default function EmailConfigBridge({ document }: { document: string }) {
           const state = await response.json()
           send({ type: 'email-config-state', state: response.ok ? state : null, error: response.ok ? '' : state.error })
         } catch { send({ type: 'email-config-state', error: 'Could not refresh status' }) }
+        return
+      }
+      if (message?.type === 'email-config-delete' && typeof message.id === 'string') {
+        try {
+          const query = new URLSearchParams({ id: message.id })
+          if (Number.isInteger(message.revision)) query.set('revision', String(message.revision))
+          const response = await fetch('/api/email-trigger-config?' + query, { method: 'DELETE' })
+          const result = await response.json()
+          send({ type: 'email-config-deleted', id: message.id, error: response.ok ? '' : result.error })
+        } catch { send({ type: 'email-config-deleted', id: message.id, error: 'Delete could not be confirmed. Reload before retrying.' }) }
         return
       }
       if (message?.type === 'email-config-save') {

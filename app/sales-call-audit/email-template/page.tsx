@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { AgentAuditMetric, SalesCallAuditEmailData } from "@/app/api/sales-call-audit/email-data/route"
+import { emailReportTemplates } from "@/lib/email-report-template"
 
 export default function SalesCallAuditEmailTemplatePage() {
   const { user } = useAuth()
@@ -176,7 +177,7 @@ export default function SalesCallAuditEmailTemplatePage() {
                 <div>
                   <div className="flex flex-wrap items-center gap-3">
                     <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white tracking-tight leading-tight">
-                      Daily HR Email Template
+                      {emailReportTemplates['sales-call-audit'].name}
                     </h1>
                     {data?.isMailSent ? (
                       <Badge className="border-emerald-300/60 bg-emerald-500/30 text-emerald-100 font-bold px-2.5 py-1 text-xs inline-flex items-center gap-1.5 shadow-sm backdrop-blur-xs">

@@ -1,10 +1,11 @@
 import { z } from 'zod'
 import { validDay, nextRun } from './schedule'
+import { emailReportTemplates, canonicalTemplateName } from '../email-report-template'
 const time=z.string().transform(s=>s.length===4&&s[1]===':'?'0'+s:s).refine(s=>/^([01]\d|2[0-3]):[0-5]\d$/.test(s),'Invalid time format'),day=z.string().refine(validDay,'Invalid calendar date')
 const addresses=z.string().max(3000).refine(s=>!/[\r\n]/.test(s)&&s.split(',').filter(x=>x.trim()).every(x=>z.string().email().safeParse(x.trim()).success),'Use comma-separated email addresses')
 export const triggerSchema=z.object({
  id:z.string().uuid().optional(),revision:z.number().int().nonnegative().optional(),name:z.string().trim().min(1).max(120),
- reportId:z.enum(['daily-sales-report','marketing-daily-report','sales-call-audit']),source:z.enum(['Daily Sales Report Alert','Marketing Daily Report','Daily HR Email Template','Sales Call Audit Report']),template:z.string().max(120),department:z.string().max(60),
+ reportId:z.enum(['daily-sales-report','marketing-daily-report','sales-call-audit']),source:z.preprocess(v=>typeof v==='string'?canonicalTemplateName(v):v,z.enum([emailReportTemplates['daily-sales-report'].name,emailReportTemplates['marketing-daily-report'].name,emailReportTemplates['sales-call-audit'].name])),template:z.string().max(120).transform(canonicalTemplateName),department:z.string().max(60),
  company:z.enum(['All companies','KTAHV','VILARAAG','KAPPL']),to:addresses,cc:addresses,bcc:addresses,
  subject:z.string().trim().min(1).max(250).refine(s=>!/[\r\n]/.test(s)),body:z.string().max(20000).default(''),bodyType:z.enum(['Full report in email body','Static','Dynamic','Mixed']),
  intro:z.string().max(3000).default(''),closing:z.string().max(3000).default(''),period:z.enum(['Today','Yesterday','Selected date']),previewDate:z.union([day,z.literal('')]).optional().transform(v=>v||undefined),
@@ -19,7 +20,7 @@ export const triggerSchema=z.object({
  if(c.frequency==='Custom'&&(!c.custom.trim()||c.custom.split(',').some(t=>!time.safeParse(t.trim()).success)))issue('Enter valid custom times')
  if(c.period==='Selected date'&&!c.previewDate)issue('Choose the report date')
  if(c.reportId==='marketing-daily-report'&&c.period==='Today')issue('Marketing reports require a completed reporting day')
- const expectedSources:Record<string,string[]>={'daily-sales-report':['Daily Sales Report Alert'],'marketing-daily-report':['Marketing Daily Report'],'sales-call-audit':['Daily HR Email Template','Sales Call Audit Report']}
+ const expectedSources:Record<string,string[]>=Object.fromEntries(Object.entries(emailReportTemplates).map(([id,t])=>[id,[t.name]]))
  if(!(expectedSources[c.reportId]||[]).includes(c.source))issue('Report template mismatch')
  const recipients=[c.to,c.cc,c.bcc].flatMap(x=>x.split(',').map(x=>x.trim()).filter(Boolean))
  if(recipients.length>50)issue('Maximum 50 recipients')
