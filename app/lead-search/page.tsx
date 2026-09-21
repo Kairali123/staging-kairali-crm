@@ -107,11 +107,12 @@ function getKserveStatusBadge(kserveStatus: string, kserveRoute: string) {
     return <Badge variant="outline" className="text-xs text-gray-500">Direct Route</Badge>
   }
   const s = (kserveStatus || "").toLowerCase()
+  // Negatives first: "Non-Qualified" / "Not Qualified" also contain "qualified".
+  if (/\b(non|not)\b|un-?qualified|rejected/.test(s)) {
+    return <Badge className="text-xs bg-red-100 text-red-700 border-red-200">KServe ✗ Not Qualified</Badge>
+  }
   if (s.includes("qualified") || s.includes("verified")) {
     return <Badge className="text-xs bg-emerald-100 text-emerald-700 border-emerald-200">KServe ✓ Qualified</Badge>
-  }
-  if (s.includes("not") || s.includes("rejected")) {
-    return <Badge className="text-xs bg-red-100 text-red-700 border-red-200">KServe ✗ Not Qualified</Badge>
   }
   return <Badge className="text-xs bg-blue-100 text-blue-700 border-blue-200">KServe: {kserveStatus || kserveRoute}</Badge>
 }
