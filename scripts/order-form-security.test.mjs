@@ -131,5 +131,11 @@ test('users are synchronized directly from MySQL all_users table', () => {
   assert.match(route, /all_users/i)
 })
 
-
-
+test('buyer details are synchronized directly from MySQL master_conversion_sheet_kappl_ktahv table', () => {
+  assert.match(route, /FROM\s+master_conversion_sheet_kappl_ktahv/i)
+  assert.match(route, /action\s*===\s*'findBuyer'/)
+  assert.match(route, /name_of_client/)
+  assert.match(route, /billing_address/)
+  assert.match(route, /shipping_address/)
+  assert.match(route, /client_category/)
+})

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { LoaderCircle } from "lucide-react"
+import { useAuth } from "@/hooks/use-auth"
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -19,6 +20,7 @@ const PRIMARY_ORDER_FORM_URL = "/new-order-fms/primary-order-form/app/index.html
 
 export default function PrimaryOrderFormPage() {
   const [isLoading, setIsLoading] = useState(true)
+  const { user } = useAuth()
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -27,12 +29,11 @@ export default function PrimaryOrderFormPage() {
     return () => clearTimeout(timer)
   }, [])
 
-  const iframeSrc = ENABLE_EDIT_ORDER
-    ? `${PRIMARY_ORDER_FORM_URL}?allowEdit=1`
-    : `${PRIMARY_ORDER_FORM_URL}?allowEdit=0`
+  const userName = user?.name ? encodeURIComponent(user.name) : ""
+  const iframeSrc = `${PRIMARY_ORDER_FORM_URL}?allowEdit=${ENABLE_EDIT_ORDER ? 1 : 0}${userName ? `&userName=${userName}` : ""}`
 
   return (
-    <div className="relative -m-4 min-h-[calc(100dvh-4rem)] bg-slate-100 sm:-m-6 lg:-m-8">
+    <div className="relative -m-4 min-h-[calc(100dvh-4rem)] w-[calc(100%+2rem)] overflow-hidden bg-slate-100 sm:-m-6 sm:w-[calc(100%+3rem)] lg:-m-8 lg:w-[calc(100%+4rem)]">
       {isLoading ? (
         <div
           className="absolute inset-0 z-10 flex items-center justify-center bg-white"
@@ -49,6 +50,7 @@ export default function PrimaryOrderFormPage() {
       ) : null}
 
       <iframe
+        key={user?.name || "anonymous"}
         src={iframeSrc}
         title="KAPPL Primary Order Form"
         className="block h-[calc(100dvh-4rem)] min-h-[720px] w-full border-0 bg-white"

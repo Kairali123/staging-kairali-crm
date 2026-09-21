@@ -69,10 +69,17 @@ function resolveAppsScriptConfig(): { url: string; secret: string } | null {
   }
 }
 
+function getUserDisplayName(user: unknown): string {
+  if (!user || typeof user !== 'object' || Array.isArray(user)) return ''
+  const record = user as Record<string, unknown>
+  return typeof record.name === 'string' ? record.name.trim() : (typeof record.user_name === 'string' ? record.user_name.trim() : '')
+}
+
 export async function POST(req: NextRequest) {
   const startedAt = Date.now()
   const correlationId = orderFormCorrelationId(req)
   const user = getVerifiedOrderFormUser(req)
+  const sessionUserName = getUserDisplayName(user)
   let action: OrderFormAction | null = null
   let body: Record<string, unknown> = {}
 
@@ -245,10 +252,171 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  if (action === 'findBuyer') {
+    try {
+      const payloadObj = body.payload && typeof body.payload === 'object' ? (body.payload as Record<string, unknown>) : null
+      const rawMobile = String(body.mobile || payloadObj?.mobile || '').trim()
+      const rawEmail = String(body.email || payloadObj?.email || '').trim().toLowerCase()
+      const cleanMobile = rawMobile.replace(/\D/g, '').slice(-10)
+
+      if (!cleanMobile && !rawEmail) {
+        return json({ ok: true, data: { found: false, buyer: null }, correlationId }, 200)
+      }
+
+      const pool = await getPool()
+      let rows: unknown[] = []
+
+      if (cleanMobile && rawEmail) {
+        const [mRows] = await pool.query(
+          `SELECT id, buyer_id, order_id, name_of_client, mobile, email, 
+                  client_category, client_category_updated, billing_address, 
+                  shipping_address, others
+           FROM master_conversion_sheet_kappl_ktahv
+           WHERE (mobile LIKE ? OR LOWER(TRIM(email)) = ?)
+           ORDER BY id DESC
+           LIMIT 1`,
+          [`%${cleanMobile}%`, rawEmail]
+        )
+        rows = Array.isArray(mRows) ? mRows : []
+      } else if (cleanMobile) {
+        const [mRows] = await pool.query(
+          `SELECT id, buyer_id, order_id, name_of_client, mobile, email, 
+                  client_category, client_category_updated, billing_address, 
+                  shipping_address, others
+           FROM master_conversion_sheet_kappl_ktahv
+           WHERE mobile LIKE ?
+           ORDER BY id DESC
+           LIMIT 1`,
+          [`%${cleanMobile}%`]
+        )
+        rows = Array.isArray(mRows) ? mRows : []
+      } else if (rawEmail) {
+        const [mRows] = await pool.query(
+          `SELECT id, buyer_id, order_id, name_of_client, mobile, email, 
+                  client_category, client_category_updated, billing_address, 
+                  shipping_address, others
+           FROM master_conversion_sheet_kappl_ktahv
+           WHERE LOWER(TRIM(email)) = ?
+           ORDER BY id DESC
+           LIMIT 1`,
+          [rawEmail]
+        )
+        rows = Array.isArray(mRows) ? mRows : []
+      }
+
+      if (rows.length === 0) {
+        await auditOrderFormAction({
+          req,
+          user,
+          action,
+          outcome: 'success',
+          correlationId,
+          targetId: targetId(body),
+          durationMs: Date.now() - startedAt,
+        })
+        return json({ ok: true, data: { found: false, buyer: null }, correlationId }, 200)
+      }
+
+      const row = rows[0] as Record<string, unknown>
+      const name = String(row.name_of_client || '').trim()
+      const clientType = String(row.client_category_updated || row.client_category || '').trim()
+      const billingAddress = String(row.billing_address || '').trim()
+      const shippingAddress = String(row.shipping_address || billingAddress).trim()
+      const clientId = String(row.buyer_id || row.order_id || '').trim()
+      const mobileFound = String(row.mobile || cleanMobile || rawMobile).trim()
+      const emailFound = String(row.email || rawEmail).trim()
+
+      let pinCode = ''
+      const tokens = `${billingAddress} ${shippingAddress}`.split(/[\s,\r\n]+/)
+      for (const token of tokens) {
+        if (/^[1-9][0-9]{5}$/.test(token)) {
+          pinCode = token
+        }
+      }
+
+      let pan = ''
+      for (const token of tokens) {
+        const upper = token.toUpperCase()
+        if (/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(upper)) {
+          pan = upper
+          break
+        }
+      }
+
+      const buyer = {
+        clientId,
+        name,
+        mobile: cleanMobile || mobileFound,
+        email: emailFound,
+        clientType,
+        gst: '',
+        pan,
+        pinCode,
+        billingAddress,
+        shippingAddress,
+      }
+
+      await auditOrderFormAction({
+        req,
+        user,
+        action,
+        outcome: 'success',
+        correlationId,
+        targetId: targetId(body),
+        durationMs: Date.now() - startedAt,
+      })
+
+      return json(
+        {
+          ok: true,
+          data: {
+            found: true,
+            buyer,
+          },
+          correlationId,
+        },
+        200
+      )
+    } catch {
+      await auditOrderFormAction({
+        req,
+        user,
+        action,
+        outcome: 'failure',
+        correlationId,
+        targetId: targetId(body),
+        durationMs: Date.now() - startedAt,
+        errorCode: 'DATABASE_ERROR',
+      })
+      return error(500, 'DATABASE_ERROR', 'Failed to search buyer in database.', correlationId)
+    }
+  }
+
   const appsScript = resolveAppsScriptConfig()
   if (!appsScript) {
     await auditOrderFormAction({ req, user, action, outcome: 'failure', correlationId, targetId: targetId(body), errorCode: 'NOT_CONFIGURED' })
     return error(503, 'NOT_CONFIGURED', 'Order service is not configured.', correlationId)
+  }
+
+  // Server-side enforcement: Lock orderPlacedBy to authenticated session user and ensure quantities are integers
+  if (action === 'submit' && body.payload && typeof body.payload === 'object') {
+    const payload = body.payload as Record<string, unknown>
+    if (payload.form && typeof payload.form === 'object') {
+      const form = payload.form as Record<string, unknown>
+      if (sessionUserName) {
+        form.orderPlacedBy = sessionUserName
+      }
+    }
+    if (Array.isArray(payload.products)) {
+      payload.products = payload.products.map((p) => {
+        if (p && typeof p === 'object') {
+          const prod = p as Record<string, unknown>
+          const qty = Math.max(1, Math.floor(Number(prod.quantity) || 1))
+          return { ...prod, quantity: qty }
+        }
+        return p
+      })
+    }
   }
 
   try {
@@ -272,23 +440,6 @@ export async function POST(req: NextRequest) {
       const safe = publicUpstreamError(action, upstream)
       await auditOrderFormAction({ req, user, action, outcome: 'failure', correlationId, targetId: targetId(body), durationMs: Date.now() - startedAt, errorCode: safe.code })
       return error(upstreamResponse.ok ? 422 : 502, safe.code, safe.message, correlationId)
-    }
-
-    if (action === 'findBuyer' && upstream.data && typeof upstream.data === 'object') {
-      const data = upstream.data as Record<string, unknown>
-      if (data.found && data.buyer && typeof data.buyer === 'object') {
-        const buyer = data.buyer as Record<string, unknown>
-        // Validate pincode if present (strict 6-digit PIN code, no heuristic string derivation)
-        if (buyer.pinCode !== undefined && buyer.pinCode !== null) {
-          const pin = String(buyer.pinCode).trim()
-          buyer.pinCode = /^[1-9][0-9]{5}$/.test(pin) ? pin : ''
-        }
-        // Validate PAN if present (strict 10-character format, no heuristic substring derivation)
-        if (buyer.pan !== undefined && buyer.pan !== null) {
-          const pan = String(buyer.pan).trim().toUpperCase()
-          buyer.pan = /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan) ? pan : ''
-        }
-      }
     }
 
     await auditOrderFormAction({ req, user, action, outcome: 'success', correlationId, targetId: targetId(body), durationMs: Date.now() - startedAt })
