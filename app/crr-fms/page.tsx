@@ -690,6 +690,8 @@ export default function CRRCallingProcessPage() {
     // "Guest Feedback & Outcome Confirmation" modal (Stage 4)
     const [activeFeedbackGuestId, setActiveFeedbackGuestId] = useState<number | null>(null);
     const [feedbackDoerRemarks, setFeedbackDoerRemarks] = useState("");
+    // UI-only switch for the Stage 4 form. It is never sent to the API and never stored.
+    const [guestAllowedFeedback, setGuestAllowedFeedback] = useState<"yes" | "no" | "">("");
     const [feedbackFormError, setFeedbackFormError] = useState("");
     const [feedbackSaved, setFeedbackSaved] = useState(false);
 
@@ -1801,19 +1803,22 @@ export default function CRRCallingProcessPage() {
         if (!g) return;
         setActiveFeedbackGuestId(id);
         const s4Saved = getStageSavedData(g, 4);
-        setFeedbackDoerRemarks(s4Saved?.doerRemarks || g.guestFeedback?.doerRemarks || "");
+        const savedRemarks = s4Saved?.doerRemarks || g.guestFeedback?.doerRemarks || "";
+        setFeedbackDoerRemarks(savedRemarks);
+        setGuestAllowedFeedback(savedRemarks.trim() !== "" ? "no" : "");
         setFeedbackFormError("");
         setFeedbackSaved(false);
     }
 
     function closeFeedbackModal() {
         setActiveFeedbackGuestId(null);
+        setGuestAllowedFeedback("");
         setFeedbackFormError("");
         setFeedbackSaved(false);
     }
 
     function isFeedbackFormComplete() {
-        return feedbackDoerRemarks.trim() !== "";
+        return guestAllowedFeedback === "no" && feedbackDoerRemarks.trim() !== "";
     }
 
     async function saveFeedbackModal() {
@@ -1825,8 +1830,8 @@ export default function CRRCallingProcessPage() {
             return;
         }
         if (!isFeedbackFormComplete() || feedbackSaved) {
-            if (!isFeedbackFormComplete()) {
-                setFeedbackFormError("Doer Remarks is compulsory. Please fill it in before saving.");
+            if (guestAllowedFeedback === "no" && feedbackDoerRemarks.trim() === "") {
+                setFeedbackFormError("Remarks are compulsory when the guest is not giving feedback. Please fill them in before saving.");
             }
             return;
         }
@@ -4338,40 +4343,80 @@ export default function CRRCallingProcessPage() {
                                     </div>
                                 )}
                                 <div className="grid grid-cols-1 gap-4">
-                                    {/* Row 1: Feedback Taking URL */}
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
-                                            Feedback Taking URL
-                                        </Label>
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                            <a
-                                                href={buildFeedbackFormUrl(activeFeedbackGuest.bookingId)}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-md px-3 py-2 shadow-sm transition-colors"
-                                            >
-                                                <Send className="h-3.5 w-3.5" />
-                                                Open Feedback Form for {activeFeedbackGuest.bookingId}
-                                            </a>
+                                    {isStage4Complete ? (
+                                        // Completed: read-only. Yes / No was only a form helper and is not stored, so only the saved remarks are shown.
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">Remarks</Label>
+                                            <div className="bg-white border border-slate-200 rounded-md p-3.5 text-xs font-medium text-slate-700 leading-relaxed whitespace-pre-wrap min-h-[60px]">
+                                                {feedbackDoerRemarks || "No remarks entered"}
+                                            </div>
                                         </div>
-                                        <p className="text-[11px] text-slate-500 break-all">
-                                            {buildFeedbackFormUrl(activeFeedbackGuest.bookingId)}
-                                        </p>
-                                    </div>
+                                    ) : (
+                                        <>
+                                            {/* Row 1: Guest Allowed to Give Feedback (dropdown - yes, no). UI-only: never sent or stored. */}
+                                            <div className="space-y-2">
+                                                <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                                                    Guest Allowed to Give Feedback <span className="text-red-500 font-bold">*</span>
+                                                </Label>
+                                                <Select
+                                                    value={guestAllowedFeedback}
+                                                    disabled={isFeedbackDisabled}
+                                                    onValueChange={(val: "yes" | "no") => {
+                                                        setGuestAllowedFeedback(val);
+                                                        setFeedbackFormError("");
+                                                        setFeedbackSaved(false);
+                                                    }}
+                                                >
+                                                    <SelectTrigger className="h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-amber-600 focus:ring-2 focus:ring-amber-200 bg-white text-slate-900 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
+                                                        <SelectValue placeholder="Select Yes / No" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="yes">Yes</SelectItem>
+                                                        <SelectItem value="no">No</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
 
-                                    {/* Row 2: Doer Remarks — editable textarea prefilled with backend/saved remarks */}
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
-                                            Doer Remarks <span className="text-red-500 font-bold">*</span>
-                                        </Label>
-                                        <Textarea
-                                            value={feedbackDoerRemarks}
-                                            disabled={isFeedbackDisabled}
-                                            onChange={(e) => { setFeedbackDoerRemarks(e.target.value); setFeedbackSaved(false); }}
-                                            placeholder="Remarks from the doer regarding the feedback / outcome..."
-                                            className="min-h-[90px] border-2 border-slate-700 hover:border-slate-900 focus:border-amber-600 focus:ring-2 focus:ring-amber-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
-                                        />
-                                    </div>
+                                            {/* Row 2 (if YES): only the feedback taking url and the Close button */}
+                                            {guestAllowedFeedback === "yes" && !s4Lock.isLocked && (
+                                                <div className="space-y-2 p-4 bg-white/80 border border-amber-300 rounded-lg shadow-sm">
+                                                    <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                                                        Feedback Taking URL
+                                                    </Label>
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <a
+                                                            href={buildFeedbackFormUrl(activeFeedbackGuest.bookingId)}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-md px-3 py-2 shadow-sm transition-colors"
+                                                        >
+                                                            <Send className="h-3.5 w-3.5" />
+                                                            Open Feedback Form for {activeFeedbackGuest.bookingId}
+                                                        </a>
+                                                    </div>
+                                                    <p className="text-[11px] text-slate-500 break-all">
+                                                        {buildFeedbackFormUrl(activeFeedbackGuest.bookingId)}
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            {/* Row 3 (if NO): remarks, then Save once they are filled in */}
+                                            {guestAllowedFeedback === "no" && (
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                                                        Remarks <span className="text-red-500 font-bold">*</span>
+                                                    </Label>
+                                                    <Textarea
+                                                        value={feedbackDoerRemarks}
+                                                        disabled={isFeedbackDisabled}
+                                                        onChange={(e) => { setFeedbackDoerRemarks(e.target.value); setFeedbackSaved(false); }}
+                                                        placeholder="Enter remarks explaining why the guest is not giving feedback..."
+                                                        className="min-h-[90px] border-2 border-slate-700 hover:border-slate-900 focus:border-amber-600 focus:ring-2 focus:ring-amber-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                    />
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
                                 </div>
                                 {feedbackFormError && (
                                     <div className="flex items-center gap-2 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
@@ -4386,7 +4431,7 @@ export default function CRRCallingProcessPage() {
                             <Button variant="outline" size="sm" onClick={closeFeedbackModal} disabled={feedbackSaved} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
                                 Close
                             </Button>
-                            {!isFeedbackDisabled && (
+                            {!isFeedbackDisabled && isFeedbackFormComplete() && (
                                 <Button
                                     size="sm"
                                     onClick={saveFeedbackModal}
