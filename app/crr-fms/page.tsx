@@ -81,6 +81,7 @@ import {
     Check,
     Contact,
     ExternalLink,
+    UserX,
 } from "lucide-react";
 
 /* =========================================================
@@ -575,7 +576,7 @@ export default function CRRCallingProcessPage() {
     // pagination
     // View mode and tables tab
     const [viewMode, setViewMode] = useState<"table" | "chart">("table");
-    const [recordsViewTab, setRecordsViewTab] = useState<"all" | "pending" | "completed" | "cancelled">("all");
+    const [recordsViewTab, setRecordsViewTab] = useState<"all" | "pending" | "completed" | "cancelled" | "not_checkedin_yet">("all");
 
     // Pending records pagination
     const [pendingPage, setPendingPage] = useState(1);
@@ -591,6 +592,11 @@ export default function CRRCallingProcessPage() {
     const [cancelledPage, setCancelledPage] = useState(1);
     const [cancelledItemsPerPage, setCancelledItemsPerPage] = useState(20);
     const [cancelledGotoPage, setCancelledGotoPage] = useState("");
+
+    // Not CheckedIn Yet records pagination
+    const [notCheckedInPage, setNotCheckedInPage] = useState(1);
+    const [notCheckedInItemsPerPage, setNotCheckedInItemsPerPage] = useState(20);
+    const [notCheckedInGotoPage, setNotCheckedInGotoPage] = useState("");
 
     // modal edit fields
     const [modalDate, setModalDate] = useState("");
@@ -691,6 +697,7 @@ export default function CRRCallingProcessPage() {
 
     // "Referral Collection & Lead Generation" modal (Stage 8)
     const [activeReferralGuestId, setActiveReferralGuestId] = useState<number | null>(null);
+    const [guestAllowedReferral, setGuestAllowedReferral] = useState<"yes" | "no" | "">("");
     const [referralTakenStatus, setReferralTakenStatus] = useState("");
     const [referralDoerRemarks, setReferralDoerRemarks] = useState("");
     const [referralFormError, setReferralFormError] = useState("");
@@ -906,7 +913,8 @@ export default function CRRCallingProcessPage() {
         setPendingPage(1);
         setCompletedPage(1);
         setCancelledPage(1);
-    }, [search, stageFilter, respFilter, statusFilter, dateRangeFilter, customStartDate, customEndDate, pendingItemsPerPage, completedItemsPerPage, cancelledItemsPerPage]);
+        setNotCheckedInPage(1);
+    }, [search, stageFilter, respFilter, statusFilter, dateRangeFilter, customStartDate, customEndDate, pendingItemsPerPage, completedItemsPerPage, cancelledItemsPerPage, notCheckedInItemsPerPage]);
 
     // Safety net: Radix Dropdown -> Dialog transitions can occasionally leave
     // `pointer-events: none` stuck on <body>, freezing the whole page (clicks
@@ -976,7 +984,9 @@ export default function CRRCallingProcessPage() {
     // Record-level separation into Pending, Completed, and Cancelled:
     const pendingRows = useMemo(() => {
         if (statusFilter === "complete" || statusFilter === "cancelled") return [];
-        const list = rows.filter((g) => !isRecordCompleted(g) && !isBookingCancelled(g));
+        const list = rows.filter(
+            (g) => !isRecordCompleted(g) && !isBookingCancelled(g) && !g.notCheckedInYet
+        );
         // Not-yet-actionable bookings (check-in after tomorrow) sink to the bottom.
         // The rest default to newest check-in first, unless the user picked a column sort.
         const active = list.filter((g) => !isFutureCheckin(g.checkin));
@@ -992,12 +1002,19 @@ export default function CRRCallingProcessPage() {
 
     const completedRows = useMemo(() => {
         if (statusFilter === "pending" || statusFilter === "cancelled") return [];
-        return rows.filter((g) => isRecordCompleted(g) && !isBookingCancelled(g));
+        return rows.filter((g) => isRecordCompleted(g) && !isBookingCancelled(g) && !g.notCheckedInYet);
     }, [rows, isRecordCompleted, statusFilter]);
 
     const cancelledRows = useMemo(() => {
         if (statusFilter === "pending" || statusFilter === "complete") return [];
         return rows.filter((g) => isBookingCancelled(g));
+    }, [rows, statusFilter]);
+
+    // Not CheckedIn Yet rows: records whose booking_id has no match in ktahv_checkinmasterfms.
+    // These are excluded from Pending and Completed to prevent dual-display.
+    const notCheckedInYetRows = useMemo(() => {
+        if (statusFilter === "complete" || statusFilter === "cancelled") return [];
+        return rows.filter((g) => g.notCheckedInYet === true);
     }, [rows, statusFilter]);
 
     // Pending pagination derived
@@ -1042,6 +1059,20 @@ export default function CRRCallingProcessPage() {
         setCancelledGotoPage("");
     }
 
+    // Not CheckedIn Yet pagination derived
+    const notCheckedInTotalPages = Math.max(1, Math.ceil(notCheckedInYetRows.length / notCheckedInItemsPerPage));
+    const notCheckedInStartIndex = (notCheckedInPage - 1) * notCheckedInItemsPerPage;
+    const notCheckedInEndIndex = Math.min(notCheckedInStartIndex + notCheckedInItemsPerPage, notCheckedInYetRows.length);
+    const pagedNotCheckedInRows = notCheckedInYetRows.slice(notCheckedInStartIndex, notCheckedInEndIndex);
+
+    function handleNotCheckedInGotoPage() {
+        const p = parseInt(notCheckedInGotoPage, 10);
+        if (!isNaN(p) && p >= 1 && p <= notCheckedInTotalPages) {
+            setNotCheckedInPage(p);
+        }
+        setNotCheckedInGotoPage("");
+    }
+
     const isStagePending = (g: Guest, stageNo: number) =>
         !isBookingCancelled(g) && g.stageStatus[stageNo - 1] !== "Complete";
 
@@ -1055,12 +1086,14 @@ export default function CRRCallingProcessPage() {
         completeCount,
         actionablePendingCount,
         cancelledCount,
+        notCheckedInCount,
         totalPipelineCount,
         referralsGeneratedCount,
     } = useMemo(() => {
         let activePend = 0;
         let actionablePend = 0;
         let cancelled = 0;
+        let notCheckedIn = 0;
         let referrals = 0;
 
         const stageNum = stageFilter !== "all" ? Number(stageFilter) : null;
@@ -1070,6 +1103,9 @@ export default function CRRCallingProcessPage() {
             const isCancelled = isBookingCancelled(g);
             if (isCancelled) {
                 cancelled++;
+            } else if (g.notCheckedInYet) {
+                // Not-checked-in records are tracked separately; excluded from Pending counts
+                notCheckedIn++;
             } else if (!isRecordCompleted(g)) {
                 activePend++;
                 // "Actionable now" = the subset of pendingRows that is already unlocked
@@ -1099,6 +1135,7 @@ export default function CRRCallingProcessPage() {
             completeCount: compCount,
             actionablePendingCount: actionablePend,
             cancelledCount: cancCount,
+            notCheckedInCount: notCheckedIn,
             totalPipelineCount: overallRecords.length,
             referralsGeneratedCount: referrals,
         };
@@ -1107,8 +1144,8 @@ export default function CRRCallingProcessPage() {
     /* ---------- PENDING REPORT (doer x stage) ---------- */
     // Scoped to the current filtered `rows`, with single-pass stage tallying for high performance
     const pendingReport = useMemo(() => {
-        // Cancelled bookings are auto-closed: none of their stages count as pending.
-        const activeRows = rows.filter((g) => !isBookingCancelled(g));
+        // Cancelled and not-checked-in-yet bookings are excluded: they have no actionable stages.
+        const activeRows = rows.filter((g) => !isBookingCancelled(g) && !g.notCheckedInYet);
 
         // Pre-calculate pending counts per stage in a single pass over activeRows (O(N) instead of O(users * stages * N))
         const stagePendingCountArray = new Array(STAGES.length).fill(0);
@@ -1822,7 +1859,16 @@ export default function CRRCallingProcessPage() {
         if (!g) return;
         setActiveReferralGuestId(id);
         const s8Saved = getStageSavedData(g, 8);
-        setReferralTakenStatus(s8Saved?.referralTakenStatus || s8Saved?.doerStatus || g.referralCollection?.referralTakenStatus || "");
+        const savedStatus = (s8Saved?.referralTakenStatus || s8Saved?.doerStatus || g.referralCollection?.referralTakenStatus || "").trim();
+        const normStatus = savedStatus.toLowerCase();
+        let allowed: "yes" | "no" | "" = "";
+        if (normStatus === "yes" || normStatus === "y") {
+            allowed = "yes";
+        } else if (normStatus === "no" || normStatus === "n" || normStatus === "declined") {
+            allowed = "no";
+        }
+        setGuestAllowedReferral(allowed);
+        setReferralTakenStatus(savedStatus || (allowed === "yes" ? "Yes" : allowed === "no" ? "No" : ""));
         setReferralDoerRemarks(s8Saved?.doerRemarks || g.referralCollection?.doerRemarks || "");
         setReferralFormError("");
         setReferralSaved(false);
@@ -1830,12 +1876,15 @@ export default function CRRCallingProcessPage() {
 
     function closeReferralModal() {
         setActiveReferralGuestId(null);
+        setGuestAllowedReferral("");
+        setReferralTakenStatus("");
+        setReferralDoerRemarks("");
         setReferralFormError("");
         setReferralSaved(false);
     }
 
     function isReferralFormComplete() {
-        return referralTakenStatus.trim() !== "" && referralDoerRemarks.trim() !== "";
+        return guestAllowedReferral === "no" && referralDoerRemarks.trim() !== "";
     }
 
     async function saveReferralModal() {
@@ -1850,9 +1899,9 @@ export default function CRRCallingProcessPage() {
             setReferralFormError("Stage 8 is already completed — saved data is read-only.");
             return;
         }
-        if (!isReferralFormComplete() || referralSaved) {
-            if (!isReferralFormComplete()) {
-                setReferralFormError("Referral Taken Status and Doer Remarks are compulsory. Please fill them in before saving.");
+        if (guestAllowedReferral !== "no" || referralDoerRemarks.trim() === "" || referralSaved) {
+            if (referralDoerRemarks.trim() === "") {
+                setReferralFormError("Remarks are compulsory when guest is not giving referral. Please fill them in before saving.");
             }
             return;
         }
@@ -1862,8 +1911,8 @@ export default function CRRCallingProcessPage() {
         const guestId = activeReferralGuest.id;
         const targetId = activeReferralGuest.bookingId || activeReferralGuest.uid;
         const data = {
-            doerStatus: referralTakenStatus,
-            doerRemarks: referralDoerRemarks,
+            doerStatus: "No",
+            doerRemarks: referralDoerRemarks.trim(),
         };
 
         closeReferralModal();
@@ -1872,7 +1921,7 @@ export default function CRRCallingProcessPage() {
 
         try {
             await saveStageWithRole(targetId, 8, data);
-            toast.success("Referral Collection saved successfully!", { id: toastId });
+            toast.success("Referral details saved successfully!", { id: toastId });
             refetchGuests();
         } catch (err) {
             const msg = err instanceof Error ? err.message : "Save failed. Please try again.";
@@ -2019,13 +2068,10 @@ export default function CRRCallingProcessPage() {
             case 8: {
                 const isComplete = g.stageStatus[7] === "Complete";
                 const lock = stageDateLock(8, gateOf(g, 8));
-                if (isComplete) {
-                    openReferralModal(guestId);
-                } else if (lock) {
+                if (lock && !isComplete) {
                     toast.info(lock);
-                } else {
-                    window.open(buildReferralFormUrl(g.bookingId), "_blank", "noopener,noreferrer");
                 }
+                openReferralModal(guestId);
                 break;
             }
             case 9:
@@ -2123,26 +2169,27 @@ export default function CRRCallingProcessPage() {
         ]
         : [];
 
-    /* ---------- RENDER A RECORDS TABLE (Pending, Completed, or Cancelled) ---------- */
-    const renderRecordsTable = (tableType: "pending" | "completed" | "cancelled") => {
-        const isPendingTable = tableType === "pending";
-        const isCompletedTable = tableType === "completed";
-        const isCancelledTable = tableType === "cancelled";
+    /* ---------- RENDER A RECORDS TABLE (Pending, Completed, Cancelled, or Not CheckedIn Yet) ---------- */
+    const renderRecordsTable = (tableType: "pending" | "completed" | "cancelled" | "not_checkedin_yet") => {
+        const isPendingTable      = tableType === "pending";
+        const isCompletedTable    = tableType === "completed";
+        const isCancelledTable    = tableType === "cancelled";
+        const isNotCheckedInTable = tableType === "not_checkedin_yet";
 
-        const tableRows = isPendingTable ? pendingRows : isCompletedTable ? completedRows : cancelledRows;
-        const pagedList = isPendingTable ? pagedPendingRows : isCompletedTable ? pagedCompletedRows : pagedCancelledRows;
-        const curPage = isPendingTable ? pendingPage : isCompletedTable ? completedPage : cancelledPage;
-        const setCurPage = isPendingTable ? setPendingPage : isCompletedTable ? setCompletedPage : setCancelledPage;
-        const itemsPage = isPendingTable ? pendingItemsPerPage : isCompletedTable ? completedItemsPerPage : cancelledItemsPerPage;
-        const setItemsPage = isPendingTable ? setPendingItemsPerPage : isCompletedTable ? setCompletedItemsPerPage : setCancelledItemsPerPage;
-        const totalP = isPendingTable ? pendingTotalPages : isCompletedTable ? completedTotalPages : cancelledTotalPages;
-        const startIdx = isPendingTable ? pendingStartIndex : isCompletedTable ? completedStartIndex : cancelledStartIndex;
-        const endIdx = isPendingTable ? pendingEndIndex : isCompletedTable ? completedEndIndex : cancelledEndIndex;
-        const gotoP = isPendingTable ? pendingGotoPage : isCompletedTable ? completedGotoPage : cancelledGotoPage;
-        const setGotoP = isPendingTable ? setPendingGotoPage : isCompletedTable ? setCompletedGotoPage : setCancelledGotoPage;
-        const onGoto = isPendingTable ? handlePendingGotoPage : isCompletedTable ? handleCompletedGotoPage : handleCancelledGotoPage;
+        const tableRows  = isPendingTable ? pendingRows      : isCompletedTable ? completedRows      : isNotCheckedInTable ? notCheckedInYetRows   : cancelledRows;
+        const pagedList  = isPendingTable ? pagedPendingRows : isCompletedTable ? pagedCompletedRows : isNotCheckedInTable ? pagedNotCheckedInRows : pagedCancelledRows;
+        const curPage    = isPendingTable ? pendingPage      : isCompletedTable ? completedPage      : isNotCheckedInTable ? notCheckedInPage       : cancelledPage;
+        const setCurPage = isPendingTable ? setPendingPage   : isCompletedTable ? setCompletedPage   : isNotCheckedInTable ? setNotCheckedInPage    : setCancelledPage;
+        const itemsPage  = isPendingTable ? pendingItemsPerPage    : isCompletedTable ? completedItemsPerPage    : isNotCheckedInTable ? notCheckedInItemsPerPage    : cancelledItemsPerPage;
+        const setItemsPage = isPendingTable ? setPendingItemsPerPage : isCompletedTable ? setCompletedItemsPerPage : isNotCheckedInTable ? setNotCheckedInItemsPerPage : setCancelledItemsPerPage;
+        const totalP     = isPendingTable ? pendingTotalPages    : isCompletedTable ? completedTotalPages    : isNotCheckedInTable ? notCheckedInTotalPages    : cancelledTotalPages;
+        const startIdx   = isPendingTable ? pendingStartIndex    : isCompletedTable ? completedStartIndex    : isNotCheckedInTable ? notCheckedInStartIndex    : cancelledStartIndex;
+        const endIdx     = isPendingTable ? pendingEndIndex      : isCompletedTable ? completedEndIndex      : isNotCheckedInTable ? notCheckedInEndIndex      : cancelledEndIndex;
+        const gotoP      = isPendingTable ? pendingGotoPage      : isCompletedTable ? completedGotoPage      : isNotCheckedInTable ? notCheckedInGotoPage      : cancelledGotoPage;
+        const setGotoP   = isPendingTable ? setPendingGotoPage   : isCompletedTable ? setCompletedGotoPage   : isNotCheckedInTable ? setNotCheckedInGotoPage   : setCancelledGotoPage;
+        const onGoto     = isPendingTable ? handlePendingGotoPage : isCompletedTable ? handleCompletedGotoPage : isNotCheckedInTable ? handleNotCheckedInGotoPage : handleCancelledGotoPage;
 
-        const title = isPendingTable ? "Pending Records" : isCompletedTable ? "Completed Records" : "Cancelled Records";
+        const title = isPendingTable ? "Pending Records" : isCompletedTable ? "Completed Records" : isNotCheckedInTable ? "Not CheckedIn Yet" : "Cancelled Records";
         const subtitle = isPendingTable
             ? (isAdminRole
                 ? "Records where one or more required workflow stages are still pending"
@@ -2151,30 +2198,40 @@ export default function CRRCallingProcessPage() {
             ? (isAdminRole
                 ? "Records where all 11 required workflow stages are completed"
                 : `Records where all stages accessible to you (${userAccessibleStages.map(n => `Stage ${n}`).join(", ")}) are completed`)
+            : isNotCheckedInTable
+            ? "Guests whose Booking ID has not yet appeared in the Check-In Master — workflow stages cannot begin until check-in is recorded"
             : "Cancelled bookings with auto-closed guest journeys (no pending tasks required)";
 
         const badgeClass = isPendingTable
             ? "bg-amber-100 text-amber-800 border-amber-300"
             : isCompletedTable
             ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+            : isNotCheckedInTable
+            ? "bg-indigo-100 text-indigo-800 border-indigo-300"
             : "bg-rose-100 text-rose-800 border-rose-300";
 
         const iconHeaderBg = isPendingTable
             ? "bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 border-amber-600/30"
             : isCompletedTable
             ? "bg-gradient-to-br from-emerald-500 via-teal-500 to-emerald-600 border-emerald-600/30"
+            : isNotCheckedInTable
+            ? "bg-gradient-to-br from-indigo-500 via-violet-500 to-indigo-600 border-indigo-600/30"
             : "bg-gradient-to-br from-rose-500 via-red-500 to-rose-600 border-rose-600/30";
 
         const headerGradient = isPendingTable
             ? "bg-gradient-to-r from-amber-50 via-white to-orange-50 border-b border-amber-200"
             : isCompletedTable
             ? "bg-gradient-to-r from-emerald-50 via-white to-teal-50 border-b border-emerald-200"
+            : isNotCheckedInTable
+            ? "bg-gradient-to-r from-indigo-50 via-white to-violet-50 border-b border-indigo-200"
             : "bg-gradient-to-r from-rose-50 via-white to-red-50 border-b border-rose-200";
 
         const cardBorder = isPendingTable
             ? "border-amber-200/90"
             : isCompletedTable
             ? "border-emerald-200/90"
+            : isNotCheckedInTable
+            ? "border-indigo-200/90"
             : "border-rose-200/90";
 
         return (
@@ -2187,6 +2244,8 @@ export default function CRRCallingProcessPage() {
                                 <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                             ) : isCompletedTable ? (
                                 <CheckCircle2 className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+                            ) : isNotCheckedInTable ? (
+                                <UserX className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                             ) : (
                                 <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                             )}
@@ -2301,6 +2360,8 @@ export default function CRRCallingProcessPage() {
                                                 ? "No pending records match the current filters."
                                                 : isCompletedTable
                                                 ? "No completed records match the current filters."
+                                                : isNotCheckedInTable
+                                                ? "No records awaiting check-in match the current filters."
                                                 : "No cancelled records match the current filters."}
                                         </td>
                                     </tr>
@@ -2674,12 +2735,8 @@ export default function CRRCallingProcessPage() {
                                                                             onSelect={(e) => {
                                                                                 e.preventDefault();
                                                                                 if (isComplete) return;
-                                                                                if (lockMsg) { toast.info(lockMsg); return; }
-                                                                                if (isComplete) {
-                                                                                    setTimeout(() => openReferralModal(g.id), 0);
-                                                                                } else {
-                                                                                    window.open(buildReferralFormUrl(g.bookingId), "_blank", "noopener,noreferrer");
-                                                                                }
+                                                                                if (lockMsg) toast.info(lockMsg);
+                                                                                setTimeout(() => openReferralModal(g.id), 0);
                                                                             }}
                                                                             className="flex items-center justify-between gap-2.5 text-green-600 focus:text-green-700 cursor-pointer disabled:opacity-40"
                                                                         >
@@ -3174,7 +3231,7 @@ export default function CRRCallingProcessPage() {
                                         Follow-up Distribution
                                     </h4>
                                 </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
                                     {/* Total Guests */}
                                     <div className="bg-blue-50/70 border-2 border-blue-300 rounded-lg p-3 shadow-sm hover:shadow-md transition">
                                         <p className="text-[10px] font-bold uppercase tracking-wide text-blue-700 leading-tight mb-2">
@@ -3211,6 +3268,19 @@ export default function CRRCallingProcessPage() {
                                         </p>
                                         <p className="text-[10px] text-green-600 font-semibold mt-1">
                                             Fully closed journeys (excl. cancelled)
+                                        </p>
+                                    </div>
+
+                                    {/* Not CheckedIn Yet */}
+                                    <div className="bg-indigo-50/70 border-2 border-indigo-300 rounded-lg p-3 shadow-sm hover:shadow-md transition">
+                                        <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-700 leading-tight mb-2">
+                                            Not CheckedIn Yet
+                                        </p>
+                                        <p className="text-3xl font-extrabold text-slate-900 leading-none mb-2">
+                                            {notCheckedInCount}
+                                        </p>
+                                        <p className="text-[10px] text-indigo-600 font-semibold mt-1">
+                                            Awaiting check-in in master
                                         </p>
                                     </div>
 
@@ -3312,7 +3382,7 @@ export default function CRRCallingProcessPage() {
                                 <div>
                                     <h3 className="text-sm sm:text-base font-semibold text-slate-900 leading-tight">Guest Follow-up Records</h3>
                                     <p className="text-xs text-slate-500 mt-0.5">
-                                        Showing guest follow-up records separated into Pending, Completed, and Cancelled
+                                        Showing guest follow-up records separated into Pending, Completed, Not CheckedIn Yet, and Cancelled
                                     </p>
                                 </div>
                             </div>
@@ -3350,6 +3420,17 @@ export default function CRRCallingProcessPage() {
                                     >
                                         <CheckCircle2 className="w-3.5 h-3.5" />
                                         Completed ({completedRows.length})
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setRecordsViewTab("not_checkedin_yet")}
+                                        className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${recordsViewTab === "not_checkedin_yet"
+                                                ? "bg-indigo-600 text-white shadow-xs font-bold"
+                                                : "text-slate-600 hover:text-indigo-700"
+                                            }`}
+                                    >
+                                        <UserX className="w-3.5 h-3.5" />
+                                        Not CheckedIn Yet ({notCheckedInYetRows.length})
                                     </button>
                                     <button
                                         type="button"
@@ -3413,6 +3494,7 @@ export default function CRRCallingProcessPage() {
                             <div className="space-y-6">
                                 {(recordsViewTab === "all" || recordsViewTab === "pending") && renderRecordsTable("pending")}
                                 {(recordsViewTab === "all" || recordsViewTab === "completed") && renderRecordsTable("completed")}
+                                {(recordsViewTab === "all" || recordsViewTab === "not_checkedin_yet") && renderRecordsTable("not_checkedin_yet")}
                                 {(recordsViewTab === "all" || recordsViewTab === "cancelled") && renderRecordsTable("cancelled")}
                             </div>
                         ) : (
@@ -4351,16 +4433,16 @@ export default function CRRCallingProcessPage() {
                                 onViewFullDetails={() => openDetailsModal(activeReferralGuest.id, "Client & Booking Details")}
                             />
 
-                            {/* Referral details card — non-edited if data exists, editable if pending */}
+                            {/* Referral details card — non-edited if data exists/completed, editable if pending */}
                             {(() => {
-                                const hasData = Boolean(isStage8Complete || (referralDoerRemarks && referralDoerRemarks.trim() !== "") || (referralTakenStatus && referralTakenStatus.trim() !== ""));
+                                const isReadOnly = Boolean(isStage8Complete);
                                 return (
                                     <div className="rounded-xl border-2 border-emerald-400 bg-emerald-50/50 p-5 space-y-4 shadow-sm">
                                         <div className="flex items-center gap-2 pb-2 border-b border-emerald-200">
                                             <Users className="h-4 w-4 text-emerald-600" />
                                             <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-700">Referral Collection Details</h4>
-                                            <span className={`ml-auto text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${hasData ? 'text-slate-600 bg-slate-100 border border-slate-200' : 'text-emerald-800 bg-emerald-100 border border-emerald-300'}`}>
-                                                {hasData ? "Read Only" : "Fill in the details below"}
+                                            <span className={`ml-auto text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${isReadOnly ? 'text-slate-600 bg-slate-100 border border-slate-200' : 'text-emerald-800 bg-emerald-100 border border-emerald-300'}`}>
+                                                {isReadOnly ? "Read Only" : "Fill in the details below"}
                                             </span>
                                         </div>
                                         {activeReferralGuest && s8Lock.isLocked && !isStage8Complete && (
@@ -4370,9 +4452,39 @@ export default function CRRCallingProcessPage() {
                                             </div>
                                         )}
                                         <div className="grid grid-cols-1 gap-4">
-                                            {/* Row 1: Referral Taking URL — hidden once data exists or while the stage is not open */}
-                                            {!hasData && !s8Lock.isLocked && (
-                                                <div className="space-y-2">
+                                            {/* Row 1: Guest Allowed to Give Referral (dropdown - yes, no) */}
+                                            <div className="space-y-2">
+                                                <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                                                    Guest Allowed to Give Referral {!isReadOnly && <span className="text-red-500 font-bold">*</span>}
+                                                </Label>
+                                                {isReadOnly ? (
+                                                    <div className="bg-white border border-slate-200 rounded-md p-3 text-xs font-medium text-slate-700">
+                                                        {guestAllowedReferral === "yes" ? "Yes" : guestAllowedReferral === "no" ? "No" : referralTakenStatus || "Not Specified"}
+                                                    </div>
+                                                ) : (
+                                                    <Select
+                                                        value={guestAllowedReferral}
+                                                        disabled={isReferralDisabled}
+                                                        onValueChange={(val: "yes" | "no") => {
+                                                            setGuestAllowedReferral(val);
+                                                            setReferralTakenStatus(val === "yes" ? "Yes" : "No");
+                                                            setReferralSaved(false);
+                                                        }}
+                                                    >
+                                                        <SelectTrigger className="h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
+                                                            <SelectValue placeholder="Select Yes / No" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="yes">Yes</SelectItem>
+                                                            <SelectItem value="no">No</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                )}
+                                            </div>
+
+                                            {/* Row 2 (if YES): only show the referral taking url and close button */}
+                                            {(guestAllowedReferral === "yes" || (isReadOnly && referralTakenStatus === "Yes")) && !s8Lock.isLocked && (
+                                                <div className="space-y-2 p-4 bg-white/80 border border-emerald-300 rounded-lg shadow-sm">
                                                     <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
                                                         Referral Taking URL
                                                     </Label>
@@ -4393,45 +4505,27 @@ export default function CRRCallingProcessPage() {
                                                 </div>
                                             )}
 
-                                            {/* Row 2: Referral Taken Status */}
-                                            <div className="space-y-2">
-                                                <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
-                                                    Referral Taken Status {!hasData && <span className="text-red-500 font-bold">*</span>}
-                                                </Label>
-                                                {hasData ? (
-                                                    <div className="bg-white border border-slate-200 rounded-md p-3 text-xs font-medium text-slate-700">
-                                                        {referralTakenStatus || "Not Taken"}
-                                                    </div>
-                                                ) : (
-                                                    <Input
-                                                        value={referralTakenStatus}
-                                                        disabled={isReferralDisabled}
-                                                        onChange={(e) => { setReferralTakenStatus(e.target.value); setReferralSaved(false); }}
-                                                        placeholder="e.g. Referral given, Follow-up needed, Declined..."
-                                                        className="h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
-                                                    />
-                                                )}
-                                            </div>
-
-                                            {/* Row 3: Doer Remarks */}
-                                            <div className="space-y-2">
-                                                <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
-                                                    Doer Remarks {!hasData && <span className="text-red-500 font-bold">*</span>}
-                                                </Label>
-                                                {hasData ? (
-                                                    <div className="bg-white border border-slate-200 rounded-md p-3.5 text-xs font-medium text-slate-700 leading-relaxed whitespace-pre-wrap min-h-[60px]">
-                                                        {referralDoerRemarks || "No remarks entered"}
-                                                    </div>
-                                                ) : (
-                                                    <Textarea
-                                                        value={referralDoerRemarks}
-                                                        disabled={isReferralDisabled}
-                                                        onChange={(e) => { setReferralDoerRemarks(e.target.value); setReferralSaved(false); }}
-                                                        placeholder="Remarks from the doer regarding the referral collection..."
-                                                        className="min-h-[90px] border-2 border-slate-700 hover:border-slate-900 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
-                                                    />
-                                                )}
-                                            </div>
+                                            {/* Row 3 (if NO): enable remarks so that user assigned stage 8 can fill remarks and then save */}
+                                            {(guestAllowedReferral === "no" || (isReadOnly && (referralTakenStatus === "No" || Boolean(referralDoerRemarks)))) && (
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                                                        Remarks {!isReadOnly && <span className="text-red-500 font-bold">*</span>}
+                                                    </Label>
+                                                    {isReadOnly ? (
+                                                        <div className="bg-white border border-slate-200 rounded-md p-3.5 text-xs font-medium text-slate-700 leading-relaxed whitespace-pre-wrap min-h-[60px]">
+                                                            {referralDoerRemarks || "No remarks entered"}
+                                                        </div>
+                                                    ) : (
+                                                        <Textarea
+                                                            value={referralDoerRemarks}
+                                                            disabled={isReferralDisabled}
+                                                            onChange={(e) => { setReferralDoerRemarks(e.target.value); setReferralSaved(false); }}
+                                                            placeholder="Enter remarks explaining why the guest declined or is not giving referral..."
+                                                            className="min-h-[90px] border-2 border-slate-700 hover:border-slate-900 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                        />
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                         {referralFormError && (
                                             <div className="flex items-center gap-2 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
@@ -4448,11 +4542,11 @@ export default function CRRCallingProcessPage() {
                             <Button variant="outline" size="sm" onClick={closeReferralModal} disabled={referralSaved} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
                                 Close
                             </Button>
-                            {!isStage8Complete && (
+                            {!isStage8Complete && guestAllowedReferral === "no" && referralDoerRemarks.trim() !== "" && (
                                 <Button
                                     size="sm"
                                     onClick={saveReferralModal}
-                                    disabled={isReferralDisabled || !isReferralFormComplete() || referralSaved}
+                                    disabled={isReferralDisabled || referralSaved}
                                     className="min-w-[112px] bg-green-600 hover:bg-green-700 text-white font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                                 >
                                     {referralSaved ? (

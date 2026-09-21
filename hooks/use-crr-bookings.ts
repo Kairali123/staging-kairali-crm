@@ -43,6 +43,8 @@ interface GasBookingRow {
     uid: string;
     bookingStatus: string;
     rowNumber: number;
+    /** True when booking_id has no matching reservation_id in ktahv_checkinmasterfms (set by API). */
+    notCheckedInYet?: boolean;
     stages?: StageInfo[]; // per-stage lock / planned-date / completion / savedData info from GAS
 }
 
@@ -309,6 +311,7 @@ function mapRow(row: GasBookingRow): Guest {
         mid: row.mid,
         uid: row.uid,
         bookingStatus: row.bookingStatus,
+        notCheckedInYet: row.notCheckedInYet ?? false,
 
         currentStage,
         allComplete,
