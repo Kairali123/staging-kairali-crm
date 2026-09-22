@@ -220,7 +220,7 @@ function mapRow(row: GasBookingRow): Guest {
             outcomeRemarks: s6!.outcomeRemarks,
             status: s6!.status,
             notDoneRemarks: s6!.notDoneRemarks,
-            followupDate: "", // no followupDate column for stage 6 (confirmed intentional)
+            followupDate: s6!.followupDate,
             stageKey: s6!.stageKey,
         } as Guest["safeReturn"])
         : undefined;

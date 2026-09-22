@@ -1716,6 +1716,7 @@ export default function CRRCallingProcessPage() {
             outcomeRemarks: safeReturnOutcomeRemarks,
             status: safeReturnStatus,
             notDoneRemarks: safeReturnStatus === "Not Done - Close" ? safeReturnNotDoneRemarks : "",
+            followupDate: safeReturnStatus === "Close Follow-up" ? safeReturnFollowupDate : "",
         };
 
         closeSafeReturnModal();
