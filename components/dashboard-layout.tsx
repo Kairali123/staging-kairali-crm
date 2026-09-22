@@ -213,6 +213,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "KAPPL New Order", icon: FileText, permission: "new-order-fms.view" },
     { name: "MR FMS", href: "/MR-FMS", icon: FileText, permission: "mr-fms.view" },
     { name: "KTAHV CRR Calling FMS", href: "/crr-fms", icon: FileText, permission: "crr_fms.view" },
+    { name: "KTAHV CRR Process Report Alert", href: "/ktahv-crr-process-report-alert", icon: AlertTriangle, permission: "crr_fms.view" },
     // { name: "KTAHV BOOKING FORM", href: "/fms/bookings/ktahv", icon: FileText, permission: "ktahv_booking_form.view", target: "_blank" },
     { name: "Unified Portal Hub", icon: LayoutGrid, permission: "portal_hub.view" },
     { name: "Meetings", href: "/meetings", icon: StickyNote, permission: "meetings.view" },

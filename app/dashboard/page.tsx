@@ -68,6 +68,17 @@ const allCards: QuickCard[] = [
   },
   {
     type: "fms",
+    name: "KTAHV CRR Process Report Alert",
+    href: "/ktahv-crr-process-report-alert",
+    icon: "⚠️",
+    desc: "KTAHV CRR Process Report & Daily Alerts",
+    pending: 0,
+    pendingPct: "0%",
+    delay: "0 Days",
+    permission: "crr_fms.view",
+  },
+  {
+    type: "fms",
     name: "FMS Pending Bottleneck Tracker",
     href: "/fms/pending-tasks",
     icon: "📈",
