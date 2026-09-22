@@ -21,10 +21,7 @@ const noStoreHeaders = {
 // instead of grouping the whole (200k+ row) table — keeps the fallback query fast
 // and its response small. See the `dateFrom`/`dateTo` path for scoped requests.
 const RECENT_SCAN_ROWS = 4000;
-// Hard cap on the final result set regardless of date range, so a wide/heavy
-// range (e.g. "This Month") degrades to "most recent N" instead of a multi-MB
-// dump that a serverless function can't return.
-const HARD_ROW_CAP = 1000;
+const RECENT_ROW_CAP = 1000;
 const MAX_HISTORY_ROWS = 200000;
 
 function hasReceivedLeadsAccess(user: any): boolean {
@@ -75,11 +72,88 @@ function mapCompany(dbCompany: string, websiteName: string): string {
     return "KAC";
 }
 
+function resolveLeadStatus(
+    calculatedStatus: string,
+    leadStatus: string,
+    finalOutcome?: string,
+    callStatus?: string,
+    finalCallStatus?: string,
+    followupStatus?: string,
+    followupTime?: string
+): string {
+    const calc = (calculatedStatus || "").trim().toLowerCase();
+    const ls = (leadStatus || "").trim().toLowerCase();
+    const fcs = (finalCallStatus || "").trim().toLowerCase();
+    const cs = (callStatus || "").trim().toLowerCase();
+    const outcome = (finalOutcome || "").trim().toLowerCase();
+    const fs = (followupStatus || "").trim().toLowerCase();
+
+    // 1. Explicitly Qualified or Verified
+    if (ls === "verified") return "Verified";
+    if (calc === "qualified" || ls === "qualified" || fcs === "interested") return "Qualified";
+    if (outcome && ["sale made", "converted", "product distributor", "product stockists", "individual products buying", "individual resort booking", "treatment package for resort", "treatment package for kairali centres", "ayurveda training", "yoga training", "order status enquiry", "expert required"].some(k => outcome.includes(k))) {
+        return "Qualified";
+    }
+
+    // 2. Exhausted retries -> Non-Qualified
+    if (fs.includes("max_followup_attempt_reached") || fs.includes("exhausted") || fs.includes("failed_to_schedule") || outcome.includes("max auto dial")) {
+        return "Non-Qualified";
+    }
+
+    // 3. Scheduled, Callback, or Unconnected Attempt -> Pending
+    if (
+        fcs === "call back" ||
+        fcs === "callback" ||
+        fs.includes("call_scheduled") ||
+        (followupTime && followupTime !== "" && followupTime !== "—") ||
+        cs === "notconnected" ||
+        cs === "not connected" ||
+        fcs.includes("not connected") ||
+        fcs.includes("notconnected") ||
+        outcome.includes("no answer") ||
+        outcome.includes("call rejected") ||
+        outcome.includes("not connected")
+    ) {
+        return "Pending";
+    }
+
+    // 4. Disqualified / Non-Qualified
+    if (
+        calc === "non-qualified" ||
+        calc === "unqualified" ||
+        ls === "unqualified" ||
+        fcs === "cold" ||
+        fcs === "not interested" ||
+        fcs === "dropped" ||
+        fcs === "junk" ||
+        fcs.includes("error") ||
+        fcs.includes("do not call") ||
+        outcome.includes("not interested") ||
+        outcome.includes("junk") ||
+        outcome.includes("did not enquire") ||
+        outcome.includes("dnc") ||
+        outcome.includes("cold")
+    ) {
+        return "Non-Qualified";
+    }
+
+    return "Pending";
+}
+
 // ─── Row → Frontend Shape ─────────────────────────────────────────────────────
 
 function mapRow(row: any): object {
     const websiteName = safeStr(row.website_name);
     const dbCompany = safeStr(row.company);
+    const resolvedStatus = resolveLeadStatus(
+        safeStr(row.calculated_qualification_status),
+        safeStr(row.lead_status),
+        safeStr(row.final_lead_outcome),
+        safeStr(row.call_status),
+        safeStr(row.final_call_status),
+        safeStr(row.followup_status),
+        safeStr(row.followup_time)
+    );
 
     return {
         id: safeStr(row.lead_id),
@@ -114,7 +188,7 @@ function mapRow(row: any): object {
         nextactionrequired: safeStr(row.next_action_required),
         aicallsummary: safeStr(row.ai_call_summary),
         lead_status: safeStr(row.lead_status),
-        leadstatus: safeStr(row.calculated_qualification_status),
+        leadstatus: resolvedStatus,
         cutomercontext: safeStr(row.customer_context),
         preferreddatetime: safeDate(row.preferred_datetime),
         cutomerintent: safeStr(row.customer_intent),
@@ -125,7 +199,7 @@ function mapRow(row: any): object {
         scheduledstatus: safeStr(row.followup_status),
         company: mapCompany(dbCompany, websiteName),
         company_by_kserve: safeStr(row.company_by_kserve),
-        calculated_qualification_status: safeStr(row.calculated_qualification_status),
+        calculated_qualification_status: resolvedStatus,
         tat: row.tat ?? null,
         followup_required: safeStr(row.followup_required),
         client_category: safeStr(row.client_category),
@@ -208,7 +282,7 @@ export async function GET(request: NextRequest) {
         const now = Date.now();
         // Cache is namespaced per date-range so different filter windows don't collide.
         const cacheBucket = hasDateRange ? `${dateFrom || ""}_${dateTo || ""}` : "recent";
-        const tmpFile = path.join(os.tmpdir(), `received_leads_cache_v5_${cacheBucket}.json`);
+        const tmpFile = path.join(os.tmpdir(), `received_leads_cache_v8_${cacheBucket}.json`);
 
         // 1. Memory cache — fastest
         if (!force && memoryCache[cacheBucket]?.length && now - (lastFetchTime[cacheBucket] || 0) < CACHE_TTL) {
@@ -287,13 +361,13 @@ export async function GET(request: NextRequest) {
 FROM    ai_voice_leads_received a
 INNER JOIN (${innerSql}) b ON a.id = b.max_id
 ORDER BY a.id DESC
-LIMIT ${HARD_ROW_CAP};
+${hasDateRange ? `LIMIT ${MAX_HISTORY_ROWS}` : `LIMIT ${RECENT_ROW_CAP}`};
             `, groupParams) as any[];
         } finally {
             connection.release();
         }
 
-        const truncated = rows.length >= HARD_ROW_CAP;
+        const truncated = !hasDateRange ? rows.length >= RECENT_ROW_CAP : rows.length >= MAX_HISTORY_ROWS;
         const mapped = (rows as any[]).map(mapRow);
 
         // 4. Save to cache

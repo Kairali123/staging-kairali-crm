@@ -101,8 +101,8 @@ function safeStr(val: any, fallback = "—"): string {
 }
 
 const CACHE_TTL = 5 * 60 * 1000;
-const CACHE_KEY_BASE = "received_leads_cache_idb_v2";
-const CACHE_TIME_KEY_BASE = "received_leads_cache_time_idb_v2";
+const CACHE_KEY_BASE = "received_leads_cache_idb_v5";
+const CACHE_TIME_KEY_BASE = "received_leads_cache_time_idb_v5";
 
 export function useReceivedLeads(dateFrom?: string, dateTo?: string) {
     const [data, setData] = useState<ReceivedLead[]>([]);
