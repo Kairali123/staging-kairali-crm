@@ -13,6 +13,20 @@ export function stageStatusOf(_stageNo: number, info: StageInfo | undefined): St
     return "Pending";
 }
 
+// Stage 8 referral collection posts to its own Apps Script deployment, but only
+// once the doer answered "Yes" and actually filled in entries. Anything else —
+// another stage, a "No", or a "Yes" with nothing filled — keeps the original
+// endpoint and envelope.
+export function isStage8ReferralSubmission(
+    stage: number,
+    fields: Record<string, unknown> | null | undefined
+): boolean {
+    if (stage !== 8 || !fields) return false;
+    if (String(fields.doerStatus ?? "").trim().toLowerCase() !== "yes") return false;
+    const referrals = fields.referrals;
+    return Array.isArray(referrals) && referrals.length > 0;
+}
+
 export function isCancelledStatus(bookingStatus: string | null | undefined): boolean {
     return /cancel/i.test(String(bookingStatus ?? ""));
 }
