@@ -94,6 +94,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [voiceCallExpanded, setVoiceCallExpanded] = useState(false)
   const [dialShreeExpanded, setDialShreeExpanded] = useState(false)
   const [kapplNewOrderExpanded, setKapplNewOrderExpanded] = useState(false)
+  const [ktahvCrrExpanded, setKtahvCrrExpanded] = useState(false)
   const [leadManagementExpanded, setLeadManagementExpanded] = useState(false)
   const [clientDatabaseExpanded, setClientDatabaseExpanded] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -141,6 +142,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (pathname.startsWith("/dialShree") || pathname.startsWith("/dialshree")) setDialShreeExpanded(true)
     if (pathname.startsWith("/meetings")) setMeetingsExpanded(true)
     if (pathname.startsWith("/new-order-fms")) setKapplNewOrderExpanded(true)
+    if (pathname.startsWith("/crr-fms") || pathname.startsWith("/ktahv-crr-process-report-alert")) setKtahvCrrExpanded(true)
     if (
       pathname.startsWith("/leads") ||
       pathname.startsWith("/lead-search") ||
@@ -212,13 +214,16 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "Partner Onboarding System", href: "/partners", icon: Building2, permission: "partners.view" },
     { name: "KAPPL New Order", icon: FileText, permission: "new-order-fms.view" },
     { name: "MR FMS", href: "/MR-FMS", icon: FileText, permission: "mr-fms.view" },
-    { name: "KTAHV CRR Calling FMS", href: "/crr-fms", icon: FileText, permission: "crr_fms.view" },
-    { name: "KTAHV CRR Process Report Alert", href: "/ktahv-crr-process-report-alert", icon: AlertTriangle, permission: "crr_fms.view" },
+    { name: "KTAHV CRR Process", icon: FileText, permission: "crr_fms.view" },
     // { name: "KTAHV BOOKING FORM", href: "/fms/bookings/ktahv", icon: FileText, permission: "ktahv_booking_form.view", target: "_blank" },
     { name: "Unified Portal Hub", icon: LayoutGrid, permission: "portal_hub.view" },
     { name: "Meetings", href: "/meetings", icon: StickyNote, permission: "meetings.view" },
     { name: "FMS Pending Bottleneck Tracker", href: "/fms/pending-tasks", icon: FileText, permission: "task_fms.view" },
     { name: "Cold Enquiry Reverification", href: "/fms/enquiry-reverification", icon: FileText, permission: "cold_enquiry_reverification.view" },
+  ]
+  const ktahvCrrSubMenu = [
+    { name: "KTAHV CRR Calling FMS", href: "/crr-fms", icon: FileText, permission: "crr_fms.view" },
+    { name: "KTAHV CRR Process Report Alert", href: "/ktahv-crr-process-report-alert", icon: AlertTriangle, permission: "crr_fms.view" },
   ]
   const clientDatabaseSubMenu = [
     { name: "Client Database", href: "/client-database", icon: Database, permission: "client_database.view" },
@@ -857,6 +862,54 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   onClick={() => isMobile && setSidebarOpen(false)}
                 >
                   <subItem.icon className={`mr-3 h-4 w-4 ${pathname === subItem.href ? "text-emerald-600" : "text-gray-400"}`} />
+                  {subItem.name}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    if (item.name === "KTAHV CRR Process") {
+      const isCrrFmsRoute = pathname.startsWith("/crr-fms")
+      const isCrrAlertRoute = pathname.startsWith("/ktahv-crr-process-report-alert")
+      const isActive = isCrrFmsRoute || isCrrAlertRoute
+      const visibleSubMenu = ktahvCrrSubMenu.filter((subItem) => {
+        return hasPermission(subItem.permission) || hasPermission("all") || isSuperAdmin
+      })
+      if (visibleSubMenu.length === 0) return null
+
+      return (
+        <div key={item.name}>
+          <button
+            onClick={() => setKtahvCrrExpanded(!ktahvCrrExpanded)}
+            className={`group flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${isActive
+              ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md"
+              : "text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"
+              }`}
+          >
+            <item.icon className={`mr-3 h-5 w-5 ${isActive ? "text-white" : "text-indigo-600"}`} />
+            {item.name}
+            {ktahvCrrExpanded ? (
+              <ChevronDown className={`ml-auto h-4 w-4 ${isActive ? "text-white" : "text-gray-500"}`} />
+            ) : (
+              <ChevronRight className={`ml-auto h-4 w-4 ${isActive ? "text-white" : "text-gray-500"}`} />
+            )}
+          </button>
+          {ktahvCrrExpanded && (
+            <div className="ml-6 mt-2 space-y-1">
+              {visibleSubMenu.map((subItem) => (
+                <Link
+                  key={subItem.name}
+                  href={subItem.href}
+                  className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${pathname === subItem.href
+                    ? "bg-gradient-to-r from-indigo-50 to-indigo-100 text-indigo-700 border-l-4 border-indigo-500 shadow-sm font-semibold"
+                    : "text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"
+                    }`}
+                  onClick={() => isMobile && setSidebarOpen(false)}
+                >
+                  <subItem.icon className={`mr-3 h-4 w-4 ${pathname === subItem.href ? "text-indigo-600" : "text-gray-400"}`} />
                   {subItem.name}
                 </Link>
               ))}
