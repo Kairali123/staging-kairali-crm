@@ -94,6 +94,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [voiceCallExpanded, setVoiceCallExpanded] = useState(false)
   const [dialShreeExpanded, setDialShreeExpanded] = useState(false)
   const [kapplNewOrderExpanded, setKapplNewOrderExpanded] = useState(false)
+  const [crrFmsExpanded, setCrrFmsExpanded] = useState(false)
   const [leadManagementExpanded, setLeadManagementExpanded] = useState(false)
   const [clientDatabaseExpanded, setClientDatabaseExpanded] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -141,6 +142,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (pathname.startsWith("/dialShree") || pathname.startsWith("/dialshree")) setDialShreeExpanded(true)
     if (pathname.startsWith("/meetings")) setMeetingsExpanded(true)
     if (pathname.startsWith("/new-order-fms")) setKapplNewOrderExpanded(true)
+    if (pathname.startsWith("/crr-fms") || pathname.startsWith("/ktahv-crr-process-report-alert")) setCrrFmsExpanded(true)
     if (
       pathname.startsWith("/leads") ||
       pathname.startsWith("/lead-search") ||
@@ -212,7 +214,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "Partner Onboarding System", href: "/partners", icon: Building2, permission: "partners.view" },
     { name: "KAPPL New Order", icon: FileText, permission: "new-order-fms.view" },
     { name: "MR FMS", href: "/MR-FMS", icon: FileText, permission: "mr-fms.view" },
-    { name: "KTAHV CRR Calling FMS", href: "/crr-fms", icon: FileText, permission: "crr_fms.view" },
+    { name: "KTAHV CRR FMS", icon: FileText, permission: "crr_fms.view" },
     // { name: "KTAHV BOOKING FORM", href: "/fms/bookings/ktahv", icon: FileText, permission: "ktahv_booking_form.view", target: "_blank" },
     { name: "Unified Portal Hub", icon: LayoutGrid, permission: "portal_hub.view" },
     { name: "Meetings", href: "/meetings", icon: StickyNote, permission: "meetings.view" },
@@ -232,6 +234,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const kapplNewOrderSubMenu = [
     { name: "New Order FMS", href: "/new-order-fms", icon: FileText, permission: "new-order-fms.view" },
     { name: "Primary Order Form", href: "/new-order-fms/primary-order-form", icon: FileText, permission: "primary_order_form.view" },
+  ]
+  const crrFmsSubMenu = [
+    { name: "KTAHV CRR Calling FMS", href: "/crr-fms", icon: FileText, permission: "crr_fms.view" },
+    { name: "KTAHV CRR Process Report Alert", href: "/ktahv-crr-process-report-alert", icon: AlertTriangle, permission: "crr_report_alert.view" },
   ]
 
   const marketingSubMenu = [
@@ -327,6 +333,22 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     )
   }
 
+  // Unchanged from before this menu was grouped with the report alert page:
+  // visibility is gated by exactly `crr_fms.view`, same as when this was a
+  // flat top-level nav item — do not widen this to other crr_fms.* variants.
+  const hasCrrFmsPermission = () => hasPermission("crr_fms.view")
+
+  const hasCrrReportAlertPermission = () => {
+    if (isSuperAdmin || user?.permissions?.includes("all") || user?.role === "admin") return true
+    return (
+      hasPermission("crr_report_alert.view") ||
+      hasPermission("crr_report_alert.viewSelf") ||
+      hasPermission("crr_report_alert.viewAll") ||
+      hasPermission("crr_report_alert.edit") ||
+      hasPermission("crr_report_alert")
+    )
+  }
+
   const hasLeadsAssignPermission = () => {
     if (isSuperAdmin || user?.permissions?.includes("all") || user?.role === "admin") return true
     return (
@@ -415,6 +437,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (item.name === "KAPPL New Order") {
       return hasNewOrderFmsPermission() || hasPrimaryOrderFormPermission()
     }
+    if (item.name === "KTAHV CRR FMS") {
+      return hasCrrFmsPermission() || hasCrrReportAlertPermission()
+    }
     if (item.name === "Lead Management") {
       return hasLeadManagementPermission()
     }
@@ -436,6 +461,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }
   if (hasPrimaryOrderFormPermission()) {
     searchableItems.push({ name: "Primary Order Form", href: "/new-order-fms/primary-order-form", description: "Primary Order Form", icon: FileText })
+  }
+  if (hasCrrFmsPermission()) {
+    searchableItems.push({ name: "KTAHV CRR Calling FMS", href: "/crr-fms", description: "KTAHV CRR Calling FMS", icon: FileText })
+  }
+  if (hasCrrReportAlertPermission()) {
+    searchableItems.push({ name: "KTAHV CRR Process Report Alert", href: "/ktahv-crr-process-report-alert", description: "KTAHV CRR Process Report Alert", icon: AlertTriangle })
   }
   if (hasPermission("marketing.view") || isSuperAdmin) marketingSubMenu.filter(isMarketingItemVisible).forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
   if (hasPermission("employee.tools")) employeeSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
@@ -856,6 +887,57 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   onClick={() => isMobile && setSidebarOpen(false)}
                 >
                   <subItem.icon className={`mr-3 h-4 w-4 ${pathname === subItem.href ? "text-emerald-600" : "text-gray-400"}`} />
+                  {subItem.name}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    if (item.name === "KTAHV CRR FMS") {
+      const isReportAlertRoute = pathname.startsWith("/ktahv-crr-process-report-alert")
+      const isCrrFmsRoute = pathname === "/crr-fms" || (pathname.startsWith("/crr-fms") && !isReportAlertRoute)
+      const isActive = (hasCrrReportAlertPermission() && isReportAlertRoute) ||
+                       (hasCrrFmsPermission() && isCrrFmsRoute)
+      const visibleSubMenu = crrFmsSubMenu.filter((subItem) => {
+        if (subItem.href === "/crr-fms") return hasCrrFmsPermission()
+        if (subItem.href === "/ktahv-crr-process-report-alert") return hasCrrReportAlertPermission()
+        return hasPermission(subItem.permission) || hasPermission("all")
+      })
+      if (visibleSubMenu.length === 0) return null
+
+      return (
+        <div key={item.name}>
+          <button
+            onClick={() => setCrrFmsExpanded(!crrFmsExpanded)}
+            className={`group flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${isActive
+              ? "bg-gradient-to-r from-sky-500 to-sky-600 text-white shadow-md"
+              : "text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"
+              }`}
+          >
+            <item.icon className={`mr-3 h-5 w-5 ${isActive ? "text-white" : "text-sky-600"}`} />
+            {item.name}
+            {crrFmsExpanded ? (
+              <ChevronDown className={`ml-auto h-4 w-4 ${isActive ? "text-white" : "text-gray-500"}`} />
+            ) : (
+              <ChevronRight className={`ml-auto h-4 w-4 ${isActive ? "text-white" : "text-gray-500"}`} />
+            )}
+          </button>
+          {crrFmsExpanded && (
+            <div className="ml-6 mt-2 space-y-1">
+              {visibleSubMenu.map((subItem) => (
+                <Link
+                  key={subItem.name}
+                  href={subItem.href}
+                  className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${pathname === subItem.href
+                    ? "bg-gradient-to-r from-sky-50 to-sky-100 text-sky-700 border-l-4 border-sky-500 shadow-sm font-semibold"
+                    : "text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"
+                    }`}
+                  onClick={() => isMobile && setSidebarOpen(false)}
+                >
+                  <subItem.icon className={`mr-3 h-4 w-4 ${pathname === subItem.href ? "text-sky-600" : "text-gray-400"}`} />
                   {subItem.name}
                 </Link>
               ))}
