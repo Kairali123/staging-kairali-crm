@@ -7,8 +7,9 @@ import path from "path";
 import os from "os";
 
 // ─── Cache Config ─────────────────────────────────────────────────────────────
-let memoryCache: any[] | null = null;
-let lastFetchTime = 0;
+// Namespaced per date-range bucket so different filter windows don't collide.
+let memoryCache: Record<string, any[]> = {};
+let lastFetchTime: Record<string, number> = {};
 const CACHE_TTL = 3 * 60 * 1000; // 5 minutes
 
 const noStoreHeaders = {
@@ -16,7 +17,14 @@ const noStoreHeaders = {
     "Pragma": "no-cache",
     "Expires": "0",
 };
-const MAX_SCAN_ROWS = 200000;
+// When no date range is requested, only look at the most recently created rows
+// instead of grouping the whole (200k+ row) table — keeps the fallback query fast
+// and its response small. See the `dateFrom`/`dateTo` path for scoped requests.
+const RECENT_SCAN_ROWS = 4000;
+// Hard cap on the final result set regardless of date range, so a wide/heavy
+// range (e.g. "This Month") degrades to "most recent N" instead of a multi-MB
+// dump that a serverless function can't return.
+const HARD_ROW_CAP = 1000;
 const MAX_HISTORY_ROWS = 200000;
 
 function hasReceivedLeadsAccess(user: any): boolean {
@@ -175,6 +183,12 @@ export async function GET(request: NextRequest) {
         const force = searchParams.get("force") === "1";
         const initialId = searchParams.get("initialId");
         const allRows = searchParams.get("allRows") === "1";
+        const isValidDate = (v: string | null): v is string => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
+        const dateFromParam = searchParams.get("dateFrom");
+        const dateToParam = searchParams.get("dateTo");
+        const dateFrom = isValidDate(dateFromParam) ? dateFromParam : null;
+        const dateTo = isValidDate(dateToParam) ? dateToParam : null;
+        const hasDateRange = !!(dateFrom || dateTo);
 
         if (initialId && allRows) {
             const pool = await getPool();
@@ -192,12 +206,13 @@ export async function GET(request: NextRequest) {
             }
         }
         const now = Date.now();
-        // Use v4 to bypass old cached data
-        const tmpFile = path.join(os.tmpdir(), "received_leads_cache_v4.json");
+        // Cache is namespaced per date-range so different filter windows don't collide.
+        const cacheBucket = hasDateRange ? `${dateFrom || ""}_${dateTo || ""}` : "recent";
+        const tmpFile = path.join(os.tmpdir(), `received_leads_cache_v5_${cacheBucket}.json`);
 
         // 1. Memory cache — fastest
-        if (!force && memoryCache && memoryCache.length > 0 && now - lastFetchTime < CACHE_TTL) {
-            return NextResponse.json(memoryCache);
+        if (!force && memoryCache[cacheBucket]?.length && now - (lastFetchTime[cacheBucket] || 0) < CACHE_TTL) {
+            return NextResponse.json(memoryCache[cacheBucket]);
         }
 
         // 2. File cache
@@ -208,8 +223,8 @@ export async function GET(request: NextRequest) {
                     if (now - stat.mtimeMs < CACHE_TTL) {
                         const fileData = JSON.parse(fs.readFileSync(tmpFile, "utf8"));
                         if (Array.isArray(fileData) && fileData.length > 0) {
-                            memoryCache = fileData;
-                            lastFetchTime = stat.mtimeMs;
+                            memoryCache[cacheBucket] = fileData;
+                            lastFetchTime[cacheBucket] = stat.mtimeMs;
                             return NextResponse.json(fileData);
                         }
                     }
@@ -220,16 +235,29 @@ export async function GET(request: NextRequest) {
         }
 
         // 3. Query MySQL
+        // - With a date range: scope the "latest row per initial_id" grouping to that
+        //   window so it never has to touch the full historical table. (Needs an index
+        //   on `timestamp` to be fast — see ops notes; without it this still returns
+        //   correct results, just slower for wide ranges.)
+        // - Without a date range: fall back to scanning only the most recently created
+        //   rows (RECENT_SCAN_ROWS) instead of the whole table.
+        // Either way, a final LIMIT caps the result so a heavy window degrades to
+        // "most recent N" instead of a multi-MB response a serverless function can't return.
         const pool = await getPool();
         const connection = await pool.getConnection();
         let rows: any[];
+        const groupParams: any[] = [];
+        let innerSql: string;
+        if (hasDateRange) {
+            let whereClause = "initial_id IS NOT NULL";
+            if (dateFrom) { whereClause += " AND timestamp >= ?"; groupParams.push(`${dateFrom} 00:00:00`); }
+            if (dateTo) { whereClause += " AND timestamp < DATE_ADD(?, INTERVAL 1 DAY)"; groupParams.push(`${dateTo} 00:00:00`); }
+            innerSql = `SELECT MAX(id) AS max_id FROM ai_voice_leads_received WHERE ${whereClause} GROUP BY initial_id`;
+        } else {
+            innerSql = `SELECT MAX(id) AS max_id FROM (SELECT id, initial_id FROM ai_voice_leads_received ORDER BY id DESC LIMIT ${RECENT_SCAN_ROWS}) t GROUP BY initial_id`;
+        }
 
         try {
-            // Efficiency: 
-            // - ORDER BY id DESC is extremely fast due to PRIMARY KEY.
-            // - We cap the scan to a practical window so cold-cache refreshes do not walk the
-            //   entire historical table on every request.
-            // - 46k+ rows with longtext columns is too slow for browser parsing.
             [rows] = await connection.execute(`
                 SELECT
     a.id, a.timestamp, a.date_time, a.lead_id, a.client_name,
@@ -257,31 +285,29 @@ export async function GET(request: NextRequest) {
     a.feedback_date, a.created_at, a.updated_at,
     a.status, a.assign_to_app_sheet_or_dialer, a.remarks, a.doer
 FROM    ai_voice_leads_received a
-INNER JOIN (
-    SELECT MAX(id) AS max_id
-    FROM (
-        SELECT id, initial_id FROM ai_voice_leads_received ORDER BY id DESC LIMIT ${MAX_SCAN_ROWS}
-    ) t
-    GROUP BY initial_id
-) b ON a.id = b.max_id
-ORDER BY a.id DESC;
-            `) as any[];
+INNER JOIN (${innerSql}) b ON a.id = b.max_id
+ORDER BY a.id DESC
+LIMIT ${HARD_ROW_CAP};
+            `, groupParams) as any[];
         } finally {
             connection.release();
         }
 
+        const truncated = rows.length >= HARD_ROW_CAP;
         const mapped = (rows as any[]).map(mapRow);
 
         // 4. Save to cache
-        memoryCache = mapped;
-        lastFetchTime = Date.now();
+        memoryCache[cacheBucket] = mapped;
+        lastFetchTime[cacheBucket] = Date.now();
         try {
             fs.writeFileSync(tmpFile, JSON.stringify(mapped));
         } catch (e) {
             console.warn("[received-leads] File cache write error:", e);
         }
 
-        return NextResponse.json(mapped, { headers: noStoreHeaders });
+        return NextResponse.json(mapped, {
+            headers: { ...noStoreHeaders, "X-Leads-Truncated": truncated ? "1" : "0", "X-Leads-Count": String(mapped.length) },
+        });
 
     } catch (error: any) {
         console.error("[received-leads] Error:", error);

@@ -1723,7 +1723,19 @@ function getDateRange(filter: string): { from: Date | null; to: Date | null } {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 function ReceivedDataPageInner() {
-    const { data: receivedApiData, loading: receivedLoading, isRefreshing: hookRefreshing, error: receivedError, refetch: refetchReceived } = useReceivedLeads();
+    // Date range drives the server query, so it's resolved before the data hooks are called.
+    const [dateFilter, setDateFilter] = useState("today");
+    const [customDate, setCustomDate] = useState({ start: "", end: "" });
+    const dateWindow = useMemo(() => {
+        if (dateFilter === "custom") return { from: customDate.start ? new Date(customDate.start) : null, to: customDate.end ? new Date(customDate.end + "T23:59:59") : null };
+        return getDateRange(dateFilter);
+    }, [dateFilter, customDate]);
+    const toYMD = (d: Date | null) => d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : undefined;
+    const dateFromStr = toYMD(dateWindow.from);
+    const dateToStr = toYMD(dateWindow.to);
+
+    const { data: receivedApiData, loading: receivedLoading, isRefreshing: hookRefreshing, error: receivedError, truncated: receivedTruncated, refetch: refetchReceived } = useReceivedLeads(dateFromStr, dateToStr);
+    // Bare call (no range) for the sent-notes cross-reference below — falls back to the API's own "most recent" safety window.
     const { data: sentApiData, loading: sentLoading, refetch: refetchSent } = useSentLeads();
     const { hasPermission, user } = useAuth();
 
@@ -1746,14 +1758,12 @@ function ReceivedDataPageInner() {
         return () => clearTimeout(h);
     }, [search]);
 
-    const [dateFilter, setDateFilter] = useState("this_week");
     const [company, setCompany] = useState("all");
     const [dataSource, setDataSource] = useState("all");
     const [status, setStatus] = useState("all");
     const [intent, setIntent] = useState("all");
     const [leadStatus, setLeadStatus] = useState("all");
     const [nonQualifiedOutcome, setNonQualifiedOutcome] = useState("all");
-    const [customDate, setCustomDate] = useState({ start: "", end: "" });
 
     useEffect(() => {
         if (leadStatus !== "Non-Qualified") {
@@ -1773,11 +1783,6 @@ function ReceivedDataPageInner() {
             tableRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
         }
     }, [search, dateFilter, company, dataSource, status, intent, leadStatus]);
-
-    const dateWindow = useMemo(() => {
-        if (dateFilter === "custom") return { from: customDate.start ? new Date(customDate.start) : null, to: customDate.end ? new Date(customDate.end + "T23:59:59") : null };
-        return getDateRange(dateFilter);
-    }, [dateFilter, customDate]);
 
     const companyMatch = (n: string) => company === "all" || n === company;
     const dsMatch = (l: string) => dataSource === "all" || l === dataSource;
@@ -2001,6 +2006,11 @@ function ReceivedDataPageInner() {
                         </div>
                         <Button variant="outline" size="sm" onClick={clearFilters} className="bg-white border-slate-300 text-slate-700 font-medium hover:bg-blue-50">Clear Filters</Button>
                     </div>
+                    {receivedTruncated && (
+                        <div className="mx-3 sm:mx-5 mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                            Showing the most recent {receivedApiData.length.toLocaleString()} leads for this range — narrow the date range or search by name/phone/ID to see the rest.
+                        </div>
+                    )}
                     <div className="px-3 sm:px-5 py-3 sm:py-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3">
                             <div className="flex flex-col gap-1.5 sm:col-span-2 xl:col-span-2">
