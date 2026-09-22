@@ -15,7 +15,9 @@ import type {
     Guest,
 } from "@/types/crr";
 import type { ReferralStage8Data } from "@/components/ReferralCollectionModal";
-import { MAX_PROOF_FILE_BYTES, PROOF_FILE_LIMIT_LABEL, isAllowedProofType, stageBlockReason, stageDateLock } from "@/lib/crr-stage-rules";
+import { MAX_PROOF_FILE_BYTES, PROOF_FILE_LIMIT_LABEL, isAllowedProofType, istToday, stageBlockReason, stageDateLock, toYmd } from "@/lib/crr-stage-rules";
+import GuestFeedbackForm, { type FeedbackValues } from "@/components/GuestFeedbackForm";
+import { FEEDBACK_FIELDS } from "@/lib/crr-feedback-form";
 import { compressImage } from "@/lib/image-compress";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { ClientBookingDetailsCard } from "@/components/ClientBookingDetailsCard";
@@ -100,14 +102,30 @@ const STAGES: Stage[] = [
 /* =========================================================
    EXTERNAL LINKS
 ========================================================= */
-// Guest Feedback & Outcome Confirmation (Stage 4) — Google Apps Script feedback
-// collection form. The guest's Booking ID is passed as a query param so the
-// form opens pre-scoped to that booking.
-const FEEDBACK_FORM_BASE_URL =
-    "https://script.google.com/a/macros/kairali.com/s/AKfycby5x4cuxgMbs2SJjd46HzswkLjYGuuw83nOwiFNj9UqcJbfzJoigNBQxxmH__mCq5afRw/exec";
+// Seed the embedded feedback form from the booking we already hold. Only fields we
+// can fill confidently are set; a value that is not one of a select's options would
+// render blank, so those are left for the user to pick.
+function prefillFeedbackValues(g: Guest, feedbackTaker: string): FeedbackValues {
+    const optionExists = (name: string, value: string) =>
+        FEEDBACK_FIELDS.find((f) => f.name === name)?.options?.some((o) => o.value === value) ?? false;
 
-function buildFeedbackFormUrl(bookingId: string) {
-    return `${FEEDBACK_FORM_BASE_URL}?bookingId=${encodeURIComponent(bookingId)}`;
+    const values: FeedbackValues = {
+        // The booking this feedback belongs to, submitted under the name the sheet expects.
+        UID: g.bookingId || "",
+        customerName: g.name || "",
+        reservationId: g.bookingId || "",
+        emaiId: g.email || "",
+        phoneNum: String(g.mobile ?? ""),
+        arrivalDate: toYmd(g.checkin) || "",
+        departureDate: toYmd(g.checkout) || "",
+        "feedback-date": istToday(),
+        // Recorded as whoever is signed in; the field is read-only in the form.
+        "feedback-taker": feedbackTaker,
+    };
+    const gender = String(g.gender || "").toUpperCase();
+    if (optionExists("gender", gender)) values.gender = gender;
+    if (optionExists("treatmentOrPackage", g.programme || "")) values.treatmentOrPackage = g.programme || "";
+    return values;
 }
 
 /* =========================================================
@@ -671,6 +689,8 @@ export default function CRRCallingProcessPage() {
     const [feedbackDoerRemarks, setFeedbackDoerRemarks] = useState("");
     // UI-only switch for the Stage 4 form. It is never sent to the API and never stored.
     const [guestAllowedFeedback, setGuestAllowedFeedback] = useState<"yes" | "no" | "">("");
+    const [feedbackValues, setFeedbackValues] = useState<FeedbackValues>({});
+    const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
     const [feedbackFormError, setFeedbackFormError] = useState("");
     const [feedbackSaved, setFeedbackSaved] = useState(false);
 
@@ -1835,6 +1855,8 @@ export default function CRRCallingProcessPage() {
         const savedRemarks = s4Saved?.doerRemarks || g.guestFeedback?.doerRemarks || "";
         setFeedbackDoerRemarks(savedRemarks);
         setGuestAllowedFeedback(savedRemarks.trim() !== "" ? "no" : "");
+        setFeedbackValues(prefillFeedbackValues(g, user?.name || ""));
+        setFeedbackSubmitting(false);
         setFeedbackFormError("");
         setFeedbackSaved(false);
     }
@@ -1842,8 +1864,38 @@ export default function CRRCallingProcessPage() {
     function closeFeedbackModal() {
         setActiveFeedbackGuestId(null);
         setGuestAllowedFeedback("");
+        setFeedbackValues({});
+        setFeedbackSubmitting(false);
         setFeedbackFormError("");
         setFeedbackSaved(false);
+    }
+
+    // Sends the embedded feedback form to Apps Script through our proxy. Stage 4's
+    // actual is stamped upstream on receipt, same as when this was a redirect, so we
+    // just refetch rather than writing the stage ourselves.
+    async function submitFeedbackForm() {
+        if (!canEditStage(4) || !activeFeedbackGuest || feedbackSubmitting) return;
+        setFeedbackSubmitting(true);
+        setFeedbackFormError("");
+        const toastId = toast.loading("Submitting guest feedback...");
+        try {
+            const res = await fetch("/api/crr-calling/feedback", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ values: feedbackValues }),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok || !json.success) throw new Error(json.error || "Failed to submit feedback");
+            toast.success("Guest feedback submitted successfully!", { id: toastId });
+            closeFeedbackModal();
+            refetchGuests();
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : "Failed to submit feedback";
+            setFeedbackFormError(msg);
+            toast.error(msg, { id: toastId });
+        } finally {
+            setFeedbackSubmitting(false);
+        }
     }
 
     function isFeedbackFormComplete() {
@@ -4452,27 +4504,15 @@ export default function CRRCallingProcessPage() {
                                                 </Select>
                                             </div>
 
-                                            {/* Row 2 (if YES): only the feedback taking url and the Close button */}
+                                            {/* Row 2 (if YES): the feedback form itself, filled in here rather than in a new tab */}
                                             {guestAllowedFeedback === "yes" && !s4Lock.isLocked && (
-                                                <div className="space-y-2 p-4 bg-white/80 border border-amber-300 rounded-lg shadow-sm">
-                                                    <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
-                                                        Feedback Taking URL
-                                                    </Label>
-                                                    <div className="flex items-center gap-2 flex-wrap">
-                                                        <a
-                                                            href={buildFeedbackFormUrl(activeFeedbackGuest.bookingId)}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-md px-3 py-2 shadow-sm transition-colors"
-                                                        >
-                                                            <Send className="h-3.5 w-3.5" />
-                                                            Open Feedback Form for {activeFeedbackGuest.bookingId}
-                                                        </a>
-                                                    </div>
-                                                    <p className="text-[11px] text-slate-500 break-all">
-                                                        {buildFeedbackFormUrl(activeFeedbackGuest.bookingId)}
-                                                    </p>
-                                                </div>
+                                                <GuestFeedbackForm
+                                                    values={feedbackValues}
+                                                    onChange={setFeedbackValues}
+                                                    disabled={isFeedbackDisabled}
+                                                    submitting={feedbackSubmitting}
+                                                    onSubmit={submitFeedbackForm}
+                                                />
                                             )}
 
                                             {/* Row 3 (if NO): remarks, then Save once they are filled in */}
