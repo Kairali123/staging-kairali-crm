@@ -138,6 +138,7 @@ async function loadBookings(where: string, params: any[], limit: number) {
                         status, outcome_remarks, did_they_achieve_the_outcomes_planned_for,
                         remarks_why_not_done_or_close, followup_date_for_the_welcome_call,
                         followup_date_for_the_rating, followup_date_for_the_result_and_progress,
+                        followup_date_for_the_call_after_landing,
                         doer, rating_status, remarks_why_not_given_ratings, proof_of_ratings,
                         stay_feedback
                  FROM KTAHV_CRR_Calling_FMS
@@ -440,6 +441,7 @@ async function loadBookings(where: string, params: any[], limit: number) {
             outcomeRemarks: c6.outcome_remarks || "",
             status: c6.status || "",
             notDoneRemarks: c6.remarks_why_not_done_or_close || "",
+            followupDate: c6.followup_date_for_the_call_after_landing ? formatDMYDate(c6.followup_date_for_the_call_after_landing) : "",
             doer: c6.doer || "",
             stageKey: c6.stage_key || (uid ? `${uid}_Stage6` : null),
         } : null;
