@@ -96,6 +96,12 @@ export default function EmailConfigBridge({ document: documentHtml }: { document
               employees: data.data.employees,
             }).html
           }
+        } else if (id === 'ktahv-crr-process-report-alert') {
+          const response = await fetch('/api/ktahv-crr-report-alert?' + new URLSearchParams({ date: message.date }), { signal: current.signal, cache: 'no-store' })
+          const data = await response.json()
+          if (!response.ok) throw new Error(data.error || 'Report unavailable')
+          const { exportCrrReportHTML } = await import('@/lib/ktahv-crr-report')
+          html = exportCrrReportHTML(data, scope)
         } else {
           const response = await fetch('/api/marketing-daily-report?' + new URLSearchParams({ date: message.date }), { signal: current.signal, cache: 'no-store' })
           const data = await response.json()

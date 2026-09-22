@@ -82,6 +82,7 @@ const pagePermissions: Record<string, string> = {
   '/pi-tracker': 'ktahv_pi_audit_tracker.view',
   '/MR-FMS': 'mr-fms.view',
   '/crr-fms': 'crr_fms.view',
+  '/ktahv-crr-process-report-alert': 'crr_report_alert.view',
   '/voicecall/non-qualified': 'non_qualified.view',
   '/fms/pending-tasks': 'task_fms.view',
   // M7: was `fms/enquiry-reverification` with no leading slash, so it never

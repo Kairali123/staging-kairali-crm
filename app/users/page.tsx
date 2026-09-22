@@ -2096,6 +2096,13 @@ export const PAGE_PERMISSIONS_MODULES: PagePermissionModule[] = [
     description: "CRR guest follow-up & multi-stage retention FMS",
   },
   {
+    key: "crr_report_alert",
+    label: "KTAHV CRR Process Report Alert",
+    category: "FMS & Booking Systems",
+    actions: ["view", "viewSelf", "viewAll", "edit"],
+    description: "Daily CRR process report snapshot & alert for management",
+  },
+  {
     key: "cold_enquiry_reverification",
     label: "Cold Enquiry Reverification",
     category: "FMS & Booking Systems",
