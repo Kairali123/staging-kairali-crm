@@ -7,8 +7,9 @@ import path from "path";
 import os from "os";
 
 // ─── Cache Config ─────────────────────────────────────────────────────────────
-let memoryCache: any = null;
-let lastFetchTime = 0;
+// Namespaced per date-range bucket so different filter windows don't collide.
+let memoryCache: Record<string, any[]> = {};
+let lastFetchTime: Record<string, number> = {};
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 const noStoreHeaders = {
@@ -16,6 +17,12 @@ const noStoreHeaders = {
     "Pragma": "no-cache",
     "Expires": "0",
 };
+// `generate_timestamp` is indexed, so date-scoped queries are fast. When no range
+// is given (e.g. a bare cross-reference lookup), fall back to the most recent rows
+// instead of the entire table. Either way, a final LIMIT caps the response so it
+// always fits well under a serverless function's response-size limit.
+const RECENT_ROW_CAP = 1200;
+const RANGED_ROW_CAP = 1500;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -113,12 +120,19 @@ export async function GET(request: NextRequest) {
 
         const { searchParams } = new URL(request.url);
         const force = searchParams.get("force") === "1";
+        const isValidDate = (v: string | null): v is string => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
+        const dateFromParam = searchParams.get("dateFrom");
+        const dateToParam = searchParams.get("dateTo");
+        const dateFrom = isValidDate(dateFromParam) ? dateFromParam : null;
+        const dateTo = isValidDate(dateToParam) ? dateToParam : null;
+        const hasDateRange = !!(dateFrom || dateTo);
         const now = Date.now();
-        const tmpFile = path.join(os.tmpdir(), "sent_leads_cache.json");
+        const cacheBucket = hasDateRange ? `${dateFrom || ""}_${dateTo || ""}` : "recent";
+        const tmpFile = path.join(os.tmpdir(), `sent_leads_cache_v2_${cacheBucket}.json`);
 
         // ── 1. Memory cache ──────────────────────────────────────────────────
-        if (!force && memoryCache && now - lastFetchTime < CACHE_TTL) {
-            return NextResponse.json(memoryCache);
+        if (!force && memoryCache[cacheBucket]?.length && now - (lastFetchTime[cacheBucket] || 0) < CACHE_TTL) {
+            return NextResponse.json(memoryCache[cacheBucket]);
         }
 
         // ── 2. File cache (survives serverless warm reboots) ─────────────────
@@ -128,8 +142,8 @@ export async function GET(request: NextRequest) {
                     const stat = fs.statSync(tmpFile);
                     if (now - stat.mtimeMs < CACHE_TTL) {
                         const data = JSON.parse(fs.readFileSync(tmpFile, "utf8"));
-                        memoryCache = data;
-                        lastFetchTime = stat.mtimeMs;
+                        memoryCache[cacheBucket] = data;
+                        lastFetchTime[cacheBucket] = stat.mtimeMs;
                         return NextResponse.json(data);
                     }
                 }
@@ -139,10 +153,18 @@ export async function GET(request: NextRequest) {
         }
 
         // ── 3. Query MySQL ────────────────────────────────────────────────────
+        // `idx_generate_timestamp` makes the date-scoped WHERE fast. Without a range,
+        // fall back to the most recent rows. Either way, LIMIT caps the payload.
         const pool = await getPool();
         const connection = await pool.getConnection();
 
         let rows: any[];
+        const whereParts: string[] = [];
+        const whereParams: any[] = [];
+        if (dateFrom) { whereParts.push("generate_timestamp >= ?"); whereParams.push(`${dateFrom} 00:00:00`); }
+        if (dateTo) { whereParts.push("generate_timestamp < DATE_ADD(?, INTERVAL 1 DAY)"); whereParams.push(`${dateTo} 00:00:00`); }
+        const whereSql = whereParts.length ? `WHERE ${whereParts.join(" AND ")}` : "";
+        const rowCap = hasDateRange ? RANGED_ROW_CAP : RECENT_ROW_CAP;
 
         try {
             [rows] = await connection.execute(`
@@ -185,24 +207,29 @@ export async function GET(request: NextRequest) {
                     created_at,
                     updated_at
                 FROM ai_voice_leads_sent
+                ${whereSql}
                 ORDER BY generate_timestamp DESC
-            `) as any[];
+                LIMIT ${rowCap}
+            `, whereParams) as any[];
         } finally {
             connection.release();
         }
 
+        const truncated = rows.length >= rowCap;
         const mapped = (rows as any[]).map(mapRow);
 
         // ── 4. Save to cache ──────────────────────────────────────────────────
-        memoryCache = mapped;
-        lastFetchTime = Date.now();
+        memoryCache[cacheBucket] = mapped;
+        lastFetchTime[cacheBucket] = Date.now();
         try {
             fs.writeFileSync(tmpFile, JSON.stringify(mapped));
         } catch (e) {
             console.warn("[sent-leads] File cache write error:", e);
         }
 
-        return NextResponse.json(mapped, { headers: noStoreHeaders });
+        return NextResponse.json(mapped, {
+            headers: { ...noStoreHeaders, "X-Leads-Truncated": truncated ? "1" : "0", "X-Leads-Count": String(mapped.length) },
+        });
 
     } catch (error: any) {
         console.error("[sent-leads] Error:", error);

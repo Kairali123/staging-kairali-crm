@@ -124,30 +124,41 @@ export async function fetchCRMTableData(filters?: { dateFrom?: string; dateTo?: 
         const selectedCompany = normalizeCompanyFilter(filters?.company);
         const selectedSource = normalizeSourceFilter(filters?.source);
 
+        // Range comparisons (not DATE(col) >=/<=, which defeats the column's index) so the
+        // date-indexed `sent` table and the `received` grouping subquery both stay fast.
+        // A hard cap guards against an unbounded/very wide range still blowing past a
+        // serverless function's response-size and execution-time limits.
+        const SUMMARY_ROW_CAP = 3000;
         let sentWhere = "generate_timestamp IS NOT NULL AND (LOWER(COALESCE(code_status,'')) = 'success' OR LOWER(COALESCE(received,'')) = 'kserve')";
         let rcvdWhere = "1=1";
+        let rcvdLatestWhere = "initial_id IS NOT NULL";
 
         const paramsSent: any[] = [];
         const paramsRcvd: any[] = [];
+        const paramsRcvdLatest: any[] = [];
 
         if (filters?.dateFrom) {
-            sentWhere += " AND DATE(generate_timestamp) >= ?";
-            rcvdWhere += " AND DATE(a.timestamp) >= ?";
-            paramsSent.push(filters.dateFrom);
-            paramsRcvd.push(filters.dateFrom);
+            sentWhere += " AND generate_timestamp >= ?";
+            rcvdWhere += " AND a.timestamp >= ?";
+            rcvdLatestWhere += " AND timestamp >= ?";
+            paramsSent.push(`${filters.dateFrom} 00:00:00`);
+            paramsRcvd.push(`${filters.dateFrom} 00:00:00`);
+            paramsRcvdLatest.push(`${filters.dateFrom} 00:00:00`);
         }
         if (filters?.dateTo) {
-            sentWhere += " AND DATE(generate_timestamp) <= ?";
-            rcvdWhere += " AND DATE(a.timestamp) <= ?";
-            paramsSent.push(filters.dateTo);
-            paramsRcvd.push(filters.dateTo);
+            sentWhere += " AND generate_timestamp < DATE_ADD(?, INTERVAL 1 DAY)";
+            rcvdWhere += " AND a.timestamp < DATE_ADD(?, INTERVAL 1 DAY)";
+            rcvdLatestWhere += " AND timestamp < DATE_ADD(?, INTERVAL 1 DAY)";
+            paramsSent.push(`${filters.dateTo} 00:00:00`);
+            paramsRcvd.push(`${filters.dateTo} 00:00:00`);
+            paramsRcvdLatest.push(`${filters.dateTo} 00:00:00`);
         }
 
-        const sentQuery = `SELECT * FROM ai_voice_leads_sent WHERE ${sentWhere} ORDER BY generate_timestamp DESC`;
-        const receivedQuery = `SELECT a.* FROM ai_voice_leads_received a INNER JOIN (SELECT initial_id, MAX(id) AS latest_id FROM ai_voice_leads_received WHERE initial_id IS NOT NULL GROUP BY initial_id) latest ON a.id = latest.latest_id WHERE ${rcvdWhere} ORDER BY a.id DESC`;
+        const sentQuery = `SELECT * FROM ai_voice_leads_sent WHERE ${sentWhere} ORDER BY generate_timestamp DESC LIMIT ${SUMMARY_ROW_CAP}`;
+        const receivedQuery = `SELECT a.* FROM ai_voice_leads_received a INNER JOIN (SELECT initial_id, MAX(id) AS latest_id FROM ai_voice_leads_received WHERE ${rcvdLatestWhere} GROUP BY initial_id) latest ON a.id = latest.latest_id WHERE ${rcvdWhere} ORDER BY a.id DESC LIMIT ${SUMMARY_ROW_CAP}`;
 
         const [sentRows]: any = await pool.query(sentQuery, paramsSent);
-        const [receivedRows]: any = await pool.query(receivedQuery, paramsRcvd);
+        const [receivedRows]: any = await pool.query(receivedQuery, [...paramsRcvdLatest, ...paramsRcvd]);
 
         const mergedMap: Record<string, any> = {};
 

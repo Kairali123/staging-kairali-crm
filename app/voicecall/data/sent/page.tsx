@@ -467,7 +467,31 @@ function inRange(dateNum: number, from: Date | null, to: Date | null): boolean {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 function SentDataPageInner() {
-    const { data: sentApiData, loading: sentLoading, isRefreshing: hookRefreshing, error: sentError, refetch } = useSentLeads();
+    // Date range drives the server query, so it's resolved before the data hook is called.
+    const [dateFilter, setDateFilter] = useState("today");
+    const [customDate, setCustomDate] = useState({ start: "", end: "" });
+    const dateWindow = useMemo(() => {
+        if (dateFilter === "custom") {
+            const parseLocalDate = (str: string, isEnd = false) => {
+                if (!str) return null;
+                const parts = str.split("-");
+                if (parts.length === 3) {
+                    const year = parseInt(parts[0], 10);
+                    const month = parseInt(parts[1], 10) - 1;
+                    const day = parseInt(parts[2], 10);
+                    return isEnd ? new Date(year, month, day, 23, 59, 59, 999) : new Date(year, month, day, 0, 0, 0, 0);
+                }
+                return new Date(str);
+            };
+            return { from: parseLocalDate(customDate.start), to: parseLocalDate(customDate.end, true) };
+        }
+        return getDateRange(dateFilter);
+    }, [dateFilter, customDate]);
+    const toYMD = (d: Date | null) => d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : undefined;
+    const dateFromStr = toYMD(dateWindow.from);
+    const dateToStr = toYMD(dateWindow.to);
+
+    const { data: sentApiData, loading: sentLoading, isRefreshing: hookRefreshing, error: sentError, truncated: sentTruncated, refetch } = useSentLeads(dateFromStr, dateToStr);
     const { hasPermission } = useAuth();
 
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -490,11 +514,9 @@ function SentDataPageInner() {
         return () => clearTimeout(h);
     }, [search]);
 
-    const [dateFilter, setDateFilter] = useState("this_week");
     const [company, setCompany] = useState("all");
     const [dataSource, setDataSource] = useState("all");
     const [status, setStatus] = useState("all");
-    const [customDate, setCustomDate] = useState({ start: "", end: "" });
 
     const clearFilters = () => {
         setSearch(""); setDateFilter("all"); setCompany("all");
@@ -507,24 +529,6 @@ function SentDataPageInner() {
             tableRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
         }
     }, [search, dateFilter, company, dataSource, status]);
-
-    const dateWindow = useMemo(() => {
-        if (dateFilter === "custom") {
-            const parseLocalDate = (str: string, isEnd = false) => {
-                if (!str) return null;
-                const parts = str.split("-");
-                if (parts.length === 3) {
-                    const year = parseInt(parts[0], 10);
-                    const month = parseInt(parts[1], 10) - 1;
-                    const day = parseInt(parts[2], 10);
-                    return isEnd ? new Date(year, month, day, 23, 59, 59, 999) : new Date(year, month, day, 0, 0, 0, 0);
-                }
-                return new Date(str);
-            };
-            return { from: parseLocalDate(customDate.start), to: parseLocalDate(customDate.end, true) };
-        }
-        return getDateRange(dateFilter);
-    }, [dateFilter, customDate]);
 
     const companyMatch = (n: string) => company === "all" || n === company;
     const dsMatch = (l: string) => dataSource === "all" || l === dataSource;
@@ -728,6 +732,11 @@ function SentDataPageInner() {
                         </div>
                         <Button variant="outline" size="sm" onClick={clearFilters} className="bg-white border-slate-300 text-slate-700 font-medium hover:bg-blue-50">Clear Filters</Button>
                     </div>
+                    {sentTruncated && (
+                        <div className="mx-3 sm:mx-5 mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                            Showing the most recent {sentApiData.length.toLocaleString()} leads for this range — narrow the date range or search by name/phone/ID to see the rest.
+                        </div>
+                    )}
                     <div className="px-3 sm:px-5 py-3 sm:py-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3">
                             <div className="flex flex-col gap-1.5 sm:col-span-2 xl:col-span-2">
