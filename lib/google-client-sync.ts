@@ -127,7 +127,7 @@ export async function fetchCategoryHierarchyFromSheet(sheetId = DEFAULT_CATEGORY
       
       if (rawSubName) {
         // Split by comma in case multiple subcategories are entered in a single cell
-        const subs = rawSubName.split(',').map(s => s.trim()).filter(Boolean)
+        const subs = rawSubName.split(',').map((s: string) => s.trim()).filter(Boolean)
         const existingSubs = catMap.get(catName)!
         
         for (const sub of subs) {

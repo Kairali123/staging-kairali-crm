@@ -289,7 +289,7 @@ export async function POST(req: Request) {
       [
         file.name,
         uploadedBy,
-        lines.length - 1,
+        allRows.length - 1,
         addedCount,
         rejectedCount,
         JSON.stringify(rejectionReasons),
@@ -306,7 +306,7 @@ export async function POST(req: Request) {
       rejectionReasons,
       driveFileUrl,
       stats: {
-        totalRows: lines.length - 1,
+        totalRows: allRows.length - 1,
         addedRows: addedCount,
         rejectedRows: rejectedCount,
         rejectionReasons,

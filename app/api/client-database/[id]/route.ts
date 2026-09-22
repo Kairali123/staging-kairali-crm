@@ -1,18 +1,20 @@
 import { NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params
     const pool = await getPool()
-    await pool.query('DELETE FROM client_database WHERE id = ?', [params.id])
+    await pool.query('DELETE FROM client_database WHERE id = ?', [id])
     return NextResponse.json({ success: true })
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 })
   }
 }
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params
     const body = await req.json()
     const pool = await getPool()
     
@@ -35,7 +37,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     
     if (updates.length === 0) return NextResponse.json({ success: true })
     
-    values.push(params.id)
+    values.push(id)
     
     await pool.query(`UPDATE client_database SET ${updates.join(', ')} WHERE id = ?`, values)
     return NextResponse.json({ success: true })

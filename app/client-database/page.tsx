@@ -88,6 +88,7 @@ export default function ClientDatabasePage() {
     uniqueEmails: 0,
     totalCategories: 0,
     totalSubCategories: 0,
+    unsubscribedCount: 0,
   })
   const [sourceSheets, setSourceSheets] = useState<{ source_sheet: string; count: number }[]>([])
   const [masterSheetUrl, setMasterSheetUrl] = useState('https://docs.google.com/spreadsheets/d/1XkE5g9kzbLNFn8DnyNW3Ielfal60frvQhp2dK9q_Vp4/edit')
