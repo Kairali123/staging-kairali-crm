@@ -14,3 +14,16 @@ test('stages 9/10/11 auto-close only when unplanned and the gate date has passed
  assert.equal(autoCloseReason(null,null,'Check-in',TODAY),null,'no gate date, no close');
  assert.equal(autoCloseReason(null,'not-a-date','Check-in',TODAY),null,'unparseable never closes');
 });
+
+const {isStage8ReferralSubmission}=load('lib/crr-stage-rules.ts');
+test('only a filled-in stage 8 "Yes" goes to the referral endpoint',()=>{
+ const filled={doerStatus:'Yes',referrals:[{name:'Ramesh'}]};
+ assert.equal(isStage8ReferralSubmission(8,filled),true);
+ assert.equal(isStage8ReferralSubmission(8,{doerStatus:'yes',referrals:[{}]}),true,'case-insensitive');
+ assert.equal(isStage8ReferralSubmission(8,{doerStatus:'No',doerRemarks:'declined'}),false,'a No keeps the old endpoint');
+ assert.equal(isStage8ReferralSubmission(8,{doerStatus:'Yes',referrals:[]}),false,'Yes with nothing filled in');
+ assert.equal(isStage8ReferralSubmission(8,{doerStatus:'Yes'}),false,'Yes with no referrals key');
+ assert.equal(isStage8ReferralSubmission(4,filled),false,'never another stage');
+ assert.equal(isStage8ReferralSubmission(8,null),false);
+ assert.equal(isStage8ReferralSubmission(8,{doerStatus:'Yes',referrals:'Ramesh'}),false,'a string is not entries');
+});

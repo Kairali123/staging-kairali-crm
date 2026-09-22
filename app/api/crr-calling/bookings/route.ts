@@ -8,9 +8,15 @@ import {
 } from "@/lib/authz";
 
 import { getPool } from "@/lib/db";
-import { MAX_PROOF_FILE_BYTES, PROOF_FILE_LIMIT_LABEL, autoCloseReason, isAllowedProofType, istToday, stageBlockReason } from "@/lib/crr-stage-rules";
+import { MAX_PROOF_FILE_BYTES, PROOF_FILE_LIMIT_LABEL, autoCloseReason, isAllowedProofType, isStage8ReferralSubmission, istToday, stageBlockReason } from "@/lib/crr-stage-rules";
 import { findCallingRowForStage, indexCallingRows, parseToShow } from "@/lib/crr-calling-rows";
 import type { StageInfo } from "@/types/crr";
+
+// Stage 8 referral collection has its own Apps Script deployment and its own
+// payload shape. It is used only when the doer answered "Yes" and actually filled
+// in referral entries; a "No" submission still goes to GAS_BOOKINGS_URL below.
+const GAS_STAGE8_REFERRAL_URL =
+    "https://script.google.com/macros/s/AKfycbzrsZGVVLk8pMhota7GSCPzj3BpLn_Ho1MQ5AG5G-laSZpwvJO6UGUfenY9tAfn2R8l/exec";
 
 const GAS_BOOKINGS_URL =
     // "https://script.google.com/macros/s/AKfycbzG_1Y18INn0l0mNXoPtNH50s24WjpGq_WIGeKkUcWcMWELSvcK7cHmxtS4iUmiel6eqA/exec";
@@ -395,16 +401,36 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        const res = await fetch(GAS_BOOKINGS_URL, {
-            method: "POST",
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify({
+        // Stage 8 only diverges once there are referral entries to record; every other
+        // stage, and a "No" answer, keeps the original endpoint and envelope.
+        const isReferralSubmission = isStage8ReferralSubmission(stage, sanitizedFields);
+        console.log("[crr-calling/bookings] upstream:", isReferralSubmission ? "stage8-referral" : "bookings");
+
+        const upstreamUrl = isReferralSubmission ? GAS_STAGE8_REFERRAL_URL : GAS_BOOKINGS_URL;
+        const upstreamBody = isReferralSubmission
+            ? {
+                bookingId: resolvedBookingId,
+                // The guest doing the referring, from the booking we just loaded.
+                refferdBy: {
+                    name: booking.clientName || "",
+                    phone: String(booking.mobile ?? ""),
+                    email: booking.email || "",
+                },
+                fields: sanitizedFields,
+                refferalTakenBy: String((user as any)?.name ?? "").trim(),
+            }
+            : {
                 bookingId: resolvedBookingId,
                 stage,
                 fields: sanitizedFields,
                 adminOverride: isAdminRole,
                 sharedSecret,
-            }),
+            };
+
+        const res = await fetch(upstreamUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(upstreamBody),
             signal: controller.signal,
         });
 
