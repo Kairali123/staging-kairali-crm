@@ -181,7 +181,7 @@ import { getRequestSourceIp, recordSecurityEvent } from '@/lib/security-audit'
 import { authorizeOrderFormAction } from '@/lib/order-form-policy'
 
 // Routes that don't need authentication
-const publicRoutes = ['/', '/access-denied']
+const publicRoutes = ['/', '/access-denied', '/guest-experience']
 
 // Routes that require authentication
 const protectedRoutes = [
@@ -364,7 +364,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Skip middleware for public routes
-  if (publicRoutes.includes(pathname)) {
+  if (publicRoutes.includes(pathname) || pathname.startsWith('/guest-experience')) {
     return withSecurityHeaders(NextResponse.next(), pathname)
   }
 

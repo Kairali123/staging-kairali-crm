@@ -149,8 +149,8 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
     // Don't redirect while loading
     if (isLoading) return
 
-    // Allow access to login page for all users
-    if (pathname === '/') return
+    // Allow access to login page for all users and guest experience app
+    if (pathname === '/' || pathname.startsWith('/guest-experience')) return
 
     // If user is not authenticated (or just logged out), redirect to login page '/', not access-denied
     if (!user) {

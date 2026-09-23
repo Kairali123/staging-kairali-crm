@@ -2,16 +2,9 @@
 import type React from "react"
 import type { Metadata } from "next"
 import "./globals.css"
-import { AuthProvider } from "@/hooks/use-auth"
-import { LeadsProvider } from "@/hooks/use-leads"
-import RouteGuard from "@/components/route-guard"
-import ContentProtectionProvider from "@/components/content-protection-provider"
-import { NotificationProvider } from "@/contexts/notification-context"
-import { NextAuthSessionProvider } from "@/components/session-provider"
-import { SessionGuard } from "@/components/session-guard"
 import { Suspense } from "react"
 import { Toaster } from "sonner"
-import ChatWidget from "@/components/bot-widget/ChatWidget"
+import CRMProviders from "@/components/crm-providers"
 
 export const metadata: Metadata = {
   title: "Kairali Group Management System",
@@ -37,34 +30,21 @@ export default function RootLayout({
             </div>
           }
         >
-          <AuthProvider>
-            <SessionGuard />
-            <RouteGuard>
-              <LeadsProvider>
-                <NotificationProvider>
-                  <ContentProtectionProvider>
-                    <NextAuthSessionProvider>
-                      {children}
-                    </NextAuthSessionProvider>
-                  </ContentProtectionProvider>
-                </NotificationProvider>
-
-                <Toaster
-                  position="top-right"
-                  richColors
-                  expand={false}
-                  visibleToasts={5}
-                  toastOptions={{
-                    style: {
-                      fontSize: "14px",
-                      pointerEvents: "auto",
-                    },
-                  }}
-                />
-              </LeadsProvider>
-            </RouteGuard>
-            <ChatWidget />
-          </AuthProvider>
+          <CRMProviders>
+            {children}
+            <Toaster
+              position="top-right"
+              richColors
+              expand={false}
+              visibleToasts={5}
+              toastOptions={{
+                style: {
+                  fontSize: "14px",
+                  pointerEvents: "auto",
+                },
+              }}
+            />
+          </CRMProviders>
         </Suspense>
       </body>
     </html>
