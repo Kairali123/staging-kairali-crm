@@ -70,7 +70,7 @@ export class AmazonSESAdapter implements EmailProviderInterface {
   async verifyConnection(): Promise<boolean> {
     if (!this.transporter) return false;
     try {
-      return await this.transporter.verify();
+      return await (this.transporter as any).verify();
     } catch {
       return false;
     }

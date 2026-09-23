@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getPool } from '@/lib/db';
 
-export async function POST(req: Request, { params }: { params: { provider: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ provider: string }> }) {
   try {
+    const params = await props.params;
     const providerStr = params.provider.toLowerCase();
     const body = await req.json();
 

@@ -31,7 +31,6 @@ export class EmailQueue {
       VALUES ?
     `;
 
-    // @ts-expect-error
     await (await getPool()).query(query, [values]);
   }
 
