@@ -8,10 +8,10 @@ export const bookingSQL=`SELECT COALESCE(NULLIF(TRIM(b.booking_taken_by),''),'Un
    AND LOWER(TRIM(COALESCE(b.booking_status,''))) NOT IN ('cancelled','booking cancelled','canceled')
  GROUP BY agent,bookingDate,currency`
 export const cancellationSQL=`SELECT COALESCE(NULLIF(TRIM(b.booking_taken_by),''),'Unassigned') agent,
- DATE_FORMAT(b.booking_datetime,'%Y-%m-%d') bookingDate, UPPER(TRIM(COALESCE(b.currency,'INR'))) currency,
+ DATE_FORMAT(COALESCE(b.updated_at, b.booking_datetime),'%Y-%m-%d') bookingDate, UPPER(TRIM(COALESCE(b.currency,'INR'))) currency,
  SUM(b.invoice_amount) amount, COUNT(*) records
  FROM ktahv_bookings_fms_v3_part1 b
- WHERE b.booking_datetime>=? AND b.booking_datetime<?
+ WHERE COALESCE(b.updated_at, b.booking_datetime)>=? AND COALESCE(b.updated_at, b.booking_datetime)<?
    AND LOWER(TRIM(COALESCE(b.booking_status,''))) IN ('cancelled','booking cancelled','canceled')
  GROUP BY agent,bookingDate,currency`
 export type BookingAggregate={agent:string;bookingDate:string;currency:string;amount:number|string|null;records:number}
