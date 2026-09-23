@@ -113,10 +113,13 @@ export async function GET(req:NextRequest){
         COALESCE(NULLIF(TRIM(c.booking_order_id),''), '—') AS pi_number,
         NULL AS pi_link
       FROM conversion_updates_employeewise c
+      LEFT JOIN orders_fms o ON c.booking_order_id COLLATE utf8mb4_unicode_ci = o.order_id COLLATE utf8mb4_unicode_ci
       WHERE c.date_and_time >= ? AND c.date_and_time < ?
         AND c.company = 'KAPPL'
-        AND c.is_verified = 1
-        AND COALESCE(c.return_id, '') = ''`,
+        AND c.is_verified = 0
+        AND COALESCE(c.return_id, '') = ''
+        AND LOWER(COALESCE(c.booking_status, '')) NOT IN ('voucher', 'complimentary', 'cancelled', 'booking cancelled', 'order cancel')
+        AND LOWER(COALESCE(o.order_status, '')) NOT LIKE '%cancel%'`,
       timeout: 20000
     }, window)
     const seen = new Set<string>()

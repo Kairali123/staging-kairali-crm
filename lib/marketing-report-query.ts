@@ -45,6 +45,10 @@ export const reportQueries = {
       ((company = 'KAPPL' AND COALESCE(return_id, '') = '' AND LOWER(COALESCE(booking_status,'')) NOT IN ('voucher','complimentary')) OR
        (company <> 'KAPPL' AND LOWER(COALESCE(booking_status,'')) NOT IN ('cancelled','booking cancelled','no show','voucher','complimentary')))
       THEN CASE WHEN company = 'KAPPL' THEN COALESCE(NULLIF(amount_after_return,0),conversion_amount,0) ELSE COALESCE(conversion_amount,0) END ELSE 0 END) AS unverified,
+    SUM(CASE WHEN is_verified = 0 AND
+      ((company = 'KAPPL' AND COALESCE(return_id, '') = '' AND LOWER(COALESCE(booking_status,'')) NOT IN ('voucher','complimentary')) OR
+       (company <> 'KAPPL' AND LOWER(COALESCE(booking_status,'')) NOT IN ('cancelled','booking cancelled','no show','voucher','complimentary')))
+      THEN 1 ELSE 0 END) AS unverifiedCount,
     SUM(CASE WHEN company = 'KAPPL' AND COALESCE(return_id, '') <> '' THEN COALESCE(NULLIF(amount_after_return,0),conversion_amount,0)
       WHEN company <> 'KAPPL' AND LOWER(COALESCE(booking_status,'')) IN ('cancelled','booking cancelled','no show') THEN COALESCE(conversion_amount,0) ELSE 0 END) AS cancelled,
     SUM(CASE WHEN (company = 'KAPPL' AND COALESCE(return_id, '') <> '') OR
