@@ -22,6 +22,9 @@ export async function GET(req: Request) {
     // Auto-create MySQL tables if missing
     await ensureClientDatabaseTables(pool)
 
+    // Cleanup: Remove rows where both email and phone are completely blank
+    await pool.query(`DELETE FROM client_database WHERE (email IS NULL OR TRIM(email) = '') AND (phone IS NULL OR TRIM(phone) = '')`)
+
     let whereClause = 'WHERE 1=1'
     const queryParams: any[] = []
 
@@ -44,6 +47,13 @@ export async function GET(req: Request) {
     if (source && source !== 'ALL') {
       whereClause += ' AND source_sheet = ?'
       queryParams.push(source)
+    }
+
+    const unsubscribedOnly = searchParams.get('unsubscribedOnly')
+    if (unsubscribedOnly === 'true') {
+      whereClause += ' AND is_unsubscribed = 1'
+    } else if (unsubscribedOnly === 'false') {
+      whereClause += ' AND (is_unsubscribed IS NULL OR is_unsubscribed = 0)'
     }
 
     const sortField = searchParams.get('sortField') || 'id'
@@ -72,7 +82,8 @@ export async function GET(req: Request) {
         COUNT(DISTINCT NULLIF(phone, '')) as uniquePhones,
         COUNT(DISTINCT NULLIF(email, '')) as uniqueEmails,
         COUNT(DISTINCT category) as totalCategories,
-        COUNT(DISTINCT sub_category) as totalSubCategories
+        COUNT(DISTINCT sub_category) as totalSubCategories,
+        SUM(CASE WHEN is_unsubscribed = 1 THEN 1 ELSE 0 END) as unsubscribedCount
       FROM client_database ${whereClause}
     `, queryParams)
 
@@ -99,6 +110,7 @@ export async function GET(req: Request) {
         uniqueEmails: 0,
         totalCategories: 0,
         totalSubCategories: 0,
+        unsubscribedCount: 0,
       },
       sourceSheets: sourceRows || []
     })
@@ -180,7 +192,7 @@ export async function POST(req: Request) {
     )
 
     // Generate Unique Client ID
-    const [countRes]: any = await pool.query('SELECT COUNT(*) as cnt FROM client_database')
+    const [countRes]: any = await pool.query('SELECT COALESCE(MAX(CAST(SUBSTRING(unique_client_id, 8) AS UNSIGNED)), 0) as cnt FROM client_database')
     const currentCount = (countRes[0]?.cnt || 0) + 1
     const uniqueClientId = generateClientId(currentCount)
 

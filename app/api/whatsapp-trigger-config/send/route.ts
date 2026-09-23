@@ -13,7 +13,9 @@ export async function POST(req:NextRequest){
  try{
   const text=await req.text();if(text.length>5700000)return NextResponse.json({error:'Report image must be under 4 MB'},{status:413,headers})
   const parsed=schema.safeParse(JSON.parse(text));if(!parsed.success)return NextResponse.json({error:'Invalid test message request'},{status:400,headers})
-  const input=parsed.data;if(input.date!==yesterdayIST())throw Error('Regenerate the image for yesterday before sending')
+  const input=parsed.data
+  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())
+  if(input.date!==today&&input.date!==yesterdayIST())throw Error('Regenerate the report image before sending')
   const image=Buffer.from(input.image,'base64');if(image.length>4*1024*1024||image.length<4||image[0]!==255||image[1]!==216||image[image.length-2]!==255||image[image.length-1]!==217)throw Error('A valid JPEG under 4 MB is required')
   const config=await transaction(s=>{
    if(s.runs.some(r=>r.id===input.requestId))throw Error('This test request was already submitted. Check its result before retrying.')

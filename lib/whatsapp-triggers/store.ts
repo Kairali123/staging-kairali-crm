@@ -50,7 +50,11 @@ export async function readState(): Promise<State> {
       )
       if (rows && rows.length > 0 && rows[0].state_json) {
         const val = rows[0].state_json
-        return typeof val === 'string' ? JSON.parse(val) : val
+        const parsed: State = typeof val === 'string' ? JSON.parse(val) : val
+        for (const t of parsed.triggers || []) {
+          if (!t.period) (t as any).period = 'Today'
+        }
+        return parsed
       }
       return { version: 1, triggers: [], runs: [] }
     } catch (e: any) {
@@ -73,7 +77,11 @@ export async function readState(): Promise<State> {
   }
 
   try {
-    return JSON.parse(await readFile(path.join(stateRoot(), 'state.json'), 'utf8'))
+    const raw = JSON.parse(await readFile(path.join(stateRoot(), 'state.json'), 'utf8'))
+    for (const t of raw.triggers || []) {
+      if (!t.period) (t as any).period = 'Today'
+    }
+    return raw
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return { version: 1, triggers: [], runs: [] }
     throw e
@@ -108,6 +116,9 @@ export async function transaction<T>(fn: (s: State) => T | Promise<T>): Promise<
             state = localData
           }
         } catch {}
+      }
+      for (const t of state.triggers || []) {
+        if (!t.period) (t as any).period = 'Today'
       }
       const result = await fn(state)
       state.runs = (state.runs || []).slice(-2000)

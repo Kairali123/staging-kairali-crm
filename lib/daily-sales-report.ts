@@ -136,8 +136,8 @@ export function exportSalesHTML(report:DailySalesReport,scope:string){
  const rows=scopedRows(report,scope),codes=scope==='ALL'?Object.keys(companies):[scope];
  const summary=callingSummary(report.calling,scope),employees=scopedEmployees(report.calling,scope)
  const contributors=salesContributors(rows)
- const totalSales=rows.reduce((n,r)=>n+r.sales,0),totalCollection=rows.reduce((n,r)=>n+r.collection,0)
- const totalUnverified=rows.reduce((n,r)=>n+r.unverified,0),totalCancelled=rows.reduce((n,r)=>n+r.cancelled,0)
+ const totalSales=rows.reduce((n,r)=>n+(r.sales||0),0),totalCollection=rows.reduce((n,r)=>n+(r.collection||0),0)
+ const totalUnverified=rows.reduce((n,r)=>n+(r.unverified||0),0),totalCancelled=rows.reduce((n,r)=>n+(r.cancelled||0),0)
   const palette=['#4f6de0','#9270cf','#31a2ad','#e4a04d','#dc7d9b','#6788a8']
   const donutChartHTML = buildSalesDonutSvg(report, scope) || '<div class="empty-chart">No sales</div>'
   const contributorRows=contributors.map((r,i)=>{
@@ -256,10 +256,10 @@ export function exportSalesHTML(report:DailySalesReport,scope:string){
   const agentHeaders=['Agent Name','Sales Quantity','UnVerified Sales Value','Collection Amount','Cancelled Qty','Cancelled Value']
   const companyHTML=codes.map(code=>{
    const list=rows.filter(r=>r.company===code)
-   const sum=(pick:(r:SalesAgent)=>number)=>list.reduce((n,r)=>n+pick(r),0)
+   const sum=(pick:(r:SalesAgent)=>number|undefined|null)=>list.reduce((n,r)=>n+(Number(pick(r))||0),0)
    const cells=(qty:string,sales:string,collection:string,cancelledQty:string,cancelled:string)=>`<td>${lbl(agentHeaders[1])}${qty}</td><td>${lbl(agentHeaders[2])}${sales}</td><td>${lbl(agentHeaders[3])}${collection}</td><td>${lbl(agentHeaders[4])}${cancelledQty}</td><td>${lbl(agentHeaders[5])}${cancelled}</td>`
-   const body=list.map(r=>`<tr><td>${esc(r.agent)}</td>${cells(showCount(r.conversions),money(r.sales),money(r.collection),showCount(r.cancelledCount),money(r.cancelled))}</tr>`).join('')
-   return `<section class="card"><h2>${esc(companies[code as Company])}</h2><table class="rt" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px"><thead><tr>${agentHeaders.map(t=>`<th>${t}</th>`).join('')}</tr></thead><tbody>${body||'<tr><td class="empty" colspan="6">No sales or collection activity for this date.</td></tr>'}</tbody><tfoot><tr><td>Grand total</td>${cells(showCount(sum(r=>r.conversions)),money(sum(r=>r.sales)),money(sum(r=>r.collection)),showCount(sum(r=>r.cancelledCount||0)),money(sum(r=>r.cancelled)))}</tr></tfoot></table></section>`
+   const body=list.map(r=>`<tr><td>${esc(r.agent)}</td>${cells(r.conversions>0?showCount(r.conversions):'—',money(r.sales||0),money(r.collection||0),r.cancelledCount>0?showCount(r.cancelledCount):'—',money(r.cancelled||0))}</tr>`).join('')
+   return `<section class="card"><h2>${esc(companies[code as Company])}</h2><table class="rt" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px"><thead><tr>${agentHeaders.map(t=>`<th>${t}</th>`).join('')}</tr></thead><tbody>${body||'<tr><td class="empty" colspan="6">No sales or collection activity for this date.</td></tr>'}</tbody><tfoot><tr><td>Grand total</td>${cells(showCount(sum(r=>r.conversions)),money(sum(r=>r.sales)),money(sum(r=>r.collection)),showCount(sum(r=>r.cancelledCount)),money(sum(r=>r.cancelled)))}</tr></tfoot></table></section>`
   }).join('')
 
   const kpis:[string,string][]=[['Sales value',money(totalSales)],['Collection',money(totalCollection)],['Unverified',money(totalUnverified)],['Cancelled',money(totalCancelled)]]

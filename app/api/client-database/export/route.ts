@@ -28,13 +28,24 @@ export async function GET(req: Request) {
     const queryParams: any[] = []
 
     if (category && category !== 'ALL') {
-      whereClause += ' AND category = ?'
-      queryParams.push(category)
+      const cats = category.split(',').map(c => c.trim()).filter(Boolean)
+      if (cats.length > 0) {
+        whereClause += ` AND category IN (${cats.map(() => '?').join(',')})`
+        queryParams.push(...cats)
+      }
     }
 
     if (subCategory && subCategory !== 'ALL') {
-      whereClause += ' AND sub_category = ?'
-      queryParams.push(subCategory)
+      const subs = subCategory.split(',').map(s => s.trim()).filter(Boolean)
+      if (subs.length > 0) {
+        whereClause += ` AND sub_category IN (${subs.map(() => '?').join(',')})`
+        queryParams.push(...subs)
+      }
+    }
+
+    const excludeUnsubscribed = searchParams.get('excludeUnsubscribed')
+    if (excludeUnsubscribed === 'true') {
+      whereClause += ' AND (is_unsubscribed IS NULL OR is_unsubscribed = 0)'
     }
 
     if (type === 'emails') {
@@ -77,6 +88,27 @@ export async function GET(req: Request) {
         headers: {
           'Content-Type': 'text/csv; charset=utf-8',
           'Content-Disposition': `attachment; filename="client_phone_numbers_${Date.now()}.csv"`,
+        },
+      })
+    }
+
+    if (type === 'both') {
+      const [rows]: any = await pool.query(
+        `SELECT unique_client_id, name, email, phone, category, sub_category, source_sheet FROM client_database ${whereClause} ORDER BY id ASC`,
+        queryParams
+      )
+
+      const lines = ['Client ID,Client Name,Email ID,Phone Number,Category,Sub Category,Source']
+      for (const r of rows) {
+        lines.push(`"${r.unique_client_id}","${r.name || ''}","${r.email || ''}","${r.phone || ''}","${r.category || ''}","${r.sub_category || ''}","${r.source_sheet || ''}"`)
+      }
+      const csvContent = lines.join('\n')
+
+      return new NextResponse(csvContent, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="client_database_full_${Date.now()}.csv"`,
         },
       })
     }
