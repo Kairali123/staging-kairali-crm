@@ -4,7 +4,7 @@ export type Company = keyof typeof companies
 export type PILink = {id:string;piNumber:string;url:string}
 export type SaleDetail = {id?:string;date:string;clientName:string;piNumber:string;piLink?:string|null;amount:number;agent:string}
 export type CollectionDetail = {id?:string;date:string;clientName:string;bookingId:string;receiptNumber?:string;paymentMode?:string;amount:number;agent:string;company:string}
-export type SalesAgent = {company:string;agent:string;sales:number;collection:number;collectionCount:number;unverified:number;cancelled:number;cancelledCount:number;conversions:number;quantity:number;dialer:number;appsheet:number|null;pending:number|null;done:number|null;piLinks?:PILink[];salesDetails?:SaleDetail[];collectionDetails?:CollectionDetail[]}
+export type SalesAgent = {company:string;agent:string;sales:number;collection:number;collectionCount:number;unverified:number;unverifiedCount:number;cancelled:number;cancelledCount:number;conversions:number;quantity:number;dialer:number;appsheet:number|null;pending:number|null;done:number|null;piLinks?:PILink[];salesDetails?:SaleDetail[];collectionDetails?:CollectionDetail[]}
 export type DailySalesReport = {date:string;generatedAt:string;cancellationSnapshotAt?:string;calling?:CallingData;rows:SalesAgent[];warnings:string[];unmappedCalls:number;sourceRecords:number}
 export function combineSales(date:string,sales:Record<string,unknown>[],calls:Record<string,unknown>[],collections:Record<string,unknown>[]=[]):DailySalesReport {
  const map=new Map<string,SalesAgent>();const warnings=[
@@ -13,12 +13,12 @@ export function combineSales(date:string,sales:Record<string,unknown>[],calls:Re
  'Calling activity is a live all-company employee snapshot. Its source date is shown separately from the selected sales date. Blank numeric cells in the Live sheet count as zero; sheet errors remain unavailable.'
  ];
  let unmappedCalls=0,sourceRecords=0;
- const get=(r:Record<string,unknown>)=>{const company=String(r.company),agent=String(r.agent||'Unassigned').trim();const key=company+'|'+agent.toLowerCase();if(!map.has(key))map.set(key,{company,agent,sales:0,collection:0,collectionCount:0,unverified:0,cancelled:0,cancelledCount:0,conversions:0,quantity:0,dialer:0,appsheet:null,pending:null,done:null,piLinks:[],salesDetails:[],collectionDetails:[]});return map.get(key)!}
- for(const r of sales){sourceRecords+=Number(r.records||0);if(!Object.hasOwn(companies,String(r.company))){warnings.push('Unmapped sales company found; consolidated sales coverage is incomplete.');continue}const a=get(r);a.sales+=Number(r.verified||0);a.unverified+=Number(r.unverified||0);a.cancelled+=Number(r.cancelled||0);a.cancelledCount+=Number(r.cancelledCount||0);a.conversions+=Number(r.conversions||0);a.quantity+=Number(r.conversions||0);if(Array.isArray(r.salesDetails)){a.salesDetails!.push(...(r.salesDetails as SaleDetail[]))}if(Array.isArray(r.piLinks)){const urls=new Set((a.piLinks||[]).map(p=>p.url));for(const p of r.piLinks as PILink[]){if(p&&p.url&&!urls.has(p.url)){urls.add(p.url);a.piLinks!.push(p)}}}}
+ const get=(r:Record<string,unknown>)=>{const company=String(r.company),agent=String(r.agent||'Unassigned').trim();const key=company+'|'+agent.toLowerCase();if(!map.has(key))map.set(key,{company,agent,sales:0,collection:0,collectionCount:0,unverified:0,unverifiedCount:0,cancelled:0,cancelledCount:0,conversions:0,quantity:0,dialer:0,appsheet:null,pending:null,done:null,piLinks:[],salesDetails:[],collectionDetails:[]});return map.get(key)!}
+ for(const r of sales){sourceRecords+=Number(r.records||0);if(!Object.hasOwn(companies,String(r.company))){warnings.push('Unmapped sales company found; consolidated sales coverage is incomplete.');continue}const a=get(r);a.sales+=Number(r.verified||0);a.unverified+=Number(r.unverified||0);a.unverifiedCount+=Number(r.unverifiedCount||0);a.cancelled+=Number(r.cancelled||0);a.cancelledCount+=Number(r.cancelledCount||0);a.conversions+=Number(r.conversions||0);a.quantity+=Number(r.conversions||0);if(Array.isArray(r.salesDetails)){a.salesDetails!.push(...(r.salesDetails as SaleDetail[]))}if(Array.isArray(r.piLinks)){const urls=new Set((a.piLinks||[]).map(p=>p.url));for(const p of r.piLinks as PILink[]){if(p&&p.url&&!urls.has(p.url)){urls.add(p.url);a.piLinks!.push(p)}}}}
  for(const r of calls){if(!(String(r.company) in companies)){unmappedCalls+=Number(r.dialer||0);continue}get(r).dialer+=Number(r.dialer||0)}
  for(const r of collections){if(!Object.hasOwn(companies,String(r.company)))continue;const a=get(r);a.collection+=Number(r.amount||r.collection||r.received_amount||0);a.collectionCount+=Number(r.count||r.collectionCount||1);if(Array.isArray(r.collectionDetails)){a.collectionDetails!.push(...(r.collectionDetails as CollectionDetail[]))}}
  if(unmappedCalls)warnings.push(`${unmappedCalls} dialer calls have no recognized company and are excluded from company totals.`)
- return {date,generatedAt:new Date().toISOString(),rows:[...map.values()].sort((a,b)=>b.sales-a.sales||b.collection-a.collection||a.agent.localeCompare(b.agent)),warnings,unmappedCalls,sourceRecords}
+ return {date,generatedAt:new Date().toISOString(),rows:[...map.values()].sort((a,b)=>(b.sales+b.unverified)-(a.sales+a.unverified)||b.collection-a.collection||a.agent.localeCompare(b.agent)),warnings,unmappedCalls,sourceRecords}
 }
 export const money=(value:number)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:2}).format(value)
 export const dayLabel=(date:string)=>new Date(date+'T00:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric',timeZone:'UTC'})
@@ -253,13 +253,19 @@ export function exportSalesHTML(report:DailySalesReport,scope:string){
    <table class="rt calling" width="100%" cellpadding="0" cellspacing="0" border="0"><thead><tr>${callingHeaders.map(([t,c])=>`<th${c?` class="${c}"`:''}>${t}</th>`).join('')}</tr></thead><tbody>${employeeRows||'<tr><td class="empty" colspan="7">No employee calling data for this scope.</td></tr>'}</tbody><tfoot><tr><td>Grand total</td><td class="c-pend">${lbl('AppSheet pending')}${showCount(employeeTotal(employees,'pending'))}</td><td class="c-done">${lbl('AppSheet done')}${showCount(employeeTotal(employees,'appsheet'))}</td><td class="c-done">${lbl('Dialer done')}${showCount(employeeTotal(employees,'dialer'))}</td><td class="c-done">${lbl('Total done')}${showCount(employeeTotal(employees,'done'))}</td><td>${lbl('Completion %')}—</td><td>${lbl('Updated (IST)')}All employees</td></tr></tfoot></table>
   </section>`
 
-  const agentHeaders=['Agent Name','Sales Quantity','UnVerified Sales Value','Collection Amount','Cancelled Qty','Cancelled Value']
   const companyHTML=codes.map(code=>{
-   const list=rows.filter(r=>r.company===code)
+   const list=rows.filter(r=>r.company===code), isKappl=code==='KAPPL'
+   const agentHeaders=['Agent Name','Sales Quantity',isKappl?'UnVerified Sales Value':'Sales Value','Collection Amount','Cancelled Qty','Cancelled Value']
    const sum=(pick:(r:SalesAgent)=>number|undefined|null)=>list.reduce((n,r)=>n+(Number(pick(r))||0),0)
    const cells=(qty:string,sales:string,collection:string,cancelledQty:string,cancelled:string)=>`<td>${lbl(agentHeaders[1])}${qty}</td><td>${lbl(agentHeaders[2])}${sales}</td><td>${lbl(agentHeaders[3])}${collection}</td><td>${lbl(agentHeaders[4])}${cancelledQty}</td><td>${lbl(agentHeaders[5])}${cancelled}</td>`
-   const body=list.map(r=>`<tr><td>${esc(r.agent)}</td>${cells(r.conversions>0?showCount(r.conversions):'—',money(r.sales||0),money(r.collection||0),r.cancelledCount>0?showCount(r.cancelledCount):'—',money(r.cancelled||0))}</tr>`).join('')
-   return `<section class="card"><h2>${esc(companies[code as Company])}</h2><table class="rt" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px"><thead><tr>${agentHeaders.map(t=>`<th>${t}</th>`).join('')}</tr></thead><tbody>${body||'<tr><td class="empty" colspan="6">No sales or collection activity for this date.</td></tr>'}</tbody><tfoot><tr><td>Grand total</td>${cells(showCount(sum(r=>r.conversions)),money(sum(r=>r.sales)),money(sum(r=>r.collection)),showCount(sum(r=>r.cancelledCount)),money(sum(r=>r.cancelled)))}</tr></tfoot></table></section>`
+   const body=list.map(r=>{
+    const qty = isKappl ? ((r.unverifiedCount || 0) > 0 ? showCount(r.unverifiedCount) : (r.conversions > 0 ? showCount(r.conversions) : '—')) : (r.conversions > 0 ? showCount(r.conversions) : '—')
+    const val = isKappl ? money(r.unverified || 0) : money(r.sales || 0)
+    return `<tr><td>${esc(r.agent)}</td>${cells(qty,val,money(r.collection||0),r.cancelledCount>0?showCount(r.cancelledCount):'—',money(r.cancelled||0))}</tr>`
+   }).join('')
+   const totalQty = isKappl ? sum(r => (r.unverifiedCount || 0) > 0 ? r.unverifiedCount : (r.conversions || 0)) : sum(r => r.conversions)
+   const totalVal = isKappl ? sum(r => r.unverified || 0) : sum(r => r.sales || 0)
+   return `<section class="card"><h2>${esc(companies[code as Company])}</h2><table class="rt" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px"><thead><tr>${agentHeaders.map(t=>`<th>${t}</th>`).join('')}</tr></thead><tbody>${body||'<tr><td class="empty" colspan="6">No sales or collection activity for this date.</td></tr>'}</tbody><tfoot><tr><td>Grand total</td>${cells(showCount(totalQty),money(totalVal),money(sum(r=>r.collection)),showCount(sum(r=>r.cancelledCount)),money(sum(r=>r.cancelled)))}</tr></tfoot></table></section>`
   }).join('')
 
   const kpis:[string,string][]=[['Sales value',money(totalSales)],['Collection',money(totalCollection)],['Unverified',money(totalUnverified)],['Cancelled',money(totalCancelled)]]

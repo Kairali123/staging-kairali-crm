@@ -1,7 +1,41 @@
 import { reportQueries } from './marketing-report-query'
 export { reportWindow } from './marketing-report-query'
-// Reuse the approved Leads / Assign monetary definitions, grouped by salesperson.
-export const salesSQL = reportQueries.sales.replace("COALESCE(NULLIF(TRIM(verified_source), ''), 'Others') AS source", "COALESCE(NULLIF(TRIM(sales_person_name), ''), 'Unassigned') AS agent").replace('GROUP BY company, TRIM(verified_source)', 'GROUP BY company, TRIM(sales_person_name)')
+export const salesSQL = `SELECT 
+  c.company, 
+  COALESCE(NULLIF(TRIM(c.sales_person_name), ''), 'Unassigned') AS agent,
+  COUNT(*) AS records,
+  SUM(CASE WHEN c.is_verified = 1 AND
+    ((c.company = 'KAPPL' AND COALESCE(c.return_id, '') = '' AND LOWER(COALESCE(o.order_status, '')) NOT LIKE '%cancel%') OR
+     (c.company <> 'KAPPL' AND LOWER(COALESCE(c.booking_status,'')) = 'confirmed')) THEN 1 ELSE 0 END) AS conversions,
+  SUM(CASE WHEN c.is_verified = 1 AND
+    ((c.company = 'KAPPL' AND COALESCE(c.return_id, '') = '' AND LOWER(COALESCE(o.order_status, '')) NOT LIKE '%cancel%') OR
+     (c.company <> 'KAPPL' AND LOWER(COALESCE(c.booking_status,'')) = 'confirmed'))
+    THEN CASE WHEN c.company = 'KAPPL' THEN COALESCE(NULLIF(c.amount_after_return,0),c.conversion_amount,0) ELSE COALESCE(c.conversion_amount,0) END ELSE 0 END) AS verified,
+  SUM(CASE WHEN c.is_verified = 0 AND
+    ((c.company = 'KAPPL' AND COALESCE(c.return_id, '') = '' AND LOWER(COALESCE(c.booking_status,'')) NOT IN ('voucher','complimentary') AND LOWER(COALESCE(o.order_status, '')) NOT LIKE '%cancel%') OR
+     (c.company <> 'KAPPL' AND LOWER(COALESCE(c.booking_status,'')) NOT IN ('cancelled','booking cancelled','no show','voucher','complimentary')))
+    THEN CASE WHEN c.company = 'KAPPL' THEN COALESCE(NULLIF(c.amount_after_return,0),c.conversion_amount,0) ELSE COALESCE(c.conversion_amount,0) END ELSE 0 END) AS unverified,
+  SUM(CASE WHEN c.is_verified = 0 AND
+    ((c.company = 'KAPPL' AND COALESCE(c.return_id, '') = '' AND LOWER(COALESCE(c.booking_status,'')) NOT IN ('voucher','complimentary') AND LOWER(COALESCE(o.order_status, '')) NOT LIKE '%cancel%') OR
+     (c.company <> 'KAPPL' AND LOWER(COALESCE(c.booking_status,'')) NOT IN ('cancelled','booking cancelled','no show','voucher','complimentary')))
+    THEN 1 ELSE 0 END) AS unverifiedCount,
+  SUM(CASE WHEN c.company = 'KAPPL' AND (
+      COALESCE(c.return_id, '') <> '' 
+      OR LOWER(COALESCE(c.booking_status, '')) IN ('cancelled', 'booking cancelled', 'order cancel')
+      OR LOWER(COALESCE(o.order_status, '')) LIKE '%cancel%'
+    ) THEN COALESCE(NULLIF(c.amount_after_return,0),c.conversion_amount,0)
+    WHEN c.company <> 'KAPPL' AND LOWER(COALESCE(c.booking_status,'')) IN ('cancelled','booking cancelled','no show') THEN COALESCE(c.conversion_amount,0) ELSE 0 END) AS cancelled,
+  SUM(CASE WHEN (c.company = 'KAPPL' AND (
+      COALESCE(c.return_id, '') <> '' 
+      OR LOWER(COALESCE(c.booking_status, '')) IN ('cancelled', 'booking cancelled', 'order cancel')
+      OR LOWER(COALESCE(o.order_status, '')) LIKE '%cancel%'
+    )) OR
+    (c.company <> 'KAPPL' AND LOWER(COALESCE(c.booking_status,'')) IN ('cancelled','booking cancelled','no show')) THEN 1 ELSE 0 END) AS cancelledCount,
+  SUM(c.conversion_amount IS NULL OR c.conversion_amount < 0 OR c.booking_status IS NULL OR c.is_verified IS NULL) AS invalid
+  FROM conversion_updates_employeewise c
+  LEFT JOIN orders_fms o ON c.booking_order_id COLLATE utf8mb4_unicode_ci = o.order_id COLLATE utf8mb4_unicode_ci
+  WHERE c.date_and_time >= ? AND c.date_and_time < ? 
+  GROUP BY c.company, TRIM(c.sales_person_name)`
 // lead_fms is the existing DialShree Received source. Latest staging classification
 // is selected once per lead to avoid multiplying calls through a many-to-many join.
 export const callsSQL = `WITH calls AS (
