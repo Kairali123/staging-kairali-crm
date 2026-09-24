@@ -1,0 +1,33 @@
+.force-refresh {
+  border: 1px solid #9c5906;
+  border-radius: 8px;
+  background: #b76b08;
+  color: #fff;
+  min-width: 142px;
+  padding: 10px 14px;
+  font-weight: 750;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.force-refresh:hover:not(:disabled) {
+  background: #985806;
+}
+
+.force-refresh:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+@media (max-width: 760px) {
+  .top-actions {
+    gap: 6px;
+  }
+
+  .refresh,
+  .force-refresh {
+    min-width: 0;
+    padding: 9px 8px;
+    font-size: 10px;
+  }
+}
