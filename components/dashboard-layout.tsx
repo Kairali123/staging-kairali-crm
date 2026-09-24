@@ -230,6 +230,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "Lead Search Dashboard", href: "/lead-search", icon: Search, permission: "lead_search.view" },
     { name: "Good Lead Leakage", href: "/good-lead-leakage", icon: Search, permission: "good_lead_leakage.view" },
     { name: "K-Serve Lead Lost", href: "/voicecall/kserve-lead-lost", icon: PhoneCall, permission: "voicecall_kserve_lead_lost.view" },
+    { name: "Lead Lost Monitor", href: "/lead-lost-monitor", icon: AlertTriangle, permission: "lead_lost_monitor.view" },
   ]
   const kapplNewOrderSubMenu = [
     { name: "New Order FMS", href: "/new-order-fms", icon: FileText, permission: "new-order-fms.view" },
