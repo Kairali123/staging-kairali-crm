@@ -1,4 +1,5 @@
 import type React from 'react'
+import "./leadguard-globals.css";
 import "./leadguard-totals.css";
 import "./leadguard-enhanced.css";
 
