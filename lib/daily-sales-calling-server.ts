@@ -40,21 +40,29 @@ export async function loadCalling(connection?: any, date?: string): Promise<Call
 
   await Promise.all([
     (async () => {
-      // 0. Try DB snapshot first (pushed by local worker — always reachable from Vercel)
+      // 0. Try DB snapshot first (pushed by local worker or previous successful fetch)
       if (connection) {
         try {
           const [tables] = await connection.query("SHOW TABLES LIKE 'calling_employee_snapshot'") as any[]
-          if (Array.isArray(tables) && tables.length > 0) {
-            const [rows] = await connection.query(
-              "SELECT employees, captured_at FROM calling_employee_snapshot WHERE id = 1 AND captured_at >= NOW() - INTERVAL 2 HOUR LIMIT 1"
-            ) as any[]
-            if (Array.isArray(rows) && rows.length > 0 && typeof rows[0]?.employees === 'string') {
-              const parsed = JSON.parse(rows[0].employees)
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                result.employees = parsed
-                result.warnings.push(`Employee calling data served from local snapshot (captured ${new Date(rows[0].captured_at).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' })} IST).`)
-                return
-              }
+          if (!tables || tables.length === 0) {
+            await connection.query(`
+              CREATE TABLE IF NOT EXISTS calling_employee_snapshot (
+                id INT NOT NULL DEFAULT 1 PRIMARY KEY,
+                captured_at DATETIME NOT NULL,
+                employees JSON NOT NULL
+              ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            `)
+          }
+          const [rows] = await connection.query(
+            "SELECT employees, captured_at FROM calling_employee_snapshot WHERE id = 1 AND captured_at >= NOW() - INTERVAL 4 HOUR LIMIT 1"
+          ) as any[]
+          if (Array.isArray(rows) && rows.length > 0 && rows[0]?.employees) {
+            const rawEmps = rows[0].employees
+            const parsed = Array.isArray(rawEmps) ? rawEmps : (typeof rawEmps === 'string' ? JSON.parse(rawEmps) : null)
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              result.employees = parsed
+              result.warnings.push(`Employee calling data served from database snapshot (captured ${new Date(rows[0].captured_at).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' })} IST).`)
+              return
             }
           }
         } catch (dbErr) {
@@ -62,25 +70,65 @@ export async function loadCalling(connection?: any, date?: string): Promise<Call
         }
       }
 
-      // 1. Live fetch (works locally; may timeout on Vercel)
+      // 1. Live fetch with retries and exponential backoff
       const attemptFetch = async () => {
-        const r = await fetch(liveURL, { cache: 'no-store', signal: AbortSignal.timeout(20000) })
+        const r = await fetch(liveURL, { cache: 'no-store', signal: AbortSignal.timeout(25000) })
         if (!r.ok) throw Error(`HTTP ${r.status}`)
         const b = await r.json()
         if (b.success !== true || !Array.isArray(b.data)) throw Error('Unexpected response shape')
         return parseEmployees(b.data)
       }
-      try {
-        result.employees = await attemptFetch()
-      } catch (err1) {
-        console.warn('[loadCalling] Employee feed attempt 1 failed:', err1)
-        await new Promise(res => setTimeout(res, 5000))
+
+      for (let attempt = 1; attempt <= 3; attempt++) {
         try {
-          result.employees = await attemptFetch()
-        } catch (err2) {
-          console.error('[loadCalling] Employee feed attempt 2 failed:', err2)
-          result.warnings.push('Employee calling feed unavailable. Refresh to retry.')
+          const emps = await attemptFetch()
+          if (Array.isArray(emps) && emps.length > 0) {
+            result.employees = emps
+            // Save fresh snapshot to database so subsequent queries and hosted runs have it
+            if (connection) {
+              try {
+                await connection.query(
+                  `INSERT INTO calling_employee_snapshot (id, captured_at, employees)
+                   VALUES (1, NOW(), ?)
+                   ON DUPLICATE KEY UPDATE captured_at = NOW(), employees = VALUES(employees)`,
+                  [JSON.stringify(emps)]
+                )
+              } catch (saveErr) {
+                console.warn('[loadCalling] Snapshot cache write failed:', saveErr)
+              }
+            }
+            return
+          }
+        } catch (err) {
+          console.warn(`[loadCalling] Employee feed attempt ${attempt} failed:`, (err as any)?.message || err)
+          if (attempt < 3) {
+            await new Promise(res => setTimeout(res, 2000 * attempt))
+          }
         }
+      }
+
+      // Fallback: Check if ANY snapshot exists in DB (even older than 4 hours) before giving up
+      if (connection && result.employees.length === 0) {
+        try {
+          const [fallbackRows] = await connection.query(
+            "SELECT employees, captured_at FROM calling_employee_snapshot WHERE id = 1 LIMIT 1"
+          ) as any[]
+          if (Array.isArray(fallbackRows) && fallbackRows.length > 0 && fallbackRows[0]?.employees) {
+            const rawEmps = fallbackRows[0].employees
+            const parsed = Array.isArray(rawEmps) ? rawEmps : (typeof rawEmps === 'string' ? JSON.parse(rawEmps) : null)
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              result.employees = parsed
+              result.warnings.push(`Live calling feed was unreachable; using cached snapshot from ${new Date(fallbackRows[0].captured_at).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' })} IST.`)
+              return
+            }
+          }
+        } catch (fallbackErr) {
+          console.warn('[loadCalling] Fallback DB snapshot check failed:', fallbackErr)
+        }
+      }
+
+      if (result.employees.length === 0) {
+        result.warnings.push('Employee calling feed unavailable. Waiting for full data.')
       }
     })(),
 

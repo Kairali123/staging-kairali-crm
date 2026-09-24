@@ -4,7 +4,7 @@ import { reportWindow, salesSQL } from '@/lib/daily-sales-report-query'
 import { bookingSQL, cancellationSQL, cancellationDates, bookingAmounts, type BookingAggregate } from '@/lib/daily-sales-bookings'
 import { loadCalling } from '@/lib/daily-sales-calling-server'
 import { mapEmployeeCompanies } from '@/lib/daily-sales-calling'
-export async function loadScheduledSales(date:string){
+export async function loadScheduledSales(date:string, options: { waitForFullData?: boolean } = {}){
  const window=reportWindow(date)
  let connection
  try{
@@ -130,7 +130,14 @@ export async function loadScheduledSales(date:string){
 
   report.cancellationSnapshotAt=sourceDates.capturedAt
   report.warnings.push(`KTAHV cancellations use AM status and CW dates from a verified Sheet snapshot captured ${sourceDates.capturedAt}; SQL CW dates have a known day/month sync mismatch. New cancellations after this snapshot need a refresh of the source snapshot.`)
-  const calling=await loadCalling(connection, date)
+  let calling=await loadCalling(connection, date)
+  if (options.waitForFullData && calling.employees.length === 0) {
+    for (let retry = 1; retry <= 2; retry++) {
+      await new Promise(res => setTimeout(res, 4000))
+      calling = await loadCalling(connection, date)
+      if (calling.employees.length > 0) break
+    }
+  }
   mapEmployeeCompanies(calling.employees, employeeCompanies as {user_name?:string;company?:string;company_name?:string}[], companies)
   const unmapped=calling.employees.filter(r=>!r.companies?.length).length
   if(unmapped)calling.warnings.push(`${unmapped} employees have no matched CRM company; visible under All companies only.`)

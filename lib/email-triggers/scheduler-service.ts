@@ -25,8 +25,28 @@ export async function runEmailSchedulerTick(): Promise<{ processed: number; hear
   }
 }
 
+export function stopEmailScheduler(): void {
+  const g = getGlobal()
+  if (g._emailScheduler?.timer) {
+    clearInterval(g._emailScheduler.timer)
+    g._emailScheduler.timer = null
+    g._emailScheduler.isTicking = false
+  }
+}
+
 export function ensureEmailSchedulerRunning(): { running: boolean; started: boolean } {
-  if (typeof window !== 'undefined' || process.env.VERCEL) {
+  // CRITICAL SAFEGUARD:
+  // Under no circumstances should background scheduling intervals run in:
+  // 1. Browsers
+  // 2. Vercel serverless runtime (Vercel Cron hits /api/cron/email-triggers instead)
+  // 3. Local dev environments (NODE_ENV !== 'production'), unless explicitly requested via ENABLE_LOCAL_TRIGGER_SCHEDULER='true'.
+  // This guarantees local dev machines connecting to production MySQL will NEVER hijack due triggers and send emails!
+  if (
+    typeof window !== 'undefined' ||
+    process.env.VERCEL ||
+    (process.env.NODE_ENV !== 'production' && process.env.ENABLE_LOCAL_TRIGGER_SCHEDULER !== 'true')
+  ) {
+    stopEmailScheduler()
     return { running: false, started: false }
   }
 

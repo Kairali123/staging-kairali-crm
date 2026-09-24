@@ -60,13 +60,22 @@ export async function renderJPEG(html:string){
   const page=await context.newPage();await page.setContent(html,{waitUntil:'load',timeout:30000})
   const bounds=await page.locator('body').boundingBox()
   if(!bounds||bounds.height>16000)throw Error('Report is too long for one image; select one company or fewer details')
-  const image=await page.screenshot({type:'jpeg',quality:92,fullPage:true,timeout:30000})
+  const image=await page.screenshot({type:'jpeg',quality:88,fullPage:true,timeout:30000})
   if(image.length>5*1024*1024)throw Error('Report image exceeds 5 MB; select one company or fewer details')
   return image
  }finally{await browser.close()}
 }
 export async function buildReportImage(config:ConfigInput,date:string){
- if(config.reportId==='daily-sales-report')return renderJPEG(exportSalesHTML(await loadScheduledSales(date),config.company))
+ if(config.reportId==='daily-sales-report'){
+  const report=await loadScheduledSales(date,{waitForFullData:true})
+  const callingLoaded=Boolean(report.calling&&Array.isArray(report.calling.employees)&&report.calling.employees.length>0)
+  if(!callingLoaded){
+   const err=new Error('Calling employee activity data is not loaded yet (0 employees). Waiting for full data before sending WhatsApp report.')
+   err.name='IncompleteReportError'
+   throw err
+  }
+  return renderJPEG(exportSalesHTML(report,config.company))
+ }
  const report=await loadScheduledMarketing(date),scope=config.company==='ALL'?'all':config.company==='VILLARAAG'?'VILARAAG':config.company
  const expanded=config.details?report.companies.filter(c=>scope==='all'||c.name===scope).flatMap(c=>[c.name+'-leads',c.name+'-sales']):[]
  return renderJPEG(reportExportHTML(date,report,{scope,expanded}))

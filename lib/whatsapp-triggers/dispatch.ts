@@ -24,7 +24,16 @@ export async function dispatchDue(now=Date.now(),io:IO){
  })
  for(const job of jobs){
   let image:Buffer
-  try{image=await io.build(job.config,job.date)}catch{
+  try{image=await io.build(job.config,job.date)}catch(err:any){
+   if(err?.name==='IncompleteReportError'){
+    await transaction(s=>{
+     const r=s.runs.find(r=>r.id===job.runId)
+     if(r){r.status='Preparing';r.detail=err.message}
+     const c=s.triggers.find(t=>t.id===job.config.id)
+     if(c){c.nextRun=new Date(now+5*60000).toISOString()}
+    })
+    continue
+   }
    await transaction(s=>{const r=s.runs.find(r=>r.id===job.runId)!;r.status='Failed';r.detail='Report image preparation failed; no message sent'});continue
   }
   for(const to of job.config.recipients){
