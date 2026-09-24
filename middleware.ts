@@ -289,6 +289,7 @@ const exemptApiPaths = new Set([
   '/api/cron/email-triggers', // Handler verifies local worker secret; hosted execution is disabled.
   '/api/cron/kserve-lost-alert',
   '/api/kserve-alert-preview',
+  '/api/voicecall/kserve-lead-lost/export',
 ])
 
 // No active API prefix exemptions. `/api/meetings/*` stays behind the signed
