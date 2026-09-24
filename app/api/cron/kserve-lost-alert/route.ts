@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
                 to: adminEmail,
                 subject,
                 html,
-                text: `KServe Lost Lead Alert: ${rows.length} leads have not returned from KServe in more than ${lostDays} days.`,
+                text: `KServe Lost Lead Alert: ${leads.length} leads have not returned from KServe in more than ${lostDays} days.`,
                 disableFileAccess: true,
                 disableUrlAccess: true,
             });
@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({
                 success: true,
                 sent: true,
-                lostLeads: rows.length,
+                lostLeads: leads.length,
                 lostDays,
                 accepted: result.accepted?.length ?? 0,
                 rejected: result.rejected?.length ?? 0,
