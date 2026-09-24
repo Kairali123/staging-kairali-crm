@@ -198,6 +198,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "Settings", icon: Settings, superAdminOnly: true },
     { name: "User Management", href: "/users", icon: UserCog, superAdminOnly: true },
     { name: "Marketing Reports", icon: TrendingUp, permission: "marketing.view" },
+    { name: "Email Marketing", icon: Mail, permission: "email_marketing.view" },
+    { name: "Guest Experience", icon: Star, permission: "guest_experience.view" },
     { name: "Doctor Consultation", icon: Stethoscope, permission: "doctor.consultation.view" },
     { name: "Riya Sharma", href: "/riya-sharma", icon: LayoutGrid, permission: "riya_sharma.view" },
     { name: "FMS Systems", icon: FileText, permission: "fms.view" },
@@ -239,6 +241,19 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const crrFmsSubMenu = [
     { name: "KTAHV CRR Calling FMS", href: "/crr-fms", icon: FileText, permission: "crr_fms.view" },
     { name: "KTAHV CRR Process Report Alert", href: "/ktahv-crr-process-report-alert", icon: AlertTriangle, permission: "crr_report_alert.view" },
+  ]
+
+  
+  const emailMarketingSubMenu = [
+    { name: "Email Campaigns", href: "/email-marketing/campaigns", icon: Mail, permission: "email_marketing.view" },
+    { name: "Create Campaign", href: "/email-marketing/campaigns/create", icon: PlusCircle, permission: "email_marketing.view" },
+    { name: "Email Configuration", href: "/admin/email-configuration", icon: Settings, permission: "email_marketing.view" },
+  ]
+  const guestExperienceSubMenu = [
+    { name: "Guest Experience (Dark)", href: "/guest-experience", icon: Moon, permission: "guest_experience.view" },
+    { name: "Guest Experience (Light)", href: "/guest-experience-light", icon: Sun, permission: "guest_experience.view" },
+    { name: "Guest Feedback", href: "/guest-experience/feedback", icon: MessageSquare, permission: "guest_experience.view" },
+    { name: "Guest Explore", href: "/guest-experience/explore", icon: Map, permission: "guest_experience.view" },
   ]
 
   const marketingSubMenu = [
