@@ -107,31 +107,29 @@ export async function buildEmail(t:Trigger,at:number){
   else if(t.reportId==='kserve-lead-lost-alert'){
    reportTitle='KServe Lead Lost Alert'
    reportSlug='KServe-Lead-Lost-Alert'
-   const { getPool } = await import('@/lib/db')
-   const pool = await getPool()
-   const [settingsRows]: any = await pool.query('SELECT lost_days FROM kserve_settings WHERE id = 1').catch(() => [[]])
-   const lostDays: number = settingsRows?.[0]?.lost_days ?? 5
-   const [rows]: any = await pool.query(`
-     SELECT
-       s.enquiry_id AS id,
-       s.name_of_client,
-       s.mobile,
-       s.email_id,
-       s.subjects,
-       s.website_name AS company,
-       s.data_source,
-       s.generate_timestamp AS sent_date,
-       DATEDIFF(NOW(), s.generate_timestamp) AS days_pending
-     FROM ai_voice_leads_sent s
-     LEFT JOIN ai_voice_leads_received r ON s.enquiry_id = r.initial_id
-     WHERE r.initial_id IS NULL
-       AND s.generate_timestamp <= DATE_SUB(NOW(), INTERVAL ? DAY)
-     ORDER BY s.generate_timestamp ASC
-   `, [lostDays]).catch(() => [[]])
-   const { buildKserveLostAlertEmail } = await import('@/lib/email-triggers/templates/kserve-lead-lost-alert')
-   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://kairali-group-crm.vercel.app'
-   hasData = Array.isArray(rows) && rows.length > 0
-   html = buildKserveLostAlertEmail(rows || [], lostDays, appUrl)
+   const pool = await (await import('@/lib/db')).getPool()
+   const connection = await pool.getConnection()
+   try {
+    const [settingsRows]: any = await connection.execute(
+     'SELECT lost_days FROM kserve_settings WHERE id = 1'
+    )
+    const lostDays: number = settingsRows?.[0]?.lost_days ?? 5
+    const { getKserveReconciledLostLeads } = await import('@/lib/kserve-reconciliation')
+    const { leads, stats } = await getKserveReconciledLostLeads({ minDays: lostDays })
+    const { buildKserveLostAlertEmail } = await import('@/lib/email-triggers/templates/kserve-lead-lost-alert')
+    hasData = leads && leads.length > 0
+    const appUrl = (
+     process.env.NEXT_PUBLIC_APP_URL ||
+     (process.env.NODE_ENV !== 'production'
+       ? 'http://localhost:3000'
+       : process.env.VERCEL_PROJECT_PRODUCTION_URL
+       ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+       : 'https://kairali-group-crm.vercel.app')
+    ).replace(/\/+$/, '')
+    html = buildKserveLostAlertEmail(leads, stats, appUrl)
+   } finally {
+    connection.release()
+   }
   }
   else{
    throw new Error(`[email-trigger dispatch] FATAL: Unhandled email trigger report template: "${t.reportId}". Refusing to send email.`)
@@ -152,7 +150,7 @@ export async function buildEmail(t:Trigger,at:number){
   const p=(s:string)=>(s||'').trim()?'<div style="padding:18px 24px;white-space:pre-wrap;font:14px/1.8 Arial">'+esc(replace(s))+'</div>':''
   // Reports with in-layout markers keep the note inside their centered column; others get it around <body>.
   html=html.includes('<!--email-intro-->')?html.replace('<!--email-intro-->',()=>p(t.intro)).replace('<!--email-closing-->',()=>p(t.closing)):html.replace(/(<body[^>]*>)/,'$1'+p(t.intro)).replace('</body>',p(t.closing)+'</body>')
-  if(t.reportId!=='sales-call-audit'){
+  if(t.reportId!=='sales-call-audit' && t.reportId!=='kserve-lead-lost-alert'){
    try{
     const {renderJPEG}=await import('@/lib/whatsapp-triggers/render')
     if(typeof renderJPEG==='function'){
