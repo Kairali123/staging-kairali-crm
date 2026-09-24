@@ -6,7 +6,7 @@
       "esnext"
     ],
     "allowJs": true,
-    "target": "ES2018",
+    "target": "ES6",
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
@@ -36,16 +36,6 @@
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules",
-    "scratch",
-    "scripts",
-    "check_*.ts",
-    "clean_*.ts",
-    "count_db.ts",
-    "debug_sheet.ts",
-    "dry_run.ts",
-    "fix_db.ts",
-    "get_*.ts",
-    "test-*.ts"
+    "node_modules"
   ]
 }

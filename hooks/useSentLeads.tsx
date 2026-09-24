@@ -137,14 +137,19 @@ function mapStatus(raw: string): { label: string; dot: string; color: string } {
 }
 
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache on client
-const CACHE_KEY = "sent_leads_cache_idb";
-const CACHE_TIME_KEY = "sent_leads_cache_time_idb";
+const CACHE_KEY_BASE = "sent_leads_cache_idb";
+const CACHE_TIME_KEY_BASE = "sent_leads_cache_time_idb";
 
-export function useSentLeads() {
+export function useSentLeads(dateFrom?: string, dateTo?: string) {
     const [data, setData] = useState<SentLead[]>([]);
     const [loading, setLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [truncated, setTruncated] = useState(false);
+
+    const rangeSuffix = `${dateFrom || "x"}_${dateTo || "x"}`;
+    const CACHE_KEY = `${CACHE_KEY_BASE}_${rangeSuffix}`;
+    const CACHE_TIME_KEY = `${CACHE_TIME_KEY_BASE}_${rangeSuffix}`;
 
     const fetchData = useCallback(async (force = false) => {
         try {
@@ -160,7 +165,7 @@ export function useSentLeads() {
             if (cachedData && Array.isArray(cachedData) && cachedData.length > 0) {
                 setData(cachedData);
                 setLoading(false); // Instantly stop loading indicator
-                
+
                 // If it's fresh and we're not forcing, we can stop here
                 if (!force && cacheTime && Date.now() - Number(cacheTime) < CACHE_TTL) {
                     setIsRefreshing(false);
@@ -173,11 +178,17 @@ export function useSentLeads() {
                 setLoading(true); // Only show hard loading if we have NO data
             }
 
-            // 2. Fetch from fast API Route proxy (runs in background if we already showed cached data)
-            const res = await fetch("/api/sent-leads" + (force ? "?force=1" : ""), {
+            // 2. Fetch from fast API Route proxy, scoped to the requested date range
+            const params = new URLSearchParams();
+            if (force) params.set("force", "1");
+            if (dateFrom) params.set("dateFrom", dateFrom);
+            if (dateTo) params.set("dateTo", dateTo);
+            const qs = params.toString();
+            const res = await fetch("/api/sent-leads" + (qs ? `?${qs}` : ""), {
                 cache: force ? "no-store" : "default",
                 headers: force ? { "Cache-Control": "no-cache" } : undefined,
             });
+            setTruncated(res.headers.get("X-Leads-Truncated") === "1");
             if (!res.ok) {
                 let message = `Request failed with HTTP ${res.status}`;
                 try {
@@ -272,9 +283,9 @@ export function useSentLeads() {
             setLoading(false);
             setIsRefreshing(false);
         }
-    }, [data.length]);
+    }, [data.length, dateFrom, dateTo, CACHE_KEY, CACHE_TIME_KEY]);
 
-    useEffect(() => { fetchData(); }, [fetchData]);
+    useEffect(() => { fetchData(); }, [dateFrom, dateTo]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         const handleClear = () => {
@@ -286,5 +297,5 @@ export function useSentLeads() {
         return () => window.removeEventListener(LEADS_CACHE_CLEARED_EVENT, handleClear);
     }, [fetchData]);
 
-    return { data, loading, isRefreshing, error, refetch: () => fetchData(true) };
+    return { data, loading, isRefreshing, error, truncated, refetch: () => fetchData(true) };
 }

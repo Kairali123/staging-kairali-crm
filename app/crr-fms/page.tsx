@@ -14,28 +14,19 @@ import type {
     Stage,
     Guest,
 } from "@/types/crr";
-import { MAX_PROOF_FILE_BYTES, PROOF_FILE_LIMIT_LABEL, isAllowedProofType, stageBlockReason, stageDateLock } from "@/lib/crr-stage-rules";
+import type { ReferralStage8Data } from "@/components/ReferralCollectionModal";
+import { MAX_PROOF_FILE_BYTES, PROOF_FILE_LIMIT_LABEL, isAllowedProofType, istToday, stageBlockReason, stageDateLock, toYmd } from "@/lib/crr-stage-rules";
+import GuestFeedbackForm, { type FeedbackValues } from "@/components/GuestFeedbackForm";
+import { FEEDBACK_FIELDS } from "@/lib/crr-feedback-form";
 import { compressImage } from "@/lib/image-compress";
 import { DashboardLayout } from "@/components/dashboard-layout";
+import { ClientBookingDetailsCard } from "@/components/ClientBookingDetailsCard";
 import { toast } from "sonner";
-import dynamic from "next/dynamic";
-
-const DriverAssignmentArrivalModal = dynamic(
-    () => import("@/components/Driverassignmentarrivalmodal"),
-    { ssr: false }
-);
-const DriverAssignmentDepartureModal = dynamic(
-    () => import("@/components/Driverassignmentdeparturemodal"),
-    { ssr: false }
-);
-const GuestRequirementVerificationModal = dynamic(
-    () => import("@/components/Guestrequirementverificationmodal"),
-    { ssr: false }
-);
-const CrrStageViewModal = dynamic(
-    () => import("@/components/CrrStageViewModal"),
-    { ssr: false }
-);
+import DriverAssignmentArrivalModal from "@/components/Driverassignmentarrivalmodal";
+import DriverAssignmentDepartureModal from "@/components/Driverassignmentdeparturemodal";
+import GuestRequirementVerificationModal from "@/components/Guestrequirementverificationmodal";
+import CrrStageViewModal from "@/components/CrrStageViewModal";
+import ReferralCollectionModal from "@/components/ReferralCollectionModal";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +34,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -79,7 +71,6 @@ import {
     ClipboardCheck,
     ClipboardEdit,
     Check,
-    Contact,
     ExternalLink,
     UserX,
 } from "lucide-react";
@@ -102,7 +93,7 @@ const STAGES: Stage[] = [
     { no: 5, name: "Online Rating & Review Request", resp: "GRE", trigger: "On Check-out Date", dateLabel: "Review Request Date", remarkLabel: "Review Request Remarks" },
     { no: 6, name: "Safe Return Confirmation", resp: "GRE", trigger: "Departure + 3 Days", dateLabel: "Return Confirmed Date", remarkLabel: "Safe Return Remarks" },
     { no: 7, name: "Result Tracking & Health Progress Check", resp: "Doctor", trigger: "Departure + 20 Days", dateLabel: "Health Check Date", remarkLabel: "Progress / Health Remarks" },
-    { no: 8, name: "Referral Collection & Lead Generation", resp: "FO", trigger: "Departure + 30 Days", dateLabel: "Referral Collected Date", remarkLabel: "Referral Details / Remarks" },
+    { no: 8, name: "Referral Collection & Lead Generation", resp: "GRE", trigger: "Departure + 30 Days", dateLabel: "Referral Collected Date", remarkLabel: "Referral Details / Remarks" },
     { no: 9, name: "Driver Assignment – Arrival Pickup", resp: "FO", trigger: "Before Arrival", dateLabel: "Pickup Date", remarkLabel: "Remarks For Driver" },
     { no: 10, name: "Driver Assignment – Departure Drop", resp: "FO", trigger: "Before Departure", dateLabel: "Drop Date", remarkLabel: "Remarks For Driver" },
     { no: 11, name: "Guest Requirement Verification", resp: "GM", trigger: "Before Check-in", dateLabel: "Verification Timestamp", remarkLabel: "Remarks" },
@@ -111,24 +102,30 @@ const STAGES: Stage[] = [
 /* =========================================================
    EXTERNAL LINKS
 ========================================================= */
-// Guest Feedback & Outcome Confirmation (Stage 4) — Google Apps Script feedback
-// collection form. The guest's Booking ID is passed as a query param so the
-// form opens pre-scoped to that booking.
-const FEEDBACK_FORM_BASE_URL =
-    "https://script.google.com/a/macros/kairali.com/s/AKfycby5x4cuxgMbs2SJjd46HzswkLjYGuuw83nOwiFNj9UqcJbfzJoigNBQxxmH__mCq5afRw/exec";
+// Seed the embedded feedback form from the booking we already hold. Only fields we
+// can fill confidently are set; a value that is not one of a select's options would
+// render blank, so those are left for the user to pick.
+function prefillFeedbackValues(g: Guest, feedbackTaker: string): FeedbackValues {
+    const optionExists = (name: string, value: string) =>
+        FEEDBACK_FIELDS.find((f) => f.name === name)?.options?.some((o) => o.value === value) ?? false;
 
-function buildFeedbackFormUrl(bookingId: string) {
-    return `${FEEDBACK_FORM_BASE_URL}?bookingId=${encodeURIComponent(bookingId)}`;
-}
-
-// Referral Collection & Lead Generation (Stage 8) — Google Apps Script referral
-// collection form. The guest's Booking ID is passed as a query param so the
-// form opens pre-scoped to that booking.
-const REFERRAL_FORM_BASE_URL =
-    "https://script.google.com/a/macros/kairali.com/s/AKfycbzrsZGVVLk8pMhota7GSCPzj3BpLn_Ho1MQ5AG5G-laSZpwvJO6UGUfenY9tAfn2R8l/exec";
-
-function buildReferralFormUrl(bookingId: string) {
-    return `${REFERRAL_FORM_BASE_URL}?bookingId=${encodeURIComponent(bookingId)}`;
+    const values: FeedbackValues = {
+        // The booking this feedback belongs to, submitted under the name the sheet expects.
+        UID: g.bookingId || "",
+        customerName: g.name || "",
+        reservationId: g.bookingId || "",
+        emaiId: g.email || "",
+        phoneNum: String(g.mobile ?? ""),
+        arrivalDate: toYmd(g.checkin) || "",
+        departureDate: toYmd(g.checkout) || "",
+        "feedback-date": istToday(),
+        // Recorded as whoever is signed in; the field is read-only in the form.
+        "feedback-taker": feedbackTaker,
+    };
+    const gender = String(g.gender || "").toUpperCase();
+    if (optionExists("gender", gender)) values.gender = gender;
+    if (optionExists("treatmentOrPackage", g.programme || "")) values.treatmentOrPackage = g.programme || "";
+    return values;
 }
 
 /* =========================================================
@@ -392,7 +389,7 @@ export default function CRRCallingProcessPage() {
     const apiFrom = dateRangeStart ? dateRangeStart.toISOString().slice(0, 10) : undefined;
     const apiTo = dateRangeEnd ? dateRangeEnd.toISOString().slice(0, 10) : undefined;
 
-    const { guests, setGuests, loading: guestsLoading, isRevalidating, error: guestsError, refetch: refetchGuests, stageUsers } = useCrrBookings(apiFrom, apiTo);
+    const { guests, setGuests, loading: guestsLoading, isRevalidating, error: guestsError, refetch: refetchGuests, stageUsers, setLockedGuestId } = useCrrBookings(apiFrom, apiTo);
 
     // ---------- REAL ROLE (from auth) — no manual switching, ever ----------
     const { user } = useAuth();
@@ -690,6 +687,10 @@ export default function CRRCallingProcessPage() {
     // "Guest Feedback & Outcome Confirmation" modal (Stage 4)
     const [activeFeedbackGuestId, setActiveFeedbackGuestId] = useState<number | null>(null);
     const [feedbackDoerRemarks, setFeedbackDoerRemarks] = useState("");
+    // UI-only switch for the Stage 4 form. It is never sent to the API and never stored.
+    const [guestAllowedFeedback, setGuestAllowedFeedback] = useState<"yes" | "no" | "">("");
+    const [feedbackValues, setFeedbackValues] = useState<FeedbackValues>({});
+    const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
     const [feedbackFormError, setFeedbackFormError] = useState("");
     const [feedbackSaved, setFeedbackSaved] = useState(false);
 
@@ -697,11 +698,6 @@ export default function CRRCallingProcessPage() {
 
     // "Referral Collection & Lead Generation" modal (Stage 8)
     const [activeReferralGuestId, setActiveReferralGuestId] = useState<number | null>(null);
-    const [guestAllowedReferral, setGuestAllowedReferral] = useState<"yes" | "no" | "">("");
-    const [referralTakenStatus, setReferralTakenStatus] = useState("");
-    const [referralDoerRemarks, setReferralDoerRemarks] = useState("");
-    const [referralFormError, setReferralFormError] = useState("");
-    const [referralSaved, setReferralSaved] = useState(false);
 
     const activeReferralGuest = guests.find((g) => g.id === activeReferralGuestId) || null;
 
@@ -804,6 +800,18 @@ export default function CRRCallingProcessPage() {
 
     // "View All Stages / Stage Data" modal
     const [activeViewGuestId, setActiveViewGuestId] = useState<number | null>(null);
+
+    // Whichever guest a modal is currently showing. Background refreshes skip this row
+    // so an open form is never reset underneath the user mid-entry.
+    const openModalGuestId =
+        activeGuestId ?? activeCallGuestId ?? activeWelcomeGuestId ?? activeSafeReturnGuestId ??
+        activeFeedbackGuestId ?? activeReferralGuestId ?? activeRatingGuestId ??
+        activeResultProgressGuestId ?? activeDriverArrivalGuestId ?? activeDriverDepartureGuestId ??
+        activeRequirementVerificationGuestId ?? activeDetailsGuestId ?? activeViewGuestId ?? null;
+
+    useEffect(() => {
+        setLockedGuestId(openModalGuestId);
+    }, [openModalGuestId, setLockedGuestId]);
     const [activeViewStage, setActiveViewStage] = useState<number>(1);
     const activeViewGuest = guests.find((g) => g.id === activeViewGuestId) || null;
 
@@ -877,21 +885,25 @@ export default function CRRCallingProcessPage() {
                 const isComplete = g.stageStatus[stageNum - 1] === "Complete";
                 const isPending = !isComplete && !isBookingCancelled(g);
                 const isCancelled = isBookingCancelled(g);
+                const isNotCheckedIn = g.notCheckedInYet === true && !isCancelled;
 
                 if (statusFilter === "complete") {
-                    if (!isComplete || isCancelled) return false;
+                    if (!isComplete || isCancelled || isNotCheckedIn) return false;
                 } else if (statusFilter === "pending") {
-                    if (!isPending) return false;
+                    if (!isPending || isNotCheckedIn) return false;
                 } else if (statusFilter === "cancelled") {
                     if (!isCancelled) return false;
+                } else if (statusFilter === "not_checkedin_yet") {
+                    if (!isNotCheckedIn) return false;
                 } else {
                     // statusFilter === "all"
-                    if (!isComplete && !isPending && !isCancelled) return false;
+                    if (!isComplete && !isPending && !isCancelled && !isNotCheckedIn) return false;
                 }
             } else {
-                if (statusFilter === "pending" && (isRecordCompleted(g) || isBookingCancelled(g))) return false;
-                if (statusFilter === "complete" && (!isRecordCompleted(g) || isBookingCancelled(g))) return false;
+                if (statusFilter === "pending" && (isRecordCompleted(g) || isBookingCancelled(g) || g.notCheckedInYet)) return false;
+                if (statusFilter === "complete" && (!isRecordCompleted(g) || isBookingCancelled(g) || g.notCheckedInYet)) return false;
                 if (statusFilter === "cancelled" && !isBookingCancelled(g)) return false;
+                if (statusFilter === "not_checkedin_yet" && (!g.notCheckedInYet || isBookingCancelled(g))) return false;
             }
             return true;
         });
@@ -983,7 +995,7 @@ export default function CRRCallingProcessPage() {
 
     // Record-level separation into Pending, Completed, and Cancelled:
     const pendingRows = useMemo(() => {
-        if (statusFilter === "complete" || statusFilter === "cancelled") return [];
+        if (statusFilter === "complete" || statusFilter === "cancelled" || statusFilter === "not_checkedin_yet") return [];
         const list = rows.filter(
             (g) => !isRecordCompleted(g) && !isBookingCancelled(g) && !g.notCheckedInYet
         );
@@ -1001,20 +1013,21 @@ export default function CRRCallingProcessPage() {
     }, [rows, isRecordCompleted, statusFilter, sortColumn]);
 
     const completedRows = useMemo(() => {
-        if (statusFilter === "pending" || statusFilter === "cancelled") return [];
+        if (statusFilter === "pending" || statusFilter === "cancelled" || statusFilter === "not_checkedin_yet") return [];
         return rows.filter((g) => isRecordCompleted(g) && !isBookingCancelled(g) && !g.notCheckedInYet);
     }, [rows, isRecordCompleted, statusFilter]);
 
     const cancelledRows = useMemo(() => {
-        if (statusFilter === "pending" || statusFilter === "complete") return [];
+        if (statusFilter === "pending" || statusFilter === "complete" || statusFilter === "not_checkedin_yet") return [];
         return rows.filter((g) => isBookingCancelled(g));
     }, [rows, statusFilter]);
 
     // Not CheckedIn Yet rows: records whose booking_id has no match in ktahv_checkinmasterfms.
-    // These are excluded from Pending and Completed to prevent dual-display.
+    // These are excluded from Pending and Completed to prevent dual-display. Cancelled
+    // bookings belong to the Cancelled table only, matching the counts loop's precedence.
     const notCheckedInYetRows = useMemo(() => {
-        if (statusFilter === "complete" || statusFilter === "cancelled") return [];
-        return rows.filter((g) => g.notCheckedInYet === true);
+        if (statusFilter === "complete" || statusFilter === "cancelled" || statusFilter === "pending") return [];
+        return rows.filter((g) => g.notCheckedInYet === true && !isBookingCancelled(g));
     }, [rows, statusFilter]);
 
     // Pending pagination derived
@@ -1125,9 +1138,10 @@ export default function CRRCallingProcessPage() {
             }
         }
 
-        const pendCount = statusFilter === "complete" || statusFilter === "cancelled" ? 0 : activePend;
-        const compCount = statusFilter === "pending" || statusFilter === "cancelled" ? 0 : completedRows.length;
-        const cancCount = statusFilter === "pending" || statusFilter === "complete" ? 0 : cancelled;
+        const pendCount = statusFilter === "complete" || statusFilter === "cancelled" || statusFilter === "not_checkedin_yet" ? 0 : activePend;
+        const compCount = statusFilter === "pending" || statusFilter === "cancelled" || statusFilter === "not_checkedin_yet" ? 0 : completedRows.length;
+        const cancCount = statusFilter === "pending" || statusFilter === "complete" || statusFilter === "not_checkedin_yet" ? 0 : cancelled;
+        const notCheckedCount = statusFilter === "pending" || statusFilter === "complete" || statusFilter === "cancelled" ? 0 : notCheckedIn;
 
         return {
             activePendingCount: activePend,
@@ -1135,7 +1149,7 @@ export default function CRRCallingProcessPage() {
             completeCount: compCount,
             actionablePendingCount: actionablePend,
             cancelledCount: cancCount,
-            notCheckedInCount: notCheckedIn,
+            notCheckedInCount: notCheckedCount,
             totalPipelineCount: overallRecords.length,
             referralsGeneratedCount: referrals,
         };
@@ -1182,7 +1196,21 @@ export default function CRRCallingProcessPage() {
                 }
                 return stagePendingCountArray[idx];
             });
-            return { emp: su.name || su.email, email: su.email, counts };
+
+            // Unique guests with at least one pending stage belonging to this employee
+            const guestIds = new Set<number>();
+            for (const g of activeRows) {
+                for (const stageNo of effectiveStages) {
+                    if (stageFilter !== "all" && String(stageNo) !== stageFilter) continue;
+                    if (g.stageStatus[stageNo - 1] !== "Complete") {
+                        guestIds.add(g.id);
+                        break;
+                    }
+                }
+            }
+            const guestCount = guestIds.size;
+
+            return { emp: su.name || su.email, email: su.email, counts, guestCount, effectiveStages };
         });
 
         const currentUserName = (user?.name ?? "").toLowerCase().trim();
@@ -1230,8 +1258,11 @@ export default function CRRCallingProcessPage() {
         const stagePending = pendingReport.totals;
         const maxStagePending = Math.max(1, ...stagePending);
 
-        // Active guest rows (excluding cancelled)
-        const activeRows = rows.filter((g) => !isBookingCancelled(g));
+        // Active guest rows (excluding cancelled and not-yet-checked-in — mirrors
+        // pendingReport's activeRows so role workload only reflects guests whose
+        // stages are actually actionable, not the default-pending stages of
+        // bookings that haven't checked in yet)
+        const activeRows = rows.filter((g) => !isBookingCancelled(g) && !g.notCheckedInYet);
 
         // Active workload and unique guest counts grouped by responsible role across active guest journeys
         const roleStats: Record<string, { tasks: number; guests: number }> = {
@@ -1273,8 +1304,25 @@ export default function CRRCallingProcessPage() {
         const maxResp = Math.max(1, ...Object.values(respCounts));
 
         // Top pending workload by employee (from the same doer attribution as the report table)
+        const totalWorkload = totalRoleWorkload || 1;
         const employeeTotals = pendingReport.table
-            .map((r) => ({ emp: r.emp, total: r.counts.reduce((a, b) => a + b, 0) }))
+            .map((r) => {
+                const total = r.counts.reduce((a, b) => a + b, 0);
+                const pct = (total / totalWorkload) * 100;
+                const formattedPct = pct < 1 && pct > 0 ? pct.toFixed(1) : pct.toFixed(0);
+                const sortedStages = [...(r.effectiveStages || [])].sort((a, b) => a - b);
+                const stagesLabel = sortedStages.length > 0 ? `(Stage ${sortedStages.join(", ")})` : "";
+                return {
+                    emp: r.emp,
+                    email: r.email,
+                    total,
+                    guestCount: r.guestCount ?? 0,
+                    pct,
+                    formattedPct,
+                    stages: sortedStages,
+                    stagesLabel,
+                };
+            })
             .sort((a, b) => b.total - a.total)
             .slice(0, 8);
         const maxEmployee = Math.max(1, ...employeeTotals.map((e) => e.total));
@@ -1379,8 +1427,11 @@ export default function CRRCallingProcessPage() {
         setCustomStartDate("");
         setCustomEndDate("");
         setStatusFilter("all");
+        setRecordsViewTab("all");
         setPendingPage(1);
         setCompletedPage(1);
+        setNotCheckedInPage(1);
+        setCancelledPage(1);
     }
 
     function openModal(id: number) {
@@ -1701,6 +1752,7 @@ export default function CRRCallingProcessPage() {
             outcomeRemarks: safeReturnOutcomeRemarks,
             status: safeReturnStatus,
             notDoneRemarks: safeReturnStatus === "Not Done - Close" ? safeReturnNotDoneRemarks : "",
+            followupDate: safeReturnStatus === "Close Follow-up" ? safeReturnFollowupDate : "",
         };
 
         closeSafeReturnModal();
@@ -1800,19 +1852,54 @@ export default function CRRCallingProcessPage() {
         if (!g) return;
         setActiveFeedbackGuestId(id);
         const s4Saved = getStageSavedData(g, 4);
-        setFeedbackDoerRemarks(s4Saved?.doerRemarks || g.guestFeedback?.doerRemarks || "");
+        const savedRemarks = s4Saved?.doerRemarks || g.guestFeedback?.doerRemarks || "";
+        setFeedbackDoerRemarks(savedRemarks);
+        setGuestAllowedFeedback(savedRemarks.trim() !== "" ? "no" : "");
+        setFeedbackValues(prefillFeedbackValues(g, user?.name || ""));
+        setFeedbackSubmitting(false);
         setFeedbackFormError("");
         setFeedbackSaved(false);
     }
 
     function closeFeedbackModal() {
         setActiveFeedbackGuestId(null);
+        setGuestAllowedFeedback("");
+        setFeedbackValues({});
+        setFeedbackSubmitting(false);
         setFeedbackFormError("");
         setFeedbackSaved(false);
     }
 
+    // Sends the embedded feedback form to Apps Script through our proxy. Stage 4's
+    // actual is stamped upstream on receipt, same as when this was a redirect, so we
+    // just refetch rather than writing the stage ourselves.
+    async function submitFeedbackForm() {
+        if (!canEditStage(4) || !activeFeedbackGuest || feedbackSubmitting) return;
+        setFeedbackSubmitting(true);
+        setFeedbackFormError("");
+        const toastId = toast.loading("Submitting guest feedback...");
+        try {
+            const res = await fetch("/api/crr-calling/feedback", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ values: feedbackValues }),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok || !json.success) throw new Error(json.error || "Failed to submit feedback");
+            toast.success("Guest feedback submitted successfully!", { id: toastId });
+            closeFeedbackModal();
+            refetchGuests();
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : "Failed to submit feedback";
+            setFeedbackFormError(msg);
+            toast.error(msg, { id: toastId });
+        } finally {
+            setFeedbackSubmitting(false);
+        }
+    }
+
     function isFeedbackFormComplete() {
-        return feedbackDoerRemarks.trim() !== "";
+        return guestAllowedFeedback === "no" && feedbackDoerRemarks.trim() !== "";
     }
 
     async function saveFeedbackModal() {
@@ -1824,8 +1911,8 @@ export default function CRRCallingProcessPage() {
             return;
         }
         if (!isFeedbackFormComplete() || feedbackSaved) {
-            if (!isFeedbackFormComplete()) {
-                setFeedbackFormError("Doer Remarks is compulsory. Please fill it in before saving.");
+            if (guestAllowedFeedback === "no" && feedbackDoerRemarks.trim() === "") {
+                setFeedbackFormError("Remarks are compulsory when the guest is not giving feedback. Please fill them in before saving.");
             }
             return;
         }
@@ -1858,69 +1945,61 @@ export default function CRRCallingProcessPage() {
         const g = guests.find((x) => x.id === id);
         if (!g) return;
         setActiveReferralGuestId(id);
-        const s8Saved = getStageSavedData(g, 8);
-        const savedStatus = (s8Saved?.referralTakenStatus || s8Saved?.doerStatus || g.referralCollection?.referralTakenStatus || "").trim();
-        const normStatus = savedStatus.toLowerCase();
-        let allowed: "yes" | "no" | "" = "";
-        if (normStatus === "yes" || normStatus === "y") {
-            allowed = "yes";
-        } else if (normStatus === "no" || normStatus === "n" || normStatus === "declined") {
-            allowed = "no";
-        }
-        setGuestAllowedReferral(allowed);
-        setReferralTakenStatus(savedStatus || (allowed === "yes" ? "Yes" : allowed === "no" ? "No" : ""));
-        setReferralDoerRemarks(s8Saved?.doerRemarks || g.referralCollection?.doerRemarks || "");
-        setReferralFormError("");
-        setReferralSaved(false);
     }
 
     function closeReferralModal() {
         setActiveReferralGuestId(null);
-        setGuestAllowedReferral("");
-        setReferralTakenStatus("");
-        setReferralDoerRemarks("");
-        setReferralFormError("");
-        setReferralSaved(false);
     }
 
-    function isReferralFormComplete() {
-        return guestAllowedReferral === "no" && referralDoerRemarks.trim() !== "";
-    }
+    // Reconstructs the modal's pre-fill data from whatever GAS has saved for
+    // Stage 8 (flat key/value strings only — no persisted `referrals` array
+    // yet, so the "Yes" branch always reopens with one blank entry row).
+    // Returns null (not a default "No") when nothing has been saved yet, so
+    // the modal opens with the Yes/No dropdown genuinely unselected.
+    const activeReferralSavedData: ReferralStage8Data | null = useMemo(() => {
+        if (!activeReferralGuest) return null;
+        const s8Saved = getStageSavedData(activeReferralGuest, 8);
+        const savedStatus = (
+            s8Saved?.referralTakenStatus ||
+            s8Saved?.doerStatus ||
+            activeReferralGuest.referralCollection?.referralTakenStatus ||
+            ""
+        ).trim().toLowerCase();
+        const doerRemarks = s8Saved?.doerRemarks || activeReferralGuest.referralCollection?.doerRemarks || "";
+        if (savedStatus !== "yes" && savedStatus !== "no") return null;
+        const doerStatus: "Yes" | "No" = savedStatus === "yes" ? "Yes" : "No";
+        return { doerStatus, doerRemarks };
+    }, [activeReferralGuest]);
 
-    async function saveReferralModal() {
+    async function saveReferralModal(data: ReferralStage8Data) {
         if (!canEditStage(8)) return; // permission gate — Stage 8
         if (!activeReferralGuest) return;
         const s8Block = blockReasonOf(activeReferralGuest, 8);
         if (s8Block) {
-            setReferralFormError(s8Block);
+            toast.error(s8Block);
             return;
         }
         if (isStage8Complete) {
-            setReferralFormError("Stage 8 is already completed — saved data is read-only.");
+            toast.error("Stage 8 is already completed — saved data is read-only.");
             return;
         }
-        if (guestAllowedReferral !== "no" || referralDoerRemarks.trim() === "" || referralSaved) {
-            if (referralDoerRemarks.trim() === "") {
-                setReferralFormError("Remarks are compulsory when guest is not giving referral. Please fill them in before saving.");
-            }
-            return;
-        }
-        setReferralFormError("");
-        setReferralSaved(true);
 
         const guestId = activeReferralGuest.id;
         const targetId = activeReferralGuest.bookingId || activeReferralGuest.uid;
-        const data = {
-            doerStatus: "No",
-            doerRemarks: referralDoerRemarks.trim(),
+        const payload: Record<string, any> = {
+            doerStatus: data.doerStatus,
+            doerRemarks: data.doerRemarks,
         };
+        if (data.doerStatus === "Yes" && data.referrals?.length) {
+            payload.referrals = data.referrals;
+        }
 
         closeReferralModal();
-        updateGuestOptimistic(guestId, 8, data);
+        updateGuestOptimistic(guestId, 8, payload);
         const toastId = toast.loading("Saving Referral Collection...");
 
         try {
-            await saveStageWithRole(targetId, 8, data);
+            await saveStageWithRole(targetId, 8, payload);
             toast.success("Referral details saved successfully!", { id: toastId });
             refetchGuests();
         } catch (err) {
@@ -2558,8 +2637,7 @@ export default function CRRCallingProcessPage() {
                                                                     return (
                                                                         <DropdownMenuItem
                                                                             disabled={isDisabled}
-                                                                            onSelect={(e) => {
-                                                                                e.preventDefault();
+                                                                            onSelect={() => {
                                                                                 if (isComplete) return;
                                                                                 if (lockMsg) toast.info(lockMsg);
                                                                                 setTimeout(() => openWelcomeModal(g.id), 0);
@@ -2582,8 +2660,7 @@ export default function CRRCallingProcessPage() {
                                                                     return (
                                                                         <DropdownMenuItem
                                                                             disabled={isDisabled}
-                                                                            onSelect={(e) => {
-                                                                                e.preventDefault();
+                                                                            onSelect={() => {
                                                                                 if (isComplete) return;
                                                                                 if (lockMsg) toast.info(lockMsg);
                                                                                 setTimeout(() => openCallModal(g.id), 0);
@@ -2609,8 +2686,7 @@ export default function CRRCallingProcessPage() {
                                                                     return (
                                                                         <DropdownMenuItem
                                                                             disabled={isDisabled}
-                                                                            onSelect={(e) => {
-                                                                                e.preventDefault();
+                                                                            onSelect={() => {
                                                                                 if (isComplete) return;
                                                                                 if (lockMsg) toast.info(lockMsg);
                                                                                 setTimeout(() => openModal(g.id), 0);
@@ -2633,8 +2709,7 @@ export default function CRRCallingProcessPage() {
                                                                     return (
                                                                         <DropdownMenuItem
                                                                             disabled={isDisabled}
-                                                                            onSelect={(e) => {
-                                                                                e.preventDefault();
+                                                                            onSelect={() => {
                                                                                 if (isComplete) return;
                                                                                 if (lockMsg) toast.info(lockMsg);
                                                                                 setTimeout(() => openFeedbackModal(g.id), 0);
@@ -2657,8 +2732,7 @@ export default function CRRCallingProcessPage() {
                                                                     return (
                                                                         <DropdownMenuItem
                                                                             disabled={isDisabled}
-                                                                            onSelect={(e) => {
-                                                                                e.preventDefault();
+                                                                            onSelect={() => {
                                                                                 if (isComplete) return;
                                                                                 if (lockMsg) toast.info(lockMsg);
                                                                                 setTimeout(() => openRatingModal(g.id), 0);
@@ -2684,8 +2758,7 @@ export default function CRRCallingProcessPage() {
                                                                     return (
                                                                         <DropdownMenuItem
                                                                             disabled={isDisabled}
-                                                                            onSelect={(e) => {
-                                                                                e.preventDefault();
+                                                                            onSelect={() => {
                                                                                 if (isComplete) return;
                                                                                 if (lockMsg) toast.info(lockMsg);
                                                                                 setTimeout(() => openSafeReturnModal(g.id), 0);
@@ -2708,8 +2781,7 @@ export default function CRRCallingProcessPage() {
                                                                     return (
                                                                         <DropdownMenuItem
                                                                             disabled={isDisabled}
-                                                                            onSelect={(e) => {
-                                                                                e.preventDefault();
+                                                                            onSelect={() => {
                                                                                 if (isComplete) return;
                                                                                 if (lockMsg) toast.info(lockMsg);
                                                                                 setTimeout(() => openResultProgressModal(g.id), 0);
@@ -2732,8 +2804,7 @@ export default function CRRCallingProcessPage() {
                                                                     return (
                                                                         <DropdownMenuItem
                                                                             disabled={isDisabled}
-                                                                            onSelect={(e) => {
-                                                                                e.preventDefault();
+                                                                            onSelect={() => {
                                                                                 if (isComplete) return;
                                                                                 if (lockMsg) toast.info(lockMsg);
                                                                                 setTimeout(() => openReferralModal(g.id), 0);
@@ -2759,8 +2830,7 @@ export default function CRRCallingProcessPage() {
                                                                     return (
                                                                         <DropdownMenuItem
                                                                             disabled={isDisabled}
-                                                                            onSelect={(e) => {
-                                                                                e.preventDefault();
+                                                                            onSelect={() => {
                                                                                 if (isComplete) return;
                                                                                 if (lockMsg) toast.info(lockMsg);
                                                                                 setTimeout(() => openDriverArrivalModal(g.id), 0);
@@ -2783,8 +2853,7 @@ export default function CRRCallingProcessPage() {
                                                                     return (
                                                                         <DropdownMenuItem
                                                                             disabled={isDisabled}
-                                                                            onSelect={(e) => {
-                                                                                e.preventDefault();
+                                                                            onSelect={() => {
                                                                                 if (isComplete) return;
                                                                                 if (lockMsg) toast.info(lockMsg);
                                                                                 setTimeout(() => openDriverDepartureModal(g.id), 0);
@@ -2807,8 +2876,7 @@ export default function CRRCallingProcessPage() {
                                                                     return (
                                                                         <DropdownMenuItem
                                                                             disabled={isDisabled}
-                                                                            onSelect={(e) => {
-                                                                                e.preventDefault();
+                                                                            onSelect={() => {
                                                                                 if (isComplete) return;
                                                                                 if (lockMsg) toast.info(lockMsg);
                                                                                 setTimeout(() => openRequirementVerificationModal(g.id), 0);
@@ -3143,7 +3211,14 @@ export default function CRRCallingProcessPage() {
                                     <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Stage Status</label>
                                     <Select
                                         value={statusFilter}
-                                        onValueChange={setStatusFilter}
+                                        onValueChange={(val) => {
+                                            setStatusFilter(val);
+                                            if (val === "pending") setRecordsViewTab("pending");
+                                            else if (val === "complete") setRecordsViewTab("completed");
+                                            else if (val === "cancelled") setRecordsViewTab("cancelled");
+                                            else if (val === "not_checkedin_yet") setRecordsViewTab("not_checkedin_yet");
+                                            else setRecordsViewTab("all");
+                                        }}
                                     >
                                         <SelectTrigger className="h-10 bg-white border-slate-200 w-full">
                                             <SelectValue placeholder="Select Status" />
@@ -3152,6 +3227,7 @@ export default function CRRCallingProcessPage() {
                                             <SelectItem value="all">All</SelectItem>
                                             <SelectItem value="complete">Complete</SelectItem>
                                             <SelectItem value="pending">Pending</SelectItem>
+                                            <SelectItem value="not_checkedin_yet">Not CheckedIn Yet</SelectItem>
                                             <SelectItem value="cancelled">Cancelled</SelectItem>
                                         </SelectContent>
                                     </Select>
@@ -3601,49 +3677,75 @@ export default function CRRCallingProcessPage() {
                                                     </div>
                                                 </div>
                                                 <div className="p-3 sm:p-4">
-                                                    {STAGES.map((s, idx) => {
-                                                        const value = chartData.stagePending[idx] ?? 0;
-                                                        const pct = (value / chartData.maxStagePending) * 100;
-                                                        return (
-                                                            <div
-                                                                key={s.no}
-                                                                className={`flex items-center gap-3 sm:gap-4 rounded-lg px-2 sm:px-3 py-2.5 ${idx % 2 === 0 ? "bg-slate-50/70" : ""}`}
-                                                            >
-                                                                <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-slate-800 text-white text-[10px] sm:text-[11px] font-bold flex items-center justify-center shrink-0">
-                                                                    {s.no}
+                                                    <TooltipProvider delayDuration={100}>
+                                                        {STAGES.map((s, idx) => {
+                                                            const value = chartData.stagePending[idx] ?? 0;
+                                                            const pct = (value / chartData.maxStagePending) * 100;
+                                                            const totalWorkload = chartData.totalRoleWorkload || 1;
+                                                            const sharePct = (value / totalWorkload) * 100;
+                                                            const formattedSharePct = sharePct < 1 && sharePct > 0 ? sharePct.toFixed(1) : sharePct.toFixed(0);
+
+                                                            return (
+                                                                <div
+                                                                    key={s.no}
+                                                                    className={`flex items-center gap-3 sm:gap-4 rounded-lg px-2 sm:px-3 py-2.5 ${idx % 2 === 0 ? "bg-slate-50/70" : ""}`}
+                                                                >
+                                                                    <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-slate-800 text-white text-[10px] sm:text-[11px] font-bold flex items-center justify-center shrink-0">
+                                                                        {s.no}
+                                                                    </div>
+                                                                    <div className="w-48 sm:w-84 md:w-96 shrink-0 flex items-center gap-2 min-w-0" title={`${s.name} (${s.resp})`}>
+                                                                        <span className="text-xs font-semibold text-slate-800 truncate">
+                                                                            {s.name}
+                                                                        </span>
+                                                                        <span
+                                                                            className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wider uppercase border shadow-2xs ${
+                                                                                s.resp === "Doctor"
+                                                                                    ? "bg-teal-50 text-teal-700 border-teal-200/80"
+                                                                                    : s.resp === "FO"
+                                                                                    ? "bg-purple-50 text-purple-700 border-purple-200/80"
+                                                                                    : s.resp === "GM"
+                                                                                    ? "bg-amber-50 text-amber-800 border-amber-200/80"
+                                                                                    : "bg-sky-50 text-sky-700 border-sky-200/80"
+                                                                            }`}
+                                                                        >
+                                                                            {s.resp}
+                                                                        </span>
+                                                                    </div>
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <div className="flex-1 py-1 cursor-pointer group/stagebar">
+                                                                                <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden group-hover/stagebar:ring-2 group-hover/stagebar:ring-blue-400/40 transition-all">
+                                                                                    <div
+                                                                                        className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all group-hover/stagebar:brightness-105"
+                                                                                        style={{ width: `${value === 0 ? 0 : Math.max(pct, 3)}%` }}
+                                                                                    />
+                                                                                </div>
+                                                                            </div>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent
+                                                                            side="top"
+                                                                            align="center"
+                                                                            className="bg-slate-900 text-white shadow-xl px-3 py-2 rounded-lg border border-slate-700 text-xs z-[9999]"
+                                                                        >
+                                                                            <div className="font-semibold text-slate-100 mb-0.5">Stage {s.no}: {s.name} ({s.resp})</div>
+                                                                            <div className="text-slate-300 flex items-center gap-1.5 whitespace-nowrap">
+                                                                                <span className="font-bold text-white">{value.toLocaleString()}</span>
+                                                                                <span className="text-slate-300">guests</span>
+                                                                                <span className="text-slate-400">
+                                                                                    ({value.toLocaleString()} tasks • {formattedSharePct}%)
+                                                                                </span>
+                                                                            </div>
+                                                                        </TooltipContent>
+                                                                    </Tooltip>
+                                                                    <div className="w-12 shrink-0 text-right">
+                                                                        <span className="inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                                                            {value}
+                                                                        </span>
+                                                                    </div>
                                                                 </div>
-                                                                <div className="w-48 sm:w-84 md:w-96 shrink-0 flex items-center gap-2 min-w-0" title={`${s.name} (${s.resp})`}>
-                                                                    <span className="text-xs font-semibold text-slate-800 truncate">
-                                                                        {s.name}
-                                                                    </span>
-                                                                    <span
-                                                                        className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wider uppercase border shadow-2xs ${
-                                                                            s.resp === "Doctor"
-                                                                                ? "bg-teal-50 text-teal-700 border-teal-200/80"
-                                                                                : s.resp === "FO"
-                                                                                ? "bg-purple-50 text-purple-700 border-purple-200/80"
-                                                                                : s.resp === "GM"
-                                                                                ? "bg-amber-50 text-amber-800 border-amber-200/80"
-                                                                                : "bg-sky-50 text-sky-700 border-sky-200/80"
-                                                                        }`}
-                                                                    >
-                                                                        {s.resp}
-                                                                    </span>
-                                                                </div>
-                                                                <div className="flex-1 h-2.5 rounded-full bg-slate-100 overflow-hidden">
-                                                                    <div
-                                                                        className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all"
-                                                                        style={{ width: `${value === 0 ? 0 : Math.max(pct, 3)}%` }}
-                                                                    />
-                                                                </div>
-                                                                <div className="w-12 shrink-0 text-right">
-                                                                    <span className="inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                                                                        {value}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
+                                                            );
+                                                        })}
+                                                    </TooltipProvider>
                                                 </div>
                                             </div>
 
@@ -3660,41 +3762,72 @@ export default function CRRCallingProcessPage() {
                                                         </div>
                                                     </div>
                                                     <div className="p-3 sm:p-4">
-                                                        {chartData.employeeTotals.map((e, i) => {
-                                                            const pct = (e.total / chartData.maxEmployee) * 100;
-                                                            const initials = e.emp
-                                                                .split(/\s+/)
-                                                                .filter(Boolean)
-                                                                .slice(0, 2)
-                                                                .map((w) => w[0])
-                                                                .join("")
-                                                                .toUpperCase();
-                                                            return (
-                                                                <div
-                                                                    key={e.emp}
-                                                                    className={`flex items-center gap-3 sm:gap-4 rounded-lg px-2 sm:px-3 py-2.5 ${i % 2 === 0 ? "bg-slate-50/70" : ""}`}
-                                                                >
-                                                                    <div className="w-5 sm:w-6 text-[11px] font-bold text-slate-400 text-center shrink-0">#{i + 1}</div>
-                                                                    <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-slate-600 to-slate-800 text-white text-[11px] font-bold flex items-center justify-center shrink-0">
-                                                                        {initials || "—"}
+                                                        <TooltipProvider delayDuration={100}>
+                                                            {chartData.employeeTotals.map((e, i) => {
+                                                                const barPct = (e.total / chartData.maxEmployee) * 100;
+                                                                const initials = e.emp
+                                                                    .split(/\s+/)
+                                                                    .filter(Boolean)
+                                                                    .slice(0, 2)
+                                                                    .map((w) => w[0])
+                                                                    .join("")
+                                                                    .toUpperCase();
+                                                                return (
+                                                                    <div
+                                                                        key={e.emp}
+                                                                        className={`flex items-center gap-3 sm:gap-4 rounded-lg px-2 sm:px-3 py-2.5 ${i % 2 === 0 ? "bg-slate-50/70" : ""}`}
+                                                                    >
+                                                                        <div className="w-5 sm:w-6 text-[11px] font-bold text-slate-400 text-center shrink-0">#{i + 1}</div>
+                                                                        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                                                                            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-slate-600 to-slate-800 text-white text-[11px] font-bold flex items-center justify-center shrink-0">
+                                                                                {initials || "—"}
+                                                                            </div>
+                                                                            <div className="w-32 sm:w-56 md:w-60 shrink-0 flex flex-col justify-center min-w-0">
+                                                                                <span className="text-xs font-semibold text-slate-800 truncate" title={e.emp}>
+                                                                                    {e.emp}
+                                                                                </span>
+                                                                                {e.stagesLabel && (
+                                                                                    <span className="text-[10px] sm:text-[11px] text-slate-400 font-medium truncate leading-tight">
+                                                                                        {e.stagesLabel}
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                        <Tooltip>
+                                                                            <TooltipTrigger asChild>
+                                                                                <div className="flex-1 py-1 cursor-pointer group/bar">
+                                                                                    <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden group-hover/bar:ring-2 group-hover/bar:ring-amber-400/40 transition-all">
+                                                                                        <div
+                                                                                            className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500 transition-all group-hover/bar:brightness-105"
+                                                                                            style={{ width: `${e.total === 0 ? 0 : Math.max(barPct, 3)}%` }}
+                                                                                        />
+                                                                                    </div>
+                                                                                </div>
+                                                                            </TooltipTrigger>
+                                                                            <TooltipContent
+                                                                                side="top"
+                                                                                align="center"
+                                                                                className="bg-slate-900 text-white shadow-xl px-3 py-2 rounded-lg border border-slate-700 text-xs z-[9999]"
+                                                                            >
+                                                                                <div className="font-semibold text-slate-100 mb-0.5">{e.emp}</div>
+                                                                                <div className="text-slate-300 flex items-center gap-1.5 whitespace-nowrap">
+                                                                                    <span className="font-bold text-white">{e.guestCount.toLocaleString()}</span>
+                                                                                    <span className="text-slate-300">guests</span>
+                                                                                    <span className="text-slate-400">
+                                                                                        ({e.total.toLocaleString()} tasks • {e.formattedPct}%)
+                                                                                    </span>
+                                                                                </div>
+                                                                            </TooltipContent>
+                                                                        </Tooltip>
+                                                                        <div className="w-12 shrink-0 text-right">
+                                                                            <span className="inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                                                                {e.total}
+                                                                            </span>
+                                                                        </div>
                                                                     </div>
-                                                                    <div className="w-24 sm:w-56 shrink-0 text-xs font-semibold text-slate-700 truncate" title={e.emp}>
-                                                                        {e.emp}
-                                                                    </div>
-                                                                    <div className="flex-1 h-2.5 rounded-full bg-slate-100 overflow-hidden">
-                                                                        <div
-                                                                            className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500 transition-all"
-                                                                            style={{ width: `${e.total === 0 ? 0 : Math.max(pct, 3)}%` }}
-                                                                        />
-                                                                    </div>
-                                                                    <div className="w-12 shrink-0 text-right">
-                                                                        <span className="inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                                                                            {e.total}
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })}
+                                                                );
+                                                            })}
+                                                        </TooltipProvider>
                                                     </div>
                                                 </div>
                                             )}
@@ -3784,7 +3917,7 @@ export default function CRRCallingProcessPage() {
                                             value={modalDate}
                                             disabled={isGuestDisabled}
                                             onChange={(e) => { setModalDate(e.target.value); setModalSaved(false); }}
-                                            className={`h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 w-full ${isNextVisitDateInvalid ? "!border-red-500 !focus:border-red-500 !ring-red-500" : ""}`}
+                                            className={`h-10 border-2 border-blue-300 hover:border-blue-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white text-slate-900 font-medium shadow-2xs rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 w-full ${isNextVisitDateInvalid ? "!border-red-500 !focus:border-red-500 !ring-red-500" : ""}`}
                                         />
                                         {isNextVisitDateInvalid && (
                                             <p className="text-[11px] font-semibold text-red-600 flex items-start gap-1 mt-1 leading-tight">
@@ -3808,7 +3941,7 @@ export default function CRRCallingProcessPage() {
                                             disabled={isGuestDisabled}
                                             onChange={(e) => { setModalRemark(e.target.value); setModalSaved(false); }}
                                             placeholder="Add remarks for this stage..."
-                                            className="min-h-[80px] border-2 border-slate-700 hover:border-slate-900 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white text-slate-900 placeholder:text-slate-500 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                            className="min-h-[80px] border-2 border-blue-300 hover:border-blue-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white text-slate-900 placeholder:text-slate-400 font-medium shadow-2xs rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                         />
                                     </div>
                                 </div>
@@ -3908,7 +4041,7 @@ export default function CRRCallingProcessPage() {
                                                 value={safeReturnStayFeedback}
                                                 onChange={(e) => { setSafeReturnStayFeedback(e.target.value); setSafeReturnSaved(false); }}
                                                 placeholder="Guest's feedback / suggestions..."
-                                                className="min-h-[70px] border-2 border-slate-700 hover:border-slate-900 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                className="min-h-[70px] border-2 border-emerald-300 hover:border-emerald-400 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-2xs font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                             />
                                         </div>
 
@@ -3922,7 +4055,7 @@ export default function CRRCallingProcessPage() {
                                                 value={safeReturnOutcomeRemarks}
                                                 onChange={(e) => { setSafeReturnOutcomeRemarks(e.target.value); setSafeReturnSaved(false); }}
                                                 placeholder="Remarks on the safe return call outcome..."
-                                                className="min-h-[70px] border-2 border-slate-700 hover:border-slate-900 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                className="min-h-[70px] border-2 border-emerald-300 hover:border-emerald-400 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-2xs font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                             />
                                         </div>
 
@@ -3942,7 +4075,7 @@ export default function CRRCallingProcessPage() {
                                                         setSafeReturnSaved(false);
                                                     }}
                                                 >
-                                                    <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
+                                                    <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-2 border-emerald-300 hover:border-emerald-400 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 font-medium shadow-2xs rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
                                                         <SelectValue placeholder="Select Status" />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -3964,7 +4097,7 @@ export default function CRRCallingProcessPage() {
                                                         disabled={isSafeReturnDisabled}
                                                         value={safeReturnFollowupDate}
                                                         onChange={(e) => { setSafeReturnFollowupDate(e.target.value); setSafeReturnSaved(false); }}
-                                                        className="w-[210px] sm:w-[230px] h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                        className="w-[210px] sm:w-[230px] h-10 border-2 border-emerald-300 hover:border-emerald-400 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 font-medium shadow-2xs rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                                     />
                                                 </div>
                                             )}
@@ -3980,7 +4113,7 @@ export default function CRRCallingProcessPage() {
                                                         value={safeReturnNotDoneRemarks}
                                                         onChange={(e) => { setSafeReturnNotDoneRemarks(e.target.value); setSafeReturnSaved(false); }}
                                                         placeholder="Reason the safe return call wasn't done / was closed..."
-                                                        className="min-h-[42px] border-2 border-slate-700 hover:border-slate-900 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 w-full"
+                                                        className="min-h-[42px] border-2 border-emerald-300 hover:border-emerald-400 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-2xs font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 w-full"
                                                     />
                                                 </div>
                                             )}
@@ -3998,7 +4131,7 @@ export default function CRRCallingProcessPage() {
                                                         setSafeReturnSaved(false);
                                                     }}
                                                 >
-                                                    <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
+                                                    <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-2 border-emerald-300 hover:border-emerald-400 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 font-medium shadow-2xs rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
                                                     <SelectValue placeholder="Yes / No" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -4114,7 +4247,7 @@ export default function CRRCallingProcessPage() {
                                                     setRatingSaved(false);
                                                 }}
                                             >
-                                                <SelectTrigger className="h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
+                                                <SelectTrigger className="h-10 border-2 border-orange-300 hover:border-orange-400 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 font-medium shadow-2xs rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
                                                     <SelectValue placeholder="Select Status" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -4135,7 +4268,7 @@ export default function CRRCallingProcessPage() {
                                                     value={ratingNotGivenRemarks}
                                                     onChange={(e) => { setRatingNotGivenRemarks(e.target.value); setRatingSaved(false); }}
                                                     placeholder="Reason the guest hasn't given a rating yet..."
-                                                    className="min-h-[42px] border-2 border-slate-700 hover:border-slate-900 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                    className="min-h-[42px] border-2 border-orange-300 hover:border-orange-400 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-2xs font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                                 />
                                             </div>
                                         )}
@@ -4153,7 +4286,7 @@ export default function CRRCallingProcessPage() {
                                                         setRatingProofFile(e.target.files?.[0] || null);
                                                         setRatingSaved(false);
                                                     }}
-                                                    className="h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 shadow-sm rounded-lg file:text-orange-700 file:font-semibold disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                    className="h-10 border-2 border-orange-300 hover:border-orange-400 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 shadow-2xs rounded-lg file:text-orange-700 file:font-semibold disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                                 />
                                                 {(ratingProofFile || ratingExistingProofFileName) && (
                                                     <p className="text-[11px] font-medium text-slate-500 truncate">
@@ -4173,7 +4306,7 @@ export default function CRRCallingProcessPage() {
                                                 value={ratingOutcomeRemarks}
                                                 onChange={(e) => { setRatingOutcomeRemarks(e.target.value); setRatingSaved(false); }}
                                                 placeholder="Remarks on the rating request outcome..."
-                                                className="min-h-[70px] border-2 border-slate-700 hover:border-slate-900 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                className="min-h-[70px] border-2 border-orange-300 hover:border-orange-400 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-2xs font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                             />
                                         </div>
 
@@ -4193,7 +4326,7 @@ export default function CRRCallingProcessPage() {
                                                         setRatingSaved(false);
                                                     }}
                                                 >
-                                                    <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
+                                                    <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-2 border-orange-300 hover:border-orange-400 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 font-medium shadow-2xs rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
                                                         <SelectValue placeholder="Select Status" />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -4215,7 +4348,7 @@ export default function CRRCallingProcessPage() {
                                                         disabled={isRatingDisabled}
                                                         value={ratingFollowupDate}
                                                         onChange={(e) => { setRatingFollowupDate(e.target.value); setRatingSaved(false); }}
-                                                        className="w-[210px] sm:w-[230px] h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                        className="w-[210px] sm:w-[230px] h-10 border-2 border-orange-300 hover:border-orange-400 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 font-medium shadow-2xs rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                                     />
                                                 </div>
                                             )}
@@ -4231,7 +4364,7 @@ export default function CRRCallingProcessPage() {
                                                         value={ratingNotDoneRemarks}
                                                         onChange={(e) => { setRatingNotDoneRemarks(e.target.value); setRatingSaved(false); }}
                                                         placeholder="Reason the rating request wasn't done / was closed..."
-                                                        className="min-h-[42px] border-2 border-slate-700 hover:border-slate-900 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 w-full"
+                                                        className="min-h-[42px] border-2 border-orange-300 hover:border-orange-400 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-2xs font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 w-full"
                                                     />
                                                 </div>
                                             )}
@@ -4249,7 +4382,7 @@ export default function CRRCallingProcessPage() {
                                                         setRatingSaved(false);
                                                     }}
                                                 >
-                                                    <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
+                                                    <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-2 border-orange-300 hover:border-orange-400 focus:border-orange-600 focus:ring-2 focus:ring-orange-200 bg-white text-slate-900 font-medium shadow-2xs rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
                                                     <SelectValue placeholder="Yes / No" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -4337,40 +4470,68 @@ export default function CRRCallingProcessPage() {
                                     </div>
                                 )}
                                 <div className="grid grid-cols-1 gap-4">
-                                    {/* Row 1: Feedback Taking URL */}
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
-                                            Feedback Taking URL
-                                        </Label>
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                            <a
-                                                href={buildFeedbackFormUrl(activeFeedbackGuest.bookingId)}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-md px-3 py-2 shadow-sm transition-colors"
-                                            >
-                                                <Send className="h-3.5 w-3.5" />
-                                                Open Feedback Form for {activeFeedbackGuest.bookingId}
-                                            </a>
+                                    {isStage4Complete ? (
+                                        // Completed: read-only. Yes / No was only a form helper and is not stored, so only the saved remarks are shown.
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">Remarks</Label>
+                                            <div className="bg-white border border-slate-200 rounded-md p-3.5 text-xs font-medium text-slate-700 leading-relaxed whitespace-pre-wrap min-h-[60px]">
+                                                {feedbackDoerRemarks || "No remarks entered"}
+                                            </div>
                                         </div>
-                                        <p className="text-[11px] text-slate-500 break-all">
-                                            {buildFeedbackFormUrl(activeFeedbackGuest.bookingId)}
-                                        </p>
-                                    </div>
+                                    ) : (
+                                        <>
+                                            {/* Row 1: Guest Allowed to Give Feedback (dropdown - yes, no). UI-only: never sent or stored. */}
+                                            <div className="space-y-2">
+                                                <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                                                    Guest Allowed to Give Feedback <span className="text-red-500 font-bold">*</span>
+                                                </Label>
+                                                <Select
+                                                    value={guestAllowedFeedback}
+                                                    disabled={isFeedbackDisabled}
+                                                    onValueChange={(val: "yes" | "no") => {
+                                                        setGuestAllowedFeedback(val);
+                                                        setFeedbackFormError("");
+                                                        setFeedbackSaved(false);
+                                                    }}
+                                                >
+                                                    <SelectTrigger className="h-10 border-2 border-amber-300 hover:border-amber-400 focus:border-amber-600 focus:ring-2 focus:ring-amber-200 bg-white text-slate-900 shadow-2xs font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
+                                                        <SelectValue placeholder="Select Yes / No" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="yes">Yes</SelectItem>
+                                                        <SelectItem value="no">No</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
 
-                                    {/* Row 2: Doer Remarks — editable textarea prefilled with backend/saved remarks */}
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
-                                            Doer Remarks <span className="text-red-500 font-bold">*</span>
-                                        </Label>
-                                        <Textarea
-                                            value={feedbackDoerRemarks}
-                                            disabled={isFeedbackDisabled}
-                                            onChange={(e) => { setFeedbackDoerRemarks(e.target.value); setFeedbackSaved(false); }}
-                                            placeholder="Remarks from the doer regarding the feedback / outcome..."
-                                            className="min-h-[90px] border-2 border-slate-700 hover:border-slate-900 focus:border-amber-600 focus:ring-2 focus:ring-amber-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
-                                        />
-                                    </div>
+                                            {/* Row 2 (if YES): the feedback form itself, filled in here rather than in a new tab */}
+                                            {guestAllowedFeedback === "yes" && !s4Lock.isLocked && (
+                                                <GuestFeedbackForm
+                                                    values={feedbackValues}
+                                                    onChange={setFeedbackValues}
+                                                    disabled={isFeedbackDisabled}
+                                                    submitting={feedbackSubmitting}
+                                                    onSubmit={submitFeedbackForm}
+                                                />
+                                            )}
+
+                                            {/* Row 3 (if NO): remarks, then Save once they are filled in */}
+                                            {guestAllowedFeedback === "no" && (
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                                                        Remarks <span className="text-red-500 font-bold">*</span>
+                                                    </Label>
+                                                    <Textarea
+                                                        value={feedbackDoerRemarks}
+                                                        disabled={isFeedbackDisabled}
+                                                        onChange={(e) => { setFeedbackDoerRemarks(e.target.value); setFeedbackSaved(false); }}
+                                                        placeholder="Enter remarks explaining why the guest is not giving feedback..."
+                                                        className="min-h-[90px] border-2 border-amber-300 hover:border-amber-400 focus:border-amber-600 focus:ring-2 focus:ring-amber-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-2xs font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                    />
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
                                 </div>
                                 {feedbackFormError && (
                                     <div className="flex items-center gap-2 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
@@ -4385,7 +4546,7 @@ export default function CRRCallingProcessPage() {
                             <Button variant="outline" size="sm" onClick={closeFeedbackModal} disabled={feedbackSaved} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
                                 Close
                             </Button>
-                            {!isFeedbackDisabled && (
+                            {!isFeedbackDisabled && isFeedbackFormComplete() && (
                                 <Button
                                     size="sm"
                                     onClick={saveFeedbackModal}
@@ -4408,161 +4569,17 @@ export default function CRRCallingProcessPage() {
             </Dialog>
 
             {/* REFERRAL COLLECTION & LEAD GENERATION DIALOG (Stage 8) */}
-            <Dialog open={activeReferralGuestId !== null} onOpenChange={(open) => !open && closeReferralModal()}>
-                {activeReferralGuest && (
-                    <DialogContent style={{ width: "min(98vw, 1100px)", maxWidth: "min(98vw, 1100px)", maxHeight: "90vh" }} className="p-0 overflow-hidden rounded-xl border border-slate-200 shadow-2xl flex flex-col [&>[data-slot=dialog-close]]:text-white/80 [&>[data-slot=dialog-close]]:hover:text-white [&>[data-slot=dialog-close]]:hover:bg-white/10 [&>[data-slot=dialog-close]]:rounded-md">
-                        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 pl-6 pr-14 py-4 text-white shrink-0">
-                            <div className="flex items-center justify-between gap-3 flex-wrap">
-                                <DialogTitle className="text-lg font-bold text-white leading-tight">
-                                    Referral Collection &amp; Lead Generation
-                                </DialogTitle>
-                                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold bg-amber-500/20 text-amber-200 border border-amber-400/40 px-2.5 py-0.5 rounded-full shrink-0">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                                    Action Required
-                                </span>
-                            </div>
-                            <DialogDescription className="text-xs text-white/90 mt-1 font-medium">
-                                Complete the required details below and submit this stage.
-                            </DialogDescription>
-                        </div>
-
-                        <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
-                            {/* Client & Booking Details Card */}
-                            <ClientBookingDetailsCard
-                                guest={activeReferralGuest}
-                                onViewFullDetails={() => openDetailsModal(activeReferralGuest.id, "Client & Booking Details")}
-                            />
-
-                            {/* Referral details card — non-edited if data exists/completed, editable if pending */}
-                            {(() => {
-                                const isReadOnly = Boolean(isStage8Complete);
-                                return (
-                                    <div className="rounded-xl border-2 border-emerald-400 bg-emerald-50/50 p-5 space-y-4 shadow-sm">
-                                        <div className="flex items-center gap-2 pb-2 border-b border-emerald-200">
-                                            <Users className="h-4 w-4 text-emerald-600" />
-                                            <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-700">Referral Collection Details</h4>
-                                            <span className={`ml-auto text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${isReadOnly ? 'text-slate-600 bg-slate-100 border border-slate-200' : 'text-emerald-800 bg-emerald-100 border border-emerald-300'}`}>
-                                                {isReadOnly ? "Read Only" : "Fill in the details below"}
-                                            </span>
-                                        </div>
-                                        {activeReferralGuest && s8Lock.isLocked && !isStage8Complete && (
-                                            <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-                                                <Clock className="h-4 w-4 shrink-0" />
-                                                {s8Lock.message}
-                                            </div>
-                                        )}
-                                        <div className="grid grid-cols-1 gap-4">
-                                            {/* Row 1: Guest Allowed to Give Referral (dropdown - yes, no) */}
-                                            <div className="space-y-2">
-                                                <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
-                                                    Guest Allowed to Give Referral {!isReadOnly && <span className="text-red-500 font-bold">*</span>}
-                                                </Label>
-                                                {isReadOnly ? (
-                                                    <div className="bg-white border border-slate-200 rounded-md p-3 text-xs font-medium text-slate-700">
-                                                        {guestAllowedReferral === "yes" ? "Yes" : guestAllowedReferral === "no" ? "No" : referralTakenStatus || "Not Specified"}
-                                                    </div>
-                                                ) : (
-                                                    <Select
-                                                        value={guestAllowedReferral}
-                                                        disabled={isReferralDisabled}
-                                                        onValueChange={(val: "yes" | "no") => {
-                                                            setGuestAllowedReferral(val);
-                                                            setReferralTakenStatus(val === "yes" ? "Yes" : "No");
-                                                            setReferralSaved(false);
-                                                        }}
-                                                    >
-                                                        <SelectTrigger className="h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
-                                                            <SelectValue placeholder="Select Yes / No" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="yes">Yes</SelectItem>
-                                                            <SelectItem value="no">No</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                )}
-                                            </div>
-
-                                            {/* Row 2 (if YES): only show the referral taking url and close button */}
-                                            {(guestAllowedReferral === "yes" || (isReadOnly && referralTakenStatus === "Yes")) && !s8Lock.isLocked && (
-                                                <div className="space-y-2 p-4 bg-white/80 border border-emerald-300 rounded-lg shadow-sm">
-                                                    <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
-                                                        Referral Taking URL
-                                                    </Label>
-                                                    <div className="flex items-center gap-2 flex-wrap">
-                                                        <a
-                                                            href={buildReferralFormUrl(activeReferralGuest.bookingId)}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-md px-3 py-2 shadow-sm transition-colors"
-                                                        >
-                                                            <Send className="h-3.5 w-3.5" />
-                                                            Open Referral Form for {activeReferralGuest.bookingId}
-                                                        </a>
-                                                    </div>
-                                                    <p className="text-[11px] text-slate-500 break-all">
-                                                        {buildReferralFormUrl(activeReferralGuest.bookingId)}
-                                                    </p>
-                                                </div>
-                                            )}
-
-                                            {/* Row 3 (if NO): enable remarks so that user assigned stage 8 can fill remarks and then save */}
-                                            {(guestAllowedReferral === "no" || (isReadOnly && (referralTakenStatus === "No" || Boolean(referralDoerRemarks)))) && (
-                                                <div className="space-y-2">
-                                                    <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
-                                                        Remarks {!isReadOnly && <span className="text-red-500 font-bold">*</span>}
-                                                    </Label>
-                                                    {isReadOnly ? (
-                                                        <div className="bg-white border border-slate-200 rounded-md p-3.5 text-xs font-medium text-slate-700 leading-relaxed whitespace-pre-wrap min-h-[60px]">
-                                                            {referralDoerRemarks || "No remarks entered"}
-                                                        </div>
-                                                    ) : (
-                                                        <Textarea
-                                                            value={referralDoerRemarks}
-                                                            disabled={isReferralDisabled}
-                                                            onChange={(e) => { setReferralDoerRemarks(e.target.value); setReferralSaved(false); }}
-                                                            placeholder="Enter remarks explaining why the guest declined or is not giving referral..."
-                                                            className="min-h-[90px] border-2 border-slate-700 hover:border-slate-900 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
-                                                        />
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                        {referralFormError && (
-                                            <div className="flex items-center gap-2 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
-                                                <AlertTriangle className="h-4 w-4 shrink-0" />
-                                                {referralFormError}
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })()}
-                        </div>
-
-                        <DialogFooter className="bg-slate-50 border-t border-slate-200 px-6 py-4 flex justify-end gap-2 sticky bottom-0 z-10">
-                            <Button variant="outline" size="sm" onClick={closeReferralModal} disabled={referralSaved} className="w-28 bg-white border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">
-                                Close
-                            </Button>
-                            {!isStage8Complete && guestAllowedReferral === "no" && referralDoerRemarks.trim() !== "" && (
-                                <Button
-                                    size="sm"
-                                    onClick={saveReferralModal}
-                                    disabled={isReferralDisabled || referralSaved}
-                                    className="min-w-[112px] bg-green-600 hover:bg-green-700 text-white font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
-                                >
-                                    {referralSaved ? (
-                                        <>
-                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                            Saving...
-                                        </>
-                                    ) : (
-                                        "Save"
-                                    )}
-                                </Button>
-                            )}
-                        </DialogFooter>
-                    </DialogContent>
-                )}
-            </Dialog>
+            <ReferralCollectionModal
+                open={activeReferralGuestId !== null}
+                guest={activeReferralGuest}
+                disabled={isReferralDisabled}
+                isComplete={isStage8Complete}
+                lockMessage={s8Lock.isLocked ? s8Lock.message : null}
+                savedData={activeReferralSavedData}
+                onClose={closeReferralModal}
+                onSubmit={saveReferralModal}
+                onViewFullDetails={() => activeReferralGuest && openDetailsModal(activeReferralGuest.id, "Client & Booking Details")}
+            />
 
             <Dialog open={activeWelcomeGuestId !== null} onOpenChange={(open) => !open && closeWelcomeModal()}>
                 {activeWelcomeGuest && (() => {
@@ -4628,7 +4645,7 @@ export default function CRRCallingProcessPage() {
                                                 value={welcomeOutcomeRemarks}
                                                 onChange={(e) => { setWelcomeOutcomeRemarks(e.target.value); setWelcomeSaved(false); }}
                                                 placeholder="Remarks on the pickup / welcome call outcome..."
-                                                className="min-h-[70px] border-2 border-slate-700 hover:border-slate-900 focus:border-sky-600 focus:ring-2 focus:ring-sky-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                className="min-h-[70px] border-2 border-sky-300 hover:border-sky-400 focus:border-sky-600 focus:ring-2 focus:ring-sky-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-2xs font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                             />
                                         </div>
 
@@ -4648,7 +4665,7 @@ export default function CRRCallingProcessPage() {
                                                     setWelcomeSaved(false);
                                                 }}
                                             >
-                                                <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-sky-600 focus:ring-2 focus:ring-sky-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
+                                                <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-2 border-sky-300 hover:border-sky-400 focus:border-sky-600 focus:ring-2 focus:ring-sky-200 bg-white text-slate-900 font-medium shadow-2xs rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
                                                     <SelectValue placeholder="Select Status" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -4670,7 +4687,7 @@ export default function CRRCallingProcessPage() {
                                                     disabled={!activeWelcomeGuest || isWelcomeDisabled}
                                                     value={welcomeFollowupDate}
                                                     onChange={(e) => { setWelcomeFollowupDate(e.target.value); setWelcomeSaved(false); }}
-                                                    className="w-[210px] sm:w-[230px] h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-sky-600 focus:ring-2 focus:ring-sky-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                    className="w-[210px] sm:w-[230px] h-10 border-2 border-sky-300 hover:border-sky-400 focus:border-sky-600 focus:ring-2 focus:ring-sky-200 bg-white text-slate-900 font-medium shadow-2xs rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                                 />
                                             </div>
                                         )}
@@ -4686,7 +4703,7 @@ export default function CRRCallingProcessPage() {
                                                     value={welcomeNotDoneRemarks}
                                                     onChange={(e) => { setWelcomeNotDoneRemarks(e.target.value); setWelcomeSaved(false); }}
                                                     placeholder="Reason the welcome call wasn't done / was closed..."
-                                                    className="min-h-[42px] border-2 border-slate-700 hover:border-slate-900 focus:border-sky-600 focus:ring-2 focus:ring-sky-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 w-full"
+                                                    className="min-h-[42px] border-2 border-sky-300 hover:border-sky-400 focus:border-sky-600 focus:ring-2 focus:ring-sky-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-2xs font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 w-full"
                                                 />
                                             </div>
                                         )}
@@ -4704,7 +4721,7 @@ export default function CRRCallingProcessPage() {
                                                     setWelcomeSaved(false);
                                                 }}
                                             >
-                                                <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-sky-600 focus:ring-2 focus:ring-sky-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
+                                                <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-2 border-sky-300 hover:border-sky-400 focus:border-sky-600 focus:ring-2 focus:ring-sky-200 bg-white text-slate-900 font-medium shadow-2xs rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
                                                     <SelectValue placeholder="Yes / No" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -4817,7 +4834,7 @@ export default function CRRCallingProcessPage() {
                                             value={resultOutcomeRemarks}
                                             onChange={(e) => { setResultOutcomeRemarks(e.target.value); setResultSaved(false); }}
                                             placeholder="Remarks on the result / health progress outcome..."
-                                            className="min-h-[70px] border-2 border-slate-700 hover:border-slate-900 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 bg-white text-slate-900 placeholder:text-slate-500 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                            className="min-h-[70px] border-2 border-purple-300 hover:border-purple-400 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 bg-white text-slate-900 placeholder:text-slate-400 font-medium shadow-2xs rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                         />
                                     </div>
 
@@ -4837,7 +4854,7 @@ export default function CRRCallingProcessPage() {
                                                     setResultSaved(false);
                                                 }}
                                             >
-                                                <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
+                                                <SelectTrigger className="w-[160px] min-w-[150px] max-w-[175px] h-10 border-2 border-purple-300 hover:border-purple-400 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 bg-white text-slate-900 font-medium shadow-2xs rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
                                                     <SelectValue placeholder="Select Status" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -4859,7 +4876,7 @@ export default function CRRCallingProcessPage() {
                                                     disabled={isResultDisabled}
                                                     value={resultFollowupDate}
                                                     onChange={(e) => { setResultFollowupDate(e.target.value); setResultSaved(false); }}
-                                                    className="w-[210px] sm:w-[230px] h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                                    className="w-[210px] sm:w-[230px] h-10 border-2 border-purple-300 hover:border-purple-400 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 bg-white text-slate-900 font-medium shadow-2xs rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                                                 />
                                             </div>
                                         )}
@@ -4875,7 +4892,7 @@ export default function CRRCallingProcessPage() {
                                                     value={resultNotDoneRemarks}
                                                     onChange={(e) => { setResultNotDoneRemarks(e.target.value); setResultSaved(false); }}
                                                     placeholder="Reason the result / progress check wasn't done / was closed..."
-                                                    className="min-h-[42px] border-2 border-slate-700 hover:border-slate-900 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 bg-white text-slate-900 placeholder:text-slate-500 shadow-sm font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 w-full"
+                                                    className="min-h-[42px] border-2 border-purple-300 hover:border-purple-400 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 bg-white text-slate-900 placeholder:text-slate-400 shadow-2xs font-medium rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 w-full"
                                                 />
                                             </div>
                                         )}
@@ -4893,7 +4910,7 @@ export default function CRRCallingProcessPage() {
                                                     setResultSaved(false);
                                                 }}
                                             >
-                                                <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-2 border-slate-700 hover:border-slate-900 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 bg-white text-slate-900 font-medium shadow-sm rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
+                                                <SelectTrigger className="w-[110px] min-w-[95px] max-w-[130px] h-10 border-2 border-purple-300 hover:border-purple-400 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 bg-white text-slate-900 font-medium shadow-2xs rounded-lg disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500">
                                                     <SelectValue placeholder="Yes / No" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -5178,83 +5195,3 @@ export default function CRRCallingProcessPage() {
     );
 }
 
-function ClientBookingDetailsCard({
-    guest,
-    onViewFullDetails,
-}: {
-    guest: Guest;
-    onViewFullDetails?: () => void;
-}) {
-    return (
-        <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3.5 shadow-sm">
-            <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
-                <div className="flex items-center gap-2">
-                    <div className="p-1 rounded-md bg-slate-100 border border-slate-200/60 flex items-center justify-center">
-                        <Contact className="h-4 w-4 text-slate-600" />
-                    </div>
-                    <h4 className="text-xs sm:text-sm font-bold text-slate-800 tracking-tight">
-                        Client &amp; Booking Details
-                    </h4>
-                </div>
-                {onViewFullDetails && (
-                    <button
-                        type="button"
-                        onClick={onViewFullDetails}
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-blue-600 bg-slate-100/90 hover:bg-slate-200/80 border border-slate-200 px-3 py-1 rounded-md transition-colors cursor-pointer"
-                    >
-                        <span>View Full Details</span>
-                        <ExternalLink className="h-3.5 w-3.5 text-slate-500" />
-                    </button>
-                )}
-            </div>
-
-            <div className="overflow-x-auto pb-0.5">
-                <div className="grid gap-3 min-w-[700px]" style={{ gridTemplateColumns: "150px 180px 140px 130px 1fr" }}>
-                    {/* Booking ID */}
-                    <div className="space-y-1 min-w-0 pr-4 border-r border-slate-200">
-                        <p className="text-[11px] font-medium text-slate-400">Booking ID</p>
-                        <p className="text-xs font-bold text-slate-900 break-words">{guest.bookingId || "—"}</p>
-                    </div>
-
-                    {/* Client Name */}
-                    <div className="space-y-1 min-w-0 pr-4 border-r border-slate-200">
-                        <p className="text-[11px] font-medium text-slate-400">Client Name</p>
-                        <p className="text-xs font-bold text-slate-900 break-words">{guest.name || "—"}</p>
-                    </div>
-
-                    {/* Mobile */}
-                    <div className="space-y-1 min-w-0 pr-4 border-r border-slate-200">
-                        <p className="text-[11px] font-medium text-slate-400">Mobile</p>
-                        <p className="text-xs font-bold text-slate-900 break-words">{guest.mobile || "—"}</p>
-                    </div>
-
-                    {/* PI Link */}
-                    <div className="space-y-1 min-w-0 pr-4 border-r border-slate-200">
-                        <p className="text-[11px] font-medium text-slate-400">PI Link</p>
-                        <div className="text-xs font-bold text-slate-900 break-words">
-                            {guest.piLink ? (
-                                <a
-                                    href={guest.piLink}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-blue-600 hover:text-blue-800 font-semibold underline underline-offset-2 inline-flex items-center gap-1"
-                                >
-                                    <span>View PI</span>
-                                    <ExternalLink className="h-3 w-3" />
-                                </a>
-                            ) : (
-                                "—"
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Programme / Package */}
-                    <div className="space-y-1 min-w-0">
-                        <p className="text-[11px] font-medium text-slate-400">Programme / Package</p>
-                        <p className="text-xs font-bold text-slate-900 break-words">{guest.programme || "—"}</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}

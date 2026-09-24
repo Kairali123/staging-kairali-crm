@@ -2,29 +2,29 @@
 // bookings API (re-checked on save). Same rule for doers and admins (issue #157).
 import type { StageInfo, StageStatus } from "@/types/crr";
 
-// Stages using the two-phase to_show model: submitted data stays "Processing"
-// until to_show is set (KTAHV_CRR_Calling_FMS.to_show, ktahv_guest_tracker_part2
-// stage9/10_to_show, ktahv_guest_tracker.stage11_to_show).
-export const TO_SHOW_STAGES = new Set([1, 5, 6, 7, 9, 10, 11]);
-
 // Metadata keys that do not represent user-submitted stage data
 export const METADATA_KEYS = new Set(["doer", "assignedBy", "stageKey", "stage_key"]);
 
-export function hasActualSavedContent(saved: Record<string, string | number | null> | null | undefined): boolean {
-    if (!saved) return false;
-    return Object.entries(saved).some(([k, v]) => !METADATA_KEYS.has(k) && v !== null && String(v).trim() !== "");
+// A stage is done as soon as the database holds its actual date and its submitted
+// data. The previous two-phase model kept such a stage "Processing" until an
+// external system set to_show; that intermediate state is gone.
+export function stageStatusOf(_stageNo: number, info: StageInfo | undefined): StageStatus {
+    if (info?.completed) return "Complete";
+    return "Pending";
 }
 
-export function stageStatusOf(stageNo: number, info: StageInfo | undefined): StageStatus {
-    if (info?.completed) return "Complete";
-    // Prefer the API's `submitted` flag: savedData also carries derived values
-    // (stage 9/10 pickupRequired/dropRequired = "Yes" once planned, stage 11
-    // timestamp) that would otherwise mark an untouched stage as Processing.
-    const submitted = info?.submitted ?? hasActualSavedContent(info?.savedData);
-    if (TO_SHOW_STAGES.has(stageNo) && (submitted || info?.actualDate) && !info?.toShow) {
-        return "Processing";
-    }
-    return "Pending";
+// Stage 8 referral collection posts to its own Apps Script deployment, but only
+// once the doer answered "Yes" and actually filled in entries. Anything else —
+// another stage, a "No", or a "Yes" with nothing filled — keeps the original
+// endpoint and envelope.
+export function isStage8ReferralSubmission(
+    stage: number,
+    fields: Record<string, unknown> | null | undefined
+): boolean {
+    if (stage !== 8 || !fields) return false;
+    if (String(fields.doerStatus ?? "").trim().toLowerCase() !== "yes") return false;
+    const referrals = fields.referrals;
+    return Array.isArray(referrals) && referrals.length > 0;
 }
 
 export function isCancelledStatus(bookingStatus: string | null | undefined): boolean {
@@ -136,7 +136,6 @@ export function stageBlockReason(stageNo: number, g: StageGateInput, today: stri
     if (isCancelledStatus(g.bookingStatus)) return "This booking is cancelled.";
     const status = stageStatusOf(stageNo, g.info);
     if (status === "Complete") return g.info?.autoClosed || "This stage is already completed.";
-    if (status === "Processing") return "This stage is already submitted and awaiting confirmation.";
     return stageDateLock(stageNo, g, today);
 }
 

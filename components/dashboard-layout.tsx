@@ -59,9 +59,6 @@ import {
   Sparkles,
   Cpu,
   Upload,
-  MonitorSmartphone,
-  Send,
-  BarChart2,
 } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
@@ -97,15 +94,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [voiceCallExpanded, setVoiceCallExpanded] = useState(false)
   const [dialShreeExpanded, setDialShreeExpanded] = useState(false)
   const [kapplNewOrderExpanded, setKapplNewOrderExpanded] = useState(false)
-  const [ktahvCrrExpanded, setKtahvCrrExpanded] = useState(false)
+  const [crrFmsExpanded, setCrrFmsExpanded] = useState(false)
   const [leadManagementExpanded, setLeadManagementExpanded] = useState(false)
   const [clientDatabaseExpanded, setClientDatabaseExpanded] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isClearingCache, setIsClearingCache] = useState(false)
   const [meetingsExpanded, setMeetingsExpanded] = useState(false)
   const [settingsExpanded, setSettingsExpanded] = useState(false)
-  const [guestExperienceExpanded, setGuestExperienceExpanded] = useState(false)
-  const [emailMarketingExpanded, setEmailMarketingExpanded] = useState(false)
   const [automationExpanded, setAutomationExpanded] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedQuery, setDebouncedQuery] = useState("")
@@ -147,12 +142,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (pathname.startsWith("/dialShree") || pathname.startsWith("/dialshree")) setDialShreeExpanded(true)
     if (pathname.startsWith("/meetings")) setMeetingsExpanded(true)
     if (pathname.startsWith("/new-order-fms")) setKapplNewOrderExpanded(true)
-    if (pathname.startsWith("/crr-fms") || pathname.startsWith("/ktahv-crr-process-report-alert")) setKtahvCrrExpanded(true)
+    if (pathname.startsWith("/crr-fms") || pathname.startsWith("/ktahv-crr-process-report-alert")) setCrrFmsExpanded(true)
     if (
       pathname.startsWith("/leads") ||
       pathname.startsWith("/lead-search") ||
       pathname.startsWith("/good-lead-leakage") ||
-      pathname.startsWith("/lead-lost-monitor") ||
       pathname === "/voicecall/kserve-lead-lost"
     ) {
       setLeadManagementExpanded(true)
@@ -201,9 +195,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const navigation = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, permission: "dashboard.view" },
-    { name: "Email Marketing", icon: Mail, superAdminOnly: true },
-    { name: "Guest Experience", icon: MonitorSmartphone, superAdminOnly: true },
-    { name: "Launch Guest App ↗", href: "/guest-experience", icon: MonitorSmartphone, superAdminOnly: true, target: "_blank" },
     { name: "Settings", icon: Settings, superAdminOnly: true },
     { name: "User Management", href: "/users", icon: UserCog, superAdminOnly: true },
     { name: "Marketing Reports", icon: TrendingUp, permission: "marketing.view" },
@@ -223,16 +214,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "Partner Onboarding System", href: "/partners", icon: Building2, permission: "partners.view" },
     { name: "KAPPL New Order", icon: FileText, permission: "new-order-fms.view" },
     { name: "MR FMS", href: "/MR-FMS", icon: FileText, permission: "mr-fms.view" },
-    { name: "KTAHV CRR Process", icon: FileText, permission: "crr_fms.view" },
+    { name: "KTAHV CRR FMS", icon: FileText, permission: "crr_fms.view" },
     // { name: "KTAHV BOOKING FORM", href: "/fms/bookings/ktahv", icon: FileText, permission: "ktahv_booking_form.view", target: "_blank" },
     { name: "Unified Portal Hub", icon: LayoutGrid, permission: "portal_hub.view" },
     { name: "Meetings", href: "/meetings", icon: StickyNote, permission: "meetings.view" },
     { name: "FMS Pending Bottleneck Tracker", href: "/fms/pending-tasks", icon: FileText, permission: "task_fms.view" },
     { name: "Cold Enquiry Reverification", href: "/fms/enquiry-reverification", icon: FileText, permission: "cold_enquiry_reverification.view" },
-  ]
-  const ktahvCrrSubMenu = [
-    { name: "KTAHV CRR Calling FMS", href: "/crr-fms", icon: FileText, permission: "crr_fms.view" },
-    { name: "KTAHV CRR Process Report Alert", href: "/ktahv-crr-process-report-alert", icon: AlertTriangle, permission: "crr_fms.view" },
   ]
   const clientDatabaseSubMenu = [
     { name: "Client Database", href: "/client-database", icon: Database, permission: "client_database.view" },
@@ -242,12 +229,15 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "Leads Assignment", href: "/leads/assign", icon: Shuffle, permission: "leads.assign" },
     { name: "Lead Search Dashboard", href: "/lead-search", icon: Search, permission: "lead_search.view" },
     { name: "Good Lead Leakage", href: "/good-lead-leakage", icon: Search, permission: "good_lead_leakage.view" },
-    { name: "LeadGuard Lead Lost Monitor", href: "/lead-lost-monitor", icon: AlertTriangle, permission: "leadguard_lead_lost_monitor.view" },
     { name: "K-Serve Lead Lost", href: "/voicecall/kserve-lead-lost", icon: PhoneCall, permission: "voicecall_kserve_lead_lost.view" },
   ]
   const kapplNewOrderSubMenu = [
     { name: "New Order FMS", href: "/new-order-fms", icon: FileText, permission: "new-order-fms.view" },
     { name: "Primary Order Form", href: "/new-order-fms/primary-order-form", icon: FileText, permission: "primary_order_form.view" },
+  ]
+  const crrFmsSubMenu = [
+    { name: "KTAHV CRR Calling FMS", href: "/crr-fms", icon: FileText, permission: "crr_fms.view" },
+    { name: "KTAHV CRR Process Report Alert", href: "/ktahv-crr-process-report-alert", icon: AlertTriangle, permission: "crr_report_alert.view" },
   ]
 
   const marketingSubMenu = [
@@ -256,18 +246,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "Facebook PPC Reports", href: "/marketing/facebook-ppc", icon: Search, description: "Facebook PPC ads reports", permission: "marketing_facebook_report.view" },
     { name: "Google Adword Reports", href: "/google-adword-reports", icon: Search, description: "Google Ads campaign expense data", permission: "google_adword_report.view" },
     { name: "Marketing Funnel", href: "/marketing-funnel", icon: Search, description: "Marketing Funnel", permission: "marketing_funnel.view" },
-  ]
-
-  const guestExperienceSubMenu = [
-    { name: "PWA Configuration", href: "/settings/guest-experience", icon: Settings, description: "Manage iPad PWA content" },
-    { name: "Transfer Reports", href: "/reports/guest-transfers", icon: BarChart3, description: "View guest feedback" },
-    { name: "Launch iPad App", href: "/guest-experience", icon: MonitorSmartphone, description: "Open Guest App", target: "_blank" },
-  ]
-
-  const emailMarketingSubMenu = [
-    { name: "Campaigns & Analytics", href: "/email-marketing/campaigns", icon: BarChart2, description: "Manage Campaigns" },
-    { name: "Create Campaign", href: "/email-marketing/campaigns/create", icon: Send, description: "Send new campaign" },
-    { name: "Admin Configuration", href: "/admin/email-configuration", icon: Settings, description: "Setup vendors" },
   ]
 
   const isMarketingItemVisible = (item: (typeof marketingSubMenu)[number]) => {
@@ -355,6 +333,22 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     )
   }
 
+  // Unchanged from before this menu was grouped with the report alert page:
+  // visibility is gated by exactly `crr_fms.view`, same as when this was a
+  // flat top-level nav item — do not widen this to other crr_fms.* variants.
+  const hasCrrFmsPermission = () => hasPermission("crr_fms.view")
+
+  const hasCrrReportAlertPermission = () => {
+    if (isSuperAdmin || user?.permissions?.includes("all") || user?.role === "admin") return true
+    return (
+      hasPermission("crr_report_alert.view") ||
+      hasPermission("crr_report_alert.viewSelf") ||
+      hasPermission("crr_report_alert.viewAll") ||
+      hasPermission("crr_report_alert.edit") ||
+      hasPermission("crr_report_alert")
+    )
+  }
+
   const hasLeadsAssignPermission = () => {
     if (isSuperAdmin || user?.permissions?.includes("all") || user?.role === "admin") return true
     return (
@@ -424,21 +418,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     )
   }
 
-  const hasLeadLostMonitorPermission = () => {
-    if (isSuperAdmin || user?.permissions?.includes("all") || user?.role === "admin") return true
-    return (
-      hasPermission("leadguard_lead_lost_monitor.view") ||
-      hasPermission("leads.view") ||
-      hasPermission("leadguard_lead_lost_monitor")
-    )
-  }
-
   const hasLeadManagementPermission = () => {
     return (
       hasLeadsAssignPermission() ||
       hasLeadSearchPermission() ||
       hasGoodLeadLeakagePermission() ||
-      hasLeadLostMonitorPermission() ||
       hasKserveLeadLostPermission()
     )
   }
@@ -452,6 +436,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     }
     if (item.name === "KAPPL New Order") {
       return hasNewOrderFmsPermission() || hasPrimaryOrderFormPermission()
+    }
+    if (item.name === "KTAHV CRR FMS") {
+      return hasCrrFmsPermission() || hasCrrReportAlertPermission()
     }
     if (item.name === "Lead Management") {
       return hasLeadManagementPermission()
@@ -475,6 +462,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   if (hasPrimaryOrderFormPermission()) {
     searchableItems.push({ name: "Primary Order Form", href: "/new-order-fms/primary-order-form", description: "Primary Order Form", icon: FileText })
   }
+  if (hasCrrFmsPermission()) {
+    searchableItems.push({ name: "KTAHV CRR Calling FMS", href: "/crr-fms", description: "KTAHV CRR Calling FMS", icon: FileText })
+  }
+  if (hasCrrReportAlertPermission()) {
+    searchableItems.push({ name: "KTAHV CRR Process Report Alert", href: "/ktahv-crr-process-report-alert", description: "KTAHV CRR Process Report Alert", icon: AlertTriangle })
+  }
   if (hasPermission("marketing.view") || isSuperAdmin) marketingSubMenu.filter(isMarketingItemVisible).forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
   if (hasPermission("employee.tools")) employeeSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
   if (hasPermission("doctor.consultation.view")) doctorConsultationSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.description || item.name, icon: item.icon }))
@@ -488,7 +481,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (hasLeadsAssignPermission()) searchableItems.push({ name: "Leads Assignment", href: "/leads/assign", description: "Leads Assignment", icon: Shuffle })
     if (hasLeadSearchPermission()) searchableItems.push({ name: "Lead Search Dashboard", href: "/lead-search", description: "Lead Search Dashboard", icon: Search })
     if (hasGoodLeadLeakagePermission()) searchableItems.push({ name: "Good Lead Leakage", href: "/good-lead-leakage", description: "Good lead leakage report", icon: Search })
-    if (hasLeadLostMonitorPermission()) searchableItems.push({ name: "LeadGuard Lead Lost Monitor", href: "/lead-lost-monitor", description: "LeadGuard Lead Lost Monitor", icon: AlertTriangle })
     if (hasKserveLeadLostPermission()) searchableItems.push({ name: "K-Serve Lead Lost", href: "/voicecall/kserve-lead-lost", description: "K-Serve lead lost tracker", icon: PhoneCall })
   }
   if (hasClientDatabasePermission() || hasClientDatabaseUploadPermission()) {
@@ -528,91 +520,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       )
     }
 
-
-    if (item.name === "Email Marketing") {
-      const isEmailMarketingActive = (pathname || "").startsWith("/email-marketing") || (pathname || "").startsWith("/admin/email-configuration")
-      return (
-        <div key={item.name}>
-          <button
-            onClick={() => setEmailMarketingExpanded(!emailMarketingExpanded)}
-            className={`group flex items-center w-full px-3 py-2 text-sm font-medium rounded-lg ${
-              isEmailMarketingActive
-                ? "bg-slate-800 text-white"
-                : "text-slate-300 hover:bg-slate-800 hover:text-white"
-            }`}
-          >
-            <item.icon className={`mr-3 h-5 w-5 flex-shrink-0 ${isEmailMarketingActive ? "text-amber-500" : "text-slate-400 group-hover:text-amber-500"}`} />
-            <span className="flex-1 text-left">{item.name}</span>
-            {emailMarketingExpanded ? (
-              <ChevronDown className="h-4 w-4" />
-            ) : (
-              <ChevronRight className="h-4 w-4" />
-            )}
-          </button>
-          {emailMarketingExpanded && (
-            <div className="mt-1 space-y-1 bg-slate-900/50 rounded-lg p-2">
-              {emailMarketingSubMenu.map((subItem) => (
-                <Link
-                  key={subItem.name}
-                  href={subItem.href}
-                  className={`group flex items-center px-3 py-2 text-sm font-medium rounded-md ${
-                    pathname === subItem.href
-                      ? "bg-amber-500/10 text-amber-500"
-                      : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-                  }`}
-                >
-                  <subItem.icon className={`mr-3 h-4 w-4 ${pathname === subItem.href ? "text-amber-500" : "text-slate-500"}`} />
-                  {subItem.name}
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-      )
-    }
-
-    if (item.name === "Guest Experience") {
-      const isGuestExperienceActive = pathname.startsWith("/settings/guest-experience") || pathname.startsWith("/reports/guest-transfers")
-      return (
-        <div key={item.name}>
-          <button
-            onClick={() => setGuestExperienceExpanded(!guestExperienceExpanded)}
-            className={`group flex items-center w-full px-3 py-2 text-sm font-medium rounded-lg ${
-              isGuestExperienceActive
-                ? "bg-slate-800 text-white"
-                : "text-slate-300 hover:bg-slate-800 hover:text-white"
-            }`}
-          >
-            <item.icon className={`mr-3 h-5 w-5 flex-shrink-0 ${isGuestExperienceActive ? "text-amber-500" : "text-slate-400 group-hover:text-amber-500"}`} />
-            <span className="flex-1 text-left">{item.name}</span>
-            {guestExperienceExpanded ? (
-              <ChevronDown className="h-4 w-4" />
-            ) : (
-              <ChevronRight className="h-4 w-4" />
-            )}
-          </button>
-          {guestExperienceExpanded && (
-            <div className="mt-1 space-y-1 bg-slate-900/50 rounded-lg p-2">
-              {guestExperienceSubMenu.map((subItem) => (
-                <Link
-                  key={subItem.name}
-                  href={subItem.href}
-                  target={subItem.target || "_self"}
-                  className={`group flex items-center px-3 py-2 text-sm font-medium rounded-md ${
-                    pathname === subItem.href
-                      ? "bg-amber-500/10 text-amber-500"
-                      : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-                  }`}
-                >
-                  <subItem.icon className={`mr-3 h-4 w-4 ${pathname === subItem.href ? "text-amber-500" : "text-slate-500"}`} />
-                  {subItem.name}
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-      )
-    }
 
     if (item.name === "Marketing Reports") {
       const isMarketingActive = pathname.startsWith("/marketing") || marketingSubMenu.some((sub) => sub.href === pathname)
@@ -710,19 +617,16 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       const isLeadsAssignRoute = pathname.startsWith("/leads/assign")
       const isLeadSearchRoute = pathname.startsWith("/lead-search")
       const isGoodLeadLeakageRoute = pathname.startsWith("/good-lead-leakage")
-      const isLeadLostMonitorRoute = pathname.startsWith("/lead-lost-monitor")
       const isKserveLeadLostRoute = pathname === "/voicecall/kserve-lead-lost"
       const isActive = (hasLeadsAssignPermission() && isLeadsAssignRoute) ||
                        (hasLeadSearchPermission() && isLeadSearchRoute) ||
                        (hasGoodLeadLeakagePermission() && isGoodLeadLeakageRoute) ||
-                       (hasLeadLostMonitorPermission() && isLeadLostMonitorRoute) ||
                        (hasKserveLeadLostPermission() && isKserveLeadLostRoute)
 
       const visibleSubMenu = leadManagementSubMenu.filter((subItem) => {
         if (subItem.href === "/leads/assign") return hasLeadsAssignPermission()
         if (subItem.href === "/lead-search") return hasLeadSearchPermission()
         if (subItem.href === "/good-lead-leakage") return hasGoodLeadLeakagePermission()
-        if (subItem.href === "/lead-lost-monitor") return hasLeadLostMonitorPermission()
         if (subItem.href === "/voicecall/kserve-lead-lost") return hasKserveLeadLostPermission()
         return hasPermission(subItem.permission) || hasPermission("all")
       })
@@ -992,45 +896,48 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       )
     }
 
-    if (item.name === "KTAHV CRR Process") {
-      const isCrrFmsRoute = pathname.startsWith("/crr-fms")
-      const isCrrAlertRoute = pathname.startsWith("/ktahv-crr-process-report-alert")
-      const isActive = isCrrFmsRoute || isCrrAlertRoute
-      const visibleSubMenu = ktahvCrrSubMenu.filter((subItem) => {
-        return hasPermission(subItem.permission) || hasPermission("all") || isSuperAdmin
+    if (item.name === "KTAHV CRR FMS") {
+      const isReportAlertRoute = pathname.startsWith("/ktahv-crr-process-report-alert")
+      const isCrrFmsRoute = pathname === "/crr-fms" || (pathname.startsWith("/crr-fms") && !isReportAlertRoute)
+      const isActive = (hasCrrReportAlertPermission() && isReportAlertRoute) ||
+                       (hasCrrFmsPermission() && isCrrFmsRoute)
+      const visibleSubMenu = crrFmsSubMenu.filter((subItem) => {
+        if (subItem.href === "/crr-fms") return hasCrrFmsPermission()
+        if (subItem.href === "/ktahv-crr-process-report-alert") return hasCrrReportAlertPermission()
+        return hasPermission(subItem.permission) || hasPermission("all")
       })
       if (visibleSubMenu.length === 0) return null
 
       return (
         <div key={item.name}>
           <button
-            onClick={() => setKtahvCrrExpanded(!ktahvCrrExpanded)}
+            onClick={() => setCrrFmsExpanded(!crrFmsExpanded)}
             className={`group flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${isActive
-              ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md"
+              ? "bg-gradient-to-r from-sky-500 to-sky-600 text-white shadow-md"
               : "text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"
               }`}
           >
-            <item.icon className={`mr-3 h-5 w-5 ${isActive ? "text-white" : "text-indigo-600"}`} />
+            <item.icon className={`mr-3 h-5 w-5 ${isActive ? "text-white" : "text-sky-600"}`} />
             {item.name}
-            {ktahvCrrExpanded ? (
+            {crrFmsExpanded ? (
               <ChevronDown className={`ml-auto h-4 w-4 ${isActive ? "text-white" : "text-gray-500"}`} />
             ) : (
               <ChevronRight className={`ml-auto h-4 w-4 ${isActive ? "text-white" : "text-gray-500"}`} />
             )}
           </button>
-          {ktahvCrrExpanded && (
+          {crrFmsExpanded && (
             <div className="ml-6 mt-2 space-y-1">
               {visibleSubMenu.map((subItem) => (
                 <Link
                   key={subItem.name}
                   href={subItem.href}
                   className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${pathname === subItem.href
-                    ? "bg-gradient-to-r from-indigo-50 to-indigo-100 text-indigo-700 border-l-4 border-indigo-500 shadow-sm font-semibold"
+                    ? "bg-gradient-to-r from-sky-50 to-sky-100 text-sky-700 border-l-4 border-sky-500 shadow-sm font-semibold"
                     : "text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"
                     }`}
                   onClick={() => isMobile && setSidebarOpen(false)}
                 >
-                  <subItem.icon className={`mr-3 h-4 w-4 ${pathname === subItem.href ? "text-indigo-600" : "text-gray-400"}`} />
+                  <subItem.icon className={`mr-3 h-4 w-4 ${pathname === subItem.href ? "text-sky-600" : "text-gray-400"}`} />
                   {subItem.name}
                 </Link>
               ))}

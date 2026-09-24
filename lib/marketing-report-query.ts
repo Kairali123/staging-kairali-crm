@@ -47,6 +47,8 @@ export const reportQueries = {
       THEN CASE WHEN company = 'KAPPL' THEN COALESCE(NULLIF(amount_after_return,0),conversion_amount,0) ELSE COALESCE(conversion_amount,0) END ELSE 0 END) AS unverified,
     SUM(CASE WHEN company = 'KAPPL' AND COALESCE(return_id, '') <> '' THEN COALESCE(NULLIF(amount_after_return,0),conversion_amount,0)
       WHEN company <> 'KAPPL' AND LOWER(COALESCE(booking_status,'')) IN ('cancelled','booking cancelled','no show') THEN COALESCE(conversion_amount,0) ELSE 0 END) AS cancelled,
+    SUM(CASE WHEN (company = 'KAPPL' AND COALESCE(return_id, '') <> '') OR
+      (company <> 'KAPPL' AND LOWER(COALESCE(booking_status,'')) IN ('cancelled','booking cancelled','no show')) THEN 1 ELSE 0 END) AS cancelledCount,
     SUM(conversion_amount IS NULL OR conversion_amount < 0 OR booking_status IS NULL OR is_verified IS NULL) AS invalid
     FROM conversion_updates_employeewise WHERE date_and_time >= ? AND date_and_time < ? GROUP BY company, TRIM(verified_source)`,
   duplicates: `SELECT COUNT(*) AS duplicates FROM (SELECT company, booking_order_id, COALESCE(return_id,'')

@@ -136,9 +136,14 @@ async function syncTabular(conn: any, state: State) {
   const recentRuns = (state.runs || []).slice(-50)
   for (const r of recentRuns) {
     await conn.query(
-      `INSERT IGNORE INTO email_trigger_runs (
+      `INSERT INTO email_trigger_runs (
         id, trigger_id, name, scheduled_at, started_at, finished_at, status, detail, recipient_count
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        finished_at = VALUES(finished_at),
+        status = VALUES(status),
+        detail = VALUES(detail),
+        recipient_count = VALUES(recipient_count)`,
       [
         r.id,
         r.triggerId,

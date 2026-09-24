@@ -14,7 +14,7 @@ import {reportJPG,saveReportFile} from '@/lib/marketing-report-browser'
 
 const field='mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600'
 const button='inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium disabled:opacity-40'
-function initial(reportId:ConfigInput['reportId']='daily-sales-report'):ConfigInput{return {name:reportTemplates[reportId].title,reportId,company:'ALL',recipients:[],consent:false,status:'Draft',time:'09:00',timezone:'Asia/Kolkata',period:'Yesterday',start:new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'}),details:true}}
+function initial(reportId:ConfigInput['reportId']='daily-sales-report'):ConfigInput{return {name:reportTemplates[reportId].title,reportId,company:'ALL',recipients:[],consent:false,status:'Draft',time:'09:00',timezone:'Asia/Kolkata',period:'Today',start:new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'}),details:true}}
 async function json(url:string,options?:RequestInit){
  const r=await fetch(url,{cache:'no-store',...options})
  const contentType=r.headers?.get?.('content-type')||''
@@ -103,7 +103,9 @@ export default function WhatsAppTriggers(){
  }
  async function save(){setBusy(true);setError('');try{const payload={id:config.id,revision:config.revision,name:config.name,reportId:config.reportId,company:config.company,recipients:recipientText.split(/[,\n]/).map(x=>x.trim()).filter(Boolean),consent:config.consent,status:config.status,time:config.time,timezone:config.timezone,period:config.period,start:config.start,details:config.details};const {trigger}=await json('/api/whatsapp-trigger-config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});setItems(list=>[...list.filter(t=>t.id!==trigger.id),trigger]);setConfig(trigger);setDirty(false);setNotice(trigger.status==='Active'?'Active: daily report delivery is scheduled.':'Configuration saved. Automatic sending remains off.')}catch(e){setError(e instanceof Error?e.message:'Save failed')}finally{setBusy(false)}}
  async function render(){setBusy(true);setError('');clearImage();const version=generation.current;try{
-  const date=yesterdayIST(),sales=config.reportId==='daily-sales-report',data=await json((sales?'/api/daily-sales-report-alert':'/api/marketing-daily-report')+'?date='+date)
+  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata'}).format(new Date())
+  const date=config.period==='Yesterday'?yesterdayIST():today
+  const sales=config.reportId==='daily-sales-report',data=await json((sales?'/api/daily-sales-report-alert':'/api/marketing-daily-report')+'?date='+date)
   const scope=config.company==='ALL'?'all':config.company==='VILLARAAG'?'VILARAAG':config.company
   const report=data as ReportData
   const expanded=!sales&&config.details?report.companies.filter(c=>scope==='all'||c.name===scope).flatMap(c=>[c.name+'-leads',c.name+'-sales']):[]
@@ -323,18 +325,19 @@ export default function WhatsAppTriggers(){
        </div>
        <label className="block text-sm font-medium">WhatsApp recipients<textarea className={field} rows={3} placeholder="+919876543210, +919876543211" value={recipientText} onChange={e=>{setRecipientText(e.target.value);setDirty(true);setConfirmTest(false)}}/><span className="mt-1 block text-xs font-normal text-slate-500">International format. Separate numbers with commas or new lines. Maximum 50.</span></label>
        <label className="flex items-start gap-2 text-sm text-slate-600"><input className="mt-1 accent-emerald-700" type="checkbox" checked={config.consent} onChange={e=>edit('consent',e.target.checked)}/>These recipients have opted in to receive this internal report on WhatsApp.</label>
-       <div className="border-t pt-5">
-        <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold"><Clock size={17}/>Daily schedule</h3>
-        <div className="grid gap-4 sm:grid-cols-2">
-         <label className="text-sm font-medium">Send time (IST)<input type="time" className={field} value={config.time} onChange={e=>edit('time',e.target.value)}/></label>
-         <label className="text-sm font-medium">Start date<input type="date" className={field} value={config.start} onChange={e=>edit('start',e.target.value)}/></label>
+        <div className="border-t pt-5">
+         <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold"><Clock size={17}/>Daily schedule</h3>
+         <div className="grid gap-4 sm:grid-cols-3">
+          <label className="text-sm font-medium">Send time (IST)<input type="time" className={field} value={config.time} onChange={e=>edit('time',e.target.value)}/></label>
+          <label className="text-sm font-medium">Start date<input type="date" className={field} value={config.start} onChange={e=>edit('start',e.target.value)}/></label>
+          <label className="text-sm font-medium">Report period<select className={field} value={config.period||'Today'} onChange={e=>edit('period',e.target.value as 'Today'|'Yesterday')}><option value="Today">Today (Current day)</option><option value="Yesterday">Yesterday (Previous day)</option></select></label>
+         </div>
+         <p className="mt-3 text-xs text-slate-500">Asia/Kolkata · {config.period==='Yesterday'?'Previous completed day':'Current day (Today)'} · JPEG attachment</p>
+         {config.reportId==='marketing-daily-report'&&<label className="mt-3 flex gap-2 text-sm"><input type="checkbox" checked={config.details} onChange={e=>edit('details',e.target.checked)}/>Include source-wise details</label>}
         </div>
-        <p className="mt-3 text-xs text-slate-500">Asia/Kolkata · Previous completed day · JPEG attachment</p>
-        {config.reportId==='marketing-daily-report'&&<label className="mt-3 flex gap-2 text-sm"><input type="checkbox" checked={config.details} onChange={e=>edit('details',e.target.checked)}/>Include source-wise details</label>}
-       </div>
-       <label className="block text-sm font-medium">Configuration status<select className={field} value={config.status} onChange={e=>edit('status',e.target.value as ConfigInput['status'])}><option>Draft</option><option disabled={!schedulerReady||!ready||!providerReady||!config.consent}>Active</option><option>Paused</option></select></label>
-      </fieldset>
-      <div className="mt-5 rounded-lg bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">{config.status==='Active'?'Active triggers send the previous day’s report at the selected time while the worker is running. Missed runs are skipped; uncertain sends pause the trigger.':'Draft and Paused configurations do not send automatically. Activation requires opted-in recipients, an approved image template, Redlava API access and a healthy worker.'}</div>
+        <label className="block text-sm font-medium">Configuration status<select className={field} value={config.status} onChange={e=>edit('status',e.target.value as ConfigInput['status'])}><option>Draft</option><option disabled={!schedulerReady||!ready||!providerReady||!config.consent}>Active</option><option>Paused</option></select></label>
+       </fieldset>
+       <div className="mt-5 rounded-lg bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">{config.status==='Active'?`Active triggers send ${config.period==='Yesterday'?'the previous day’s report':'today’s daily report'} at the selected time while the worker is running. Missed runs are skipped; uncertain sends pause the trigger.`:'Draft and Paused configurations do not send automatically. Activation requires opted-in recipients, an approved image template, Redlava API access and a healthy worker.'}</div>
       <div className="mt-5 flex flex-wrap gap-3">
        <button disabled={busy||!loaded} onClick={save} className={button+' border-emerald-800 bg-emerald-800 text-white'}><Save size={16}/>{busy?'Please wait…':'Save configuration'}</button>
        <button disabled={busy} onClick={render} className={button+' bg-white'}><ImageIcon size={16}/>Generate report image</button>
