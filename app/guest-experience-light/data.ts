@@ -414,6 +414,6 @@ export const WIDGET_DATA = {
   }
 };
 
-export const getLegacy = (lang: Lang) => WIDGET_DATA.legacy[lang] || WIDGET_DATA.legacy.EN;
-export const getAwards = (lang: Lang) => WIDGET_DATA.awards[lang] || WIDGET_DATA.awards.EN;
+export const getLegacy = (lang: Lang): { title: string; desc: string }[] => (WIDGET_DATA.legacy as any)[lang] ?? WIDGET_DATA.legacy.EN;
+export const getAwards = (lang: Lang): { title: string; desc: string }[] => (WIDGET_DATA.awards as any)[lang] ?? WIDGET_DATA.awards.EN;
 

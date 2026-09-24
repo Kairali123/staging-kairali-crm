@@ -221,7 +221,7 @@ function SlideWidgetLegacy({ lang }: { lang: Lang }) {
   const items = getLegacy(lang)
   return (
     <div className="flex flex-col gap-4">
-      {items.map((item, idx) => (
+      {items.map((item: { title: string; desc: string }, idx: number) => (
         <div key={idx} className="flex items-center gap-4 bg-white/5 border border-white/10 rounded-xl p-4">
           <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
             <Star className="w-5 h-5 text-amber-400" />
@@ -240,7 +240,7 @@ function SlideWidgetAwards({ lang }: { lang: Lang }) {
   const items = getAwards(lang)
   return (
     <div className="grid grid-cols-2 gap-4">
-      {items.map((item, idx) => (
+      {items.map((item: { title: string; desc: string }, idx: number) => (
         <div key={idx} className="flex flex-col items-center text-center gap-2 bg-white/5 border border-white/10 rounded-xl p-4">
           <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center">
             <Star className="w-6 h-6 text-amber-400" />

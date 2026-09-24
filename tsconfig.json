@@ -36,6 +36,12 @@
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "scratch",
+    "*.js",
+    "check_*.ts",
+    "test-*.ts",
+    "fix_*.py",
+    "do_patch.py"
   ]
 }
