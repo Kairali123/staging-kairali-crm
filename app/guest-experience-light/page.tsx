@@ -27,16 +27,16 @@ function SlideWidgetClock({ lang }: { lang: Lang }) {
   const w = WIDGET_DATA.clock[lang] || WIDGET_DATA.clock.EN
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="flex flex-col sm:flex-row items-start sm:items-center gap-6 w-full">
-      <div className="flex flex-col px-8 py-5 rounded-3xl bg-black/40 backdrop-blur-2xl border border-amber-500/30 shadow-[0_10px_40px_rgba(245,158,11,0.1)]">
-        <span className="text-amber-400 text-4xl md:text-5xl font-serif tracking-widest leading-none drop-shadow-md">{hours}</span>
-        <span className="text-white/60 text-xs tracking-[0.2em] uppercase mt-2 font-medium">{date}</span>
+      <div className="flex flex-col px-8 py-5 rounded-3xl bg-amber-50 border border-amber-200 shadow-md">
+        <span className="text-[#C74B26] text-4xl md:text-5xl font-serif tracking-widest leading-none">{hours}</span>
+        <span className="text-[#50725D] text-xs tracking-[0.2em] uppercase mt-2 font-medium">{date}</span>
       </div>
-      <div className="flex flex-col gap-4 pl-2 sm:pl-0 sm:border-l sm:border-white/10 sm:pl-6 py-2">
-        <div className="flex items-center gap-3 text-white/80 text-sm md:text-base font-medium">
+      <div className="flex flex-col gap-4 pl-2 sm:pl-0 sm:border-l sm:border-[#E6E2D3] sm:pl-6 py-2">
+        <div className="flex items-center gap-3 text-[#264531] text-sm md:text-base font-medium">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_10px_rgba(52,211,153,0.6)]" />
           {w.rec}
         </div>
-        <div className="flex items-center gap-3 text-white/80 text-sm md:text-base font-medium">
+        <div className="flex items-center gap-3 text-[#264531] text-sm md:text-base font-medium">
           <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.6)]" />
           {w.doc}
         </div>
@@ -80,21 +80,21 @@ function SlideWidgetTreatments({ lang }: { lang: Lang }) {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="w-full">
       <div className="flex items-center gap-4 mb-6">
-        <div className="px-4 py-1.5 rounded-full bg-red-600/20 border border-red-500/50 flex items-center gap-2 shadow-[0_0_15px_rgba(220,38,38,0.3)]">
-          <span className="text-red-400 font-bold text-sm tracking-wide">NABH</span>
+        <div className="px-4 py-1.5 rounded-full bg-red-50 border border-red-300 flex items-center gap-2 shadow-sm">
+          <span className="text-red-600 font-bold text-sm tracking-wide">NABH</span>
           <span className="w-1 h-1 bg-red-400 rounded-full"></span>
-          <span className="text-white/90 text-xs uppercase tracking-widest font-medium">{W2_BADGE[lang] || W2_BADGE.EN}</span>
+          <span className="text-[#264531] text-xs uppercase tracking-widest font-medium">{W2_BADGE[lang] || W2_BADGE.EN}</span>
         </div>
       </div>
-      <p className="text-amber-400/90 text-xs tracking-[0.25em] uppercase font-bold mb-4">{W2_TITLE[lang] || W2_TITLE.EN}</p>
+      <p className="text-[#C74B26] text-xs tracking-[0.25em] uppercase font-bold mb-4">{W2_TITLE[lang] || W2_TITLE.EN}</p>
       <div className="grid grid-cols-2 gap-3">
         {list.map((item) => (
-          <div key={item.label} className="flex flex-col text-left px-5 py-4 rounded-2xl border bg-black/40 border-white/10 backdrop-blur-xl">
+          <div key={item.label} className="flex flex-col text-left px-5 py-4 rounded-2xl border bg-white border-[#E6E2D3] shadow-sm">
             <div className="flex items-center gap-3 mb-1">
               <span className="text-2xl drop-shadow-md">{item.icon}</span>
-              <span className="text-sm md:text-base font-semibold text-white">{item.label}</span>
+              <span className="text-sm md:text-base font-semibold text-[#18311F]">{item.label}</span>
             </div>
-            <span className="text-xs text-white/50">{item.desc}</span>
+            <span className="text-xs text-[#708F7D]">{item.desc}</span>
           </div>
         ))}
       </div>
@@ -135,14 +135,14 @@ function SlideWidgetVillaStats({ lang }: { lang: Lang }) {
   const list = VILLA_STATS_I18N[lang] || VILLA_STATS_I18N.EN!
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="w-full">
-      <p className="text-amber-400/90 text-xs tracking-[0.25em] uppercase font-bold mb-4">{W3_TITLE[lang] || W3_TITLE.EN}</p>
+      <p className="text-[#C74B26] text-xs tracking-[0.25em] uppercase font-bold mb-4">{W3_TITLE[lang] || W3_TITLE.EN}</p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {list.map((s) => (
-          <div key={s.label} className="flex flex-col items-center justify-center p-4 rounded-3xl bg-black/40 backdrop-blur-2xl border border-white/10 shadow-xl">
+          <div key={s.label} className="flex flex-col items-center justify-center p-4 rounded-3xl bg-white border border-[#E6E2D3] shadow-md">
             <span className="text-2xl mb-2">{s.icon}</span>
-            <span className="text-white text-2xl md:text-3xl font-serif font-bold">{s.value}</span>
-            <span className="text-amber-400 text-[10px] font-bold tracking-widest uppercase mt-1 text-center">{s.unit}</span>
-            <span className="text-white/50 text-[10px] mt-1 text-center leading-tight">{s.label}</span>
+            <span className="text-[#0C1F12] text-2xl md:text-3xl font-serif font-bold">{s.value}</span>
+            <span className="text-[#C74B26] text-[10px] font-bold tracking-widest uppercase mt-1 text-center">{s.unit}</span>
+            <span className="text-[#708F7D] text-[10px] mt-1 text-center leading-tight">{s.label}</span>
           </div>
         ))}
       </div>
@@ -161,20 +161,20 @@ function SlideWidgetCuisine({ lang }: { lang: Lang }) {
   const c = CUISINE_I18N[lang] || CUISINE_I18N.EN!
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="w-full">
-      <div className="relative overflow-hidden p-6 rounded-3xl bg-gradient-to-br from-amber-900/40 to-black/60 backdrop-blur-2xl border border-amber-500/30 mb-5 shadow-[0_10px_30px_rgba(245,158,11,0.1)]">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full blur-3xl"></div>
+      <div className="relative overflow-hidden p-6 rounded-3xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 mb-5 shadow-md">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-amber-200/40 rounded-full blur-3xl"></div>
         <div className="relative z-10 flex items-start gap-5">
-          <div className="w-14 h-14 rounded-2xl bg-amber-500/20 flex items-center justify-center text-3xl border border-amber-500/30">🍲</div>
+          <div className="w-14 h-14 rounded-2xl bg-amber-100 flex items-center justify-center text-3xl border border-amber-200">🍲</div>
           <div className="flex-1">
-            <p className="text-amber-400 text-[10px] tracking-[0.2em] uppercase font-bold mb-1">{c.spec}</p>
-            <p className="text-white font-serif text-xl md:text-2xl leading-tight mb-2">{c.meal}</p>
-            <p className="text-white/70 text-sm">{c.desc}</p>
+            <p className="text-[#C74B26] text-[10px] tracking-[0.2em] uppercase font-bold mb-1">{c.spec}</p>
+            <p className="text-[#0C1F12] font-serif text-xl md:text-2xl leading-tight mb-2">{c.meal}</p>
+            <p className="text-[#365942] text-sm">{c.desc}</p>
           </div>
         </div>
       </div>
       <div className="flex flex-wrap gap-2.5">
         {c.tags.map((tag) => (
-          <span key={tag} className="px-4 py-1.5 rounded-full bg-green-500/10 border border-green-500/30 text-green-300 text-xs font-semibold tracking-wide shadow-sm">
+          <span key={tag} className="px-4 py-1.5 rounded-full bg-green-50 border border-green-300 text-green-700 text-xs font-semibold tracking-wide shadow-sm">
             🌿 {tag}
           </span>
         ))}
@@ -211,10 +211,10 @@ const ACTIONS_I18N: Partial<Record<Lang, { title: string; items: { icon: string;
   ]},
 }
 const ACTION_COLORS = [
-  { color: "from-sky-900/60 to-black/60",     border: "border-sky-500/30" },
-  { color: "from-amber-900/60 to-black/60",   border: "border-amber-500/50" },
-  { color: "from-violet-900/60 to-black/60",  border: "border-violet-500/30" },
-  { color: "from-emerald-900/60 to-black/60", border: "border-emerald-500/30" },
+  { color: "from-sky-50 to-blue-50",     border: "border-sky-200" },
+  { color: "from-amber-50 to-yellow-50",   border: "border-amber-200" },
+  { color: "from-violet-50 to-purple-50",  border: "border-violet-200" },
+  { color: "from-emerald-50 to-green-50", border: "border-emerald-200" },
 ]
 
 function SlideWidgetLegacy({ lang }: { lang: Lang }) {
@@ -222,13 +222,13 @@ function SlideWidgetLegacy({ lang }: { lang: Lang }) {
   return (
     <div className="flex flex-col gap-4">
       {items.map((item, idx) => (
-        <div key={idx} className="flex items-center gap-4 bg-white/5 border border-white/10 rounded-xl p-4">
-          <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
-            <Star className="w-5 h-5 text-amber-400" />
+        <div key={idx} className="flex items-center gap-4 bg-stone-50 border border-[#E6E2D3] rounded-xl p-4 shadow-sm">
+          <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+            <Star className="w-5 h-5 text-[#D95D39]" />
           </div>
           <div className="flex flex-col">
-            <span className="text-white font-bold text-sm">{item.title}</span>
-            <span className="text-white/60 text-xs">{item.desc}</span>
+            <span className="text-[#0C1F12] font-bold text-sm">{item.title}</span>
+            <span className="text-[#50725D] text-xs">{item.desc}</span>
           </div>
         </div>
       ))}
@@ -241,12 +241,12 @@ function SlideWidgetAwards({ lang }: { lang: Lang }) {
   return (
     <div className="grid grid-cols-2 gap-4">
       {items.map((item, idx) => (
-        <div key={idx} className="flex flex-col items-center text-center gap-2 bg-white/5 border border-white/10 rounded-xl p-4">
-          <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center">
-            <Star className="w-6 h-6 text-amber-400" />
+        <div key={idx} className="flex flex-col items-center text-center gap-2 bg-white border border-[#E6E2D3] rounded-xl p-4 shadow-sm">
+          <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
+            <Star className="w-6 h-6 text-[#D95D39]" />
           </div>
-          <span className="text-amber-400 font-bold text-sm mt-2 leading-tight">{item.title}</span>
-          <span className="text-white/60 text-xs leading-tight">{item.desc}</span>
+          <span className="text-[#C74B26] font-bold text-sm mt-2 leading-tight">{item.title}</span>
+          <span className="text-[#50725D] text-xs leading-tight">{item.desc}</span>
         </div>
       ))}
     </div>
@@ -257,14 +257,14 @@ function SlideWidgetActions({ lang }: { lang: Lang }) {
   const { title, items } = ACTIONS_I18N[lang] || ACTIONS_I18N.EN!
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="w-full">
-      <p className="text-amber-400/90 text-xs tracking-[0.25em] uppercase font-bold mb-4">{title}</p>
+      <p className="text-[#C74B26] text-xs tracking-[0.25em] uppercase font-bold mb-4">{title}</p>
       <div className="grid grid-cols-2 gap-3 md:gap-4">
         {items.map((a, i) => (
-          <div key={a.label} className={`flex items-center gap-4 p-4 rounded-2xl bg-gradient-to-br ${ACTION_COLORS[i].color} border ${ACTION_COLORS[i].border} shadow-lg backdrop-blur-xl`}>
-            <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center text-2xl">{a.icon}</div>
+          <div key={a.label} className={`flex items-center gap-4 p-4 rounded-2xl bg-gradient-to-br ${ACTION_COLORS[i].color} border ${ACTION_COLORS[i].border} shadow-md`}>
+            <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-2xl shadow-sm">{a.icon}</div>
             <div className="flex flex-col text-left">
-              <span className="text-white text-sm md:text-base font-bold tracking-wide">{a.label}</span>
-              <span className="text-white/50 text-xs mt-0.5">{a.sub}</span>
+              <span className="text-[#18311F] text-sm md:text-base font-bold tracking-wide">{a.label}</span>
+              <span className="text-[#708F7D] text-xs mt-0.5">{a.sub}</span>
             </div>
           </div>
         ))}
@@ -353,7 +353,7 @@ export default function GuestWelcomePage() {
 
   return (
     <div
-      className="fixed inset-0 flex flex-col h-[100dvh] w-screen bg-black overflow-hidden font-sans select-none"
+      className="fixed inset-0 flex flex-col h-[100dvh] w-screen bg-stone-100 overflow-hidden font-sans select-none"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
@@ -374,8 +374,8 @@ export default function GuestWelcomePage() {
         />
       </AnimatePresence>
 
-      <div className="absolute inset-0 z-0 bg-gradient-to-r from-black/95 via-black/55 to-black/25" />
-      <div className="absolute inset-0 z-0 bg-gradient-to-t from-black/80 via-transparent to-black/40" />
+      <div className="absolute inset-0 z-0 bg-gradient-to-r from-[#F4F1E1]/95 via-[#F4F1E1]/75 to-[#F4F1E1]/40" />
+      <div className="absolute inset-0 z-0 bg-gradient-to-t from-[#F4F1E1]/80 via-transparent to-[#F4F1E1]/30" />
 
       {/* ── Header ───────────────────────────────────────────────────────────── */}
       <motion.header
@@ -386,15 +386,15 @@ export default function GuestWelcomePage() {
       >
         <div className="flex items-center gap-3">
           {/* Emblem */}
-          <div className="w-10 h-10 md:w-12 md:h-12 border border-amber-400/50 rounded-full flex items-center justify-center text-amber-500 font-serif font-bold text-lg md:text-xl backdrop-blur-md bg-black/40 shadow-[0_0_20px_rgba(245,158,11,0.15)] shrink-0">
+          <div className="w-10 h-10 md:w-12 md:h-12 border-2 border-amber-600 rounded-full flex items-center justify-center text-[#C74B26] font-serif font-bold text-lg md:text-xl bg-amber-50 shadow-lg shrink-0">
             K
           </div>
           {/* Brand name */}
           <div className="flex flex-col leading-none">
-            <h1 className="font-serif text-white text-base md:text-xl tracking-[0.12em] uppercase font-semibold">
+            <h1 className="font-serif text-[#0C1F12] text-base md:text-xl tracking-[0.12em] uppercase font-semibold">
               Kairali
             </h1>
-            <p className="text-amber-400/90 text-[9px] md:text-[11px] tracking-[0.22em] uppercase font-light mt-0.5">
+            <p className="text-[#C74B26] text-[9px] md:text-[11px] tracking-[0.22em] uppercase font-light mt-0.5">
               The Ayurvedic Healing Village
             </p>
           </div>
@@ -404,9 +404,9 @@ export default function GuestWelcomePage() {
         <div className="relative">
           <button
             onClick={(e) => { e.stopPropagation(); setShowLangMenu(!showLangMenu); }}
-            className="flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 backdrop-blur-xl bg-white/5 hover:bg-white/10 text-xs text-white/80 tracking-[0.15em] uppercase shadow-sm transition-all"
+            className="flex items-center gap-2 px-4 py-2 rounded-full border border-amber-300 bg-white hover:bg-amber-50 text-xs text-[#18311F] tracking-[0.15em] uppercase shadow-sm transition-all"
           >
-            <Globe className="w-3.5 h-3.5 text-amber-400" />
+            <Globe className="w-3.5 h-3.5 text-[#D95D39]" />
             {LANGUAGES[lang].code}
           </button>
 
@@ -417,13 +417,13 @@ export default function GuestWelcomePage() {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -8, scale: 0.95 }}
                 transition={{ duration: 0.15 }}
-                className="absolute right-0 top-12 z-50 bg-black/80 backdrop-blur-2xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl w-40"
+                className="absolute right-0 top-12 z-50 bg-white border border-[#E6E2D3] rounded-2xl overflow-hidden shadow-2xl w-40"
               >
                 {Object.entries(LANGUAGES).map(([key, val]) => (
                   <button
                     key={key}
                     onClick={(e) => { e.stopPropagation(); setLang(key as keyof typeof LANGUAGES); setShowLangMenu(false) }}
-                    className={`w-full flex items-center gap-3 px-4 py-3 text-sm transition-colors ${lang === key ? "bg-amber-500/20 text-amber-400 font-semibold" : "text-white/70 hover:bg-white/10 hover:text-white"}`}
+                    className={`w-full flex items-center gap-3 px-4 py-3 text-sm transition-colors ${lang === key ? "bg-amber-100 text-[#C74B26] font-semibold" : "text-[#365942] hover:bg-stone-100 hover:text-[#0C1F12]"}`}
                   >
                     <span className="text-xs tracking-widest font-bold opacity-60">{val.code}</span>
                     <span>{val.label}</span>
@@ -450,13 +450,13 @@ export default function GuestWelcomePage() {
               transition={{ duration: 0.7, ease: "easeOut" }}
               className="flex flex-col"
             >
-              <h2 className="text-4xl md:text-5xl lg:text-[4.5rem] font-serif text-white mb-5 leading-[1.1] tracking-tight drop-shadow-2xl">
+              <h2 className="text-4xl md:text-5xl lg:text-[4.5rem] font-serif text-[#0C1F12] mb-5 leading-[1.1] tracking-tight drop-shadow-sm">
                 {currentSlide.title[lang]} <br />
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-amber-400 to-amber-600">
                   {currentSlide.highlight[lang]}
                 </span>
               </h2>
-              <p className="text-lg md:text-xl lg:text-2xl text-white/75 font-light max-w-xl leading-relaxed drop-shadow-lg">
+              <p className="text-lg md:text-xl lg:text-2xl text-[#365942] font-light max-w-xl leading-relaxed">
                 {currentSlide.subtitle[lang]}
               </p>
             </motion.div>
@@ -479,7 +479,7 @@ export default function GuestWelcomePage() {
                 transition={{ duration: 0.8 }}
                 className="flex flex-col gap-5 w-full"
               >
-                <Card className="border-0 bg-black/40 backdrop-blur-2xl shadow-2xl rounded-[2rem] overflow-hidden ring-1 ring-white/10 p-6 md:p-8">
+                <Card className="border-0 bg-[#FDFBF7]/90 backdrop-blur-xl shadow-2xl rounded-[2rem] overflow-hidden ring-1 ring-[#E6E2D3] p-6 md:p-8">
                   <SlideWidgetClock lang={lang} />
                 </Card>
 
@@ -514,7 +514,7 @@ export default function GuestWelcomePage() {
                             onClick={() => setIsPlaying(false)}
                             className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center border border-white/20 hover:bg-black/70"
                           >
-                            <Volume2 className="w-4 h-4 text-amber-400" />
+                            <Volume2 className="w-4 h-4 text-[#D95D39]" />
                           </button>
                         </>
                       )}
@@ -534,7 +534,7 @@ export default function GuestWelcomePage() {
                 transition={{ duration: 0.8 }}
                 className="w-full"
               >
-                <Card className="border-0 bg-black/40 backdrop-blur-2xl shadow-2xl rounded-[2rem] overflow-hidden ring-1 ring-white/10 p-6 md:p-8">
+                <Card className="border-0 bg-[#FDFBF7]/90 backdrop-blur-xl shadow-2xl rounded-[2rem] overflow-hidden ring-1 ring-[#E6E2D3] p-6 md:p-8">
                   <SlideWidgetTreatments lang={lang} />
                 </Card>
               </motion.div>
@@ -591,7 +591,7 @@ export default function GuestWelcomePage() {
                     </div>
                   </div>
                 )}
-                <Card className="border-0 bg-black/40 backdrop-blur-2xl shadow-2xl rounded-[2rem] overflow-hidden ring-1 ring-white/10 p-6">
+                <Card className="border-0 bg-[#FDFBF7]/90 backdrop-blur-xl shadow-2xl rounded-[2rem] overflow-hidden ring-1 ring-[#E6E2D3] p-6">
                   <SlideWidgetVillaStats lang={lang} />
                 </Card>
               </motion.div>
@@ -607,7 +607,7 @@ export default function GuestWelcomePage() {
                 transition={{ duration: 0.8 }}
                 className="w-full"
               >
-                <Card className="border-0 bg-black/40 backdrop-blur-2xl shadow-2xl rounded-[2rem] overflow-hidden ring-1 ring-white/10 p-6 md:p-8">
+                <Card className="border-0 bg-[#FDFBF7]/90 backdrop-blur-xl shadow-2xl rounded-[2rem] overflow-hidden ring-1 ring-[#E6E2D3] p-6 md:p-8">
                   <SlideWidgetCuisine lang={lang} />
                 </Card>
               </motion.div>
@@ -623,40 +623,40 @@ export default function GuestWelcomePage() {
                 transition={{ duration: 0.8 }}
                 className="flex flex-col gap-5 w-full"
               >
-                <Card className="border-0 bg-black/40 backdrop-blur-2xl shadow-2xl rounded-[2rem] overflow-hidden ring-1 ring-white/10 p-4 md:p-5">
+                <Card className="border-0 bg-[#FDFBF7]/90 backdrop-blur-xl shadow-2xl rounded-[2rem] overflow-hidden ring-1 ring-[#E6E2D3] p-4 md:p-5">
                   <SlideWidgetActions lang={lang} />
                 </Card>
 
-                <Card className="border-0 bg-black/40 backdrop-blur-2xl shadow-2xl rounded-[2rem] overflow-hidden ring-1 ring-white/10 p-4 md:p-5">
+                <Card className="border-0 bg-[#FDFBF7]/90 backdrop-blur-xl shadow-2xl rounded-[2rem] overflow-hidden ring-1 ring-[#E6E2D3] p-4 md:p-5">
                   <div className="mb-3">
-                    <h3 className="font-serif text-white text-2xl tracking-wide">
+                    <h3 className="font-serif text-[#0C1F12] text-2xl tracking-wide">
                       {t.feedback_title}
                     </h3>
-                    <p className="text-white/50 text-sm mt-1">{t.feedback_sub}</p>
+                    <p className="text-[#50725D] text-sm mt-1">{t.feedback_sub}</p>
                   </div>
 
                   {/* Static Star Rating (No Click) */}
                   <div className="flex items-center gap-2 mb-6 opacity-50">
                     {[1, 2, 3, 4, 5].map((star) => (
-                      <Star key={star} className="w-7 h-7 text-amber-400/50" />
+                      <Star key={star} className="w-7 h-7 text-[#D95D39]/50" />
                     ))}
                   </div>
 
-                  <Link href="/guest-experience/feedback" className="block w-full mb-5">
-                    <button className="w-full h-12 rounded-2xl bg-amber-600 hover:bg-amber-500 text-white font-semibold text-sm flex items-center justify-center gap-3 shadow-[0_8px_30px_rgba(217,119,6,0.3)] transition-all">
+                  <Link href="/guest-experience-light/feedback" className="block w-full mb-5">
+                    <button className="w-full h-12 rounded-2xl bg-[#D95D39] hover:bg-[#C74B26] text-white font-semibold text-sm flex items-center justify-center gap-3 shadow-[0_8px_30px_rgba(217,119,6,0.3)] transition-all">
                       <MessageSquare className="w-4 h-4" />
                       {t.btn_feedback}
                     </button>
                   </Link>
 
-                  <div className="flex flex-col gap-2 pt-4 border-t border-white/10">
+                  <div className="flex flex-col gap-2 pt-4 border-t border-[#E6E2D3]">
                     <div className="flex items-center gap-3">
                       <Star className="w-4 h-4 text-amber-500/50" />
-                      <span className="text-white/50 text-sm font-medium">{t.btn_rate}</span>
+                      <span className="text-[#50725D] text-sm font-medium">{t.btn_rate}</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <Smile className="w-4 h-4 text-amber-500/50" />
-                      <span className="text-white/50 text-sm font-medium">{t.btn_request}</span>
+                      <span className="text-[#50725D] text-sm font-medium">{t.btn_request}</span>
                     </div>
                   </div>
                 </Card>
@@ -670,7 +670,7 @@ export default function GuestWelcomePage() {
                 initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 30 }} transition={{ duration: 0.8 }}
                 className="w-full"
               >
-                <Card className="border-0 bg-black/40 backdrop-blur-2xl shadow-2xl rounded-[2rem] overflow-hidden ring-1 ring-white/10 p-6 md:p-8">
+                <Card className="border-0 bg-[#FDFBF7]/90 backdrop-blur-xl shadow-2xl rounded-[2rem] overflow-hidden ring-1 ring-[#E6E2D3] p-6 md:p-8">
                   <SlideWidgetLegacy lang={lang as Lang} />
                 </Card>
               </motion.div>
@@ -683,7 +683,7 @@ export default function GuestWelcomePage() {
                 initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 30 }} transition={{ duration: 0.8 }}
                 className="w-full"
               >
-                <Card className="border-0 bg-black/40 backdrop-blur-2xl shadow-2xl rounded-[2rem] overflow-hidden ring-1 ring-white/10 p-6 md:p-8">
+                <Card className="border-0 bg-[#FDFBF7]/90 backdrop-blur-xl shadow-2xl rounded-[2rem] overflow-hidden ring-1 ring-[#E6E2D3] p-6 md:p-8">
                   <SlideWidgetAwards lang={lang as Lang} />
                 </Card>
               </motion.div>
@@ -696,26 +696,26 @@ export default function GuestWelcomePage() {
                 initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 30 }} transition={{ duration: 0.8 }}
                 className="flex flex-col gap-3 w-full"
               >
-                <Card className="border-0 bg-black/40 backdrop-blur-2xl shadow-2xl rounded-[2rem] overflow-hidden ring-1 ring-white/10 p-4 md:p-5">
+                <Card className="border-0 bg-[#FDFBF7]/90 backdrop-blur-xl shadow-2xl rounded-[2rem] overflow-hidden ring-1 ring-[#E6E2D3] p-4 md:p-5">
                   <SlideWidgetActions lang={lang as Lang} />
                 </Card>
-                <Card className="border-0 bg-black/40 backdrop-blur-2xl shadow-2xl rounded-[2rem] overflow-hidden ring-1 ring-white/10 p-4 md:p-5">
+                <Card className="border-0 bg-[#FDFBF7]/90 backdrop-blur-xl shadow-2xl rounded-[2rem] overflow-hidden ring-1 ring-[#E6E2D3] p-4 md:p-5">
                   <div className="mb-3">
-                    <h3 className="font-serif text-white text-2xl tracking-wide">{t.feedback_title}</h3>
-                    <p className="text-white/50 text-sm mt-1">{t.feedback_sub}</p>
+                    <h3 className="font-serif text-[#0C1F12] text-2xl tracking-wide">{t.feedback_title}</h3>
+                    <p className="text-[#50725D] text-sm mt-1">{t.feedback_sub}</p>
                   </div>
                   <div className="flex items-center gap-2 mb-6 opacity-50">
-                    {[1,2,3,4,5].map((s) => <Star key={s} className="w-7 h-7 text-amber-400/50" />)}
+                    {[1,2,3,4,5].map((s) => <Star key={s} className="w-7 h-7 text-[#D95D39]/50" />)}
                   </div>
-                  <Link href="/guest-experience/feedback" className="block w-full mb-5">
-                    <button className="w-full h-12 rounded-2xl bg-amber-600 hover:bg-amber-500 text-white font-semibold text-sm flex items-center justify-center gap-3 shadow-[0_8px_30px_rgba(217,119,6,0.3)] transition-all">
+                  <Link href="/guest-experience-light/feedback" className="block w-full mb-5">
+                    <button className="w-full h-12 rounded-2xl bg-[#D95D39] hover:bg-[#C74B26] text-white font-semibold text-sm flex items-center justify-center gap-3 shadow-[0_8px_30px_rgba(217,119,6,0.3)] transition-all">
                       <MessageSquare className="w-4 h-4" />
                       {t.btn_feedback}
                     </button>
                   </Link>
-                  <div className="flex flex-col gap-2 pt-4 border-t border-white/10">
-                    <div className="flex items-center gap-3"><Star className="w-4 h-4 text-amber-500/50" /><span className="text-white/50 text-sm font-medium">{t.btn_rate}</span></div>
-                    <div className="flex items-center gap-3"><Smile className="w-4 h-4 text-amber-500/50" /><span className="text-white/50 text-sm font-medium">{t.btn_request}</span></div>
+                  <div className="flex flex-col gap-2 pt-4 border-t border-[#E6E2D3]">
+                    <div className="flex items-center gap-3"><Star className="w-4 h-4 text-amber-500/50" /><span className="text-[#50725D] text-sm font-medium">{t.btn_rate}</span></div>
+                    <div className="flex items-center gap-3"><Smile className="w-4 h-4 text-amber-500/50" /><span className="text-[#50725D] text-sm font-medium">{t.btn_request}</span></div>
                   </div>
                 </Card>
               </motion.div>
@@ -739,9 +739,9 @@ export default function GuestWelcomePage() {
           <button
             onClick={prevSlide}
             aria-label="Previous slide"
-            className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/5 hover:bg-amber-500/20 border border-white/15 hover:border-amber-500/50 flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 backdrop-blur-md"
+            className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white hover:bg-amber-50 border border-[#D9D3C1] hover:border-amber-400 flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 shadow-sm"
           >
-            <svg className="w-4 h-4 text-white/70" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-[#365942]" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
           </button>
@@ -754,8 +754,8 @@ export default function GuestWelcomePage() {
                 onClick={() => { setIsPlaying(false); setCurrentSlideIndex(idx) }}
                 className={`transition-all duration-500 rounded-full ${
                   idx === currentSlideIndex
-                    ? "w-8 h-2 bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.6)]"
-                    : "w-2 h-2 bg-white/25 hover:bg-white/60"
+                    ? "w-8 h-2 bg-[#D95D39] shadow-md"
+                    : "w-2 h-2 bg-stone-300 hover:bg-amber-400"
                 }`}
                 aria-label={`${t.slide_controls} ${idx + 1}`}
               />
@@ -766,19 +766,19 @@ export default function GuestWelcomePage() {
           <button
             onClick={nextSlide}
             aria-label="Next slide"
-            className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/5 hover:bg-amber-500/20 border border-white/15 hover:border-amber-500/50 flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 backdrop-blur-md"
+            className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white hover:bg-amber-50 border border-[#D9D3C1] hover:border-amber-400 flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 shadow-sm"
           >
-            <svg className="w-4 h-4 text-white/70" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-[#365942]" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             </svg>
           </button>
 
           {/* Slide counter */}
           <div className="ml-2 flex items-center gap-4 hidden md:flex">
-            <span className="text-white/30 text-xs tracking-widest font-medium">
+            <span className="text-[#708F7D] text-xs tracking-widest font-medium">
               {currentSlideIndex + 1} / {SLIDES.length}
             </span>
-            <span className="text-white/20 text-[10px] tracking-[0.2em] uppercase px-3 py-1 border border-white/10 rounded-full animate-pulse">
+            <span className="text-[#708F7D] text-[10px] tracking-[0.2em] uppercase px-3 py-1 border border-[#E6E2D3] rounded-full animate-pulse">
               Swipe to Explore
             </span>
             
@@ -787,16 +787,16 @@ export default function GuestWelcomePage() {
         </div>
 
         {/* Right: Riya Sharma QR Badge */}
-        <div className="hidden md:flex items-center gap-5 bg-gradient-to-br from-black/80 to-black/40 backdrop-blur-2xl border border-white/15 rounded-3xl p-4 shadow-[0_15px_50px_rgba(0,0,0,0.5)] max-w-[440px]">
-          <div className="relative shrink-0 rounded-2xl bg-white p-1.5 shadow-[0_0_20px_rgba(255,255,255,0.15)]">
+        <div className="hidden md:flex items-center gap-5 bg-white border border-[#E6E2D3] rounded-3xl p-4 shadow-lg max-w-[440px]">
+          <div className="relative shrink-0 rounded-2xl bg-stone-100 p-1.5 shadow-sm">
             <img src={KAIRALI_IMAGES.riyaQr} alt="Riya Sharma QR" className="w-20 h-20 md:w-24 md:h-24 object-contain rounded-xl" />
           </div>
           <div className="flex flex-col">
             <div className="flex items-center gap-2 mb-1">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"></span>
-              <span className="text-amber-400 font-bold text-sm md:text-base tracking-wide drop-shadow-md">Riya Sharma / AI</span>
+              <span className="text-[#C74B26] font-bold text-sm md:text-base tracking-wide">Riya Sharma / AI</span>
             </div>
-            <span className="text-white/75 text-[11px] md:text-xs leading-relaxed">
+            <span className="text-[#365942] text-[11px] md:text-xs leading-relaxed">
               Scan to report room or service concerns instantly. Get priority attention & faster resolution.
             </span>
           </div>

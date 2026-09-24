@@ -21,7 +21,7 @@ export default function GuestExperienceLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="min-h-screen flex flex-col bg-black">
+    <div className="min-h-screen flex flex-col bg-[#F4F1E1]">
       <main className="flex-1 w-full mx-auto relative">
         {children}
       </main>
