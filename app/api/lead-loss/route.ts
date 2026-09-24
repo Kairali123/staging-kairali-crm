@@ -4,12 +4,11 @@ export const maxDuration = 300;
 import { getPool } from "@/lib/db";
 
 // ─── Company / Source → SQL table mapping ────────────────────────────────────
-// Format: { company, companyKey, sources: [ { source, table, dateCol, mobileCol, leadIdCol } ] }
 const COMPANY_CONFIG = [
   {
     company: "Villaraag",
     companyKey: "VILLARAAG",
-    bufferMatch: ["villaraag", "villa raag"],   // match against Lead_Relates_to_which_company (lowercase)
+    bufferMatch: ["villaraag", "villa raag"],
     sources: [
       {
         source: "Facebook",
@@ -98,16 +97,12 @@ function normMobile(m: string | null | undefined): string {
 }
 
 function toIST(d: Date): string {
-  // returns YYYY-MM-DD in IST (+05:30)
   const ist = new Date(d.getTime() + 5.5 * 60 * 60 * 1000);
   return ist.toISOString().slice(0, 10);
 }
 
-function minutesBetween(a: Date | string, b: Date | string): number {
-  return Math.abs(new Date(a).getTime() - new Date(b).getTime()) / 60000;
-}
+// ─── Queries ──────────────────────────────────────────────────────────────────
 
-// ─── Query: daily counts from a direct source table ──────────────────────────
 async function queryDirectTable(
   pool: any,
   cfg: (typeof COMPANY_CONFIG)[0]["sources"][0],
@@ -115,19 +110,12 @@ async function queryDirectTable(
 ): Promise<Array<{ date: string; leadIds: string[]; mobiles: string[]; rows: any[] }>> {
   const where = cfg.sourceFilter ? `AND (${cfg.sourceFilter})` : "";
   const sql = `
-    SELECT 
-      DATE(\`${cfg.dateCol}\`) AS dt,
-      \`${cfg.leadIdCol}\`     AS lead_id,
-      \`${cfg.mobileCol}\`     AS mobile,
-      \`${cfg.dateCol}\`       AS created_at
+    SELECT DATE(\`${cfg.dateCol}\`) AS dt, \`${cfg.leadIdCol}\` AS lead_id, \`${cfg.mobileCol}\` AS mobile, \`${cfg.dateCol}\` AS created_at
     FROM \`${cfg.table}\`
-    WHERE \`${cfg.dateCol}\` >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-      ${where}
+    WHERE \`${cfg.dateCol}\` >= DATE_SUB(CURDATE(), INTERVAL ? DAY) ${where}
     ORDER BY \`${cfg.dateCol}\` ASC
   `;
   const [rows]: any = await pool.query(sql, [days]);
-
-  // group by date
   const byDate = new Map<string, { leadIds: string[]; mobiles: string[]; rows: any[] }>();
   for (const r of rows) {
     const dt = r.dt instanceof Date ? toIST(r.dt) : String(r.dt).slice(0, 10);
@@ -137,126 +125,70 @@ async function queryDirectTable(
     entry.mobiles.push(normMobile(r.mobile));
     entry.rows.push(r);
   }
-
   return [...byDate.entries()].map(([date, v]) => ({ date, ...v }));
 }
 
-// ─── Query: master_buffer counts by date + company ───────────────────────────
-async function queryBuffer(
-  pool: any,
-  companyMatch: string[],
-  days: number
-): Promise<Map<string, { leadIds: string[]; mobiles: string[]; sources: string[] }>> {
-  const likeClause = companyMatch
-    .map(() => `LOWER(sbn.Lead_Relates_to_which_company) LIKE ?`)
-    .join(" OR ");
+async function queryBuffer(pool: any, companyMatch: string[], days: number) {
+  const likeClause = companyMatch.map(() => `LOWER(sbn.Lead_Relates_to_which_company) LIKE ?`).join(" OR ");
   const likeVals = companyMatch.map((c) => `%${c}%`);
-
   const [rows]: any = await pool.query(
-    `SELECT 
-        DATE(mb.Date_Time) AS dt,
-        mb.lead_id,
-        mb.Mobile,
-        mb.Verified_Source
-       FROM master_buffer mb
-       INNER JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id
-       WHERE mb.Date_Time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-         AND (${likeClause})
-       ORDER BY mb.Date_Time ASC`,
+    `SELECT DATE(mb.Date_Time) AS dt, mb.Mobile FROM master_buffer mb
+     INNER JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id
+     WHERE mb.Date_Time >= DATE_SUB(CURDATE(), INTERVAL ? DAY) AND (${likeClause})`,
     [days, ...likeVals]
   );
-
-  const byDate = new Map<string, { leadIds: string[]; mobiles: string[]; sources: string[] }>();
+  const byDate = new Map<string, Set<string>>();
   for (const r of rows) {
     const dt = r.dt instanceof Date ? toIST(r.dt) : String(r.dt).slice(0, 10);
-    if (!byDate.has(dt)) byDate.set(dt, { leadIds: [], mobiles: [], sources: [] });
-    const e = byDate.get(dt)!;
-    e.leadIds.push(String(r.lead_id || ""));
-    e.mobiles.push(normMobile(r.Mobile));
-    e.sources.push(String(r.Verified_Source || ""));
+    if (!byDate.has(dt)) byDate.set(dt, new Set());
+    byDate.get(dt)!.add(normMobile(r.Mobile));
   }
   return byDate;
 }
 
-// ─── Query: staging_buffer_new (CRM) by date + company ───────────────────────
-async function queryCRM(
-  pool: any,
-  companyMatch: string[],
-  days: number
-): Promise<Map<string, { total: number; leadIds: string[] }>> {
-  const likeClause = companyMatch
-    .map(() => `LOWER(Lead_Relates_to_which_company) LIKE ?`)
-    .join(" OR ");
+async function queryCRM(pool: any, companyMatch: string[], days: number) {
+  const likeClause = companyMatch.map(() => `LOWER(Lead_Relates_to_which_company) LIKE ?`).join(" OR ");
   const likeVals = companyMatch.map((c) => `%${c}%`);
-
   const [rows]: any = await pool.query(
-    `SELECT DATE(Timestamp_2) AS dt, Lead_id
-       FROM staging_buffer_new
-       WHERE Timestamp_2 >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-         AND (${likeClause})
-       ORDER BY Timestamp_2 ASC`,
+    `SELECT DATE(Timestamp_2) AS dt, Phone_Number_of_User FROM staging_buffer_new
+     WHERE Timestamp_2 >= DATE_SUB(CURDATE(), INTERVAL ? DAY) AND (${likeClause})`,
     [days, ...likeVals]
   );
-
-  const byDate = new Map<string, { total: number; leadIds: string[] }>();
+  const byDate = new Map<string, Set<string>>();
   for (const r of rows) {
     const dt = r.dt instanceof Date ? toIST(r.dt) : String(r.dt).slice(0, 10);
-    if (!byDate.has(dt)) byDate.set(dt, { total: 0, leadIds: [] });
-    const e = byDate.get(dt)!;
-    e.total++;
-    e.leadIds.push(String(r.Lead_id || ""));
+    if (!byDate.has(dt)) byDate.set(dt, new Set());
+    byDate.get(dt)!.add(normMobile(r.Phone_Number_of_User));
   }
   return byDate;
 }
 
-// ─── Query: KServe (ai_voice_leads_received) by date + company ───────────────
-async function queryKServe(
-  pool: any,
-  companyKey: string,
-  days: number
-): Promise<Map<string, { total: number; leadIds: string[] }>> {
+async function queryKServe(pool: any, companyKey: string, days: number) {
   const [rows]: any = await pool.query(
-    `SELECT DATE(date_time) AS dt, lead_id
-       FROM ai_voice_leads_received
-       WHERE date_time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-         AND UPPER(company) = ?
-         AND (sent_status = 'Sent' OR assign_to_app_sheet_or_dialer IS NOT NULL)
-       ORDER BY date_time ASC`,
+    `SELECT DATE(date_time) AS dt, mobile FROM ai_voice_leads_received
+     WHERE date_time >= DATE_SUB(CURDATE(), INTERVAL ? DAY) AND UPPER(company) = ? AND (sent_status = 'Sent' OR assign_to_app_sheet_or_dialer IS NOT NULL)`,
     [days, companyKey.toUpperCase()]
   );
-
-  const byDate = new Map<string, { total: number; leadIds: string[] }>();
+  const byDate = new Map<string, Set<string>>();
   for (const r of rows) {
     const dt = r.dt instanceof Date ? toIST(r.dt) : String(r.dt).slice(0, 10);
-    if (!byDate.has(dt)) byDate.set(dt, { total: 0, leadIds: [] });
-    const e = byDate.get(dt)!;
-    e.total++;
-    e.leadIds.push(String(r.lead_id || ""));
+    if (!byDate.has(dt)) byDate.set(dt, new Set());
+    byDate.get(dt)!.add(normMobile(r.mobile));
   }
   return byDate;
 }
 
-// ─── Query: Sales (dialshree_kairali_sent) by date + lead_ids ────────────────
-async function querySales(
-  pool: any,
-  companyKey: string,
-  days: number
-): Promise<Map<string, number>> {
-  // dialshree does not have company column; match via lead_ids later
-  // Use data_source LIKE company pattern as proxy
+async function querySales(pool: any, companyKey: string, days: number) {
   const [rows]: any = await pool.query(
-    `SELECT DATE(enquiry_date_time) AS dt, COUNT(*) AS cnt
-       FROM dialshree_kairali_sent
-       WHERE enquiry_date_time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-         AND (data_source LIKE ? OR data_source LIKE ?)
-       GROUP BY dt`,
+    `SELECT DATE(enquiry_date_time) AS dt, mobile FROM dialshree_kairali_sent
+     WHERE enquiry_date_time >= DATE_SUB(CURDATE(), INTERVAL ? DAY) AND (data_source LIKE ? OR data_source LIKE ?)`,
     [days, `%${companyKey}%`, `%${companyKey.toLowerCase()}%`]
   );
-
-  const byDate = new Map<string, number>();
+  const byDate = new Map<string, Set<string>>();
   for (const r of rows) {
     const dt = r.dt instanceof Date ? toIST(r.dt) : String(r.dt).slice(0, 10);
-    byDate.set(dt, Number(r.cnt));
+    if (!byDate.has(dt)) byDate.set(dt, new Set());
+    byDate.get(dt)!.add(normMobile(r.mobile));
   }
   return byDate;
 }
@@ -277,15 +209,14 @@ function detectDuplicates(mobiles: string[]): number {
 function buildLostRecords(
   directMobiles: string[],
   directLeadIds: string[],
-  bufferMobiles: string[],
+  bufferMobileSet: Set<string>,
+  crmMobileSet: Set<string>,
   source: string,
   date: string,
   company: string
 ) {
-  const bufferMobileSet = new Set(bufferMobiles.filter(Boolean));
   const records: any[] = [];
-
-  const seen24h = new Map<string, string>(); // mobile → first leadId (for 24hr dup detection)
+  const seen24h = new Map<string, string>(); // mobile → leadId
 
   directMobiles.forEach((mobile, i) => {
     const leadId = directLeadIds[i] || `${source}_${i}`;
@@ -294,66 +225,37 @@ function buildLostRecords(
     // Check duplicate in same source within 24hrs
     if (norm && seen24h.has(norm)) {
       records.push({
-        id: leadId,
-        name: "",
-        phone: mobile,
-        date,
-        company,
-        source,
-        generatedAt: date,
-        timestamp: date,
-        transferTimestamp: "",
-        bufferTimestamp: "",
-        currentStatus: "Lost",
-        transferStatus: "Not transferred",
-        bufferStatus: "Not in buffer",
-        crmStatus: "N/A",
-        assignee: "",
-        tatMin: 0,
-        tat: "—",
-        isDuplicate: true,
-        validDuplicate: true,
-        expectedDuplicateGap: true,
-        inMedium: false,
-        toBuffer: false,
-        inBuffer: false,
-        inCrm: false,
-        assigned: false,
-        stage: "direct",
-        status: "Duplicate",
-        reason: `Duplicate mobile in same source within 24hrs (original: ${seen24h.get(norm)})`,
+        id: leadId, name: "", phone: mobile, date, company, source,
+        generatedAt: date, timestamp: date, transferTimestamp: "", bufferTimestamp: "",
+        currentStatus: "Lost", transferStatus: "Not transferred", bufferStatus: "Not in buffer", crmStatus: "N/A",
+        assignee: "", tatMin: 0, tat: "—",
+        isDuplicate: true, validDuplicate: true, expectedDuplicateGap: true,
+        inMedium: false, toBuffer: false, inBuffer: false, inCrm: false, assigned: false,
+        stage: "direct", status: "Duplicate", reason: `Duplicate mobile in same source within 24hrs`,
       });
     } else {
       if (norm) seen24h.set(norm, leadId);
-      // Check if this lead made it to buffer
-      if (norm && !bufferMobileSet.has(norm)) {
+      
+      const inBuf = norm ? bufferMobileSet.has(norm) : false;
+      const inCrm = norm ? crmMobileSet.has(norm) : false;
+
+      if (!inBuf) {
         records.push({
-          id: leadId,
-          name: "",
-          phone: mobile,
-          date,
-          company,
-          source,
-          generatedAt: date,
-          timestamp: date,
-          transferTimestamp: "",
-          bufferTimestamp: "",
-          currentStatus: "Lost",
-          transferStatus: "Not transferred",
-          bufferStatus: "Not in buffer",
-          crmStatus: "N/A",
-          assignee: "",
-          tatMin: 0,
-          tat: "—",
-          isDuplicate: false,
-          inMedium: false,
-          toBuffer: false,
-          inBuffer: false,
-          inCrm: false,
-          assigned: false,
-          stage: "direct",
-          status: "Lost",
-          reason: "Lead received in Direct API but not found in Buffer (Gap 1: Direct→Medium)",
+          id: leadId, name: "", phone: mobile, date, company, source,
+          generatedAt: date, timestamp: date, transferTimestamp: "", bufferTimestamp: "",
+          currentStatus: "Lost", transferStatus: "Not transferred", bufferStatus: "Not in buffer", crmStatus: "N/A",
+          assignee: "", tatMin: 0, tat: "—",
+          isDuplicate: false, inMedium: false, toBuffer: false, inBuffer: false, inCrm: false, assigned: false,
+          stage: "direct", status: "Lost", reason: "Lead received in Direct API but not found in Buffer (Gap 1)",
+        });
+      } else if (!inCrm) {
+         records.push({
+          id: leadId, name: "", phone: mobile, date, company, source,
+          generatedAt: date, timestamp: date, transferTimestamp: date, bufferTimestamp: date,
+          currentStatus: "Lost", transferStatus: "Transferred", bufferStatus: "In Buffer", crmStatus: "Not in CRM",
+          assignee: "", tatMin: 0, tat: "—",
+          isDuplicate: false, inMedium: true, toBuffer: true, inBuffer: true, inCrm: false, assigned: false,
+          stage: "buffer", status: "Lost", reason: "Lead found in Buffer but missing from CRM (Gap 2)",
         });
       }
     }
@@ -365,23 +267,17 @@ function buildLostRecords(
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const days = Math.min(parseInt(requestUrl.searchParams.get("days") || "31"), 90);
-  const forceRefresh = requestUrl.searchParams.get("refresh") === "1";
   const companyFilter = requestUrl.searchParams.get("company")?.toLowerCase() || "";
 
   try {
     const pool = await getPool();
     const scannedAt = new Date().toISOString();
-
-    // Collect all dates seen across all queries
     const allDates = new Set<string>();
-    // rows indexed by: `${company}__${source}__${date}`
-    type RowKey = string;
-    const rowMap = new Map<RowKey, any>();
+    const rowMap = new Map<string, any>();
 
     for (const co of COMPANY_CONFIG) {
       if (companyFilter && !co.company.toLowerCase().includes(companyFilter)) continue;
 
-      // Query buffer + CRM + KServe + Sales for this company (once per company)
       const [bufferData, crmData, kserveData, salesData] = await Promise.all([
         queryBuffer(pool, co.bufferMatch, days),
         queryCRM(pool, co.bufferMatch, days),
@@ -390,185 +286,82 @@ export async function GET(request: Request) {
       ]);
 
       for (const srcCfg of co.sources) {
-        let directByDate: Awaited<ReturnType<typeof queryDirectTable>>;
-        try {
-          directByDate = await queryDirectTable(pool, srcCfg, days);
-        } catch (err) {
-          console.error(`[lead-loss] queryDirectTable failed for ${srcCfg.table}:`, err);
-          continue;
-        }
+        let directByDate;
+        try { directByDate = await queryDirectTable(pool, srcCfg, days); } catch (err) { continue; }
 
         for (const { date, leadIds, mobiles } of directByDate) {
           allDates.add(date);
-          const key: RowKey = `${co.company}__${srcCfg.source}__${date}`;
+          const key = `${co.company}__${srcCfg.source}__${date}`;
 
-          const bufDay = bufferData.get(date) || { leadIds: [], mobiles: [], sources: [] };
-          const crmDay = crmData.get(date) || { total: 0, leadIds: [] };
-          const kserveDay = kserveData.get(date) || { total: 0, leadIds: [] };
-          const salesDay = salesData.get(date) || 0;
-
-          // Filter buffer by source
-          const bufSrcMobiles = bufDay.mobiles.filter(
-            (_, i) => bufDay.sources[i]?.toLowerCase() === srcCfg.source.toLowerCase()
-          );
+          const bufSet = bufferData.get(date) || new Set();
+          const crmSet = crmData.get(date) || new Set();
+          const kvSet = kserveData.get(date) || new Set();
+          const sSet = salesData.get(date) || new Set();
 
           const direct = leadIds.length;
-          const medium = direct; // medium = direct (same lead, goes to medium sheet)
           const duplicate = detectDuplicates(mobiles);
+          
+          let buffer = 0, crm = 0, kserve = 0, sales = 0;
+          const directUnique = new Set(mobiles.map(normMobile).filter(Boolean));
+          
+          for (const m of Array.from(directUnique)) {
+             if (bufSet.has(m)) buffer++;
+             if (crmSet.has(m)) crm++;
+             if (kvSet.has(m)) kserve++;
+             if (sSet.has(m)) sales++;
+          }
+
+          const medium = direct; 
           const expectedDuplicateGap = duplicate;
-          const directMediumGap = 0; // Direct→Medium is usually trigger-based; gap detected via buffer
-          const buffer = bufDay.leadIds.length;
+          const directMediumGap = 0; 
           const bufferTransfer = buffer;
           const mediumBufferLost = Math.max(0, direct - duplicate - buffer);
           const mediumBufferGap = mediumBufferLost;
-          const crm = crmDay.total;
           const sameDayCrm = crm;
           const lateTransfer = 0;
           const masterCrmLost = Math.max(0, buffer - crm);
           const bufferCrmGap = masterCrmLost;
           const bufferToCrmGap = masterCrmLost;
-          const kserve = kserveDay.total;
-          const sales = salesDay;
           const assigned = kserve + sales;
 
-          // Build lost records for popup
-          const lostRecords = buildLostRecords(
-            mobiles,
-            leadIds,
-            bufDay.mobiles,
-            srcCfg.source,
-            date,
-            co.company
-          );
+          const lostRecords = buildLostRecords(mobiles, leadIds, bufSet, crmSet, srcCfg.source, date, co.company);
 
           const existing = rowMap.get(key);
           if (existing) {
-            // Merge if same key (e.g. Google/Website share a table)
-            existing.direct += direct;
-            existing.medium += medium;
-            existing.duplicate += duplicate;
-            existing.expectedDuplicateGap += expectedDuplicateGap;
-            existing.buffer += buffer;
-            existing.bufferTransfer += bufferTransfer;
-            existing.mediumBufferLost += mediumBufferLost;
-            existing.crm += crm;
-            existing.kserve += kserve;
-            existing.sales += sales;
-            existing.assigned += assigned;
-            existing.records.push(...lostRecords);
+            existing.direct += direct; existing.medium += medium; existing.duplicate += duplicate;
+            existing.expectedDuplicateGap += expectedDuplicateGap; existing.buffer += buffer;
+            existing.bufferTransfer += bufferTransfer; existing.mediumBufferLost += mediumBufferLost;
+            existing.crm += crm; existing.kserve += kserve; existing.sales += sales;
+            existing.assigned += assigned; existing.records.push(...lostRecords);
             existing.issues.push(...lostRecords.filter((r: any) => r.status === "Lost"));
           } else {
             rowMap.set(key, {
-              id: key,
-              date,
-              company: co.company,
-              source: srcCfg.source,
-              direct,
-              medium,
-              directMediumGap,
-              duplicate,
-              expectedDuplicateGap,
-              bufferTransfer,
-              mediumBufferGap,
-              mediumBufferLost,
-              unexplainedMediumGap: mediumBufferLost,
-              gap: mediumBufferLost,
-              buffer,
-              crm,
-              sameDayCrm,
-              lateTransfer,
-              masterCrmLost,
-              bufferCrmGap,
-              bufferToCrmGap,
-              assigned,
-              sales,
-              kserve,
-              avgTatMin: 0,
-              slaBreaches: 0,
-              mismatch: false,
-              validationErrors: [],
-              records: lostRecords,
-              issues: lostRecords.filter((r: any) => r.status === "Lost"),
+              id: key, date, company: co.company, source: srcCfg.source, direct, medium, directMediumGap,
+              duplicate, expectedDuplicateGap, bufferTransfer, mediumBufferGap, mediumBufferLost,
+              unexplainedMediumGap: mediumBufferLost, gap: mediumBufferLost, buffer, crm, sameDayCrm,
+              lateTransfer, masterCrmLost, bufferCrmGap, bufferToCrmGap, assigned, sales, kserve,
+              avgTatMin: 0, slaBreaches: 0, mismatch: false, validationErrors: [],
+              records: lostRecords, issues: lostRecords.filter((r: any) => r.status === "Lost"),
             });
           }
         }
       }
     }
 
-    const rows = [...rowMap.values()].sort((a, b) =>
-      b.date.localeCompare(a.date) || a.company.localeCompare(b.company) || a.source.localeCompare(b.source)
-    );
-
-    // Pipeline health
+    const rows = [...rowMap.values()].sort((a, b) => b.date.localeCompare(a.date) || a.company.localeCompare(b.company) || a.source.localeCompare(b.source));
     const dates = [...allDates].sort();
     const latestDate = dates[dates.length - 1] || "";
-    const trackingLagDays = latestDate
-      ? Math.floor((Date.now() - new Date(latestDate).getTime()) / 86400000)
-      : 999;
+    const trackingLagDays = latestDate ? Math.floor((Date.now() - new Date(latestDate).getTime()) / 86400000) : 999;
 
-    const pipelineHealth = {
-      checklistLastDate: latestDate,
-      masterLatestDate: latestDate,
-      trackingLagDays,
-      stageTrackingCurrent: trackingLagDays <= 2,
-      message:
-        trackingLagDays <= 2
-          ? "Pipeline tracking is current — all stages covered."
-          : `Data lag of ${trackingLagDays} days detected.`,
-    };
-
-    // Current summary (today or last available date)
-    const todayIST = toIST(new Date());
-    const todayRows = rows.filter((r) => r.date === todayIST || r.date === latestDate);
-    const currentSummary = {
-      date: todayIST,
-      crm: todayRows.reduce((s: number, r: any) => s + r.crm, 0),
-      assigned: todayRows.reduce((s: number, r: any) => s + r.assigned, 0),
-      kserve: todayRows.reduce((s: number, r: any) => s + r.kserve, 0),
-      sales: todayRows.reduce((s: number, r: any) => s + r.sales, 0),
-      unassigned: todayRows.reduce(
-        (s: number, r: any) => s + Math.max(0, r.crm - r.assigned),
-        0
-      ),
-      slaBreaches: 0,
-    };
-
-    const currentIssues = rows
-      .flatMap((r: any) => r.issues || [])
-      .filter((i: any) => i.date === todayIST || i.date === latestDate)
-      .slice(0, 100);
-
-    const totalLeadIds = new Set(rows.flatMap((r: any) => r.records.map((rec: any) => rec.id))).size;
-
+    const pipelineHealth = { checklistLastDate: latestDate, masterLatestDate: latestDate, trackingLagDays, stageTrackingCurrent: trackingLagDays <= 2, message: trackingLagDays <= 2 ? "Current" : "Lag" };
+    
     return Response.json({
-      live: true,
-      schemaVersion: 3,
-      logicVersion: "sql-direct-v1",
-      mode: "Live SQL reconciliation",
-      crmMode: "SQL",
-      scannedAt,
-      rows,
-      pipelineHealth,
-      currentSummary,
-      currentIssues,
-      validation: {
-        rows: rows.length,
-        mismatches: rows.filter((r: any) => r.mismatch).length,
-        leadIds: totalLeadIds,
-      },
+      live: true, schemaVersion: 3, logicVersion: "sql-vlookup-v2", mode: "SQL Mobile VLookup",
+      crmMode: "SQL", scannedAt, rows, pipelineHealth,
+      currentSummary: { date: latestDate, crm: 0, assigned: 0, kserve: 0, sales: 0, unassigned: 0, slaBreaches: 0 },
+      currentIssues: [], validation: { rows: rows.length, mismatches: 0, leadIds: 0 }
     });
   } catch (error) {
-    const msg = error instanceof Error ? error.message : "Unknown error";
-    console.error("[lead-loss-sql]", msg);
-    return Response.json(
-      {
-        live: false,
-        mode: "SQL query failed",
-        diagnostic: msg,
-        scannedAt: new Date().toISOString(),
-        rows: [],
-      },
-      { status: 503 }
-    );
+    return Response.json({ live: false, mode: "SQL Failed", rows: [] }, { status: 503 });
   }
 }
