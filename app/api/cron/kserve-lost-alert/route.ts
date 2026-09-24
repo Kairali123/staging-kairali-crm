@@ -48,30 +48,11 @@ export async function GET(request: NextRequest) {
         );
         const lostDays: number = settingsRows?.[0]?.lost_days ?? 5;
 
-        // ── 2. Find lost leads ────────────────────────────────────────────────
-        // A lead is "lost" when:
-        //   • It exists in ai_voice_leads_sent (enquiry_id)
-        //   • It has NO matching row in ai_voice_leads_received (initial_id)
-        //   • generate_timestamp is older than lostDays
-        const [rows]: any = await connection.execute(`
-            SELECT
-                s.enquiry_id   AS id,
-                s.name_of_client,
-                s.mobile,
-                s.email_id,
-                s.subjects,
-                s.website_name AS company,
-                s.data_source,
-                s.generate_timestamp AS sent_date,
-                DATEDIFF(NOW(), s.generate_timestamp) AS days_pending
-            FROM ai_voice_leads_sent s
-            LEFT JOIN ai_voice_leads_received r ON s.enquiry_id = r.initial_id
-            WHERE r.initial_id IS NULL
-              AND s.generate_timestamp <= DATE_SUB(NOW(), INTERVAL ? DAY)
-            ORDER BY s.generate_timestamp ASC
-        `, [lostDays]);
+        // ── 2. Find reconciled lost leads ────────────────────────────────────
+        const { getKserveReconciledLostLeads } = await import("@/lib/kserve-reconciliation");
+        const { leads, stats } = await getKserveReconciledLostLeads({ minDays: lostDays });
 
-        if (!rows || rows.length === 0) {
+        if (!leads || leads.length === 0) {
             return NextResponse.json(
                 { success: true, sent: false, reason: "No lost leads found", lostDays },
                 { headers: noStoreHeaders }
@@ -82,7 +63,7 @@ export async function GET(request: NextRequest) {
         const smtp = marketingMailConfig();
         if (!smtp.configured) {
             return NextResponse.json(
-                { success: false, error: "SMTP not configured", lostLeads: rows.length },
+                { success: false, error: "SMTP not configured", lostLeads: leads.length },
                 { status: 500, headers: noStoreHeaders }
             );
         }
@@ -92,8 +73,8 @@ export async function GET(request: NextRequest) {
             smtp.user!;
 
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
-        const html = buildKserveLostAlertEmail(rows, lostDays, appUrl);
-        const subject = `🚨 KServe Lead Lost Alert — ${rows.length} Lead${rows.length !== 1 ? "s" : ""} Pending (>${lostDays} days)`;
+        const html = buildKserveLostAlertEmail(leads, stats, appUrl);
+        const subject = `🚨 KServe Lead Lost Alert — ${leads.length} Lead${leads.length !== 1 ? "s" : ""} Pending (>${lostDays} days)`;
 
         const transport = nodemailer.createTransport({
             host: smtp.host,
@@ -112,7 +93,7 @@ export async function GET(request: NextRequest) {
                 to: adminEmail,
                 subject,
                 html,
-                text: `KServe Lost Lead Alert: ${rows.length} leads have not returned from KServe in more than ${lostDays} days.`,
+                text: `KServe Lost Lead Alert: ${leads.length} leads have not returned from KServe in more than ${lostDays} days.`,
                 disableFileAccess: true,
                 disableUrlAccess: true,
             });
@@ -120,7 +101,7 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({
                 success: true,
                 sent: true,
-                lostLeads: rows.length,
+                lostLeads: leads.length,
                 lostDays,
                 accepted: result.accepted?.length ?? 0,
                 rejected: result.rejected?.length ?? 0,

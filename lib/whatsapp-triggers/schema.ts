@@ -11,7 +11,7 @@ export const configSchema = z.object({
   recipients: z.array(z.string().regex(/^\+[1-9]\d{7,14}$/, 'Use international numbers, e.g. +919876543210')).max(50),
   consent: z.boolean(), status: z.enum(['Draft','Active','Paused']),
   time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), timezone: z.literal('Asia/Kolkata'),
-  period: z.literal('Yesterday'), start: z.string().refine(validDay,'Invalid start date'),
+  period: z.enum(['Today', 'Yesterday']).default('Today'), start: z.string().refine(validDay,'Invalid start date'),
   details: z.boolean(),
 }).strict().superRefine((c,ctx)=>{
   if(c.status==='Active'&&(!c.consent||!c.recipients.length))ctx.addIssue({code:'custom',message:'Active triggers require opted-in recipients'})

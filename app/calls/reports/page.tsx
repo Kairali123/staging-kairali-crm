@@ -2,6 +2,8 @@
 
 import { useState, useMemo, useRef, useEffect } from "react"
 import useCallsData, { type CallsRow, type CallsDateGroup, type CallsEmployeeRow } from "@/hooks/use-calls-data"
+import dynamic from "next/dynamic"
+import EmployeeCallsPerformance from "@/components/calls/employee-calls-performance"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -13,10 +15,17 @@ import {
   AlertTriangle, RefreshCw,
 } from "lucide-react"
 import { format } from "date-fns"
-import {
-  Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip,
-  XAxis, YAxis, ReferenceLine, Cell, LabelList, Area, AreaChart,
-} from "recharts"
+
+// Charts (recharts) load only when Graph View is opened.
+const CallsGraphView = dynamic(() => import("@/components/calls/calls-graph-view"), {
+  ssr: false,
+  loading: () => (
+    <div className="space-y-4 p-4 sm:p-6" aria-busy="true" aria-label="Loading charts">
+      <div className="h-40 rounded-xl bg-slate-100 animate-pulse" />
+      <div className="h-72 rounded-xl bg-slate-100 animate-pulse" />
+    </div>
+  ),
+})
 
 // ─── Sticky column pixel constants ────────────────────────────────────────────
 // Mirrors Sales page exactly — same frozen zone = 206 px
@@ -67,30 +76,26 @@ export default function CallReportPage() {
     return next
   })
 
-  /* ─── loader overlay ────────────────────────────────────────────────────── */
-  const PageLoader = () => (
-    <div className="fixed inset-0 z-[30] flex items-center justify-center bg-white pointer-events-auto">
-      <div className="flex flex-col items-center gap-6">
-        <img src="/grouploader.gif" alt="Logo" className="w-48 h-auto object-contain" />
-        <p className="text-base font-semibold text-slate-700">Loading data...</p>
-      </div>
-    </div>
-  )
-
-  /* ─── data from real hook ───────────────────────────────────────────────── */
-  const { callsData, dateGroups, loading, error, refetch } = useCallsData()
+  /* ─── data from the /api/calls-report cache ─────────────────────────────── */
+  // The server caches the slow upstream call, so repeat opens are near-instant. `loading` is true only
+  // while there is nothing to show yet; the page shell and skeletons render straight away.
+  const { callsData, dateGroups, loading, refreshing, error, fetchedAt, refetch } = useCallsData()
   const isInitialLoad = useRef(true)
-  const [showLoader, setShowLoader] = useState(false)
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
-  const loaderStartRef = useRef<number | null>(null)
+  const lastUpdated = fetchedAt ? new Date(fetchedAt) : null
+  const skipNextScroll = useRef(false)
+  const scrollKey = useRef("")
 
   // Auto-select last month + KTAHV on first data load (same as Sales page)
   useEffect(() => {
     if (!loading && isInitialLoad.current && callsData.length > 0) {
       const now = new Date()
       const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-      setMonthFilter(MONTH_ORDER[lastMonthDate.getMonth()])
-      setYearFilter(lastMonthDate.getFullYear().toString())
+      const month = MONTH_ORDER[lastMonthDate.getMonth()]
+      const year = lastMonthDate.getFullYear().toString()
+      // This first selection must not scroll the page down to the results.
+      skipNextScroll.current = monthFilter !== month || yearFilter !== year || employeeFilter !== "all" || companyFilter !== "KTAHV"
+      setMonthFilter(month)
+      setYearFilter(year)
       setEmployeeFilter("all")
       setCompanyFilter("KTAHV")
       setCurrentPage(1)
@@ -98,31 +103,8 @@ export default function CallReportPage() {
     }
   }, [loading, callsData])
 
-  // Minimum-display loader (700 ms)
-  useEffect(() => {
-    if (loading) {
-      loaderStartRef.current = Date.now()
-      setShowLoader(true)
-    } else {
-      const elapsed = Date.now() - (loaderStartRef.current || 0)
-      const minDisplay = 700
-      if (elapsed < minDisplay) {
-        const t = setTimeout(() => { setShowLoader(false); setLastUpdated(new Date()) }, minDisplay - elapsed)
-        return () => clearTimeout(t)
-      }
-      setShowLoader(false)
-      setLastUpdated(new Date())
-    }
-  }, [loading])
-
-  useEffect(() => {
-    if (showLoader) { document.body.style.overflow = "hidden"; window.scrollTo(0, 0) }
-    else document.body.style.overflow = ""
-    return () => { document.body.style.overflow = "" }
-  }, [showLoader])
-
-  // Load failure is only surfaced once the loader has fully cleared
-  const loadFailed = !loading && !showLoader && !!error
+  // A failed refresh is shown as a banner; the table keeps whatever data is already on screen.
+  const loadFailed = !loading && !!error
 
   /* ─── filter mode handlers ──────────────────────────────────────────────── */
   const handleDateFilterChange = (val: string) => {
@@ -345,78 +327,17 @@ export default function CallReportPage() {
     }
   }, [filteredData])
 
-  /* ─── monthly chart data ─────────────────────────────────────────────────── */
-  const monthlyChartData = useMemo(() =>
-    MONTH_ORDER.map(month => {
-      const md = filteredData.filter(d => d.month.toUpperCase() === month && (yearFilter === "all" || d.year === yearFilter))
-      const planned = md.reduce((s, d) => s + (d.plannedCalls || 0), 0)
-      const actual = md.reduce((s, d) => s + (d.actualCalls || 0), 0)
-      const newC = md.reduce((s, d) => s + (d.newClientsActual || 0), 0)
-      const oldC = md.reduce((s, d) => s + (d.oldClientsActual || 0), 0)
-      const variance = actual - planned
-      return {
-        month: month.substring(0, 3).charAt(0).toUpperCase() + month.substring(1, 3).toLowerCase(),
-        planned, actual, newClients: newC, oldClients: oldC, variance,
-        variancePercent: Number((planned !== 0 ? (variance / planned) * 100 : 0).toFixed(1)),
-      }
-    }).filter(d => d.planned > 0 || d.actual > 0),
-    [filteredData, yearFilter])
-
-  /* ─── selected-month KPIs (graph view) ──────────────────────────────────── */
-  const selectedMonthKPIs = useMemo(() => {
-    const cd = filteredData.filter(d =>
-      (monthFilter === "all" || d.month === monthFilter) &&
-      (yearFilter === "all" || d.year === yearFilter))
-    const planned = cd.reduce((s, d) => s + (d.plannedCalls || 0), 0)
-    const actual = cd.reduce((s, d) => s + (d.actualCalls || 0), 0)
-    const newC = cd.reduce((s, d) => s + (d.newClientsActual || 0), 0)
-    const oldC = cd.reduce((s, d) => s + (d.oldClientsActual || 0), 0)
-    const variance = actual - planned
-    return {
-      plannedCalls: planned, actualCalls: actual,
-      newClientsActual: newC, oldClientsActual: oldC,
-      varianceCalls: variance,
-      variancePercent: planned !== 0 ? (variance / planned) * 100 : 0,
-    }
-  }, [filteredData, monthFilter, yearFilter])
-
-  /* ─── quarterly metrics ─────────────────────────────────────────────────── */
-  const quarterlyMetrics = useMemo(() => {
-    const qs = {
-      Q1: ["JANUARY", "FEBRUARY", "MARCH"], Q2: ["APRIL", "MAY", "JUNE"],
-      Q3: ["JULY", "AUGUST", "SEPTEMBER"], Q4: ["OCTOBER", "NOVEMBER", "DECEMBER"],
-    }
-    return Object.entries(qs).map(([quarter, months]) => {
-      const qd = filteredData.filter(d => months.includes(d.month.toUpperCase()) && (yearFilter === "all" || d.year === yearFilter))
-      const planned = qd.reduce((s, d) => s + (d.plannedCalls || 0), 0)
-      const actual = qd.reduce((s, d) => s + (d.actualCalls || 0), 0)
-      const variance = actual - planned
-      return {
-        quarter, planned, actual, variance,
-        variancePercent: Number((planned !== 0 ? (variance / planned) * 100 : 0).toFixed(1)),
-        achieved: actual >= planned,
-      }
-    }).filter(q => q.planned > 0 || q.actual > 0)
-  }, [filteredData, yearFilter])
-
-  /* ─── cumulative chart data ──────────────────────────────────────────────── */
-  const cumulativeCallData = useMemo(() => {
-    let cp = 0, ca = 0, cn = 0, co = 0
-    return monthlyChartData.map(m => {
-      cp += m.planned; ca += m.actual; cn += m.newClients; co += m.oldClients
-      return {
-        month: m.month,
-        cumulativePlanned: cp, cumulativeActual: ca,
-        cumulativeNew: cn, cumulativeOld: co,
-      }
-    })
-  }, [monthlyChartData])
-
   /* ─── pagination ─────────────────────────────────────────────────────────── */
   const totalPages = Math.ceil(sortedData.length / itemsPerPage)
   const resultsRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    // Scroll only when a filter really changed: not on mount (or its StrictMode re-run), and not for the first auto-selection.
+    const key = [dateFilter, monthFilter, yearFilter, employeeFilter, companyFilter].join("|")
+    const previous = scrollKey.current
+    scrollKey.current = key
+    if (!previous || previous === key) return
+    if (skipNextScroll.current) { skipNextScroll.current = false; return }
     resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
   }, [dateFilter, monthFilter, yearFilter, employeeFilter, companyFilter])
 
@@ -444,43 +365,6 @@ export default function CallReportPage() {
       : sortOrder === "asc"
         ? <ChevronUp className="ml-1 h-3 w-3 text-white" />
         : <ChevronDown className="ml-1 h-3 w-3 text-white" />
-
-  /* ─── custom tooltip ─────────────────────────────────────────────────────── */
-  const CustomChartTooltip = ({ active, payload, label }: any) => {
-    if (!active || !payload?.length) return null
-    const d = payload[0].payload || {}
-    const planned = Number(d.planned ?? 0)
-    const actual = Number(d.actual ?? 0)
-    const newC = Number(d.newClients ?? 0)
-    const oldC = Number(d.oldClients ?? 0)
-    const variance = actual - planned
-    const vp = planned !== 0 ? (variance / planned) * 100 : 0
-    return (
-      <div style={{ borderRadius: 12, border: "2px solid #e2e8f0", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)", padding: 12, backgroundColor: "white", minWidth: 190 }}>
-        <div style={{ fontWeight: 800, color: "#0f172a", marginBottom: 8, fontSize: 14 }}>{label}</div>
-        <div className="flex flex-col gap-1">
-          {[
-            ["Planned Calls", formatNumber(planned), "text-slate-600", "text-blue-700"],
-            ["Actual Calls", formatNumber(actual), "text-slate-600", "text-green-700"],
-            ["NBD Clients", formatNumber(newC), "text-slate-600", "text-violet-700"],
-            ["CRR Clients", formatNumber(oldC), "text-slate-600", "text-amber-700"],
-            ["Variance", formatNumber(variance), "text-slate-600", variance >= 0 ? "text-green-700" : "text-red-700"],
-          ].map(([lbl, val, lc, vc]) => (
-            <div key={lbl} className="flex justify-between">
-              <div className={`text-xs ${lc}`}>{lbl}</div>
-              <div className={`text-sm font-semibold ${vc}`}>{val}</div>
-            </div>
-          ))}
-          <div className="flex justify-between">
-            <div className="text-xs text-slate-600">Variance %</div>
-            <div className={`text-sm font-semibold ${vp >= 0 ? "text-green-700" : "text-red-700"}`}>
-              {vp >= 0 ? "+" : ""}{formatPct(vp)}%
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   /* ─── Excel download ─────────────────────────────────────────────────────── */
   const handleExcelDownload = async () => {
@@ -643,7 +527,6 @@ export default function CallReportPage() {
   ════════════════════════════════════════════════════════════════════════════ */
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-4 md:p-8">
-      {showLoader && <PageLoader />}
 
       <div className="relative z-10">
         <div className="w-full space-y-8">
@@ -668,6 +551,7 @@ export default function CallReportPage() {
                     {lastUpdated
                       ? <p className="text-sm font-bold text-white leading-snug">{lastUpdated.toLocaleString("en-US", { month: "numeric", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true })}</p>
                       : <p className="text-sm text-white/60 italic">Loading…</p>}
+                    {refreshing && !loading && <p className="mt-0.5 text-[11px] font-medium text-white/70" role="status">Refreshing…</p>}
                   </div>
                 </div>
               </div>
@@ -682,9 +566,9 @@ export default function CallReportPage() {
                   <AlertTriangle className="w-5 h-5 text-red-600" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-sm sm:text-base font-semibold text-red-800 leading-tight">Could not load calls report data</h3>
+                  <h3 className="text-sm sm:text-base font-semibold text-red-800 leading-tight">{callsData.length > 0 ? "Could not refresh calls report data" : "Could not load calls report data"}</h3>
                   <p className="text-xs sm:text-sm text-red-700/90 mt-1 break-words">{error}</p>
-                  <p className="text-xs text-red-700/70 mt-1">Metrics and tables below may be empty or out of date.</p>
+                  <p className="text-xs text-red-700/70 mt-1">{callsData.length > 0 ? "Showing the last data that loaded." : "Metrics and tables below may be empty or out of date."}</p>
                 </div>
                 <button
                   type="button"
@@ -846,6 +730,11 @@ export default function CallReportPage() {
                 </div>
               </div>
               <div className="px-4 sm:px-5 py-5">
+                {loading ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-3 md:gap-4" aria-busy="true" aria-label="Loading key performance indicators">
+                    {Array.from({ length: 6 }).map((_, i) => <div key={i} className="min-h-[170px] rounded-2xl border border-slate-200 bg-slate-100/70 animate-pulse" />)}
+                  </div>
+                ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-3 md:gap-4">
 
                   {/* Planned Calls */}
@@ -919,15 +808,19 @@ export default function CallReportPage() {
                   </div>
 
                 </div>
+                )}
               </div>
             </div>
           </div>
 
         </div>{/* end w-full space-y-8 */}
 
+        {/* ── EMPLOYEE-WISE CALLS PERFORMANCE ────────────────────────────── */}
+        <EmployeeCallsPerformance rows={filteredData} loading={loading} headerRef={resultsRef} />
+
         {/* ── MAIN TABLE CARD ────────────────────────────────────────────── */}
         <Card className="shadow-2xl border-0 rounded-2xl overflow-hidden bg-white mt-8">
-          <div ref={resultsRef} className="w-full -mt-2 sm:-mt-3 px-4 sm:px-6 py-2.5 bg-[#f5f9ff] border-b border-slate-200">
+          <div className="w-full -mt-2 sm:-mt-3 px-4 sm:px-6 py-2.5 bg-[#f5f9ff] border-b border-slate-200">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
               <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                 <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900">Calls Performance Analytics</h2>
@@ -967,7 +860,7 @@ export default function CallReportPage() {
                   </div>
                 ) : filteredDateGroups.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-20">
-                    {loadFailed ? (
+                    {loadFailed && callsData.length === 0 ? (
                       <>
                         <AlertTriangle className="h-12 w-12 text-red-300 mb-4" />
                         <p className="text-base font-semibold text-slate-600 mb-1">Data could not be loaded</p>
@@ -992,14 +885,14 @@ export default function CallReportPage() {
                     <div className="overflow-x-auto w-full" style={{ WebkitOverflowScrolling: "touch" }}>
                       <table className="border-collapse" style={{ minWidth: "950px", width: "100%", tableLayout: "fixed" }}>
                         <colgroup>
-                          <col style={{ width: "220px" }} /> {/* Date / Employee */}
-                          <col style={{ width: "110px" }} /> {/* Company */}
-                          <col style={{ width: "110px" }} /> {/* Planned */}
-                          <col style={{ width: "110px" }} /> {/* Actual */}
-                          <col style={{ width: "100px" }} /> {/* Variance */}
-                          <col style={{ width: "80px" }} /> {/* Var% */}
-                          <col style={{ width: "110px" }} /> {/* NBD Clients */}
-                          <col style={{ width: "110px" }} /> {/* CRR Clients */}
+                          <col style={{ width: "220px" }} />{/* Date / Employee */}
+                          <col style={{ width: "110px" }} />{/* Company */}
+                          <col style={{ width: "110px" }} />{/* Planned */}
+                          <col style={{ width: "110px" }} />{/* Actual */}
+                          <col style={{ width: "100px" }} />{/* Variance */}
+                          <col style={{ width: "80px" }} />{/* Var% */}
+                          <col style={{ width: "110px" }} />{/* NBD Clients */}
+                          <col style={{ width: "110px" }} />{/* CRR Clients */}
                         </colgroup>
 
                         {/* ── THEAD ───────────────────────────────────────── */}
@@ -1445,232 +1338,7 @@ export default function CallReportPage() {
               </div>) : (
 
               /* ── GRAPH VIEW ──────────────────────────────────────────────── */
-              <div className="space-y-6">
-
-                {/* Month KPI summary cards */}
-                <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
-                  <div className="text-center mb-6">
-                    <h2 className="text-2xl md:text-3xl font-bold text-slate-800">{monthFilter} {yearFilter}</h2>
-                    <p className="text-sm text-slate-600 mt-1">Calls Performance Overview & Metrics</p>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-5 gap-4 md:gap-5">
-                    {[
-                      { icon: <Phone className="w-6 h-6 text-blue-600" />, bg: "bg-blue-100", badge: "PLANNED", badgeCls: "bg-blue-50 text-blue-700 border-blue-200", label: "Planned Calls", val: selectedMonthKPIs.plannedCalls, color: "text-slate-900", note: "Monthly target benchmark", hoverBorder: "hover:border-blue-300" },
-                      { icon: <Activity className="w-6 h-6 text-green-600" />, bg: "bg-green-100", badge: "ACHIEVED", badgeCls: "bg-green-50 text-green-700 border-green-200", label: "Actual Calls", val: selectedMonthKPIs.actualCalls, color: "text-slate-900", note: null, hoverBorder: "hover:border-green-300" },
-                      { icon: <UserPlus className="w-6 h-6 text-violet-600" />, bg: "bg-violet-100", badge: "NEW", badgeCls: "bg-violet-50 text-violet-700 border-violet-200", label: "NBD Clients", val: selectedMonthKPIs.newClientsActual, color: "text-violet-700", note: "Newly acquired clients", hoverBorder: "hover:border-violet-300" },
-                      { icon: <UserCheck className="w-6 h-6 text-amber-600" />, bg: "bg-amber-100", badge: "RETURNING", badgeCls: "bg-amber-50 text-amber-700 border-amber-200", label: "CRR Clients", val: selectedMonthKPIs.oldClientsActual, color: "text-amber-700", note: "Returning clients", hoverBorder: "hover:border-amber-300" },
-                    ].map(c => (
-                      <Card key={c.label} className={`border border-slate-200 ${c.hoverBorder} transition-colors`}>
-                        <CardContent className="p-5">
-                          <div className="flex items-start justify-between mb-4">
-                            <div className={`p-3 ${c.bg} rounded-lg`}>{c.icon}</div>
-                            <Badge variant="outline" className={`${c.badgeCls} text-xs font-medium`}>{c.badge}</Badge>
-                          </div>
-                          <p className="text-xs text-slate-500 font-medium uppercase tracking-wide mb-1">{c.label}</p>
-                          <p className={`text-xl font-bold ${c.color} mb-2 break-all`}>{formatNumber(c.val)}</p>
-                          {c.note && <p className="text-xs text-slate-500">{c.note}</p>}
-                        </CardContent>
-                      </Card>
-                    ))}
-                    {/* Variance card */}
-                    <Card className={`border border-slate-200 ${selectedMonthKPIs.varianceCalls >= 0 ? "hover:border-green-300" : "hover:border-red-300"} transition-colors`}>
-                      <CardContent className="p-5">
-                        <div className="flex items-start justify-between mb-4">
-                          <div className={`p-3 rounded-lg ${selectedMonthKPIs.varianceCalls >= 0 ? "bg-green-100" : "bg-red-100"}`}>
-                            <Activity className={`w-6 h-6 ${selectedMonthKPIs.varianceCalls >= 0 ? "text-green-600" : "text-red-600"}`} />
-                          </div>
-                          <Badge variant="outline" className={selectedMonthKPIs.varianceCalls >= 0 ? "bg-green-50 text-green-700 border-green-200 text-xs font-medium" : "bg-red-50 text-red-700 border-red-200 text-xs font-medium"}>
-                            {selectedMonthKPIs.varianceCalls >= 0 ? "SURPLUS" : "DEFICIT"}
-                          </Badge>
-                        </div>
-                        <p className="text-xs text-slate-500 font-medium uppercase tracking-wide mb-1">Variance</p>
-                        <p className={`text-xl font-bold mb-2 break-all ${selectedMonthKPIs.varianceCalls >= 0 ? "text-green-600" : "text-red-600"}`}>
-                          {formatNumber(Math.abs(selectedMonthKPIs.varianceCalls))}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          <span className={`font-semibold text-sm ${selectedMonthKPIs.variancePercent >= 0 ? "text-green-600" : "text-red-600"}`}>
-                            {selectedMonthKPIs.variancePercent >= 0 ? "+" : ""}{formatPct(selectedMonthKPIs.variancePercent)}%
-                          </span> from target
-                        </p>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </div>
-
-                {/* Quarter + Performance Summary */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <Card className="border-2 border-slate-200 shadow-lg">
-                    <CardHeader className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-200">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2.5 bg-blue-100 rounded-lg"><BarChart3 className="w-5 h-5 text-blue-600" /></div>
-                        <div><CardTitle className="text-base font-bold text-slate-800">Quarter Performance</CardTitle><p className="text-xs text-slate-500 mt-0.5">Q1 to Q4 calls breakdown</p></div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="pt-6">
-                      <div className="space-y-4">
-                        {quarterlyMetrics.length > 0 ? quarterlyMetrics.map(q => (
-                          <div key={q.quarter} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
-                            <div className="flex items-center gap-3">
-                              <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm ${q.achieved ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>{q.quarter}</div>
-                              <div>
-                                <div className="text-sm font-semibold text-slate-800">{formatNumber(q.actual)} calls</div>
-                                <div className="text-xs text-slate-500">Target: {formatNumber(q.planned)}</div>
-                              </div>
-                            </div>
-                            <div className={`text-sm font-bold ${q.variancePercent >= 0 ? "text-green-600" : "text-red-600"}`}>
-                              {q.variancePercent >= 0 ? "+" : ""}{q.variancePercent}%
-                            </div>
-                          </div>
-                        )) : <div className="text-center py-8 text-slate-500"><BarChart3 className="w-12 h-12 mx-auto mb-2 opacity-30" /><p className="text-sm">No quarterly data available</p></div>}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-2 border-slate-200 shadow-lg">
-                    <CardHeader className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-200">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2.5 bg-purple-100 rounded-lg"><Award className="w-5 h-5 text-purple-600" /></div>
-                        <div><CardTitle className="text-base font-bold text-slate-800">Performance Summary</CardTitle><p className="text-xs text-slate-500 mt-0.5">Cumulative call totals</p></div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="pt-6">
-                      <div className="space-y-4">
-                        {cumulativeCallData.length > 0 && (<>
-                          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                            <div className="text-xs text-slate-600 font-semibold mb-1">Cumulative Planned</div>
-                            <div className="text-xl font-black text-blue-700 break-all">{formatNumber(cumulativeCallData[cumulativeCallData.length - 1].cumulativePlanned)}</div>
-                          </div>
-                          <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-                            <div className="text-xs text-slate-600 font-semibold mb-1">Cumulative Actual</div>
-                            <div className="text-xl font-black text-green-700 break-all">{formatNumber(cumulativeCallData[cumulativeCallData.length - 1].cumulativeActual)}</div>
-                          </div>
-                          <div className="p-3 bg-violet-50 rounded-lg border border-violet-200">
-                            <div className="text-xs text-slate-600 font-semibold mb-1">Cumulative NBD Clients</div>
-                            <div className="text-xl font-black text-violet-700 break-all">{formatNumber(cumulativeCallData[cumulativeCallData.length - 1].cumulativeNew)}</div>
-                          </div>
-                        </>)}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Cumulative Area Chart */}
-                <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-                  <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-200">
-                    <div className="p-2.5 bg-purple-100 rounded-lg"><Activity className="w-5 h-5 text-purple-600" /></div>
-                    <div><h3 className="text-lg font-semibold text-slate-800">Cumulative Calls Tracking</h3><p className="text-xs text-slate-500 mt-0.5">Year-to-date for {yearFilter}</p></div>
-                  </div>
-                  {cumulativeCallData.length > 0 ? (
-                    <div className="bg-slate-50/50 rounded-lg p-4 border border-slate-200">
-                      <div className="overflow-x-auto -mx-4 px-4"><div className="min-w-[600px]">
-                        <ResponsiveContainer width="100%" height={400}>
-                          <AreaChart data={cumulativeCallData} margin={{ top: 20, right: 30, left: 20, bottom: 40 }}>
-                            <defs>
-                              <linearGradient id="cpGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#60a5fa" stopOpacity={0.3} /><stop offset="95%" stopColor="#60a5fa" stopOpacity={0.05} /></linearGradient>
-                              <linearGradient id="caGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} /><stop offset="95%" stopColor="#22c55e" stopOpacity={0.05} /></linearGradient>
-                              <linearGradient id="cnGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#a78bfa" stopOpacity={0.3} /><stop offset="95%" stopColor="#a78bfa" stopOpacity={0.05} /></linearGradient>
-                              <linearGradient id="coGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} /><stop offset="95%" stopColor="#f59e0b" stopOpacity={0.05} /></linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                            <XAxis dataKey="month" angle={-35} textAnchor="end" height={80} tick={{ fontSize: 12, fontWeight: 600, fill: "#475569" }} stroke="#94a3b8" />
-                            <YAxis tick={{ fontSize: 12, fontWeight: 600, fill: "#475569" }} stroke="#94a3b8" width={55} />
-                            <Tooltip content={({ active, payload, label }) => {
-                              if (!active || !payload) return null
-                              return (
-                                <div className="bg-white p-4 rounded-lg border-2 border-slate-200 shadow-lg">
-                                  <p className="font-bold text-slate-900 mb-2">{label}</p>
-                                  <div className="space-y-1 text-sm">
-                                    {([["Cumul. Planned", "text-blue-600", 0], ["Cumul. Actual", "text-green-600", 1], ["Cumul. NBD Clients", "text-violet-600", 2], ["Cumul. CRR Clients", "text-amber-600", 3]] as [string, string, number][]).map(([lbl, cls, i]) =>
-                                      <div key={lbl} className="flex justify-between gap-6">
-                                        <span className={`${cls} font-semibold`}>{lbl}:</span>
-                                        <span className="font-bold">{formatNumber(payload[i]?.value as number || 0)}</span>
-                                      </div>)}
-                                  </div>
-                                </div>
-                              )
-                            }} />
-                            <Area type="monotone" dataKey="cumulativePlanned" stroke="#3b82f6" strokeWidth={3} fill="url(#cpGrad)" name="Cumulative Planned" />
-                            <Area type="monotone" dataKey="cumulativeActual" stroke="#22c55e" strokeWidth={3} fill="url(#caGrad)" name="Cumulative Actual" />
-                            <Area type="monotone" dataKey="cumulativeNew" stroke="#8b5cf6" strokeWidth={2} fill="url(#cnGrad)" name="Cumulative NBD Clients" />
-                            <Area type="monotone" dataKey="cumulativeOld" stroke="#f59e0b" strokeWidth={2} fill="url(#coGrad)" name="Cumulative CRR Clients" />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      </div></div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center h-80 bg-slate-50 rounded-lg border-2 border-dashed border-slate-200">
-                      <Activity className="w-16 h-16 text-slate-300 mb-4" />
-                      <p className="text-base font-semibold text-slate-600 mb-1">No Data Available</p>
-                      <p className="text-sm text-slate-500">Select a year to view cumulative tracking</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Monthly Bar Chart */}
-                <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-                  <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-200">
-                    <div className="p-2.5 bg-slate-100 rounded-lg"><BarChart3 className="w-5 h-5 text-slate-600" /></div>
-                    <div><h3 className="text-lg font-semibold text-slate-800">Year-to-Date Calls Trends</h3><p className="text-xs text-slate-500 mt-0.5">Monthly planned vs actual for {yearFilter}</p></div>
-                  </div>
-                  {monthlyChartData.length > 0 ? (
-                    <div className="space-y-6">
-                      <div className="bg-slate-50/50 rounded-lg p-4 border border-slate-200">
-                        <div className="overflow-x-auto -mx-4 px-4"><div className="min-w-[600px]">
-                          <ResponsiveContainer width="100%" height={monthlyChartData.length <= 3 ? 400 : monthlyChartData.length <= 6 ? 450 : 550}>
-                            <BarChart data={monthlyChartData} margin={{ top: 40, right: 30, left: 20, bottom: 80 }}>
-                              <defs>
-                                <linearGradient id="bg1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#60a5fa" stopOpacity={0.9} /><stop offset="100%" stopColor="#3b82f6" stopOpacity={1} /></linearGradient>
-                                <linearGradient id="bg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#4ade80" stopOpacity={0.9} /><stop offset="100%" stopColor="#22c55e" stopOpacity={1} /></linearGradient>
-                                <linearGradient id="bg3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#c4b5fd" stopOpacity={0.9} /><stop offset="100%" stopColor="#8b5cf6" stopOpacity={1} /></linearGradient>
-                                <linearGradient id="bg4" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#fde68a" stopOpacity={0.9} /><stop offset="100%" stopColor="#f59e0b" stopOpacity={1} /></linearGradient>
-                              </defs>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                              <XAxis dataKey="month" angle={monthlyChartData.length > 6 ? -45 : -35} textAnchor="end" height={90} tick={{ fontSize: 12, fontWeight: 600, fill: "#475569" }} stroke="#94a3b8" interval={0} />
-                              <YAxis tick={{ fontSize: 12, fontWeight: 600, fill: "#475569" }} stroke="#94a3b8" width={55} />
-                              <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'rgba(148,163,184,0.08)' }} />
-                              <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="3 3" />
-                              <Bar dataKey="planned" fill="url(#bg1)" name="Planned Calls" radius={[6, 6, 0, 0]} maxBarSize={60}
-                                label={{ position: "top", formatter: ((v: any, e: any, i: number) => { const dp = monthlyChartData[i]; const vp = dp?.variancePercent ? Number(dp.variancePercent) : 0; return vp !== 0 ? `${vp > 0 ? "+" : ""}${vp.toFixed(1)}%` : "" }) as any, fill: "#64748b", fontSize: 11, fontWeight: "600", offset: 8 }} />
-                              <Bar dataKey="actual" fill="url(#bg2)" name="Actual Calls" radius={[6, 6, 0, 0]} maxBarSize={60} />
-                              <Bar dataKey="newClients" fill="url(#bg3)" name="NBD Clients" radius={[6, 6, 0, 0]} maxBarSize={60} />
-                              <Bar dataKey="oldClients" fill="url(#bg4)" name="CRR Clients" radius={[6, 6, 0, 0]} maxBarSize={60} />
-                              <Bar dataKey="variance" name="Variance" radius={[4, 4, 0, 0]} maxBarSize={35}>
-                                {monthlyChartData.map((e, i) => <Cell key={`c-${i}`} fill={e.variance >= 0 ? "#22c55e" : "#ef4444"} opacity={0.75} />)}
-                                <LabelList dataKey="variancePercent" position="top" formatter={(v: any) => v !== undefined ? `${v > 0 ? "+" : ""}${Number(v).toFixed(1)}%` : ""} style={{ fill: "#64748b", fontSize: 10, fontWeight: 600 }} />
-                              </Bar>
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div></div>
-                      </div>
-                      {/* Legend */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                        {[
-                          ["bg-blue-50 border-blue-100", "bg-blue-500", "Planned Calls", "Target benchmark"],
-                          ["bg-green-50 border-green-100", "bg-green-500", "Actual Calls", "Calls completed"],
-                          ["bg-violet-50 border-violet-100", "bg-violet-500", "NBD Clients", "Newly acquired"],
-                          ["bg-amber-50 border-amber-100", "bg-amber-500", "CRR Clients", "Returning clients"],
-                        ].map(([wrap, dot, lbl, sub]) => (
-                          <div key={lbl} className={`flex items-center gap-3 p-4 ${wrap} rounded-lg border`}>
-                            <div className={`w-3 h-3 ${dot} rounded`} />
-                            <div><p className="text-xs text-slate-600 font-medium">{lbl}</p><p className="text-xs text-slate-500">{sub}</p></div>
-                          </div>
-                        ))}
-                        <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
-                          <div className="flex gap-1.5"><TrendingUp className="w-3.5 h-3.5 text-green-600" /><TrendingDown className="w-3.5 h-3.5 text-red-600" /></div>
-                          <div><p className="text-xs text-slate-600 font-medium">Variance %</p><p className="text-xs text-slate-500">Performance gap</p></div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center h-80 bg-slate-50 rounded-lg border-2 border-dashed border-slate-200">
-                      <BarChart3 className="w-16 h-16 text-slate-300 mb-4" />
-                      <p className="text-base font-semibold text-slate-600 mb-1">No Data Available</p>
-                      <p className="text-sm text-slate-500">Select a different year or add call data</p>
-                    </div>
-                  )}
-                </div>
-
-              </div>
+              <CallsGraphView rows={filteredData} monthFilter={monthFilter} yearFilter={yearFilter} />
             )}
           </CardContent>
         </Card>

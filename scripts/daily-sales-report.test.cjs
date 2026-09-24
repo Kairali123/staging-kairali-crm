@@ -114,6 +114,30 @@ test('salesContributors aggregates by agent and exportSalesHTML includes Sales b
  assert(html.includes('66.7%'));
  assert(html.includes('33.3%'));
 });
+test('exportSalesHTML renders collection amount, cancelled quantity, and cancelled value correctly without NaN',()=>{
+ const report={
+  date:'2026-09-15',
+  generatedAt:new Date().toISOString(),
+  rows:[
+   {company:'KTAHV',agent:'Pawan',sales:100000,conversions:1,collection:50000,collectionCount:1,cancelled:20000,cancelledCount:1},
+   {company:'KTAHV',agent:'Sneha',sales:0,conversions:0,collection:75000,collectionCount:1,cancelled:0,cancelledCount:0},
+   {company:'KTAHV',agent:'Roshni',sales:40000,conversions:1}
+  ],
+  warnings:[],
+  unmappedCalls:0,
+  sourceRecords:3
+ };
+ const html=model.exportSalesHTML(report,'KTAHV');
+ assert(!html.includes('NaN'));
+ assert(html.includes('Collection Amount'));
+ assert(html.includes('Cancelled Qty'));
+ assert(html.includes('Cancelled Value'));
+ assert(html.includes('₹50,000.00'));
+ assert(html.includes('₹20,000.00'));
+ assert(html.includes('₹75,000.00'));
+ assert(html.includes('₹0.00'));
+ assert(html.includes('₹1,25,000.00'));
+});
 module.exports={load};
 
 

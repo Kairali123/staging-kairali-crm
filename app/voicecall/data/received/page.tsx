@@ -245,16 +245,61 @@ const CONNECTED_COLOR = "#059669";
 
 function colorText(value: string, type: "status" | "finalcallstatus" | "interest" | "outcome" | "intent" | "finalleadoutcome" | "leadstatus"): string {
     const v = (value || "").toLowerCase().trim();
+    const compactV = v.replace(/[\s\-_]+/g, "");
     const colors: Record<string, Record<string, string>> = {
-        status: { completed: CONNECTED_COLOR, failed: "#dc2626", "not connected": NOT_CONNECTED_COLOR },
-        finalcallstatus: { interested: CONNECTED_COLOR, drop: "#dc2626", "call back": "#2563eb", callback: "#2563eb", "not connected": NOT_CONNECTED_COLOR },
-        interest: { interested: CONNECTED_COLOR, "non interested": "#dc2626", "not interested": "#dc2626", maybe: "#d97706" },
-        outcome: { "follow-up needed": "#ea580c", "follow up needed": "#ea580c", "callback requested": "#2563eb", "callback scheduled": "#2563eb" },
-        intent: { high: CONNECTED_COLOR, medium: "#d97706", low: "#ea580c", unqualified: "#dc2626" },
-        leadstatus: { qualified: CONNECTED_COLOR, "non qualified": "#dc2626", "non-qualified": "#dc2626", "not qualified": "#dc2626", unqualified: "#dc2626", "not connected": NOT_CONNECTED_COLOR, open: "#2563eb", pending: "#ea580c" },
+        status: {
+            connected: CONNECTED_COLOR,
+            completed: CONNECTED_COLOR,
+            notconnected: NOT_CONNECTED_COLOR,
+            "not connected": NOT_CONNECTED_COLOR,
+            failed: "#dc2626",
+            busy: "#ea580c",
+            scheduled: "#d97706",
+            inprogress: "#2563eb",
+            "in progress": "#2563eb",
+        },
+        finalcallstatus: {
+            interested: CONNECTED_COLOR,
+            drop: "#dc2626",
+            "call back": "#2563eb",
+            callback: "#2563eb",
+            notconnected: NOT_CONNECTED_COLOR,
+            "not connected": NOT_CONNECTED_COLOR,
+        },
+        interest: {
+            interested: CONNECTED_COLOR,
+            "non interested": "#dc2626",
+            "not interested": "#dc2626",
+            uninterested: "#dc2626",
+            maybe: "#d97706",
+        },
+        outcome: {
+            "follow-up needed": "#ea580c",
+            "follow up needed": "#ea580c",
+            "callback requested": "#2563eb",
+            "callback scheduled": "#2563eb",
+        },
+        intent: {
+            high: CONNECTED_COLOR,
+            medium: "#d97706",
+            low: "#ea580c",
+            unqualified: "#dc2626",
+        },
+        leadstatus: {
+            qualified: CONNECTED_COLOR,
+            verified: CONNECTED_COLOR,
+            "non qualified": "#dc2626",
+            "non-qualified": "#dc2626",
+            "not qualified": "#dc2626",
+            unqualified: "#dc2626",
+            "not connected": NOT_CONNECTED_COLOR,
+            notconnected: NOT_CONNECTED_COLOR,
+            open: "#2563eb",
+            pending: "#ea580c",
+        },
         finalleadoutcome: {
             "did not enquire": "#dc2626", "did not enquiry": "#dc2626", "junk": "#dc2626", "not interested": "#dc2626", "not interested ahv": "#dc2626", "not reachable": "#dc2626", "not rechable": "#dc2626", "cold": "#dc2626", "duplicate lead": "#dc2626", "dnc client": "#dc2626", "don't call furthur": "#dc2626", "outreach stopped": "#dc2626",
-            "not connected": NOT_CONNECTED_COLOR, "no answer": NOT_CONNECTED_COLOR, "busy": NOT_CONNECTED_COLOR, "technical error": NOT_CONNECTED_COLOR, "language issue": NOT_CONNECTED_COLOR, "other cases": "#94a3b8", "other/misc enquiry": "#94a3b8",
+            "not connected": NOT_CONNECTED_COLOR, "notconnected": NOT_CONNECTED_COLOR, "no answer": NOT_CONNECTED_COLOR, "busy": NOT_CONNECTED_COLOR, "technical error": NOT_CONNECTED_COLOR, "language issue": NOT_CONNECTED_COLOR, "other cases": "#94a3b8", "other/misc enquiry": "#94a3b8",
             "product distributor": CONNECTED_COLOR, "product stockists": CONNECTED_COLOR, "individual products buying": CONNECTED_COLOR, "individual resort booking": CONNECTED_COLOR, "group resort booking": CONNECTED_COLOR, "treatment package for resort": CONNECTED_COLOR, "single therapy for individual": CONNECTED_COLOR, "treatment package for kairali centres": CONNECTED_COLOR, "franchise": CONNECTED_COLOR, "sanitizers enquiry": CONNECTED_COLOR, "ayurveda training": CONNECTED_COLOR, "yoga training": CONNECTED_COLOR, "ayurveda and yoga training": CONNECTED_COLOR, "prevention_rejuvenation": CONNECTED_COLOR, "ayurvedic doctor_panchakarma center": CONNECTED_COLOR, "group resort booking_yoga retreat": CONNECTED_COLOR, "pharmacy_retail": CONNECTED_COLOR, "online sales": CONNECTED_COLOR, "export_import": CONNECTED_COLOR, "treatment package for resort ahv": CONNECTED_COLOR, "prevention_rejuvenation ahv": CONNECTED_COLOR, "group resort booking ahv yoga retreat": CONNECTED_COLOR, "ayurvedic training ahv": CONNECTED_COLOR, "yoga training ahv": CONNECTED_COLOR, "panchkarma training": CONNECTED_COLOR, "contract manufacturing": CONNECTED_COLOR,
             "order status enquiry": "#2563eb", "already spoken": "#2563eb", "reverify": "#2563eb", "expert required": "#2563eb", "assign to mr": "#2563eb", "travel agent": "#2563eb", "wants details over email": "#2563eb",
             "jobs enquiry": "#ea580c", "doctor consultation required": "#ea580c", "ayurvedic doctor_panchakarma centre": "#7c3aed",
@@ -262,7 +307,12 @@ function colorText(value: string, type: "status" | "finalcallstatus" | "interest
     };
     const map = colors[type] || {};
     if (map[v]) return map[v];
-    for (const [key, color] of Object.entries(map)) { if (v.includes(key) || key.includes(v)) return color; }
+    if (map[compactV]) return map[compactV];
+    const sortedKeys = Object.keys(map).sort((a, b) => b.length - a.length);
+    for (const key of sortedKeys) {
+        const compactKey = key.replace(/[\s\-_]+/g, "");
+        if (v.includes(key) || compactV.includes(compactKey)) return map[key];
+    }
     return "#374151";
 }
 function ColorTd({ value, type, maxWidth }: { value: string; type: "status" | "finalcallstatus" | "interest" | "outcome" | "intent" | "finalleadoutcome" | "leadstatus"; maxWidth?: number }) {
@@ -361,7 +411,7 @@ function getRowStatus(r: ReceivedRow): StatusKey {
 
     if (hasScheduledTime && scheduleOutcomeList.includes(finalOutcome)) return "scheduled";
     if (finalOutcome === "busy") return "busy";
-    if (cs.includes("notconnected") || cs.includes("no answer") || cs.includes("unanswered") || cs.includes("unreachable")) return "not_connected";
+    if (cs.includes("notconnected") || cs.includes("not connected") || cs.includes("no answer") || cs.includes("unanswered") || cs.includes("unreachable")) return "not_connected";
     if (cs.includes("fail") || cs.includes("error") || cs.includes("rejected") || cs.includes("invalid")) return "failed";
     if (cs.includes("in progress") || cs.includes("inprogress") || cs.includes("processing") || cs.includes("queued")) return "in_progress";
 
@@ -403,9 +453,20 @@ function buildReceivedCounts(rows: ReceivedRow[], pendingCount: number) {
 }
 
 function getQualificationBucket(row: ReceivedRow): "qualified" | "not_qualified" | "pending" {
-    const status = (row.calculated_qualification_status || row.leadstatus || "").toLowerCase().trim();
-    if (status === "qualified") return "qualified";
+    const status = (row.calculated_qualification_status || row.leadstatus || row.lead_status || "").toLowerCase().trim();
+    if (status === "qualified" || status === "verified") return "qualified";
     if (status === "non-qualified" || status === "non qualified" || status === "not qualified" || status === "unqualified" || status === "junk") {
+        return "not_qualified";
+    }
+    const finalOutcome = (row.finalleadoutcome || "").toLowerCase().trim();
+    if (
+        finalOutcome === "junk" ||
+        finalOutcome.includes("did not") ||
+        finalOutcome.includes("not interested") ||
+        finalOutcome.includes("duplicate") ||
+        finalOutcome.includes("outreach stopped") ||
+        finalOutcome.includes("dnc")
+    ) {
         return "not_qualified";
     }
     return "pending";
@@ -1120,7 +1181,7 @@ function CallStatusBreakdown({ counts, total, loading }: { counts: Record<Status
                                 const count = stats.total;
                                 const calculatePercent = (value: number, totalAmount: number) =>
                                     totalAmount > 0 ? ((value / totalAmount) * 100).toFixed(1) : "0.0";
-                                const denom = (cfg.key === "qualified" || cfg.key === "not_qualified" || cfg.key === "total_received") ? respondedTotal : total;
+                                const denom = (cfg.key === "qualified" || cfg.key === "not_qualified") ? respondedTotal : total;
                                 const pct = calculatePercent(count, denom);
                                 const isEmpty = count === 0;
                                 return (
@@ -1135,13 +1196,11 @@ function CallStatusBreakdown({ counts, total, loading }: { counts: Record<Status
                                             <div style={{ fontSize: 16, opacity: 0.9, display: "flex", alignItems: "center", justifyContent: "center" }}>{StatusIcons[cfg.key]}</div>
                                         </div>
                                         <div style={{ fontSize: 30, fontWeight: 800, color: "#0f172a", lineHeight: 1, letterSpacing: "-1.5px" }}>{count}</div>
-                                        {cfg.key !== "reschedule" && (
-                                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                                <div style={{ display: "inline-flex", alignItems: "center", background: cfg.color + "18", borderRadius: 20, padding: "2px 9px", width: "fit-content" }}>
-                                                    <span style={{ fontSize: 11.5, fontWeight: 700, color: cfg.color }}>{pct}%</span>
-                                                </div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                            <div style={{ display: "inline-flex", alignItems: "center", background: cfg.color + "18", borderRadius: 20, padding: "2px 9px", width: "fit-content" }}>
+                                                <span style={{ fontSize: 11.5, fontWeight: 700, color: cfg.color }}>{pct}%</span>
                                             </div>
-                                        )}
+                                        </div>
 
                                         {/* Intent Breakdown */}
                                         <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 4, borderTop: "1px dashed rgba(0,0,0,0.08)", paddingTop: 8 }}>
@@ -1723,7 +1782,59 @@ function getDateRange(filter: string): { from: Date | null; to: Date | null } {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 function ReceivedDataPageInner() {
-    const { data: receivedApiData, loading: receivedLoading, isRefreshing: hookRefreshing, error: receivedError, refetch: refetchReceived } = useReceivedLeads();
+    // Date range drives the server query, so it's resolved before the data hooks are called.
+    const [dateFilter, setDateFilter] = useState("today");
+    const [customDate, setCustomDate] = useState({ start: "", end: "" });
+    const [appliedCustomDate, setAppliedCustomDate] = useState({ start: "", end: "" });
+
+    const parseLocalDate = (str: string, isEnd = false) => {
+        if (!str) return null;
+        const parts = str.split("-");
+        if (parts.length === 3) {
+            const year = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10) - 1;
+            const day = parseInt(parts[2], 10);
+            return isEnd ? new Date(year, month, day, 23, 59, 59, 999) : new Date(year, month, day, 0, 0, 0, 0);
+        }
+        return new Date(str);
+    };
+
+    const dateWindow = useMemo(() => {
+        if (dateFilter === "custom") {
+            if (!appliedCustomDate.start || !appliedCustomDate.end) {
+                return { from: null, to: null };
+            }
+            return {
+                from: parseLocalDate(appliedCustomDate.start),
+                to: parseLocalDate(appliedCustomDate.end, true),
+            };
+        }
+        return getDateRange(dateFilter);
+    }, [dateFilter, appliedCustomDate]);
+
+    const toYMD = (d: Date | null) => d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : undefined;
+    const dateFromStr = toYMD(dateWindow.from);
+    const dateToStr = toYMD(dateWindow.to);
+
+    const { data: receivedApiData, loading: receivedLoading, isRefreshing: hookRefreshing, error: receivedError, truncated: receivedTruncated, refetch: refetchReceived } = useReceivedLeads(dateFromStr, dateToStr);
+
+    const handleApplyCustomDate = () => {
+        if (!customDate.start || !customDate.end) return;
+        let start = customDate.start;
+        let end = customDate.end;
+        if (start > end) {
+            const temp = start;
+            start = end;
+            end = temp;
+            setCustomDate({ start, end });
+        }
+        if (appliedCustomDate.start === start && appliedCustomDate.end === end) {
+            refetchReceived();
+        } else {
+            setAppliedCustomDate({ start, end });
+        }
+    };
+    // Bare call (no range) for the sent-notes cross-reference below — falls back to the API's own "most recent" safety window.
     const { data: sentApiData, loading: sentLoading, refetch: refetchSent } = useSentLeads();
     const { hasPermission, user } = useAuth();
 
@@ -1746,14 +1857,12 @@ function ReceivedDataPageInner() {
         return () => clearTimeout(h);
     }, [search]);
 
-    const [dateFilter, setDateFilter] = useState("this_week");
     const [company, setCompany] = useState("all");
     const [dataSource, setDataSource] = useState("all");
     const [status, setStatus] = useState("all");
     const [intent, setIntent] = useState("all");
     const [leadStatus, setLeadStatus] = useState("all");
     const [nonQualifiedOutcome, setNonQualifiedOutcome] = useState("all");
-    const [customDate, setCustomDate] = useState({ start: "", end: "" });
 
     useEffect(() => {
         if (leadStatus !== "Non-Qualified") {
@@ -1766,6 +1875,7 @@ function ReceivedDataPageInner() {
         setDataSource("all"); setStatus("all"); setIntent("all"); setLeadStatus("all");
         setNonQualifiedOutcome("all");
         setCustomDate({ start: "", end: "" });
+        setAppliedCustomDate({ start: "", end: "" });
     };
 
     useEffect(() => {
@@ -1773,11 +1883,6 @@ function ReceivedDataPageInner() {
             tableRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
         }
     }, [search, dateFilter, company, dataSource, status, intent, leadStatus]);
-
-    const dateWindow = useMemo(() => {
-        if (dateFilter === "custom") return { from: customDate.start ? new Date(customDate.start) : null, to: customDate.end ? new Date(customDate.end + "T23:59:59") : null };
-        return getDateRange(dateFilter);
-    }, [dateFilter, customDate]);
 
     const companyMatch = (n: string) => company === "all" || n === company;
     const dsMatch = (l: string) => dataSource === "all" || l === dataSource;
@@ -1793,8 +1898,8 @@ function ReceivedDataPageInner() {
             dataSource: { label: r.dataSource || "—", color: "gray" as const },
             finalStatus: {
                 label: r.callstatus || "—",
-                dot: (r.callstatus === "completed" ? "g" : r.callstatus === "failed" ? "r" : "o") as DotColor,
-                color: (r.callstatus === "completed" ? "green" : r.callstatus === "failed" ? "red" : "orange") as PillColor,
+                dot: (r.callstatus === "completed" || r.callstatus === "connected" ? "g" : r.callstatus === "failed" ? "r" : "o") as DotColor,
+                color: (r.callstatus === "completed" || r.callstatus === "connected" ? "green" : r.callstatus === "failed" ? "red" : "orange") as PillColor,
             },
         }));
     }, [receivedApiData, receivedLoading]);
@@ -1836,7 +1941,11 @@ function ReceivedDataPageInner() {
         processedReceived.forEach(r => keys.add(getRowStatus(r)));
         return STATUS_CFG.filter(c => keys.has(c.key)).map(c => c.label);
     }, [processedReceived]);
-    const leadStatusOptions = useMemo(() => Array.from(new Set(processedReceived.map(r => r.leadstatus))).filter(v => v && v !== "—").sort(), [processedReceived]);
+    const leadStatusOptions = useMemo(() => {
+        const base = ["Qualified", "Non-Qualified", "Pending"];
+        const found = processedReceived.map(r => r.leadstatus).filter(v => v && v !== "—");
+        return Array.from(new Set([...base, ...found])).sort();
+    }, [processedReceived]);
     const nonQualifiedOutcomeOptions = useMemo(() => {
         const presentOutcomes = new Set<string>();
         processedReceived.forEach(r => {
@@ -2001,6 +2110,11 @@ function ReceivedDataPageInner() {
                         </div>
                         <Button variant="outline" size="sm" onClick={clearFilters} className="bg-white border-slate-300 text-slate-700 font-medium hover:bg-blue-50">Clear Filters</Button>
                     </div>
+                    {receivedTruncated && (
+                        <div className="mx-3 sm:mx-5 mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                            Showing the most recent {receivedApiData.length.toLocaleString()} leads for this range — narrow the date range or search by name/phone/ID to see the rest.
+                        </div>
+                    )}
                     <div className="px-3 sm:px-5 py-3 sm:py-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3">
                             <div className="flex flex-col gap-1.5 sm:col-span-2 xl:col-span-2">
@@ -2009,7 +2123,12 @@ function ReceivedDataPageInner() {
                             </div>
                             <div className="flex flex-col gap-1.5">
                                 <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Date Range</label>
-                                <Select value={dateFilter} onValueChange={setDateFilter}>
+                                <Select value={dateFilter} onValueChange={(val) => {
+                                    setDateFilter(val);
+                                    if (val !== "custom") {
+                                        setAppliedCustomDate({ start: "", end: "" });
+                                    }
+                                }}>
                                     <SelectTrigger className="h-10 w-full rounded-md border-gray-300"><SelectValue placeholder="Select range" /></SelectTrigger>
                                     <SelectContent>
                                         {[["all", "All Time"], ["today", "Today"], ["yesterday", "Yesterday"], ["this_week", "This Week"], ["last_week", "Last Week"], ["this_month", "This Month"], ["last_month", "Last Month"], ["this_year", "This Year"], ["last_year", "Last Year"], ["custom", "Custom"]].map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
@@ -2090,15 +2209,71 @@ function ReceivedDataPageInner() {
 
                         {/* Custom date range */}
                         {dateFilter === "custom" && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 pt-3 border-t border-slate-200">
-                                <div className="flex flex-col gap-1.5">
-                                    <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Start Date</label>
-                                    <Input type="date" value={customDate.start} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomDate({ ...customDate, start: e.target.value })} className="h-10 w-full rounded-md border-gray-300" />
+                            <div className="mt-3 pt-3 border-t border-slate-200">
+                                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                                    <div className="sm:col-span-4 flex flex-col gap-1.5">
+                                        <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Start Date</label>
+                                        <Input
+                                            type="date"
+                                            value={customDate.start}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomDate({ ...customDate, start: e.target.value })}
+                                            onKeyDown={(e: React.KeyboardEvent) => { if (e.key === "Enter") handleApplyCustomDate(); }}
+                                            className="h-10 w-full rounded-md border-gray-300"
+                                        />
+                                    </div>
+                                    <div className="sm:col-span-4 flex flex-col gap-1.5">
+                                        <label className="text-xs font-medium uppercase tracking-wide text-slate-500">End Date</label>
+                                        <Input
+                                            type="date"
+                                            value={customDate.end}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomDate({ ...customDate, end: e.target.value })}
+                                            onKeyDown={(e: React.KeyboardEvent) => { if (e.key === "Enter") handleApplyCustomDate(); }}
+                                            className="h-10 w-full rounded-md border-gray-300"
+                                        />
+                                    </div>
+                                    <div className="sm:col-span-4 flex gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={handleApplyCustomDate}
+                                            disabled={!customDate.start || !customDate.end || receivedLoading}
+                                            className="h-10 flex-1 flex items-center justify-center gap-1.5 px-4 rounded-md text-xs font-bold uppercase tracking-wider text-white bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all"
+                                        >
+                                            {receivedLoading ? (
+                                                <>
+                                                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                                    <span>Fetching...</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                                    </svg>
+                                                    <span>Run Query</span>
+                                                </>
+                                            )}
+                                        </button>
+                                        {(customDate.start || customDate.end || appliedCustomDate.start) && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setCustomDate({ start: "", end: "" });
+                                                    setAppliedCustomDate({ start: "", end: "" });
+                                                }}
+                                                className="h-10 px-3 rounded-md text-xs font-semibold text-slate-600 hover:text-slate-900 border border-slate-300 hover:bg-slate-100 transition-colors"
+                                                title="Clear custom dates"
+                                            >
+                                                Clear
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
-                                <div className="flex flex-col gap-1.5">
-                                    <label className="text-xs font-medium uppercase tracking-wide text-slate-500">End Date</label>
-                                    <Input type="date" value={customDate.end} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomDate({ ...customDate, end: e.target.value })} className="h-10 w-full rounded-md border-gray-300" />
-                                </div>
+                                {appliedCustomDate.start && appliedCustomDate.end && (
+                                    <div className="mt-2.5 flex items-center gap-2 text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-md px-3 py-1.5 w-fit">
+                                        <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse" />
+                                        <span>Active Query: {appliedCustomDate.start} → {appliedCustomDate.end}</span>
+                                        <span className="text-slate-400 font-normal">({filteredReceived.length} {filteredReceived.length === 1 ? 'record' : 'records'})</span>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

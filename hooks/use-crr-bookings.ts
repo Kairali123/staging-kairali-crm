@@ -1,8 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Guest, StageInfo, StageStatus } from "@/types/crr";
 import { METADATA_KEYS, PROOF_FILE_LIMIT_LABEL, isCancelledStatus, stageStatusOf } from "@/lib/crr-stage-rules";
+import {
+    FOCUS_REFETCH_THROTTLE_MS,
+    POLL_GIVE_UP_MS,
+    chunk,
+    hasToShowFlip,
+    nextPollDelay,
+    processingTargets,
+} from "@/lib/crr-poll";
 
 /* =========================================================
    REQUIRED TYPE UPDATE — @/types/crr
@@ -212,7 +220,7 @@ function mapRow(row: GasBookingRow): Guest {
             outcomeRemarks: s6!.outcomeRemarks,
             status: s6!.status,
             notDoneRemarks: s6!.notDoneRemarks,
-            followupDate: "", // no followupDate column for stage 6 (confirmed intentional)
+            followupDate: s6!.followupDate,
             stageKey: s6!.stageKey,
         } as Guest["safeReturn"])
         : undefined;
@@ -349,8 +357,21 @@ export function useCrrBookings(from?: string, to?: string) {
     const [loading, setLoading] = useState(() => !cached);
     const [isRevalidating, setIsRevalidating] = useState(() => Boolean(cached));
     const [error, setError] = useState<string | null>(null);
+    const [pollNonce, setPollNonce] = useState(0);
+    // The guest behind an open modal. Background refreshes leave that one row untouched
+    // so a half-filled form is never overwritten underneath the user.
+    const [lockedGuestId, setLockedGuestId] = useState<number | null>(null);
 
-    const fetchBookings = useCallback(async (isBackground = false) => {
+    const guestsRef = useRef<Guest[]>(guests);
+    const lockedGuestIdRef = useRef<number | null>(lockedGuestId);
+    const lastFetchAtRef = useRef(0);
+    const pollAttemptRef = useRef(0);
+    const pollStartedAtRef = useRef<number | null>(null);
+
+    useEffect(() => { guestsRef.current = guests; }, [guests]);
+    useEffect(() => { lockedGuestIdRef.current = lockedGuestId; }, [lockedGuestId]);
+
+    const fetchBookings = useCallback(async (isBackground = false, preserveGuestId?: number | null) => {
         if (isBackground) {
             setIsRevalidating(true);
         } else {
@@ -370,11 +391,18 @@ export function useCrrBookings(from?: string, to?: string) {
             }
 
             const mapped = json.data.map(mapRow).sort((a, b) => b.id - a.id);
-            setGuests(mapped);
+            // Keep the row behind an open modal exactly as the user left it.
+            const next = preserveGuestId == null
+                ? mapped
+                : mapped.map((g) => (g.id === preserveGuestId
+                    ? guestsRef.current.find((prev) => prev.id === preserveGuestId) ?? g
+                    : g));
+            setGuests(next);
+            lastFetchAtRef.current = Date.now();
             const fetchedUsers = json.stageUsers || [];
             setStageUsers(fetchedUsers);
             crrClientCache.set(cacheKey, {
-                guests: mapped,
+                guests: next,
                 stageUsers: fetchedUsers,
                 timestamp: Date.now(),
             });
@@ -394,7 +422,77 @@ export function useCrrBookings(from?: string, to?: string) {
 
     const refetch = useCallback(() => fetchBookings(true), [fetchBookings]);
 
-    return { guests, setGuests, loading, isRevalidating, error, refetch, stageUsers };
+    // Coming back to the tab is the cheapest possible signal that time has passed
+    // and something may have been confirmed elsewhere. Throttled so alt-tabbing
+    // does not turn into a burst of requests.
+    useEffect(() => {
+        const maybeRefetch = () => {
+            if (document.visibilityState !== "visible") return;
+            if (Date.now() - lastFetchAtRef.current < FOCUS_REFETCH_THROTTLE_MS) return;
+            void fetchBookings(true, lockedGuestIdRef.current);
+        };
+        window.addEventListener("focus", maybeRefetch);
+        document.addEventListener("visibilitychange", maybeRefetch);
+        return () => {
+            window.removeEventListener("focus", maybeRefetch);
+            document.removeEventListener("visibilitychange", maybeRefetch);
+        };
+    }, [fetchBookings]);
+
+    // While any stage sits in "Processing", poll the status-only endpoint until its
+    // to_show flips, then pull the authoritative payload through the normal endpoint.
+    // Gives up after POLL_GIVE_UP_MS; the focus listener above still covers it after that.
+    useEffect(() => {
+        const targets = processingTargets(guests, lockedGuestId);
+        if (targets.length === 0) {
+            pollStartedAtRef.current = null;
+            pollAttemptRef.current = 0;
+            return;
+        }
+        if (pollStartedAtRef.current == null) pollStartedAtRef.current = Date.now();
+        if (Date.now() - pollStartedAtRef.current > POLL_GIVE_UP_MS) return;
+
+        let cancelled = false;
+        const timer = setTimeout(async () => {
+            if (cancelled) return;
+            try {
+                // Chunked: the route caps one request, and a busy page can easily
+                // have more bookings waiting than that cap allows.
+                const batches = await Promise.all(
+                    chunk(targets).map(async (bookings) => {
+                        const res = await fetch("/api/crr-calling/stage-status", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ bookings }),
+                            cache: "no-store",
+                        });
+                        const json = await res.json();
+                        return res.ok && json.success ? (json.data || []) : [];
+                    })
+                );
+                const rows = batches.flat();
+                if (cancelled) return;
+                if (hasToShowFlip(guestsRef.current, rows, lockedGuestIdRef.current)) {
+                    pollAttemptRef.current = 0;
+                    pollStartedAtRef.current = null;
+                    await fetchBookings(true, lockedGuestIdRef.current);
+                    return; // the resulting guests change reschedules if anything is still pending
+                }
+            } catch {
+                // Transient network/API failure: keep backing off rather than giving up.
+            }
+            if (cancelled) return;
+            pollAttemptRef.current += 1;
+            setPollNonce((n) => n + 1);
+        }, nextPollDelay(pollAttemptRef.current));
+
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [guests, lockedGuestId, pollNonce, fetchBookings]);
+
+    return { guests, setGuests, loading, isRevalidating, error, refetch, stageUsers, setLockedGuestId };
 }
 
 /* =========================================================

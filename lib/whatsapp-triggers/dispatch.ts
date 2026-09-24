@@ -18,7 +18,7 @@ export async function dispatchDue(now=Date.now(),io:IO){
    const missed=now-slot>30*60000,id=randomUUID()
    const templateName=reportTemplates[c.reportId]?.template||'crm_daily_sales_report_image'
    s.runs.push({id,triggerId:c.id,triggerName:c.name,scheduledAt,startedAt:new Date(now).toISOString(),status:missed?'Skipped':'Preparing',detail:missed?'Missed run skipped (>2 hours late)':'Preparing report image',templateName,templateLink:'https://wa.redlava.in/ListTemplate',recipients:c.recipients.map(to=>({to,status:'Pending'}))})
-   if(!missed)jobs.push({config:{...c},runId:id,date:reportDate(slot)})
+   if(!missed)jobs.push({config:{...c},runId:id,date:reportDate(slot,(c.period as 'Today'|'Yesterday')||'Today')})
   }
   return jobs
  })

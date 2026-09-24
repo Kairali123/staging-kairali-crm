@@ -1,174 +1,84 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { CallsReport, CallsRow, CallsDateGroup } from "@/lib/calls-report";
 
-/* ─── Types ──────────────────────────────────────────────────────────────── */
-
-export interface CallsEmployeeRow {
-  empName: string;
-  company: string;
-  plannedCalls: number;
-  actualCalls: number;
-  varianceCalls: number;
-  variancePercent: number;
-  newClientsPlanned: number;
-  newClientsActual: number;
-  oldClientsPlanned: number;
-  oldClientsActual: number;
-}
-
-export interface CallsDateGroup {
-  date: string;          // "2024-02-21"
-  displayDate: string;   // "21 Feb 2024"
-  month: string;         // "FEBRUARY"
-  year: string;          // "2024"
-  employees: CallsEmployeeRow[];
-  totalPlanned: number;
-  totalActual: number;
-  totalVariance: number;
-  totalNewPlanned: number;
-  totalNewActual: number;
-  totalOldPlanned: number;
-  totalOldActual: number;
-}
-
-// Legacy flat row — kept for filters, KPIs, graph view
-export interface CallsRow {
-  empName: string;
-  company: string;
-  month: string;
-  year: string;
-  plannedCalls: number;
-  actualCalls: number;
-  varianceCalls: number;
-  variancePercent: number;
-  newClientsActual: number;
-  oldClientsActual: number;
-  rank?: number;
-}
+// Types live in lib/calls-report (shared with the API route); re-exported so existing imports keep working.
+export type { CallsEmployeeRow, CallsDateGroup, CallsRow, CallsReport } from "@/lib/calls-report";
 
 interface UseCallsDataReturn {
   callsData: CallsRow[];
   dateGroups: CallsDateGroup[];
+  /** True only while there is nothing to show yet. Background refreshes do not set it. */
   loading: boolean;
+  /** True while a request is in flight, including background refreshes of data already on screen. */
+  refreshing: boolean;
   error: string | null;
+  /** ISO time the server last pulled the data from its source. */
+  fetchedAt: string | null;
   refetch: () => void;
 }
 
-/* ─── Helpers ────────────────────────────────────────────────────────────── */
+type Snapshot = { report: CallsReport; fetchedAt: string };
 
-const MONTH_NAMES = [
-  "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE",
-  "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER",
-];
+// Survives client-side navigation: coming back to the page renders immediately from here.
+let snapshot: Snapshot | null = null;
+let inflight: Promise<Snapshot> | null = null;
 
-function formatDisplayDate(dateStr: string): string {
-  const [y, m, d] = dateStr.split("-");
-  const abbr = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  return `${d} ${abbr[parseInt(m, 10) - 1]} ${y}`;
+// Stable references so memoised filters do not re-run while there is no data.
+const EMPTY_ROWS: CallsRow[] = [];
+const EMPTY_GROUPS: CallsDateGroup[] = [];
+
+async function requestReport(force: boolean): Promise<Snapshot> {
+  if (!force && inflight) return inflight;
+  const run = (async () => {
+    const res = await fetch(force ? "/api/calls-report?refresh=1" : "/api/calls-report", { credentials: "same-origin" });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.success) throw new Error(json?.error || `Request failed (${res.status})`);
+    return { report: json.data as CallsReport, fetchedAt: json.fetchedAt as string };
+  })();
+  inflight = run;
+  try {
+    return await run;
+  } finally {
+    if (inflight === run) inflight = null;
+  }
 }
 
-/* ─── Hook ───────────────────────────────────────────────────────────────── */
-
 export default function useCallsData(): UseCallsDataReturn {
-  const [callsData, setCallsData] = useState<CallsRow[]>([]);
-  const [dateGroups, setDateGroups] = useState<CallsDateGroup[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<Snapshot | null>(snapshot);
+  const [refreshing, setRefreshing] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const alive = useRef(true);
 
-  const fetchCalls = async () => {
+  const load = useCallback(async (force: boolean) => {
+    setRefreshing(true);
+    setError(null);
     try {
-      setLoading(true);
-      setError(null);
-
-      const res = await fetch(
-        "https://script.google.com/macros/s/AKfycbydzH-IMa6XAwjjmJmy6yfDjnuu2Rfc8n2OUHYPYp5gQjNoqjjc5BrtLxB83torBcU/exec"
-      );
-      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-
-      const json = await res.json();
-      if (!json || Object.keys(json).length === 0)
-        throw new Error("No data received from API");
-
-      const groups: CallsDateGroup[] = [];
-      const flatMap = new Map<string, CallsRow>();
-
-      // Sort dates ascending
-      Object.keys(json).sort().forEach((dateStr) => {
-        const [y, m] = dateStr.split("-");
-        const monthName = MONTH_NAMES[parseInt(m, 10) - 1];
-        const year = y;
-
-        const employees: CallsEmployeeRow[] = [];
-
-        Object.entries(json[dateStr]).forEach(([empName, data]: [string, any]) => {
-          const company = (data.companyName ?? "")
-            .toString().trim().toUpperCase().replace(/\s+/g, "");
-
-          const plannedCalls = data.plannedData?.totalPlannedCalls ?? 0;
-          const actualCalls = data.actualData?.totalActualCalls ?? 0;
-          const newClientsPlanned = data.plannedData?.breakdown?.newClientCalls ?? 0;
-          const oldClientsPlanned = data.plannedData?.breakdown?.oldClientCalls ?? 0;
-          const newClientsActual = data.actualData?.breakdown?.newClientCalls ?? 0;
-          const oldClientsActual = data.actualData?.breakdown?.oldClientCalls ?? 0;
-          const varianceCalls = actualCalls - plannedCalls;
-          const variancePercent = plannedCalls !== 0
-            ? (varianceCalls / plannedCalls) * 100 : 0;
-
-          employees.push({
-            empName, company,
-            plannedCalls, actualCalls, varianceCalls, variancePercent,
-            newClientsPlanned, newClientsActual,
-            oldClientsPlanned, oldClientsActual,
-          });
-
-          // Accumulate flat row per employee+month+year
-          const key = `${empName}||${monthName}||${year}||${company}`;
-          const ex = flatMap.get(key);
-          if (ex) {
-            ex.plannedCalls += plannedCalls;
-            ex.actualCalls += actualCalls;
-            ex.newClientsActual += newClientsActual;
-            ex.oldClientsActual += oldClientsActual;
-            ex.varianceCalls = ex.actualCalls - ex.plannedCalls;
-            ex.variancePercent = ex.plannedCalls !== 0
-              ? (ex.varianceCalls / ex.plannedCalls) * 100 : 0;
-          } else {
-            flatMap.set(key, {
-              empName, company, month: monthName, year,
-              plannedCalls, actualCalls, varianceCalls, variancePercent,
-              newClientsActual, oldClientsActual,
-            });
-          }
-        });
-
-        groups.push({
-          date: dateStr,
-          displayDate: formatDisplayDate(dateStr),
-          month: monthName,
-          year,
-          employees,
-          totalPlanned: employees.reduce((s, e) => s + e.plannedCalls, 0),
-          totalActual: employees.reduce((s, e) => s + e.actualCalls, 0),
-          totalVariance: employees.reduce((s, e) => s + e.varianceCalls, 0),
-          totalNewPlanned: employees.reduce((s, e) => s + e.newClientsPlanned, 0),
-          totalNewActual: employees.reduce((s, e) => s + e.newClientsActual, 0),
-          totalOldPlanned: employees.reduce((s, e) => s + e.oldClientsPlanned, 0),
-          totalOldActual: employees.reduce((s, e) => s + e.oldClientsActual, 0),
-        });
-      });
-
-      setDateGroups(groups);
-      setCallsData(Array.from(flatMap.values()));
+      const next = await requestReport(force);
+      snapshot = next;
+      if (alive.current) setData(prev => (prev && prev.fetchedAt === next.fetchedAt ? prev : next));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch calls data");
       console.error("Calls API error:", err);
+      if (alive.current) setError(err instanceof Error ? err.message : "Failed to fetch calls data");
     } finally {
-      setLoading(false);
+      if (alive.current) setRefreshing(false);
     }
+  }, []);
+
+  useEffect(() => {
+    alive.current = true;
+    load(false);
+    return () => { alive.current = false; };
+  }, [load]);
+
+  return {
+    callsData: data?.report.callsData ?? EMPTY_ROWS,
+    dateGroups: data?.report.dateGroups ?? EMPTY_GROUPS,
+    loading: !data && refreshing,
+    refreshing,
+    error,
+    fetchedAt: data?.fetchedAt ?? null,
+    refetch: () => { load(true); },
   };
-
-  useEffect(() => { fetchCalls(); }, []);
-
-  return { callsData, dateGroups, loading, error, refetch: fetchCalls };
 }

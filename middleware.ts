@@ -181,7 +181,7 @@ import { getRequestSourceIp, recordSecurityEvent } from '@/lib/security-audit'
 import { authorizeOrderFormAction } from '@/lib/order-form-policy'
 
 // Routes that don't need authentication
-const publicRoutes = ['/', '/access-denied', '/guest-experience']
+const publicRoutes = ['/', '/access-denied']
 
 // Routes that require authentication
 const protectedRoutes = [
@@ -289,6 +289,7 @@ const exemptApiPaths = new Set([
   '/api/cron/email-triggers', // Handler verifies local worker secret; hosted execution is disabled.
   '/api/cron/kserve-lost-alert',
   '/api/kserve-alert-preview',
+  '/api/voicecall/kserve-lead-lost/export',
 ])
 
 // No active API prefix exemptions. `/api/meetings/*` stays behind the signed
@@ -364,7 +365,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Skip middleware for public routes
-  if (publicRoutes.includes(pathname) || pathname.startsWith('/guest-experience')) {
+  if (publicRoutes.includes(pathname)) {
     return withSecurityHeaders(NextResponse.next(), pathname)
   }
 
