@@ -4,6 +4,7 @@ export const emailReportTemplates = {
   'marketing-daily-report': { name: 'Marketing Daily Report', path: '/marketing-daily-report' },
   'sales-call-audit': { name: 'Daily Call Audit Pass/Fail Report Email Template', path: '/sales-call-audit/email-template' },
   'ktahv-crr-process-report-alert': { name: 'KTAHV CRR Process Report Alert', path: '/ktahv-crr-process-report-alert' },
+  'kserve-lead-lost-alert': { name: 'KServe Lead Lost Alert', path: '/ai-voice-leads' },
 } as const
 export type EmailReportId = keyof typeof emailReportTemplates
 /** Names this report was saved under before it was renamed; still accepted and shown under the current name. */

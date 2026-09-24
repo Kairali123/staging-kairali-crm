@@ -47,8 +47,22 @@ function getGlobal(): any {
   return {}
 }
 
+export function stopScheduler(): void {
+  const g = getGlobal()
+  if (g._whatsappScheduler?.timer) {
+    clearInterval(g._whatsappScheduler.timer)
+    g._whatsappScheduler.timer = null
+    g._whatsappScheduler.isTicking = false
+  }
+}
+
 export function ensureSchedulerRunning(): { running: boolean; started: boolean } {
-  if (typeof window !== 'undefined' || process.env.VERCEL) {
+  if (
+    typeof window !== 'undefined' ||
+    process.env.VERCEL ||
+    (process.env.NODE_ENV !== 'production' && process.env.ENABLE_LOCAL_TRIGGER_SCHEDULER !== 'true')
+  ) {
+    stopScheduler()
     return { running: false, started: false }
   }
 

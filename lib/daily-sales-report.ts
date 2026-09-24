@@ -30,9 +30,10 @@ export function salesContributors(rows:SalesAgent[]):{agent:string;sales:number}
   const name=(r.agent||'').trim()
   if(!name)continue
   const key=name.toLowerCase()
+  const totalVal=(r.sales||0)+(r.unverified||0)
   const existing=map.get(key)
-  if(existing){existing.sales+=r.sales}
-  else{map.set(key,{agent:name,sales:r.sales})}
+  if(existing){existing.sales+=totalVal}
+  else{map.set(key,{agent:name,sales:totalVal})}
  }
  return [...map.values()].filter(r=>r.sales>0).sort((a,b)=>b.sales-a.sales||a.agent.localeCompare(b.agent))
 }
@@ -139,12 +140,13 @@ export function exportSalesHTML(report:DailySalesReport,scope:string){
  const totalSales=rows.reduce((n,r)=>n+(r.sales||0),0),totalCollection=rows.reduce((n,r)=>n+(r.collection||0),0)
  const totalUnverified=rows.reduce((n,r)=>n+(r.unverified||0),0),totalCancelled=rows.reduce((n,r)=>n+(r.cancelled||0),0)
   const palette=['#4f6de0','#9270cf','#31a2ad','#e4a04d','#dc7d9b','#6788a8']
+  const totalContributingSales=contributors.reduce((n,c)=>n+c.sales,0)
   const donutChartHTML = buildSalesDonutSvg(report, scope) || '<div class="empty-chart">No sales</div>'
   const contributorRows=contributors.map((r,i)=>{
-   const pct=(totalSales>0?r.sales/totalSales*100:0).toFixed(1),color=palette[i%palette.length]
+   const pct=(totalContributingSales>0?r.sales/totalContributingSales*100:0).toFixed(1),color=palette[i%palette.length]
    return `<table role="presentation" class="crow" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td class="cname"><span class="dot" style="background:${color}"></span>${esc(r.agent)}</td><td class="camt" align="right">${money(r.sales)}</td></tr><tr><td colspan="2"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td><div class="cbar"><div style="background:${color};height:8px;width:${pct}%;border-radius:4px"></div></div></td><td class="cpct" width="54" align="right">${pct}%</td></tr></table></td></tr></table>`
   }).join('')
-  const contributorHTML=`<section class="contributors"><table role="presentation" class="stack" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td><span class="eyebrow">SALES CONTRIBUTION</span><h2>Sales by contributor</h2><p class="sub" style="margin-bottom:0">${contributors.length} active agent${contributors.length===1?'':'s'} with positive sales · ${scope==='ALL'?'All companies':esc(companies[scope as Company])}</p></td><td class="meta"><span class="total-l">Total contributing sales</span><strong class="total-v">${money(totalSales)}</strong></td></tr></table><table role="presentation" class="split" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td class="chart">${donutChartHTML}</td><td>${contributorRows||'<p class="sub" style="text-align:center;margin:18px 0">No positive sales contributors recorded for this date.</p>'}${contributors.length?`<div class="ctot">Grand total<span>${money(totalSales)} · ${totalSales>0?'100%':'—'}</span></div>`:''}</td></tr></table></section>`
+  const contributorHTML=`<section class="contributors"><table role="presentation" class="stack" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td><span class="eyebrow">SALES CONTRIBUTION</span><h2>Sales by contributor</h2><p class="sub" style="margin-bottom:0">${contributors.length} active agent${contributors.length===1?'':'s'} with positive sales · ${scope==='ALL'?'All companies':esc(companies[scope as Company])}</p></td><td class="meta"><span class="total-l">Total contributing sales</span><strong class="total-v">${money(totalContributingSales)}</strong></td></tr></table><table role="presentation" class="split" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td class="chart">${donutChartHTML}</td><td>${contributorRows||'<p class="sub" style="text-align:center;margin:18px 0">No positive sales contributors recorded for this date.</p>'}${contributors.length?`<div class="ctot">Grand total<span>${money(totalContributingSales)} · ${totalContributingSales>0?'100%':'—'}</span></div>`:''}</td></tr></table></section>`
    const callingCards = [
      {
       label: 'AppSheet Pending',
@@ -254,18 +256,27 @@ export function exportSalesHTML(report:DailySalesReport,scope:string){
   </section>`
 
   const companyHTML=codes.map(code=>{
-   const list=rows.filter(r=>r.company===code), isKappl=code==='KAPPL'
-   const agentHeaders=['Agent Name','Sales Quantity',isKappl?'UnVerified Sales Value':'Sales Value','Collection Amount','Cancelled Qty','Cancelled Value']
+   const list=rows.filter(r=>r.company===code)
+   const agentHeaders=['Agent Name','Sales Quantity','Sales Value','Unverified Sales','Collection Amount','Cancelled Qty','Cancelled Value']
    const sum=(pick:(r:SalesAgent)=>number|undefined|null)=>list.reduce((n,r)=>n+(Number(pick(r))||0),0)
-   const cells=(qty:string,sales:string,collection:string,cancelledQty:string,cancelled:string)=>`<td>${lbl(agentHeaders[1])}${qty}</td><td>${lbl(agentHeaders[2])}${sales}</td><td>${lbl(agentHeaders[3])}${collection}</td><td>${lbl(agentHeaders[4])}${cancelledQty}</td><td>${lbl(agentHeaders[5])}${cancelled}</td>`
+   const cells=(qty:string,sales:string,unverified:string,collection:string,cancelledQty:string,cancelled:string)=>`<td>${lbl(agentHeaders[1])}${qty}</td><td>${lbl(agentHeaders[2])}${sales}</td><td>${lbl(agentHeaders[3])}${unverified}</td><td>${lbl(agentHeaders[4])}${collection}</td><td>${lbl(agentHeaders[5])}${cancelledQty}</td><td>${lbl(agentHeaders[6])}${cancelled}</td>`
    const body=list.map(r=>{
-    const qty = isKappl ? ((r.unverifiedCount || 0) > 0 ? showCount(r.unverifiedCount) : (r.conversions > 0 ? showCount(r.conversions) : '—')) : (r.conversions > 0 ? showCount(r.conversions) : '—')
-    const val = isKappl ? money(r.unverified || 0) : money(r.sales || 0)
-    return `<tr><td>${esc(r.agent)}</td>${cells(qty,val,money(r.collection||0),r.cancelledCount>0?showCount(r.cancelledCount):'—',money(r.cancelled||0))}</tr>`
+    const totalQ = (r.conversions || 0) + (r.unverifiedCount || 0)
+    const qty = totalQ > 0 ? showCount(totalQ) : '—'
+    const salesVal = money(r.sales || 0)
+    const unverifiedVal = money(r.unverified || 0)
+    const collVal = money(r.collection || 0)
+    const cancelQty = r.cancelledCount > 0 ? showCount(r.cancelledCount) : '—'
+    const cancelVal = money(r.cancelled || 0)
+    return `<tr><td>${esc(r.agent)}</td>${cells(qty,salesVal,unverifiedVal,collVal,cancelQty,cancelVal)}</tr>`
    }).join('')
-   const totalQty = isKappl ? sum(r => (r.unverifiedCount || 0) > 0 ? r.unverifiedCount : (r.conversions || 0)) : sum(r => r.conversions)
-   const totalVal = isKappl ? sum(r => r.unverified || 0) : sum(r => r.sales || 0)
-   return `<section class="card"><h2>${esc(companies[code as Company])}</h2><table class="rt" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px"><thead><tr>${agentHeaders.map(t=>`<th>${t}</th>`).join('')}</tr></thead><tbody>${body||'<tr><td class="empty" colspan="6">No sales or collection activity for this date.</td></tr>'}</tbody><tfoot><tr><td>Grand total</td>${cells(showCount(totalQty),money(totalVal),money(sum(r=>r.collection)),showCount(sum(r=>r.cancelledCount)),money(sum(r=>r.cancelled)))}</tr></tfoot></table></section>`
+   const totalQty = sum(r => (r.conversions || 0) + (r.unverifiedCount || 0))
+   const totalSalesVal = sum(r => r.sales || 0)
+   const totalUnverifiedVal = sum(r => r.unverified || 0)
+   const totalCollection = sum(r => r.collection || 0)
+   const totalCancelledCount = sum(r => r.cancelledCount || 0)
+   const totalCancelledVal = sum(r => r.cancelled || 0)
+   return `<section class="card"><h2>${esc(companies[code as Company])}</h2><table class="rt" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px"><thead><tr>${agentHeaders.map(t=>`<th>${t}</th>`).join('')}</tr></thead><tbody>${body||'<tr><td class="empty" colspan="7">No sales or collection activity for this date.</td></tr>'}</tbody><tfoot><tr><td>Grand total</td>${cells(showCount(totalQty),money(totalSalesVal),money(totalUnverifiedVal),money(totalCollection),showCount(totalCancelledCount),money(totalCancelledVal))}</tr></tfoot></table></section>`
   }).join('')
 
   const kpis:[string,string][]=[['Sales value',money(totalSales)],['Collection',money(totalCollection)],['Unverified',money(totalUnverified)],['Cancelled',money(totalCancelled)]]
@@ -277,7 +288,7 @@ export function exportSalesHTML(report:DailySalesReport,scope:string){
 
 export function buildSalesDonutSvg(report:DailySalesReport,scope:string):string{
  const rows=scopedRows(report,scope),contributors=salesContributors(rows)
- const totalSales=rows.reduce((n,r)=>n+r.sales,0)
+ const totalSales=contributors.reduce((n,r)=>n+r.sales,0)
  if(totalSales<=0)return ''
  const palette=['#4f6de0','#9270cf','#31a2ad','#e4a04d','#dc7d9b','#6788a8']
  const slices=contributors.filter(c=>c.sales>0).map((c,i)=>({v:c.sales,col:palette[i%palette.length]}))
