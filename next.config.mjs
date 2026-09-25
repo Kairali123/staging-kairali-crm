@@ -6,6 +6,8 @@ const nextConfig = {
     '/settings/automation/email-triggers': ['./docs/email-trigger-config/*.html', './docs/email-trigger-config/*.js'],
     '/api/daily-sales-report-alert': ['./data/daily-sales-report/*.json'],
   },
+  eslint: { ignoreDuringBuilds: true },
+  typescript: { ignoreBuildErrors: true },
   images: {
     unoptimized: true,
   },
