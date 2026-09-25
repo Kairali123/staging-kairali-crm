@@ -7,7 +7,7 @@ import type { Stage, Guest } from "@/types/crr";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import Link from "next/link";
-import { AlertTriangle, BarChart3, TrendingUp, Award, PhoneCall, Briefcase, ClipboardCheck, Users, Calendar, CheckCircle2, Send, Download, Printer, Share2, Mail, FileSpreadsheet, Clock } from "lucide-react";
+import { AlertTriangle, BarChart3, TrendingUp, Award, PhoneCall, Briefcase, ClipboardCheck, Users, Calendar, CheckCircle2, Send, Download, Printer, Share2, Mail, FileSpreadsheet, Clock, Image as ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
@@ -233,6 +233,29 @@ export default function KtahvCrrProcessReportAlertPage() {
         toast.success("CSV Downloaded!");
     };
 
+    const handleDownloadJPG = async () => {
+        try {
+            toast.info("Generating report image...");
+            const { exportCrrReportHTML } = await import("@/lib/ktahv-crr-report");
+            const { reportJPG, saveReportFile } = await import("@/lib/marketing-report-browser");
+            const reportData = {
+                reportDate: new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()),
+                displayDate: reportDateStr,
+                generatedAt: new Date().toISOString(),
+                pendingReport,
+                dailyDoneReport,
+                chartData,
+                stages: STAGES
+            };
+            const html = exportCrrReportHTML(reportData as any, "KTAHV");
+            const blob = await reportJPG(html);
+            saveReportFile(blob, `KTAHV-CRR-Report-${reportData.reportDate}.jpg`);
+            toast.success("JPG image downloaded successfully!");
+        } catch (e: any) {
+            toast.error(e?.message || "Failed to generate JPG");
+        }
+    };
+
     const handleShareEmail = () => {
         const subject = `KTAHV CRR Process Report Alert - ${reportDateStr}`;
         const body = `Please review the CRR Process Report Alert for ${reportDateStr}.%0D%0A%0D%0AActive Guests: ${chartData.totalActive}%0D%0ATotal Completed Guests: ${chartData.totalComplete}%0D%0A%0D%0ALogin to the CRM to view the full detailed report.`;
@@ -338,6 +361,10 @@ export default function KtahvCrrProcessReportAlertPage() {
                                     <DropdownMenuItem onClick={handlePrint} className="cursor-pointer">
                                         <Printer className="mr-2 h-4 w-4" />
                                         <span>Print / Save as PDF</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={handleDownloadJPG} className="cursor-pointer">
+                                        <ImageIcon className="mr-2 h-4 w-4" />
+                                        <span>Download JPG Image</span>
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={handleExportCSV} className="cursor-pointer">
                                         <FileSpreadsheet className="mr-2 h-4 w-4" />
