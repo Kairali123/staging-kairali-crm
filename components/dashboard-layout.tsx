@@ -59,6 +59,12 @@ import {
   Sparkles,
   Cpu,
   Upload,
+  Star,
+  PlusCircle,
+  Moon,
+  Sun,
+  MessageSquare,
+  Map,
 } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"

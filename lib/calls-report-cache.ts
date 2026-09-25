@@ -31,7 +31,7 @@ let lastFailure: { at: number; message: string } | null = null
 
 async function readDisk() {
   try {
-    const parsed = JSON.parse(await fs.readFile(CACHE_FILE, 'utf8'))
+    const parsed = JSON.parse(await fs.readFile(/*turbopackIgnore: true*/ CACHE_FILE, 'utf8'))
     if (parsed?.report?.dateGroups?.length && Number.isFinite(parsed.fetchedAt)) memory = parsed
   } catch {
     // No usable disk copy; the first request fetches upstream.
@@ -41,8 +41,8 @@ async function readDisk() {
 async function writeDisk(entry: Entry) {
   try {
     const temp = `${CACHE_FILE}.${process.pid}.tmp`
-    await fs.writeFile(temp, JSON.stringify(entry))
-    await fs.rename(temp, CACHE_FILE)
+    await fs.writeFile(/*turbopackIgnore: true*/ temp, JSON.stringify(entry))
+    await fs.rename(/*turbopackIgnore: true*/ temp, CACHE_FILE)
   } catch {
     // Read-only or full disk: memory cache still works.
   }
