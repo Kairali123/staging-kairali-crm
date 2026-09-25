@@ -318,6 +318,30 @@ export default function GuestWelcomePage() {
     setCurrentSlideIndex((prev) => (prev - 1 + SLIDES.length) % SLIDES.length)
   }, [])
 
+  // Kiosk config state — fetched from admin config page
+  const [kioskConfig, setKioskConfig] = useState<{
+    guestName: string; roomNumber: string; welcomeMessage: string;
+    enabledSlides: number[]; defaultLanguage: string; activeTheme: string; kioskLabel: string;
+  } | null>(null)
+  const [langManuallySet, setLangManuallySet] = useState(false)
+
+  const fetchKioskConfig = useCallback(async () => {
+    try {
+      const res = await fetch("/api/guest-experience/config")
+      const data = await res.json()
+      setKioskConfig(data)
+      if (!langManuallySet && data.defaultLanguage && data.defaultLanguage in LANGUAGES) {
+        setLang(data.defaultLanguage as keyof typeof LANGUAGES)
+      }
+    } catch {}
+  }, [langManuallySet])
+
+  useEffect(() => {
+    fetchKioskConfig()
+    const interval = setInterval(fetchKioskConfig, 60000)
+    return () => clearInterval(interval)
+  }, [fetchKioskConfig])
+
   // Reset video when slide changes
   useEffect(() => {
     setIsPlaying(false)
@@ -397,6 +421,11 @@ export default function GuestWelcomePage() {
             <p className="text-amber-400/90 text-[9px] md:text-[11px] tracking-[0.22em] uppercase font-light mt-0.5">
               The Ayurvedic Healing Village
             </p>
+            {kioskConfig?.guestName && (
+              <p className="text-white/60 text-[9px] md:text-[10px] tracking-widest uppercase font-medium mt-0.5">
+                Welcome, {kioskConfig.guestName}{kioskConfig.roomNumber ? ` · ${kioskConfig.roomNumber}` : ""}
+              </p>
+            )}
           </div>
         </div>
 
@@ -422,7 +451,7 @@ export default function GuestWelcomePage() {
                 {Object.entries(LANGUAGES).map(([key, val]) => (
                   <button
                     key={key}
-                    onClick={(e) => { e.stopPropagation(); setLang(key as keyof typeof LANGUAGES); setShowLangMenu(false) }}
+                    onClick={(e) => { e.stopPropagation(); setLang(key as keyof typeof LANGUAGES); setShowLangMenu(false); setLangManuallySet(true) }}
                     className={`w-full flex items-center gap-3 px-4 py-3 text-sm transition-colors ${lang === key ? "bg-amber-500/20 text-amber-400 font-semibold" : "text-white/70 hover:bg-white/10 hover:text-white"}`}
                   >
                     <span className="text-xs tracking-widest font-bold opacity-60">{val.code}</span>

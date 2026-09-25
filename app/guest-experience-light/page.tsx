@@ -318,6 +318,30 @@ export default function GuestWelcomePage() {
     setCurrentSlideIndex((prev) => (prev - 1 + SLIDES.length) % SLIDES.length)
   }, [])
 
+  // Kiosk config state — fetched from admin config page
+  const [kioskConfig, setKioskConfig] = useState<{
+    guestName: string; roomNumber: string; welcomeMessage: string;
+    enabledSlides: number[]; defaultLanguage: string; activeTheme: string; kioskLabel: string;
+  } | null>(null)
+  const [langManuallySet, setLangManuallySet] = useState(false)
+
+  const fetchKioskConfig = useCallback(async () => {
+    try {
+      const res = await fetch("/api/guest-experience/config")
+      const data = await res.json()
+      setKioskConfig(data)
+      if (!langManuallySet && data.defaultLanguage && data.defaultLanguage in LANGUAGES) {
+        setLang(data.defaultLanguage as keyof typeof LANGUAGES)
+      }
+    } catch {}
+  }, [langManuallySet])
+
+  useEffect(() => {
+    fetchKioskConfig()
+    const interval = setInterval(fetchKioskConfig, 60000)
+    return () => clearInterval(interval)
+  }, [fetchKioskConfig])
+
   // Reset video when slide changes
   useEffect(() => {
     setIsPlaying(false)
@@ -422,7 +446,7 @@ export default function GuestWelcomePage() {
                 {Object.entries(LANGUAGES).map(([key, val]) => (
                   <button
                     key={key}
-                    onClick={(e) => { e.stopPropagation(); setLang(key as keyof typeof LANGUAGES); setShowLangMenu(false) }}
+                    onClick={(e) => { e.stopPropagation(); setLang(key as keyof typeof LANGUAGES); setShowLangMenu(false); setLangManuallySet(true) }}
                     className={`w-full flex items-center gap-3 px-4 py-3 text-sm transition-colors ${lang === key ? "bg-amber-100 text-[#C74B26] font-semibold" : "text-[#365942] hover:bg-stone-100 hover:text-[#0C1F12]"}`}
                   >
                     <span className="text-xs tracking-widest font-bold opacity-60">{val.code}</span>
