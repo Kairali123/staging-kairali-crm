@@ -47,18 +47,20 @@ export async function GET(req: NextRequest) {
          campaign_name,
          generate_timestamp AS sent_date,
          DATE(generate_timestamp) AS sent_day
-       FROM ai_voice_leads_sent
+       FROM ai_voice_leads_sent FORCE INDEX (idx_generate_timestamp)
        WHERE generate_timestamp >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
        ORDER BY generate_timestamp DESC`,
       [days]
     );
 
     // ── 2. All received leads in window ─────────────────────────────────────
+    // Using FORCE INDEX (idx_timestamp) because MySQL optimizer incorrectly chooses 
+    // full index scan on initial_id when querying DISTINCT initial_id.
     const [recvRows]: any[] = await pool.query(
       `SELECT DISTINCT initial_id AS enquiry_id
-       FROM ai_voice_leads_received
-       WHERE date_time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)`,
-      [days]
+       FROM ai_voice_leads_received FORCE INDEX (idx_timestamp)
+       WHERE timestamp >= DATE_SUB(CURDATE(), INTERVAL ? DAY)`,
+      [days + 3] // Add 3 days buffer to catch late returns
     );
     const receivedSet = new Set<string>(
       (recvRows as any[]).map((r: any) => String(r.enquiry_id))
