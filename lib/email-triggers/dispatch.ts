@@ -139,6 +139,10 @@ export async function buildEmail(t:Trigger,at:number){
    if(html.includes('Marketing Daily Report')){
     throw new Error('[email-trigger dispatch] INTEGRITY GUARD: Report output contains Marketing Daily Report instead of Daily Sales Report. Aborting email send.')
    }
+  }else if(t.reportId==='kserve-lead-lost-alert'){
+   if(html.includes('Marketing Daily Report') || !html.includes('KServe Lead Lost Alert')){
+    throw new Error('[email-trigger dispatch] INTEGRITY GUARD: Report output does not match KServe Lead Lost Alert. Aborting email send.')
+   }
   }
   const p=(s:string)=>(s||'').trim()?'<div style="padding:18px 24px;white-space:pre-wrap;font:14px/1.8 Arial">'+esc(replace(s))+'</div>':''
   // Reports with in-layout markers keep the note inside their centered column; others get it around <body>.

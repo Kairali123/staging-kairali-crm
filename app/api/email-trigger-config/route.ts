@@ -137,6 +137,12 @@ export async function POST(req: NextRequest) {
       if (input.id && (!previous || (input.revision !== undefined && input.revision !== previous.revision))) {
         throw Error('Configuration changed. Reload before saving.')
       }
+      // A trigger's report type is fixed at creation. This is the only server-side
+      // guarantee that an existing trigger can never silently start sending a
+      // different report (e.g. a client-side bug swapping reportId mid-edit).
+      if (previous && input.reportId !== previous.reportId) {
+        throw Error(`This trigger is locked to "${emailReportTemplates[previous.reportId].name}". Delete it and create a new trigger to send a different report.`)
+      }
       if (input.status === 'Active' && (!marketingMailConfig().configured || !isWorkerReady(s.heartbeat))) {
         throw Error('SMTP and background worker must be ready before activating')
       }
