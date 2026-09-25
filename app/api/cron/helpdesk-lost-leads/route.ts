@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({
-      message: \`Processed \${processed.length} help tickets. \${errors.length} errors.\`,
+      message: `Processed ${processed.length} help tickets. ${errors.length} errors.`,
       processed,
       errors
     });

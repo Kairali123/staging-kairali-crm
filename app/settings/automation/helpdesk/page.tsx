@@ -58,9 +58,9 @@ export default function HelpdeskConfigPage() {
           
           <button
             onClick={() => setConfig({...config, is_active: !config?.is_active})}
-            className={\`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors \${
+            className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors ${
               config?.is_active ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-            }\`}
+            }`}
           >
             {config?.is_active ? <Power className="w-4 h-4" /> : <PowerOff className="w-4 h-4" />}
             {config?.is_active ? "Automation Active" : "Automation Paused"}
@@ -68,9 +68,9 @@ export default function HelpdeskConfigPage() {
         </div>
 
         {message && (
-          <div className={\`p-4 rounded-lg flex items-center gap-3 \${
+          <div className={`p-4 rounded-lg flex items-center gap-3 ${
             message.type === 'success' ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-800 border border-red-200"
-          }\`}>
+          }`}>
             {message.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
             {message.text}
           </div>
