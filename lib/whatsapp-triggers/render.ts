@@ -65,7 +65,8 @@ export async function renderJPEG(html:string){
   return image
  }finally{await browser.close()}
 }
-export async function buildReportImage(config:ConfigInput,date:string){
+export type ReportImage={company:string;image:Buffer}
+export async function buildReportImage(config:ConfigInput,date:string):Promise<ReportImage[]>{
  if(config.reportId==='daily-sales-report'){
   const report=await loadScheduledSales(date,{waitForFullData:true})
   const callingLoaded=Boolean(report.calling&&Array.isArray(report.calling.employees)&&report.calling.employees.length>0)
@@ -74,9 +75,16 @@ export async function buildReportImage(config:ConfigInput,date:string){
    err.name='IncompleteReportError'
    throw err
   }
-  return renderJPEG(exportSalesHTML(report,config.company))
+  return [{company:config.company,image:await renderJPEG(exportSalesHTML(report,config.company))}]
  }
  const report=await loadScheduledMarketing(date),scope=config.company==='ALL'?'all':config.company==='VILLARAAG'?'VILARAAG':config.company
- const expanded=config.details?report.companies.filter(c=>scope==='all'||c.name===scope).flatMap(c=>[c.name+'-leads',c.name+'-sales']):[]
- return renderJPEG(reportExportHTML(date,report,{scope,expanded}))
+ // A single "all companies" image with full source-wise detail exceeds the render
+ // height/size limits, so each company is rendered and sent as its own image instead.
+ const companies=scope==='all'?report.companies:report.companies.filter(c=>c.name===scope)
+ const images:ReportImage[]=[]
+ for(const c of companies){
+  const expanded=config.details?[c.name+'-leads',c.name+'-sales']:[]
+  images.push({company:c.name,image:await renderJPEG(reportExportHTML(date,report,{scope:c.name,expanded}))})
+ }
+ return images
 }

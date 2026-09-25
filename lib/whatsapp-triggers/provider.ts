@@ -39,17 +39,18 @@ export function getReportUrl(config: { reportId: string; company?: string }, dat
  return `${normalizedBase}/sales/reports/daily-alert?date=${encodeURIComponent(date)}&company=${encodeURIComponent(company)}`
 }
 
-export function formatReportScopeVariable(config: ConfigInput, date: string): string {
- const companyLabel = config.company === 'ALL' ? 'All companies' : config.company === 'VILLARAAG' ? 'VILARAAG' : config.company
- const url = getReportUrl(config, date)
+export function formatReportScopeVariable(config: ConfigInput, date: string, companyOverride?: string): string {
+ const company = companyOverride ?? config.company
+ const companyLabel = company === 'ALL' ? 'All companies' : company === 'VILLARAAG' ? 'VILARAAG' : company
+ const url = getReportUrl({ ...config, company }, date)
  return `${companyLabel} (View / PDF: ${url})`
 }
 
-export async function sendReport(config:ConfigInput,to:string,date:string,image:Buffer){
+export async function sendReport(config:ConfigInput,to:string,date:string,image:Buffer,companyOverride?:string){
  const name=reportTemplates[config.reportId].template
  const template=(await templates()).find(t=>t.name===name&&t.compatible)
  if(!template)throw Error('Sending blocked: the mapped template must be APPROVED with an IMAGE header and the expected variables')
- const scopeVariable = formatReportScopeVariable(config, date)
+ const scopeVariable = formatReportScopeVariable(config, date, companyOverride)
  const data=await request('/api/v1/whatsapp/sendMessage',{templateName:name,language:'en',to:to.slice(1),base64File:{name:config.reportId+'-'+date+'.jpg',body:image.toString('base64')},templateVariables:[date,scopeVariable]})
  if(typeof data.waMessageId!=='string'||!data.waMessageId)throw Error('Provider acceptance could not be confirmed; check Redlava before retrying')
  return data.waMessageId as string

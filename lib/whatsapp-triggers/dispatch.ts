@@ -2,7 +2,7 @@ import {randomUUID} from 'node:crypto'
 import {transaction} from './store'
 import {nextDailyRun,reportDate} from './schedule'
 import {reportTemplates, type Config} from './schema'
-type IO={build:(config:Config,date:string)=>Promise<Buffer>;send:(config:Config,to:string,date:string,image:Buffer)=>Promise<string>}
+type IO={build:(config:Config,date:string)=>Promise<{company:string;image:Buffer}[]>;send:(config:Config,to:string,date:string,image:Buffer,company?:string)=>Promise<string>}
 export async function dispatchDue(now=Date.now(),io:IO){
  // Reservations are durable before any report preparation or provider request.
  const jobs=await transaction(s=>{
@@ -23,8 +23,8 @@ export async function dispatchDue(now=Date.now(),io:IO){
   return jobs
  })
  for(const job of jobs){
-  let image:Buffer
-  try{image=await io.build(job.config,job.date)}catch(err:any){
+  let images:{company:string;image:Buffer}[]
+  try{images=await io.build(job.config,job.date)}catch(err:any){
    if(err?.name==='IncompleteReportError'){
     await transaction(s=>{
      const r=s.runs.find(r=>r.id===job.runId)
@@ -44,8 +44,9 @@ export async function dispatchDue(now=Date.now(),io:IO){
    })
    if(!allowed)continue
    try{
-    const messageId=await io.send(job.config,to,job.date,image)
-    await transaction(s=>{const recipient=s.runs.find(r=>r.id===job.runId)!.recipients!.find(r=>r.to===to)!;recipient.status='Accepted';recipient.messageId=messageId})
+    const messageIds:string[]=[]
+    for(const {company,image} of images)messageIds.push(await io.send(job.config,to,job.date,image,company))
+    await transaction(s=>{const recipient=s.runs.find(r=>r.id===job.runId)!.recipients!.find(r=>r.to===to)!;recipient.status='Accepted';recipient.messageId=messageIds.join(',')})
    }catch{
     await transaction(s=>{const run=s.runs.find(r=>r.id===job.runId)!;run.recipients!.find(r=>r.to===to)!.status='Unknown';run.status='Unknown';run.detail='Acceptance uncertain; no retries. Check Redlava.';const c=s.triggers.find(t=>t.id===job.config.id);if(c){c.status='Paused';c.nextRun=null;c.revision++}})
     break
