@@ -10,6 +10,7 @@ import { loadScheduledCrr } from './load-crr-report'
 import { exportCrrReportHTML } from '@/lib/ktahv-crr-report'
 import { localDay, nextRun } from './schedule'
 import { transaction } from './store'
+import { resolveAppUrl } from './app-url'
 import type { Trigger, Run } from './schema'
 const esc=(s:string)=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!))
 
@@ -118,15 +119,7 @@ export async function buildEmail(t:Trigger,at:number){
     const { leads, stats } = await getKserveReconciledLostLeads({ minDays: lostDays })
     const { buildKserveLostAlertEmail } = await import('@/lib/email-triggers/templates/kserve-lead-lost-alert')
     hasData = leads && leads.length > 0
-    const appUrl = (
-     process.env.NEXT_PUBLIC_APP_URL ||
-     (process.env.NODE_ENV !== 'production'
-       ? 'http://localhost:3000'
-       : process.env.VERCEL_PROJECT_PRODUCTION_URL
-       ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-       : 'https://kairali-group-crm.vercel.app')
-    ).replace(/\/+$/, '')
-    html = buildKserveLostAlertEmail(leads, stats, appUrl)
+    html = buildKserveLostAlertEmail(leads, stats, resolveAppUrl())
    } finally {
     connection.release()
    }

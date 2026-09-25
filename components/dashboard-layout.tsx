@@ -59,6 +59,12 @@ import {
   Sparkles,
   Cpu,
   Upload,
+  PlusCircle,
+  Star,
+  Moon,
+  Sun,
+  MessageSquare,
+  Map,
 } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
@@ -102,6 +108,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [meetingsExpanded, setMeetingsExpanded] = useState(false)
   const [settingsExpanded, setSettingsExpanded] = useState(false)
   const [automationExpanded, setAutomationExpanded] = useState(false)
+  const [isEmailMarketingOpen, setIsEmailMarketingOpen] = useState(false)
+  const [isGuestExperienceOpen, setIsGuestExperienceOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedQuery, setDebouncedQuery] = useState("")
   const pathname = usePathname()
@@ -207,6 +215,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "Lead Management", icon: Users, permission: "leads.view" },
     { name: "Client Database", icon: Database, permission: "client_database.view" },
     { name: "AI Deal Assistant", href: "/deal-assistant", icon: Sparkles, permission: "deal_assistant.view" },
+    { name: "Email Marketing", icon: Mail, permission: "email_marketing.view" },
+    { name: "Guest Experience", icon: Star, permission: "guest_experience.view" },
     // { name: "K-Serve Billing Auditor", href: "/ksereve-billing-auditer", icon: FileText, permission: "bill_fms.view" },
     { name: "AI Voice Lead Qual.", icon: Phone, permission: "ai_voice_menu.view" },
     { name: "DialShree Lead Qual.", icon: PhoneCall, permission: "dialshree_menu.view" },
@@ -246,6 +256,19 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "Facebook PPC Reports", href: "/marketing/facebook-ppc", icon: Search, description: "Facebook PPC ads reports", permission: "marketing_facebook_report.view" },
     { name: "Google Adword Reports", href: "/google-adword-reports", icon: Search, description: "Google Ads campaign expense data", permission: "google_adword_report.view" },
     { name: "Marketing Funnel", href: "/marketing-funnel", icon: Search, description: "Marketing Funnel", permission: "marketing_funnel.view" },
+  ]
+
+  const emailMarketingSubMenu = [
+    { name: "Email Campaigns", href: "/email-marketing/campaigns", icon: Mail, permission: "email_marketing.view" },
+    { name: "Create Campaign", href: "/email-marketing/campaigns/create", icon: PlusCircle, permission: "email_marketing.view" },
+    { name: "Email Configuration", href: "/admin/email-configuration", icon: Settings, permission: "email_marketing.view" },
+  ]
+
+  const guestExperienceSubMenu = [
+    { name: "Guest Experience (Dark)", href: "/guest-experience", icon: Moon, permission: "guest_experience.view" },
+    { name: "Guest Experience (Light)", href: "/guest-experience-light", icon: Sun, permission: "guest_experience.view" },
+    { name: "Guest Feedback", href: "/guest-experience/feedback", icon: MessageSquare, permission: "guest_experience.view" },
+    { name: "Guest Explore", href: "/guest-experience/explore", icon: Map, permission: "guest_experience.view" },
   ]
 
   const isMarketingItemVisible = (item: (typeof marketingSubMenu)[number]) => {
@@ -477,6 +500,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     searchableItems.push({ name: "Email Triggers", href: "/settings/automation/email-triggers", description: "Scheduled email trigger configuration", icon: Mail })
     searchableItems.push({ name: "WhatsApp Triggers", href: "/settings/automation/whatsapp", description: "WhatsApp report image trigger configuration", icon: Mail })
   }
+  if (hasPermission("email_marketing.view") || isSuperAdmin) emailMarketingSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.name, icon: item.icon }))
+  if (hasPermission("guest_experience.view") || isSuperAdmin) guestExperienceSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.name, icon: item.icon }))
   if (hasLeadManagementPermission()) {
     if (hasLeadsAssignPermission()) searchableItems.push({ name: "Leads Assignment", href: "/leads/assign", description: "Leads Assignment", icon: Shuffle })
     if (hasLeadSearchPermission()) searchableItems.push({ name: "Lead Search Dashboard", href: "/lead-search", description: "Lead Search Dashboard", icon: Search })
@@ -1023,6 +1048,58 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    if (item.name === "Email Marketing") {
+      const isEmailActive = pathname.startsWith("/email-marketing") || pathname.startsWith("/admin/email-configuration")
+      return (
+        <div key={item.name}>
+          <button
+            onClick={() => setIsEmailMarketingOpen(!isEmailMarketingOpen)}
+            className={`group flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${isEmailActive ? "bg-gradient-to-r from-red-500 to-red-600 text-white shadow-md" : "text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"}`}
+          >
+            <item.icon className={`mr-3 h-5 w-5 ${isEmailActive ? "text-white" : "text-red-500"}`} />
+            {item.name}
+            {isEmailMarketingOpen ? <ChevronDown className="ml-auto h-4 w-4" /> : <ChevronRight className="ml-auto h-4 w-4" />}
+          </button>
+          {isEmailMarketingOpen && (
+            <div className="ml-6 mt-2 space-y-1">
+              {emailMarketingSubMenu.map((subItem) => (
+                <Link key={subItem.name} href={subItem.href} className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${pathname === subItem.href ? "bg-gradient-to-r from-red-50 to-red-100 text-red-700 border-l-4 border-red-500 shadow-sm" : "text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"}`} onClick={() => isMobile && setSidebarOpen(false)}>
+                  <subItem.icon className={`mr-3 h-4 w-4 ${pathname === subItem.href ? "text-red-600" : "text-gray-500"}`} />
+                  {subItem.name}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    if (item.name === "Guest Experience") {
+      const isGuestActive = pathname.startsWith("/guest-experience")
+      return (
+        <div key={item.name}>
+          <button
+            onClick={() => setIsGuestExperienceOpen(!isGuestExperienceOpen)}
+            className={`group flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${isGuestActive ? "bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-md" : "text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"}`}
+          >
+            <item.icon className={`mr-3 h-5 w-5 ${isGuestActive ? "text-white" : "text-amber-500"}`} />
+            {item.name}
+            {isGuestExperienceOpen ? <ChevronDown className="ml-auto h-4 w-4" /> : <ChevronRight className="ml-auto h-4 w-4" />}
+          </button>
+          {isGuestExperienceOpen && (
+            <div className="ml-6 mt-2 space-y-1">
+              {guestExperienceSubMenu.map((subItem) => (
+                <Link key={subItem.name} href={subItem.href} className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${pathname === subItem.href ? "bg-gradient-to-r from-amber-50 to-amber-100 text-amber-700 border-l-4 border-amber-500 shadow-sm" : "text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-gray-900"}`} onClick={() => isMobile && setSidebarOpen(false)}>
+                  <subItem.icon className={`mr-3 h-4 w-4 ${pathname === subItem.href ? "text-amber-600" : "text-gray-500"}`} />
+                  {subItem.name}
+                </Link>
+              ))}
             </div>
           )}
         </div>
