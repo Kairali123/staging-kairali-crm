@@ -582,13 +582,13 @@ export default function Home() {
                                 </span>
                                 <strong style={{fontSize:12,color:"#1e3a5f",fontWeight:700}}>{cg.company}</strong>
                                 <span style={{fontSize:10,color:"#4b7fb8",marginLeft:"auto"}}>
-                                  {fmt(cg.total.direct)} sent · {fmt(cg.total.crm)} received · {fmt(cg.total.masterCrmLost+cg.total.mediumBufferLost)} lost/pending
+                                  {fmt(cg.total.direct)} direct · {fmt(cg.total.medium)} medium · {fmt(cg.total.buffer)} buffer · {fmt(cg.total.crm)} crm
                                 </span>
                               </div>
                             </td>
                           </tr>
                           {cg.rows.map(row=>{
-                            const rowLost = row.masterCrmLost+row.mediumBufferLost;
+                            const rowLost = row.masterCrmLost+row.mediumBufferLost+row.directMediumGap;
                             const rowRate = row.direct>0?Math.round(rowLost/row.direct*100):0;
                             const rowClear = rowLost===0;
                             return (
@@ -598,9 +598,12 @@ export default function Home() {
                               }}>
                                 {/* 1. DIRECT API SOURCE SHEET */}
                                 <td style={{padding:"10px 12px"}}>
-                                  <div style={{display:"flex",alignItems:"center",gap:9}}>
-                                    <span style={{ width:24,height:24,borderRadius:6,flexShrink:0, background: rowLost>0?"#fee2e2":"#e8f5f4", color: rowLost>0?"#991b1b":"#178b7c", display:"grid",placeItems:"center", fontWeight:800,fontSize:10 }}>{row.source.slice(0,1)}</span>
-                                    <div><strong style={{fontSize:11,color:"#12202f",display:"block"}}>{row.source}</strong></div>
+                                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:9}}>
+                                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                                      <span style={{ width:24,height:24,borderRadius:6,flexShrink:0, background: rowLost>0?"#fee2e2":"#e8f5f4", color: rowLost>0?"#991b1b":"#178b7c", display:"grid",placeItems:"center", fontWeight:800,fontSize:10 }}>{row.source.slice(0,1)}</span>
+                                      <strong style={{fontSize:11,color:"#12202f",display:"block"}}>{row.source}</strong>
+                                    </div>
+                                    <span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.direct)}</span>
                                   </div>
                                 </td>
                                 {/* 2. GAP 1 DIRECT → MEDIUM */}
@@ -610,7 +613,7 @@ export default function Home() {
                                   ):<span style={{color:"#94a3b8",fontSize:12}}>0</span>}
                                 </td>
                                 {/* 3. MASTER MEDIUM MERGED */}
-                                <td style={{padding:"10px 12px"}}><span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.direct)}</span></td>
+                                <td style={{padding:"10px 12px"}}><span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.medium)}</span></td>
                                 {/* 4. GAP 2 MEDIUM → BUFFER */}
                                 <td style={{padding:"10px 12px"}}>
                                   {row.mediumBufferLost>0?(
@@ -645,8 +648,12 @@ export default function Home() {
                             );
                           })}
                           <tr style={{background:"#f8fafc",borderTop:"2px solid #e2e8f0"}}>
-                            <td colSpan={2} style={{padding:"10px 12px",fontWeight:800,fontSize:11,color:"#334e68"}}>↳ {cg.company} Total</td>
-                            <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:"#334e68"}}>{fmt(cg.total.direct)}</td>
+                            <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:"#334e68", display:"flex", justifyContent:"space-between"}}>
+                              <span style={{fontSize:11}}>↳ {cg.company} Total</span>
+                              <span>{fmt(cg.total.direct)}</span>
+                            </td>
+                            <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:cg.total.directMediumGap>0?"#92400e":"#64748b"}}>{fmt(cg.total.directMediumGap)}</td>
+                            <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:"#334e68"}}>{fmt(cg.total.medium)}</td>
                             <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:cg.total.mediumBufferLost>0?"#92400e":"#64748b"}}>{fmt(cg.total.mediumBufferLost)}</td>
                             <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:"#334e68"}}>{fmt(cg.total.buffer)}</td>
                             <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:cg.total.masterCrmLost>0?"#991b1b":"#22c55e"}}>{fmt(cg.total.masterCrmLost)}</td>
@@ -655,7 +662,7 @@ export default function Home() {
                             <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:"#334e68"}}>{fmt(cg.total.kserve)}</td>
                             <td style={{padding:"10px 12px"}}></td>
                             <td style={{padding:"10px 12px"}}></td>
-                            <td style={{padding:"10px 12px"}}><span style={{fontWeight:800,fontSize:11, color:(cg.total.masterCrmLost+cg.total.mediumBufferLost)>0?"#991b1b":"#166534"}}>{cg.total.direct>0?Math.round((cg.total.masterCrmLost+cg.total.mediumBufferLost)/cg.total.direct*100):0}%</span></td>
+                            <td style={{padding:"10px 12px"}}><span style={{fontWeight:800,fontSize:11, color:(cg.total.masterCrmLost+cg.total.mediumBufferLost+cg.total.directMediumGap)>0?"#991b1b":"#166534"}}>{cg.total.direct>0?Math.round((cg.total.masterCrmLost+cg.total.mediumBufferLost+cg.total.directMediumGap)/cg.total.direct*100):0}%</span></td>
                           </tr>
                         </Fragment>
                       ))}
