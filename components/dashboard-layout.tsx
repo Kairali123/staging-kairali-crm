@@ -264,6 +264,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const guestExperienceSubMenu = [
     { name: "Guest Experience (Dark)", href: "/guest-experience", icon: Moon, permission: "guest_experience.view" },
     { name: "Guest Experience (Light)", href: "/guest-experience-light", icon: Sun, permission: "guest_experience.view" },
+    { name: "Kiosk Setup (Config)", href: "/guest-experience/config", icon: Settings, permission: "guest_experience.view" },
     { name: "Guest Feedback", href: "/guest-experience/feedback", icon: MessageSquare, permission: "guest_experience.view" },
     { name: "Guest Explore", href: "/guest-experience/explore", icon: Map, permission: "guest_experience.view" },
   ]
