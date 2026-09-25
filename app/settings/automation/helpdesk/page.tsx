@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { Save, AlertCircle, CheckCircle2, Ticket, Power, PowerOff } from "lucide-react";
-import DashboardLayout from "@/components/dashboard-layout";
+import { DashboardLayout } from "@/components/dashboard-layout";
 
 export default function HelpdeskConfigPage() {
   const [config, setConfig] = useState<any>(null);
