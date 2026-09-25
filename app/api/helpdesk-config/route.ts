@@ -36,12 +36,12 @@ export async function POST(req: NextRequest) {
       UPDATE helpdesk_config SET 
         form_url = ?, entry_lead_id = ?, entry_name = ?, entry_phone = ?, 
         entry_email = ?, entry_source = ?, entry_company = ?, entry_issue = ?,
-        is_active = ?
+        is_active = ?, trigger_hours = ?
       WHERE id = 1
     `, [
       body.form_url || '', body.entry_lead_id || '', body.entry_name || '', body.entry_phone || '',
       body.entry_email || '', body.entry_source || '', body.entry_company || '', body.entry_issue || '',
-      body.is_active ? 1 : 0
+      body.is_active ? 1 : 0, body.trigger_hours || 1
     ]);
 
     return NextResponse.json({ success: true });
