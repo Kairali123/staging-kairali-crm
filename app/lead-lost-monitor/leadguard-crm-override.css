@@ -1,0 +1,27 @@
+/*
+ * leadguard-crm-override.css
+ *
+ * This file neutralises the standalone-page CSS that LeadGuard injects via
+ * dangerouslySetInnerHTML so that it sits correctly inside the Staging CRM
+ * DashboardLayout (which already owns the left sidebar).
+ */
+
+/* The page's embedded CSS sets:  main { margin-left: 238px }
+   That offset is for its own fixed sidebar which we DON'T render inside the CRM.
+   Reset it so content fills the available space. */
+main {
+  margin-left: 0 !important;
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+}
+
+/* The page CSS defines .shell as a full-viewport wrapper.
+   Inside DashboardLayout the shell is already inside a scrollable content area. */
+.shell {
+  min-height: unset !important;
+}
+
+/* Keep the topbar from becoming a second header bar */
+.topbar {
+  padding-top: 8px !important;
+}
