@@ -6,10 +6,11 @@
  * otherwise instead of guessing a domain that may not be the real live site.
  */
 export function resolveAppUrl(env: NodeJS.ProcessEnv = process.env): string {
-  const explicit = env.NEXT_PUBLIC_APP_URL?.trim()
+  const explicit = (env.NEXT_PUBLIC_APP_URL || env.APP_URL)?.trim()
   if (explicit) return explicit.replace(/\/+$/, '')
   if (env.NODE_ENV === 'development') return 'http://localhost:3000'
   if (env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${env.VERCEL_PROJECT_PRODUCTION_URL}`.replace(/\/+$/, '')
+  if (env.VERCEL_URL) return `https://${env.VERCEL_URL}`.replace(/\/+$/, '')
   throw new Error(
     'NEXT_PUBLIC_APP_URL is not set. Set it to the live site URL before this trigger can send ' +
     '(without it, report links would either fail to build or point at the wrong host).'

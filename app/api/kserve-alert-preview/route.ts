@@ -44,7 +44,13 @@ export async function GET(request: NextRequest) {
         const { leads, stats } = await getKserveReconciledLostLeads({ minDays: lostDays });
 
         // 3. Build HTML
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+        const appUrl =
+            process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+            process.env.APP_URL?.trim() ||
+            (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : null) ||
+            (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+            (request.nextUrl.origin && !request.nextUrl.origin.includes('localhost') ? request.nextUrl.origin : null) ||
+            'https://kairali-group-crm.vercel.app';
         const html = buildKserveLostAlertEmail(leads, stats, appUrl);
         
         return new NextResponse(html, {

@@ -441,13 +441,25 @@ export default function CrrStageViewModal({
                 );
             }
             case 8: {
-                const referralStatus = (savedData.referralTakenStatus as string) || (savedData.doerStatus as string) || guest.referralCollection?.referralTakenStatus || "";
+                const hasActual = Boolean(stageInfo?.actualDate && String(stageInfo.actualDate).trim() !== "");
+                const statusVal = (savedData.ratingStatus as string) || (savedData.referralTakenStatus as string) || (savedData.doerStatus as string) || guest.referralCollection?.referralTakenStatus || "";
+                const isStatusBlank = !statusVal || statusVal.trim() === "";
+
+                // If the actual column has a value and the rating/referral status is null or blank -> "Given", otherwise -> "Not Given"
+                const displayStatus = (hasActual && isStatusBlank) || statusVal.toLowerCase() === "given" || statusVal.toLowerCase() === "yes"
+                    ? "Given"
+                    : "Not Given";
+
                 const doerRemarks = (savedData.doerRemarks as string) || guest.referralCollection?.doerRemarks || "";
 
                 return (
                     <>
                         <SectionGroup title="Referral & Lead Generation">
-                            <FieldBox label="Referral Taken Status" value={referralStatus || "Not Taken"} badgeColor={referralStatus && referralStatus !== "No" && referralStatus !== "Not Taken" ? "#16a34a" : "#64748b"} />
+                            <FieldBox
+                                label="Referral Taken Status"
+                                value={displayStatus}
+                                badgeColor={displayStatus === "Given" ? "#16a34a" : "#64748b"}
+                            />
                             <FieldBox label="Referral Remarks / Details" value={doerRemarks || "No remarks entered"} fullWidth />
                         </SectionGroup>
                     </>

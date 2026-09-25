@@ -249,9 +249,25 @@ export default function GuestFeedbackForm({
 
             <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
                 <h4 className="text-xs font-bold text-slate-900 mb-3 pb-2 border-b border-slate-100">{section.title}</h4>
-                <div className={section.fields.every((f) => f.kind === "rating") ? "" : "grid grid-cols-1 sm:grid-cols-2 gap-4"}>
-                    {section.fields.map(renderField)}
-                </div>
+                {(() => {
+                    const ratingFields = section.fields.filter((f) => f.kind === "rating");
+                    const otherFields = section.fields.filter((f) => f.kind !== "rating");
+
+                    return (
+                        <>
+                            {ratingFields.length > 0 && (
+                                <div>
+                                    {ratingFields.map(renderField)}
+                                </div>
+                            )}
+                            {otherFields.length > 0 && (
+                                <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 ${ratingFields.length > 0 ? "mt-4 pt-4 border-t border-slate-100" : ""}`}>
+                                    {otherFields.map(renderField)}
+                                </div>
+                            )}
+                        </>
+                    );
+                })()}
             </section>
 
             {(uploadError || (showErrors && missing.length > 0)) && (
