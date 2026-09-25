@@ -9,6 +9,8 @@ import { loadScheduledMarketing } from './load-marketing'
 import { loadScheduledCrr } from './load-crr-report'
 import { exportCrrReportHTML } from '@/lib/ktahv-crr-report'
 import { buildKserveLostAlertEmail } from './templates/kserve-lead-lost-alert'
+import { buildPIReviewAlertEmail } from './templates/booking-pi-review-alert'
+import { loadBookingPIReviewAlertData } from './load-booking-pi-review'
 import { localDay, nextRun } from './schedule'
 import { transaction } from './store'
 import type { Trigger, Run } from './schema'
@@ -59,13 +61,23 @@ export async function buildEmail(t:Trigger,at:number){
     connection.release()
    }
   }
+  else if(t.reportId==='booking-pi-review-alert'){
+   reportTitle='Booking PI Review Alert'
+   reportSlug='Booking-PI-Review-Alert'
+   const appUrl=process.env.NEXT_PUBLIC_APP_URL||'http://localhost:3000'
+   const alertData=await loadBookingPIReviewAlertData(date,appUrl)
+   // Always send — the email itself shows the summary (all done or pending)
+   hasData=alertData.totalPIs>0
+   html=buildPIReviewAlertEmail(alertData)
+  }
   else{
    throw new Error(`Unhandled email trigger report template: "${t.reportId}"`)
   }
   const p=(s:string)=>(s||'').trim()?'<div style="padding:18px 24px;white-space:pre-wrap;font:14px/1.8 Arial">'+esc(replace(s))+'</div>':''
   // Reports with in-layout markers keep the note inside their centered column; others get it around <body>.
   html=html.includes('<!--email-intro-->')?html.replace('<!--email-intro-->',()=>p(t.intro)).replace('<!--email-closing-->',()=>p(t.closing)):html.replace(/(<body[^>]*>)/,'$1'+p(t.intro)).replace('</body>',p(t.closing)+'</body>')
-  if(t.reportId!=='sales-call-audit' && t.reportId!=='kserve-lead-lost-alert'){
+  // booking-pi-review-alert and kserve-lead-lost-alert and sales-call-audit skip JPEG rendering — they use inline HTML tables
+  if(t.reportId!=='sales-call-audit'&&t.reportId!=='kserve-lead-lost-alert'&&t.reportId!=='booking-pi-review-alert'){
    try{
     const {renderJPEG}=await import('@/lib/whatsapp-triggers/render')
     if(typeof renderJPEG==='function'){

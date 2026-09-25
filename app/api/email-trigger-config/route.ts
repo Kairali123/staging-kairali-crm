@@ -98,6 +98,69 @@ export async function GET(req: NextRequest) {
         console.warn('[email-trigger-config] Auto-seed sales-call-audit skipped:', err)
       }
     }
+    // Auto-seed: Booking PI Review Alert (daily 18:30 IST) if not yet present
+    if (!state.triggers.some(t => t.reportId === 'booking-pi-review-alert') && !auditSeedSuppressed(state)) {
+      try {
+        state = await transaction(s => {
+          if (!s.triggers.some(t => t.reportId === 'booking-pi-review-alert')) {
+            const now2 = Date.now()
+            s.triggers.push({
+              id: randomUUID(),
+              revision: 1,
+              name: emailReportTemplates['booking-pi-review-alert'].name,
+              reportId: 'booking-pi-review-alert',
+              source: emailReportTemplates['booking-pi-review-alert'].name,
+              template: emailReportTemplates['booking-pi-review-alert'].name,
+              department: 'Accounts',
+              company: 'All companies',
+              to: '',
+              cc: '',
+              bcc: '',
+              subject: '[PI Review Alert] Booking PI Review Status — {{report_date}}',
+              body: '',
+              bodyType: 'Full report in email body',
+              intro: '',
+              closing: '',
+              period: 'Today',
+              reportDetail: 'Full report',
+              status: 'Draft',
+              frequency: 'Daily',
+              time: '18:30',
+              custom: '18:30',
+              interval: '6',
+              weekday: 'Monday',
+              monthday: '1',
+              timezone: 'Asia/Kolkata',
+              start: new Date(now2).toISOString().slice(0, 10),
+              end: '',
+              attachment: 'None',
+              mode: 'Same email to all recipients',
+              condition: 'Always send',
+              retry: 'No retries',
+              missed: 'Skip missed run',
+              replyTo: '',
+              owner: 'system',
+              updatedAt: new Date(now2).toISOString(),
+              nextRun: nextRun({
+                frequency: 'Daily',
+                time: '18:30',
+                custom: '18:30',
+                interval: '6',
+                weekday: 'Monday',
+                monthday: '1',
+                timezone: 'Asia/Kolkata',
+                start: new Date(now2).toISOString().slice(0, 10),
+                end: '',
+              } as any, now2),
+              lastResult: '—',
+            })
+          }
+          return s
+        })
+      } catch (err) {
+        console.warn('[email-trigger-config] Auto-seed booking-pi-review-alert skipped:', err)
+      }
+    }
     if (!process.env.VERCEL) {
       try {
         const { ensureEmailSchedulerRunning } = await import('@/lib/email-triggers/scheduler-service')
