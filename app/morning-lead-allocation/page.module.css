@@ -2,3 +2,22 @@
 .sourceNote{padding:0 22px 13px;color:#778b98;font-size:11px;line-height:1.45}.sourceLink{display:block;margin-top:5px;color:#168770;font-size:10px;font-weight:700;text-decoration:none}.sourceLink:hover{text-decoration:underline}.inlineButton{display:inline-block;margin-left:10px;padding:3px 8px;border:1px solid #cfa65c;border-radius:5px;background:white;color:#80551b;font-size:11px;font-weight:800;cursor:pointer}.success{max-width:1600px;margin:12px auto 0;border:1px solid #b8e2d1;background:#ecf9f3;color:#1b7158;border-radius:9px;padding:10px 14px;font-size:12px}.footer a{color:#23826b;font-weight:700;text-decoration:none}.footer a:hover{text-decoration:underline}
 .hero .timer{display:inline-block;margin-top:13px;color:#e9fbf2;background:#ffffff18;border:1px solid #ffffff30;padding:6px 10px;border-radius:7px;font-size:12px;font-weight:800}
 .modalBackdrop{position:fixed;inset:0;z-index:80;display:grid;place-items:center;background:#102b3b99;padding:20px}.modal{width:min(100%,480px);background:#fff;border-radius:14px;box-shadow:0 18px 55px #071d2b55;padding:24px;color:#244257}.modal h2{margin:0 0 12px;font-size:20px}.modal p{font-size:12px;line-height:1.5}.modal label{display:block;margin:16px 0 6px;font-size:11px;font-weight:800}.modal textarea{width:100%;box-sizing:border-box;resize:vertical;border:1px solid #cbd8de;border-radius:8px;padding:10px;font:inherit;font-size:12px}.modalActions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}.modalActions button{padding:9px 13px;border:1px solid #ccd9dd;border-radius:7px;background:#fff;color:#244257;font-size:12px;font-weight:800;cursor:pointer}.modalActions button:last-child{background:#168770;border-color:#168770;color:#fff}.modalActions button:disabled{opacity:.5;cursor:not-allowed}
+.overdueDuration { display: inline-block; background: #e3342f; color: white; padding: 2px 5px; border-radius: 4px; margin-left: 6px; font-size: 9px; font-weight: bold; }
+.workListTable { overflow-x: auto; }
+.workListTable table { width: 100%; border-collapse: collapse; min-width: 900px; }
+.workListTable th, .workListTable td { padding: 10px 14px; text-align: left; font-size: 11px; border-bottom: 1px solid #edf1f3; }
+.workListTable th { background: #f8fafb; color: #8998a4; font-weight: 700; text-transform: uppercase; }
+.workListTable td { color: #244257; }
+.workListTable code { background: #f0f4f6; padding: 2px 4px; border-radius: 3px; font-family: monospace; }
+.snapshotGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; padding: 20px; }
+.snapshotCard { display: flex; align-items: center; gap: 12px; background: #f8fafb; border: 1px solid #e1e9ee; border-radius: 10px; padding: 14px; position: relative; }
+.snapshotAvatar { height: 36px; width: 36px; display: grid; place-items: center; background: #e9f4f2; color: #1b8374; border-radius: 50%; font-size: 11px; font-weight: 800; flex: none; }
+.snapshotInfo { flex: 1; min-width: 0; }
+.snapshotInfo strong { display: block; font-size: 13px; color: #193049; }
+.snapshotInfo small { display: block; font-size: 11px; color: #667b8b; margin-top: 2px; }
+.snapshotReceived { color: #1b8374 !important; font-weight: 600; }
+.snapshotBadge { position: absolute; right: 14px; top: 14px; background: #1b8374; color: white; font-size: 14px; font-weight: 800; padding: 4px 10px; border-radius: 8px; }
+.snapshotZero { background: #cbd5e1; }
+.snapshotSummary { grid-column: 1 / -1; display: flex; gap: 20px; align-items: center; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid #edf1f3; margin-top: 4px; font-size: 12px; color: #536879; }
+.snapshotSummary b { color: #193049; }
+.overdueText { color: #c25b4c !important; }
