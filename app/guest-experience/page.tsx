@@ -306,12 +306,15 @@ export default function GuestWelcomePage() {
   }
 
   const t = TRANSLATIONS[lang]
-  const ACTIVE_SLIDES = SLIDES.filter(s => kioskConfig?.enabledSlides ? kioskConfig.enabledSlides.includes(s.id) : true)
+  let ACTIVE_SLIDES = SLIDES
+  if (kioskConfig && kioskConfig.enabledSlides && kioskConfig.enabledSlides.length > 0) {
+    ACTIVE_SLIDES = SLIDES.filter(s => kioskConfig.enabledSlides.includes(s.id))
+  }
   const baseSlide = ACTIVE_SLIDES[currentSlideIndex] || SLIDES[0]
   const currentSlide = {
     ...baseSlide,
-    title: kioskConfig?.slideOverrides?.[baseSlide.id]?.title || baseSlide.title,
-    subtitle: kioskConfig?.slideOverrides?.[baseSlide.id]?.subtitle || baseSlide.subtitle,
+    title: (kioskConfig && kioskConfig.slideOverrides && kioskConfig.slideOverrides[baseSlide.id] && kioskConfig.slideOverrides[baseSlide.id].title) || baseSlide.title,
+    subtitle: (kioskConfig && kioskConfig.slideOverrides && kioskConfig.slideOverrides[baseSlide.id] && kioskConfig.slideOverrides[baseSlide.id].subtitle) || baseSlide.subtitle,
   }
 
   const nextSlide = useCallback(() => {
@@ -323,30 +326,6 @@ export default function GuestWelcomePage() {
     setIsPlaying(false)
     setCurrentSlideIndex((prev) => (prev - 1 + ACTIVE_SLIDES.length) % ACTIVE_SLIDES.length)
   }, [ACTIVE_SLIDES.length])
-
-  // Kiosk config state — fetched from admin config page
-  const [kioskConfig, setKioskConfig] = useState<{
-    guestName: string; roomNumber: string; welcomeMessage: string;
-    enabledSlides: number[]; defaultLanguage: string; activeTheme: string; kioskLabel: string;
-  } | null>(null)
-  const [langManuallySet, setLangManuallySet] = useState(false)
-
-  const fetchKioskConfig = useCallback(async () => {
-    try {
-      const res = await fetch("/api/guest-experience/config")
-      const data = await res.json()
-      setKioskConfig(data)
-      if (!langManuallySet && data.defaultLanguage && data.defaultLanguage in LANGUAGES) {
-        setLang(data.defaultLanguage as keyof typeof LANGUAGES)
-      }
-    } catch {}
-  }, [langManuallySet])
-
-  useEffect(() => {
-    fetchKioskConfig()
-    const interval = setInterval(fetchKioskConfig, 60000)
-    return () => clearInterval(interval)
-  }, [fetchKioskConfig])
 
   // Reset video when slide changes
   useEffect(() => {
