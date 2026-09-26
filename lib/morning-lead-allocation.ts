@@ -123,7 +123,7 @@ export function parsePendingMainRows(
   if (
     header[2] !== 'ID' || header[11] !== 'Assign To MR' ||
     header[13] !== 'Planned' || header[14] !== 'Actual' ||
-    header[16] !== 'Status' || header[19] !== 'Remarks'
+    header[16] !== 'Status'
   ) {
     throw new Error(`Main headers changed for ${employee.name}`)
   }
@@ -264,7 +264,8 @@ export async function loadMorningAllocation() {
         batches.push(item.value.leads)
         writable.set(employees[i + index].id, item.value.writable)
       } else {
-        failures.push(employees[i + index].name)
+        const errorMsg = item.reason instanceof Error ? item.reason.message : String(item.reason)
+        failures.push(`${employees[i + index].name} (${errorMsg})`)
       }
     })
   }
