@@ -20,7 +20,7 @@ async function launchBrowser() {
   const isServerless = !!(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.AWS_EXECUTION_ENV)
   if (isServerless) {
     try {
-      // @ts-ignore — optional peer dep, only present in serverless environments
+      // @ts-expect-error — optional peer dep, only present in serverless environments
       const sparticuz = await import('@sparticuz/chromium')
       const executablePath = await sparticuz.default.executablePath()
       return chromium.launch({

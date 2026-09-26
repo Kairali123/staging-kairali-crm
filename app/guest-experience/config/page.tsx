@@ -19,6 +19,38 @@ const SLIDES_META = [
 ]
 
 const LANGUAGES = ["EN", "HI", "ML", "DE", "RU", "FR", "NL", "ES", "AR", "ZH"]
+
+function Section({ id, title, icon: Icon, children, openSection, setOpenSection }: any) {
+  return (
+    <div className="border border-[#E0D8C3] rounded-2xl overflow-hidden mb-4 shadow-sm bg-white">
+      <button
+        onClick={() => setOpenSection(openSection === id ? null : id)}
+        className="w-full flex items-center justify-between px-5 py-4 bg-[#FDFBF7] hover:bg-[#F5F0E8] transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <Icon className="w-5 h-5 text-[#C74B26]" />
+          <span className="font-semibold text-[#132A13]">{title}</span>
+        </div>
+        {openSection === id ? <ChevronUp className="w-4 h-4 text-[#4A5D4E]" /> : <ChevronDown className="w-4 h-4 text-[#4A5D4E]" />}
+      </button>
+      {openSection === id && (
+        <div className="px-5 py-5 border-t border-[#E0D8C3] space-y-4">
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Field({ label, children }: any) {
+  return (
+    <div>
+      <label className="block text-xs font-bold text-[#4A5D4E] uppercase tracking-widest mb-1.5">{label}</label>
+      {children}
+    </div>
+  )
+}
+
 const LANG_LABELS: Record<string, string> = {
   EN: "English", HI: "हिन्दी", ML: "മലയാളം", DE: "Deutsch",
   RU: "Русский", FR: "Français", NL: "Nederlands", ES: "Español", AR: "العربية", ZH: "中文"
@@ -48,6 +80,7 @@ export default function GuestAppConfig() {
   })
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone) setIsInstalled(true)
     const handler = (e: any) => { e.preventDefault(); setDeferredPrompt(e) }
     window.addEventListener('beforeinstallprompt', handler)
@@ -124,32 +157,6 @@ export default function GuestAppConfig() {
     setConfig(c => ({ ...c, feedbackQuestions: [...c.feedbackQuestions, ""] }))
   }
 
-  const Section = ({ id, title, icon: Icon, children }: any) => (
-    <div className="border border-[#E0D8C3] rounded-2xl overflow-hidden mb-4 shadow-sm bg-white">
-      <button
-        onClick={() => setOpenSection(openSection === id ? null : id)}
-        className="w-full flex items-center justify-between px-5 py-4 bg-[#FDFBF7] hover:bg-[#F5F0E8] transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <Icon className="w-5 h-5 text-[#C74B26]" />
-          <span className="font-semibold text-[#132A13]">{title}</span>
-        </div>
-        {openSection === id ? <ChevronUp className="w-4 h-4 text-[#4A5D4E]" /> : <ChevronDown className="w-4 h-4 text-[#4A5D4E]" />}
-      </button>
-      {openSection === id && (
-        <div className="px-5 py-5 border-t border-[#E0D8C3] space-y-4">
-          {children}
-        </div>
-      )}
-    </div>
-  )
-
-  const Field = ({ label, children }: any) => (
-    <div>
-      <label className="block text-xs font-bold text-[#4A5D4E] uppercase tracking-widest mb-1.5">{label}</label>
-      {children}
-    </div>
-  )
 
   const inputCls = "w-full px-4 py-2.5 rounded-xl border border-[#E0D8C3] bg-[#FDFBF7] text-[#132A13] text-sm focus:outline-none focus:border-[#C74B26] focus:ring-1 focus:ring-[#C74B26]/30 transition"
 
@@ -187,7 +194,7 @@ export default function GuestAppConfig() {
           </div>
 
           {/* 1. Guest Details */}
-          <Section id="guest" title="Guest Assignment" icon={User}>
+          <Section openSection={openSection} setOpenSection={setOpenSection} id="guest" title="Guest Assignment" icon={User}>
             <div className="grid grid-cols-2 gap-4">
               <Field label="Guest Name">
                 <input className={inputCls} placeholder="e.g. Mr. Rajiv Mehta"
@@ -213,7 +220,7 @@ export default function GuestAppConfig() {
           </Section>
 
           {/* 2. Display Settings */}
-          <Section id="display" title="Theme & Global Display" icon={Globe}>
+          <Section openSection={openSection} setOpenSection={setOpenSection} id="display" title="Theme & Global Display" icon={Globe}>
             <div className="grid grid-cols-2 gap-4">
               <Field label="Active Theme">
                 <select className={inputCls}
@@ -236,7 +243,7 @@ export default function GuestAppConfig() {
           </Section>
 
           {/* 3. Slide Content Editor */}
-          <Section id="slides" title="Dynamic Slide Editor" icon={Edit3}>
+          <Section openSection={openSection} setOpenSection={setOpenSection} id="slides" title="Dynamic Slide Editor" icon={Edit3}>
             <p className="text-xs text-[#708F7D] mb-4">Toggle slides on/off, and customize their titles/subtitles (English base). Leave fields blank to use defaults.</p>
             
             <div className="space-y-4">
@@ -276,7 +283,7 @@ export default function GuestAppConfig() {
           </Section>
 
           {/* 4. Feedback Questions Config */}
-          <Section id="feedback" title="Dynamic Feedback Form" icon={List}>
+          <Section openSection={openSection} setOpenSection={setOpenSection} id="feedback" title="Dynamic Feedback Form" icon={List}>
             <p className="text-xs text-[#708F7D] mb-4">Edit the questions asked in the quick feedback flow.</p>
             
             <div className="space-y-3">
@@ -307,7 +314,7 @@ export default function GuestAppConfig() {
           </Section>
 
           {/* 5. Install */}
-          <Section id="install" title="Install Device App" icon={Smartphone}>
+          <Section openSection={openSection} setOpenSection={setOpenSection} id="install" title="Install Device App" icon={Smartphone}>
              <button onClick={handleInstallClick}
               className="w-full py-3.5 rounded-xl bg-green-700 hover:bg-green-800 text-white font-bold tracking-wide shadow-md flex items-center justify-center gap-2 transition active:scale-95">
               <MonitorDown className="w-5 h-5" /> Install Guest App Fullscreen
