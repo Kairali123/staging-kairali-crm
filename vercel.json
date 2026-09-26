@@ -10,12 +10,20 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/cron/ht-automation-engine",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/whatsapp-triggers",
       "schedule": "*/15 * * * *"
     },
     {
       "path": "/api/cron/booking-pi-review-alert",
       "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/morning-allocation-snapshot",
+      "schedule": "30 5 * * *"
     }
   ],
   "git": {
