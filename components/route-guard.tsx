@@ -186,6 +186,11 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
     // Super admin and admin have unrestricted access to all other pages
     if (isSuperAdmin || roleStr === 'admin' || user?.permissions?.includes('all')) return
 
+    if (cleanPath === '/morning-lead-allocation') {
+      if (!hasPermission('leads.view') && !hasPermission('leads.assign')) router.replace('/access-denied')
+      return
+    }
+
     // If route is restricted, redirect to access-denied unless user has the permission
     if (isRestricted(pathname)) {
       const requiredPermission = pagePermissions[pathname]
