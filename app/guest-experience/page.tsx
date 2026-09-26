@@ -285,6 +285,32 @@ export default function GuestWelcomePage() {
   // PWA Install Prompt State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
 
+  // Kiosk config state — fetched from admin config page
+  const [kioskConfig, setKioskConfig] = useState<{
+    guestName: string; roomNumber: string; welcomeMessage: string;
+    enabledSlides: number[]; defaultLanguage: string; activeTheme: string; kioskLabel: string;
+  } | null>(null)
+  const [langManuallySet, setLangManuallySet] = useState(false)
+
+  const fetchKioskConfig = useCallback(async () => {
+    try {
+      const res = await fetch("/api/guest-experience/config")
+      const data = await res.json()
+      setKioskConfig(data)
+      if (!langManuallySet && data.defaultLanguage && data.defaultLanguage in LANGUAGES) {
+        setLang(data.defaultLanguage as keyof typeof LANGUAGES)
+      }
+    } catch {}
+  }, [langManuallySet])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchKioskConfig()
+    const interval = setInterval(fetchKioskConfig, 60000)
+    return () => clearInterval(interval)
+  }, [fetchKioskConfig])
+
+
   useEffect(() => {
     const handler = (e: any) => {
       e.preventDefault()
@@ -329,6 +355,7 @@ export default function GuestWelcomePage() {
 
   // Reset video when slide changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsPlaying(false)
   }, [currentSlideIndex])
 
