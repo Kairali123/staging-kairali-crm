@@ -106,6 +106,12 @@ export default function EmailConfigBridge({ document: documentHtml }: { document
           const response = await fetch('/api/kserve-alert-preview', { signal: current.signal, cache: 'no-store' })
           html = await response.text()
           if (!response.ok) throw new Error('Preview unavailable')
+        } else if (id === 'booking-pi-review-alert') {
+          const response = await fetch('/api/booking-pi-review-tracker?' + new URLSearchParams({ date: message.date }), { signal: current.signal, cache: 'no-store' })
+          const data = await response.json()
+          if (!response.ok || !data.ok) throw new Error(data.error || 'Report unavailable')
+          const { exportBookingPiReviewHTML } = await import('@/lib/booking-pi-review-report')
+          html = exportBookingPiReviewHTML(data, window.location.origin)
         } else {
           const response = await fetch('/api/marketing-daily-report?' + new URLSearchParams({ date: message.date }), { signal: current.signal, cache: 'no-store' })
           const data = await response.json()

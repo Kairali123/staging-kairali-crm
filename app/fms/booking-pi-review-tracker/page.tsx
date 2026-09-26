@@ -250,9 +250,9 @@ export default function BookingPIReviewTrackerPage() {
         .piTable { width: 100%; border-collapse: collapse; min-width: 1400px; }
         .piTable th { text-align: left; color: #758078; letter-spacing: .1em; text-transform: uppercase; border-top: 1px solid #dce4df; border-bottom: 1px solid #dce4df; background: #f7f9f7; padding: 10px 18px; font-size: 9px; }
         .piTable td { color: #34453b; border-bottom: 1px solid #edf1ee; padding: 14px 18px; font-size: 12px; }
-        .piStatus { text-transform: uppercase; color: #32684d; background: #e5eee8; border-radius: 5px; padding: 5px 7px; font-size: 9px; font-weight: 800; display: inline-block; }
-        .piStatus.amended { color: #9a611e; background: #faead8; }
-        .piStatus.cancelled { color: #a83834; background: #f7dcda; }
+        .piStatus { text-transform: uppercase; color: #14532d; background: #dcfce7; border: 1.5px solid #22c55e; border-radius: 6px; padding: 5px 9px; font-size: 10px; font-weight: 900; letter-spacing: 0.5px; display: inline-block; box-shadow: 0 1px 2px rgba(34,197,94,0.12); }
+        .piStatus.amended { color: #92400e; background: #fef3c7; border-color: #f59e0b; box-shadow: 0 1px 2px rgba(245,158,11,0.12); }
+        .piStatus.cancelled { color: #991b1b; background: #fee2e2; border-color: #ef4444; box-shadow: 0 1px 2px rgba(239,68,68,0.12); }
         .viewPi { color: #285d45; background: #f6faf7; border: 1px solid #bdd0c4; border-radius: 7px; padding: 7px 9px; font-size: 10px; font-weight: 800; text-decoration: none; display: inline-block; }
         .viewPi.disabled { color: #929c96; border-color: #dce4df; background: #f0f3f0; cursor: not-allowed; }
         .viewPi.history { color: #625c88; background: #f8f7fc; border-color: #c9c5df; }
@@ -261,7 +261,8 @@ export default function BookingPIReviewTrackerPage() {
         .reviewToggle button.selected.yes { color: #286448; background: #dcebe1; }
         .reviewToggle button.selected.no { color: #9a4c48; background: #fff; box-shadow: 0 1px 2px #12201618; }
         .reviewToggle button:disabled { cursor: not-allowed; opacity: .55; }
-        .reviewLocked { border-left: 3px solid #c94c47; color: #a83834; background: #fff2f1; border-radius: 6px; min-width: 145px; padding: 8px 10px; }
+        .reviewLocked { border: 1.5px solid #ef4444; color: #991b1b; background: #fee2e2; border-radius: 6px; min-width: 135px; padding: 6px 10px; }
+        .reviewLocked.approved { border-color: #22c55e; color: #14532d; background: #dcfce7; }
         @media (max-width: 1100px) { .piMetricGrid { grid-template-columns: repeat(3, 1fr); } }
         @media (max-width: 760px) { .piMetricGrid { grid-template-columns: 1fr 1fr; } .salesFilterBar { flex-direction: column; align-items: flex-start; } }
       `}</style>
@@ -293,6 +294,12 @@ export default function BookingPIReviewTrackerPage() {
             >
               {isLoading ? 'Syncing…' : 'Sync from SQL'}
             </button>
+            <Link
+              href={`/settings/automation/email-triggers?report=booking-pi-review-alert&scope=KTAHV&date=${selectedDate}`}
+              className="border border-[#dce4df] bg-white text-[#285d45] font-bold rounded-lg px-4 py-2 text-xs transition hover:bg-[#f6faf7]"
+            >
+              Auto Trigger Email
+            </Link>
             <span className="bg-[#d7c8a5] text-[#14251d] rounded-full w-9 h-9 grid place-items-center font-bold text-xs">AC</span>
           </div>
         </header>
@@ -380,12 +387,21 @@ export default function BookingPIReviewTrackerPage() {
             <strong className="text-2xl text-[#14251d] my-2 block">{activeMetrics.cancelled}</strong>
             <small className="text-[#6c7a72] text-[10px]">Includes older bookings</small>
           </article>
-          <article className="reviewed">
-            <span className="text-[#6c7a72] text-[10px] font-bold block">Reviewed</span>
-            <strong className="text-2xl text-[#14251d] my-2 block">
+          <article className="reviewed" style={{ border: activeMetrics.total > 0 && activeMetrics.reviewed >= activeMetrics.total ? '2px solid #22c55e' : '2px solid #f59e0b', background: activeMetrics.total > 0 && activeMetrics.reviewed >= activeMetrics.total ? '#f0fdf4' : '#fffbeb' }}>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider" style={{ color: activeMetrics.total > 0 && activeMetrics.reviewed >= activeMetrics.total ? '#15803d' : '#b45309' }}>
+                Reviewed Status
+              </span>
+              <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full uppercase" style={{ background: activeMetrics.total > 0 && activeMetrics.reviewed >= activeMetrics.total ? '#22c55e' : '#f59e0b', color: activeMetrics.total > 0 && activeMetrics.reviewed >= activeMetrics.total ? '#ffffff' : '#14251d' }}>
+                {activeMetrics.total > 0 && activeMetrics.reviewed >= activeMetrics.total ? '✓ All Done' : `⏳ ${Math.max(0, activeMetrics.total - activeMetrics.reviewed)} Left`}
+              </span>
+            </div>
+            <strong className="text-2xl text-[#14251d] my-2 block font-black">
               {activeMetrics.reviewed}/{activeMetrics.total}
             </strong>
-            <small className="text-[#6c7a72] text-[10px]">Accounts completed</small>
+            <small className="text-[#6c7a72] text-[10px] font-semibold">
+              {reviewPercentage}% accounts completed
+            </small>
           </article>
         </section>
 
@@ -586,30 +602,39 @@ export default function BookingPIReviewTrackerPage() {
                       </td>
                       <td>
                         {item.reviewLocked ? (
-                          <div className="reviewLocked">
-                            <strong className="block text-[10px] font-bold">Reviewed: {item.reviewStatus}</strong>
-                            <small className="block text-[9px] text-[#b15c57] mt-0.5">
+                          <div className={`reviewLocked ${item.reviewStatus === 'Yes' ? 'approved' : 'rejected'}`}>
+                            <strong className="block text-[11px] font-black uppercase tracking-wider">
+                              {item.reviewStatus === 'Yes' ? '✓ Reviewed' : '✗ Rejected'}
+                            </strong>
+                            <small className="block text-[9px] font-semibold opacity-80 mt-0.5">
                               {item.reviewedBy || 'Accounts'}
                               <br />
                               {item.reviewedAt ? new Date(item.reviewedAt).toLocaleString('en-IN') : 'Saved in SQL'}
                             </small>
                           </div>
                         ) : (
-                          <div className="reviewToggle">
-                            <button
-                              disabled={savingId === item.id}
-                              className={item.reviewed ? 'selected yes' : ''}
-                              onClick={() => handleReviewToggle(item, true)}
-                            >
-                              Yes
-                            </button>
-                            <button
-                              disabled={savingId === item.id}
-                              className={!item.reviewed && item.reviewStatus === 'No' ? 'selected no' : ''}
-                              onClick={() => handleReviewToggle(item, false)}
-                            >
-                              No
-                            </button>
+                          <div className="flex items-center gap-2">
+                            <span className="inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-[#fff7ed] text-[#c2410c] border border-[#ea580c] shadow-sm">
+                              ⏳ Pending
+                            </span>
+                            <div className="reviewToggle">
+                              <button
+                                disabled={savingId === item.id}
+                                className={item.reviewed ? 'selected yes' : ''}
+                                onClick={() => handleReviewToggle(item, true)}
+                                title="Mark as Reviewed"
+                              >
+                                Yes
+                              </button>
+                              <button
+                                disabled={savingId === item.id}
+                                className={!item.reviewed && item.reviewStatus === 'No' ? 'selected no' : ''}
+                                onClick={() => handleReviewToggle(item, false)}
+                                title="Reject"
+                              >
+                                No
+                              </button>
+                            </div>
                           </div>
                         )}
                       </td>

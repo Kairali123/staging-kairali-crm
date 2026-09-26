@@ -1,0 +1,21 @@
+.date-total-row {
+  background: #eef7f5;
+  border-top: 2px solid #b9ddd5;
+}
+.date-total-row td {
+  border-bottom: 2px solid #cfe5e0;
+  color: #24483f;
+}
+.date-total-row td:first-child strong { color: #0b7464; }
+.drawer-sheet-link {
+  display: block;
+  width: max-content;
+  margin-top: 9px;
+  color: var(--teal-dark);
+  font-size: 10px;
+  font-weight: 800;
+  text-decoration: none;
+  background: #e7f6f2;
+  border-radius: 6px;
+  padding: 7px 9px;
+}

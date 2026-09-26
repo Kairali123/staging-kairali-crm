@@ -2,10 +2,6 @@
   "regions": ["bom1"],
   "crons": [
     {
-      "path": "/api/cron/sales-call-audit-daily-email",
-      "schedule": "30 3 * * *"
-    },
-    {
       "path": "/api/cron/email-triggers",
       "schedule": "*/15 * * * *"
     },

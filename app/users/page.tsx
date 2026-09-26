@@ -86,6 +86,29 @@ const ROLE_META: Record<string, { label: string; bg: string; text: string; borde
   operation_staff:   { label: "Ops Staff",      bg: "#ffedd5", text: "#9a3412", border: "#fed7aa" },
   doctor:            { label: "Doctor",         bg: "#d1fae5", text: "#065f46", border: "#6ee7b7" },
   account_manager:   { label: "Acct. Manager",  bg: "#ffe4e6", text: "#9f1239", border: "#fecdd3" },
+  account_staff:     { label: "Acct. Staff",    bg: "#ffe4e6", text: "#9f1239", border: "#fecdd3" },
+  general_manager:   { label: "General Manager",bg: "#f3e8ff", text: "#6b21a8", border: "#d8b4fe" },
+  hr_manager:        { label: "HR Manager",     bg: "#fce7f3", text: "#9d174d", border: "#fbcfe8" },
+  front_office:      { label: "Front Office",   bg: "#e0e7ff", text: "#3730a3", border: "#c7d2fe" },
+}
+
+export function formatRoleDisplay(roleKey: string = ""): string {
+  if (!roleKey) return "—"
+  if (roleKey === "super_admin") return "Super Admin (Full Authority)"
+  if (ROLE_META[roleKey]?.label) return ROLE_META[roleKey].label
+  return roleKey
+    .replace(/[_-]/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+export function getRoleBadgeStyle(roleKey: string = "") {
+  if (ROLE_META[roleKey]) return ROLE_META[roleKey]
+  return {
+    label: formatRoleDisplay(roleKey),
+    bg: "#f1f5f9",
+    text: "#334155",
+    border: "#cbd5e1",
+  }
 }
 
 const COMPANY_META: Record<string, { bg: string; text: string; border: string }> = {
@@ -178,15 +201,32 @@ export default function UsersPage() {
     }
   }, [user, isLoading, hasPermission, router])
 
+  const [dbRoles, setDbRoles] = useState<string[]>([])
+
+  const fetchRolesFromDb = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/roles")
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success && Array.isArray(data.roles)) {
+          setDbRoles(data.roles)
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load roles from DB:", err)
+    }
+  }, [])
+
   useEffect(() => {
     if (user?.id) {
       if (isSuperAdminOrAdmin) {
         fetchUsersFromDb()
+        fetchRolesFromDb()
       } else if (typeof getAllUsers === "function") {
         setUsers(getAllUsers())
       }
     }
-  }, [user?.id, isSuperAdminOrAdmin, fetchUsersFromDb])
+  }, [user?.id, isSuperAdminOrAdmin, fetchUsersFromDb, fetchRolesFromDb])
 
   const availableDepartments = useMemo(() => {
     const deptSet = new Set<string>()
@@ -223,15 +263,22 @@ export default function UsersPage() {
       "operation_staff",
       "doctor",
       "account_manager",
+      "account_staff",
+      "general_manager",
+      "hr_manager",
+      "front_office",
     ]
     standardRoles.forEach((r) => roleSet.add(r))
+    dbRoles.forEach((r) => {
+      if (r && String(r).trim()) roleSet.add(String(r).trim())
+    })
     users.forEach((u) => {
       if (u.role && String(u.role).trim()) {
         roleSet.add(String(u.role).trim())
       }
     })
     return Array.from(roleSet).sort((a, b) => a.localeCompare(b))
-  }, [users])
+  }, [dbRoles, users])
 
   const availableDivisions = useMemo(() => {
     const divSet = new Set<string>()
@@ -907,12 +954,7 @@ export default function UsersPage() {
 
                   <tbody className="divide-y divide-slate-200 bg-white">
                     {currentTableUsers.map((u) => {
-                      const role = ROLE_META[u.role] ?? {
-                        label: u.role,
-                        bg: "#f1f5f9",
-                        text: "#475569",
-                        border: "#cbd5e1",
-                      }
+                      const role = getRoleBadgeStyle(u.role)
                       const company = COMPANY_META[u.company] ?? {
                         bg: "#f1f5f9",
                         text: "#475569",
@@ -1229,11 +1271,14 @@ export default function UsersPage() {
         {isCreateDialogOpen && (
           <EmployeeProfileModal
             open={isCreateDialogOpen}
+            availableRoles={availableRoles}
+            onRoleCreated={fetchRolesFromDb}
             onClose={() => setIsCreateDialogOpen(false)}
             onSubmit={async (d) => {
               try {
                 await createUser(d)
                 await fetchUsersFromDb()
+                await fetchRolesFromDb()
                 setIsCreateDialogOpen(false)
               } catch {}
             }}
@@ -1245,11 +1290,14 @@ export default function UsersPage() {
           <EmployeeProfileModal
             user={editingUser}
             open={!!editingUser}
+            availableRoles={availableRoles}
+            onRoleCreated={fetchRolesFromDb}
             onClose={() => setEditingUser(null)}
             onSubmit={async (d) => {
               try {
                 await updateUser(editingUser.id, d)
                 await fetchUsersFromDb()
+                await fetchRolesFromDb()
                 setEditingUser(null)
               } catch {}
             }}
@@ -2922,9 +2970,11 @@ interface EmployeeProfileModalProps {
   open: boolean
   onClose: () => void
   onSubmit: (userData: Omit<User, "id">) => Promise<void> | void
+  availableRoles?: string[]
+  onRoleCreated?: () => void
 }
 
-function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfileModalProps) {
+function EmployeeProfileModal({ user, open, onClose, onSubmit, availableRoles, onRoleCreated }: EmployeeProfileModalProps) {
   const { user: currentUser } = useAuth()
   const [formData, setFormData] = useState({
     name:       user?.name       || "",
@@ -2940,6 +2990,44 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
 
   const [pageModules, setPageModules] = useState<PagePermissionModule[]>(PAGE_PERMISSIONS_MODULES)
   const [isManagePermsOpen, setIsManagePermsOpen] = useState(false)
+  const [modalRoles, setModalRoles] = useState<string[]>([])
+  const [isCreatingNewRole, setIsCreatingNewRole] = useState(false)
+  const [newRoleInput, setNewRoleInput] = useState("")
+
+  // Fetch or sync roles when modal opens
+  useEffect(() => {
+    if (open) {
+      const initial = new Set<string>(availableRoles || [])
+      const standardRoles = [
+        "super_admin",
+        "admin",
+        "sales_manager",
+        "sales_agent",
+        "operation_manager",
+        "operation_staff",
+        "account_manager",
+        "account_staff",
+        "general_manager",
+        "doctor",
+        "hr_manager",
+        "front_office",
+      ]
+      standardRoles.forEach((r) => initial.add(r))
+      if (user?.role) initial.add(user.role)
+      setModalRoles(Array.from(initial))
+      setIsCreatingNewRole(false)
+      setNewRoleInput("")
+
+      fetch("/api/admin/roles")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && Array.isArray(data.roles)) {
+            setModalRoles((prev) => Array.from(new Set([...prev, ...data.roles])))
+          }
+        })
+        .catch((err) => console.error("Failed to load roles in modal:", err))
+    }
+  }, [open, user?.role, availableRoles])
 
   // Load custom modules and action overrides from database
   useEffect(() => {
@@ -3020,8 +3108,29 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
 
   const handleRoleChange = (newRole: UserRole) => {
     setFormData(p => ({ ...p, role: newRole }))
-    const defaults = ROLE_DEFAULT_PERMISSIONS[newRole] || []
-    setPermissions(defaults)
+    const defaults = ROLE_DEFAULT_PERMISSIONS[newRole]
+    if (defaults && defaults.length > 0) {
+      setPermissions(defaults)
+    } else if (permissions.length === 0) {
+      setPermissions(["dashboard.view"])
+    }
+  }
+
+  const handleAddNewRoleConfirm = () => {
+    const raw = newRoleInput.trim()
+    if (!raw) {
+      toast.error("Please enter a role name")
+      return
+    }
+    const roleKey = raw.toLowerCase().replace(/[\s-]+/g, "_")
+    setModalRoles((prev) => Array.from(new Set([...prev, roleKey])))
+    handleRoleChange(roleKey as any)
+    setIsCreatingNewRole(false)
+    setNewRoleInput("")
+    if (typeof onRoleCreated === "function") {
+      onRoleCreated()
+    }
+    toast.success(`Role "${formatRoleDisplay(roleKey)}" selected. Click Save to persist to database.`)
   }
 
   const togglePermission = (permKey: string) => {
@@ -3252,7 +3361,7 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-md bg-white/10 px-2.5 py-1 text-xs text-indigo-50 ring-1 ring-inset ring-white/20">
                   <span className="font-semibold text-white">Role Authority</span>
-                  <span className="text-indigo-100">{formData.role.replace(/_/g, " ").toUpperCase()}</span>
+                  <span className="text-indigo-100">{formatRoleDisplay(formData.role)}</span>
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-md bg-white/10 px-2.5 py-1 text-xs text-indigo-50 ring-1 ring-inset ring-white/20">
                   <span className="font-semibold text-white">Status</span>
@@ -3378,25 +3487,79 @@ function EmployeeProfileModal({ user, open, onClose, onSubmit }: EmployeeProfile
               </div>
 
               <div className="space-y-1.5">
-                <Label className={L}>
-                  Role Authority <span className="text-rose-500">*</span>
-                </Label>
-                <Select
-                  value={formData.role}
-                  onValueChange={(v: UserRole) => handleRoleChange(v)}
-                >
-                  <SelectTrigger className={F}><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="super_admin">Super Admin (Full Authority)</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                    <SelectItem value="sales_manager">Sales Manager</SelectItem>
-                    <SelectItem value="sales_agent">Sales Agent</SelectItem>
-                    <SelectItem value="operation_manager">Operations Manager</SelectItem>
-                    <SelectItem value="operation_staff">Operations Staff</SelectItem>
-                    <SelectItem value="doctor">Doctor</SelectItem>
-                    <SelectItem value="account_manager">Account Manager</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center justify-between">
+                  <Label className={L}>
+                    Role Authority <span className="text-rose-500">*</span>
+                  </Label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCreatingNewRole(prev => !prev)
+                      setNewRoleInput("")
+                    }}
+                    className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                  >
+                    {isCreatingNewRole ? "← Select Existing" : "+ New Role"}
+                  </button>
+                </div>
+
+                {isCreatingNewRole ? (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        value={newRoleInput}
+                        onChange={(e) => setNewRoleInput(e.target.value)}
+                        placeholder="e.g. Quality Analyst"
+                        className={`${F} text-xs`}
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault()
+                            handleAddNewRoleConfirm()
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleAddNewRoleConfirm}
+                        className="h-11 px-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shrink-0 rounded-xl"
+                      >
+                        Confirm
+                      </Button>
+                    </div>
+                    <p className="text-[10px] text-slate-500 italic">
+                      Will be saved to database upon submitting form.
+                    </p>
+                  </div>
+                ) : (
+                  <Select
+                    value={formData.role}
+                    onValueChange={(v: string) => {
+                      if (v === "__CREATE_NEW_ROLE__") {
+                        setIsCreatingNewRole(true)
+                        setNewRoleInput("")
+                      } else {
+                        handleRoleChange(v as UserRole)
+                      }
+                    }}
+                  >
+                    <SelectTrigger className={F}><SelectValue /></SelectTrigger>
+                    <SelectContent className="max-h-72">
+                      {modalRoles.map((r) => (
+                        <SelectItem key={r} value={r}>
+                          {formatRoleDisplay(r)}
+                        </SelectItem>
+                      ))}
+                      <SelectItem
+                        value="__CREATE_NEW_ROLE__"
+                        className="text-indigo-600 font-semibold border-t border-slate-100 mt-1 cursor-pointer"
+                      >
+                        ➕ Create New Role Authority...
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               <div className="space-y-1.5">

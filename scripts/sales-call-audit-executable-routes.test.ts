@@ -391,7 +391,7 @@ test('Executable Route Handlers Suite (Sales Call Audit)', async (t) => {
     assert.ok(cc.includes('no-store'), 'Cache-Control must contain no-store')
   })
 
-  await t.test('9. Cron Daily Audit Email: Bearer token auth, skip on empty data, and automated dispatch', async () => {
+  await t.test('9. Cron Daily Audit Email: superseded by the email-triggers automation, never dispatches', async () => {
     process.env.CRON_SECRET = 'test-cron-secret-token'
     sentEmails = []
 
@@ -406,20 +406,9 @@ test('Executable Route Handlers Suite (Sales Call Audit)', async (t) => {
     const resWrongAuth = await getCronEmail(reqWrongAuth)
     assert.equal(resWrongAuth.status, 401, 'Cron must reject invalid bearer token')
 
-    // 9b. Skip send when no audit rows found for date
-    dbReturnEmpty = true
-    const reqEmptyDate = new NextRequest('http://localhost:3000/api/cron/sales-call-audit-daily-email?date=2026-09-01', {
-      headers: { authorization: 'Bearer test-cron-secret-token' },
-    })
-    const resEmptyDate = await getCronEmail(reqEmptyDate)
-    assert.equal(resEmptyDate.status, 200)
-    const jsonEmpty = await resEmptyDate.json()
-    assert.equal(jsonEmpty.skipped, true)
-    assert.equal(jsonEmpty.reason, 'no-audit-rows')
-    assert.equal(sentEmails.length, 0, 'No email should be dispatched when no rows exist')
-    dbReturnEmpty = false
-
-    // 9c. Successful dispatch with valid bearer token and audit data
+    // 9b. Authorized calls no longer send: this report is now sent only by the
+    // "sales-call-audit" trigger under /settings/automation/email-triggers. Keeping
+    // both wired up used to mail the report twice every morning.
     const reqValid = new NextRequest('http://localhost:3000/api/cron/sales-call-audit-daily-email?date=2026-09-02', {
       headers: { authorization: 'Bearer test-cron-secret-token' },
     })
@@ -427,11 +416,9 @@ test('Executable Route Handlers Suite (Sales Call Audit)', async (t) => {
     assert.equal(resValid.status, 200)
     const jsonValid = await resValid.json()
     assert.equal(jsonValid.success, true)
-    assert.equal(jsonValid.skipped, false)
-    assert.equal(jsonValid.smtpDispatched, true)
-    assert.equal(sentEmails.length, 1, 'Cron must successfully dispatch email')
-    assert.ok(sentEmails[0].html.includes('Agent-wise Call Audit Report'))
-    assert.ok(sentEmails[0].html.includes('Zaki Ahmed'))
+    assert.equal(jsonValid.skipped, true)
+    assert.equal(jsonValid.reason, 'superseded-by-email-triggers')
+    assert.equal(sentEmails.length, 0, 'This endpoint must never dispatch; email-triggers owns the send')
   })
 
   await t.test('10. Middleware session boundary allows cron endpoint without session cookie', async () => {

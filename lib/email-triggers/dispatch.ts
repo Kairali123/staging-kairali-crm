@@ -8,6 +8,8 @@ import { loadScheduledSales } from './load-sales'
 import { loadScheduledMarketing } from './load-marketing'
 import { loadScheduledCrr } from './load-crr-report'
 import { exportCrrReportHTML } from '@/lib/ktahv-crr-report'
+import { loadScheduledBookingPiReview } from './load-booking-pi-review'
+import { exportBookingPiReviewHTML } from '@/lib/booking-pi-review-report'
 import { localDay, nextRun } from './schedule'
 import { transaction } from './store'
 import { resolveAppUrl } from './app-url'
@@ -105,6 +107,11 @@ export async function buildEmail(t:Trigger,at:number){
    reportSlug='Marketing-Daily-Report'
    const report=await loadScheduledMarketing(date);const scope=t.company==='All companies'?'all':t.company,selected=report.companies.filter(c=>scope==='all'||c.name===scope);hasData=selected.some(c=>c.totalLeads||c.totalSpend||c.sale);html=reportExportHTML(date,report,{scope,expanded:t.reportDetail==='Include source-wise details'?selected.flatMap(c=>[c.name+'-leads',c.name+'-sales']):[]})
   }
+  else if(t.reportId==='booking-pi-review-alert'){
+   reportTitle='Booking PI Review Alert'
+   reportSlug='Booking-PI-Review-Alert'
+   const report=await loadScheduledBookingPiReview(date);hasData=report.summary.total>0;html=exportBookingPiReviewHTML(report,resolveAppUrl())
+  }
   else if(t.reportId==='kserve-lead-lost-alert'){
    reportTitle='KServe Lead Lost Alert'
    reportSlug='KServe-Lead-Lost-Alert'
@@ -143,11 +150,15 @@ export async function buildEmail(t:Trigger,at:number){
    if(html.includes('Marketing Daily Report') || !html.includes('KServe Lead Lost Alert')){
     throw new Error('[email-trigger dispatch] INTEGRITY GUARD: Report output does not match KServe Lead Lost Alert. Aborting email send.')
    }
+  }else if(t.reportId==='booking-pi-review-alert'){
+   if(html.includes('Marketing Daily Report') || !html.includes('Booking PI Review Alert')){
+    throw new Error('[email-trigger dispatch] INTEGRITY GUARD: Report output does not match Booking PI Review Alert. Aborting email send.')
+   }
   }
   const p=(s:string)=>(s||'').trim()?'<div style="padding:18px 24px;white-space:pre-wrap;font:14px/1.8 Arial">'+esc(replace(s))+'</div>':''
   // Reports with in-layout markers keep the note inside their centered column; others get it around <body>.
   html=html.includes('<!--email-intro-->')?html.replace('<!--email-intro-->',()=>p(t.intro)).replace('<!--email-closing-->',()=>p(t.closing)):html.replace(/(<body[^>]*>)/,'$1'+p(t.intro)).replace('</body>',p(t.closing)+'</body>')
-  if(t.reportId!=='sales-call-audit' && t.reportId!=='kserve-lead-lost-alert'){
+  if(t.reportId!=='sales-call-audit' && t.reportId!=='kserve-lead-lost-alert' && t.reportId!=='ktahv-crr-process-report-alert' && t.reportId!=='booking-pi-review-alert'){
    try{
     const {renderJPEG}=await import('@/lib/whatsapp-triggers/render')
     if(typeof renderJPEG==='function'){
@@ -172,7 +183,8 @@ export async function buildEmail(t:Trigger,at:number){
    }
   }
  }else html='<div style="white-space:pre-wrap;font:14px/1.8 Arial">'+esc(t.bodyType==='Static'?t.body:replace(t.body))+'</div>'
- return {subject:replace(t.subject),html,hasData,...(attachments?{attachments}:{})}
+ const diag=`reportId=${t.reportId} kserveMarker=${html.includes('KServe Lead Lost Alert')} marketingMarker=${html.includes('Marketing Daily Report')} len=${html.length}`
+ return {subject:replace(t.subject),html,hasData,diag,...(attachments?{attachments}:{})}
 }
 export type DispatchDeps={build:typeof buildEmail;send:(t:Trigger,email:{subject:string;html:string;attachments?:any[]})=>Promise<{accepted:number;rejected:number}>}
 const deps:DispatchDeps={build:buildEmail,send:async(t,email)=>{
@@ -202,7 +214,7 @@ export async function dispatchDue(now=Date.now(),io=deps){
    else{
     const allowed=await transaction(s=>{const current=s.triggers.find(x=>x.id===t.id),r=s.runs.find(x=>x.id===run.id)!;if(!current||current.status!=='Active'||current.revision!==t.revision){r.status='Skipped';return false}r.status='Sending';r.detail='Handing message to provider';return true})
     if(!allowed){status='Skipped';detail='Configuration changed or paused before delivery'}
-    else{sending=true;const result=await io.send(t,email);status=result.rejected?'Partial':result.accepted?'Accepted':'Failed';detail=result.rejected?'Some recipients rejected; inspect mailbox before retrying':result.accepted?'Accepted by email provider (not delivery confirmation)':'Provider accepted no recipients'}
+    else{sending=true;const result=await io.send(t,email);status=result.rejected?'Partial':result.accepted?'Accepted':'Failed';detail=(result.rejected?'Some recipients rejected; inspect mailbox before retrying':result.accepted?'Accepted by email provider (not delivery confirmation)':'Provider accepted no recipients')+' | DIAG:'+((email as any).diag||'none')}
    }
   }catch(err:any){
    if(err instanceof IncompleteReportError || err?.name === 'IncompleteReportError'){
