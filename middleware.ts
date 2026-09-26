@@ -187,6 +187,7 @@ const publicRoutes = ['/', '/access-denied']
 const protectedRoutes = [
   '/dashboard',
   '/leads',
+  '/morning-lead-allocation',
   '/calls',
   '/reports',
   '/performance',
