@@ -520,6 +520,7 @@ export type UserRole =
   | "front_office"
   | "hr_manager"
   | "villa_raag_manager"
+  | (string & {})
 
 export type Department =
   | "Administration"

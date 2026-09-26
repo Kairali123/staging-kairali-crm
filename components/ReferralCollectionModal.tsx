@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertTriangle, Clock, Users, UserX, Check, Loader2, Plus } from "lucide-react";
 import type { Guest } from "@/types/crr";
 import { ClientBookingDetailsCard } from "@/components/ClientBookingDetailsCard";
+import { toast } from "sonner";
 
 /* =========================================================
    TYPES
@@ -138,13 +139,17 @@ export default function ReferralCollectionModal({
     function updateEntry(index: number, field: keyof ReferredPersonEntry, value: string) {
         setEntries((rows) => rows.map((r, i) => (i === index ? { ...r, [field]: value } : r)));
         setSaved(false);
+        setFormError("");
     }
 
     function addEntry() {
         setEntries((rows) => {
             const last = rows[rows.length - 1];
             if (last && !isReferralEntryComplete(last)) {
-                setFormError("Please fill all fields in the current row before adding a new one.");
+                const missing = getMissingFields(last);
+                const msg = `Please fill all required fields in Referral #${rows.length} (${missing.join(", ")}) before adding a new one.`;
+                setFormError(msg);
+                toast.error(msg);
                 return rows;
             }
             setFormError("");
@@ -155,22 +160,24 @@ export default function ReferralCollectionModal({
     function removeEntry(index: number) {
         setEntries((rows) => (rows.length <= 1 ? rows : rows.filter((_, i) => i !== index)));
         setSaved(false);
+        setFormError("");
     }
 
-    function mobileDuplicateError(): string {
-        const mobiles = entries.map((r) => r.mobile.trim()).filter(Boolean);
-        const seen = new Set<string>();
-        for (const m of mobiles) {
-            if (seen.has(m)) return "Referral mobile numbers must be unique for each referral.";
-            seen.add(m);
-        }
-        return "";
+    function getMissingFields(e: ReferredPersonEntry): string[] {
+        const missing: string[] = [];
+        if (!e.name.trim()) missing.push("Name");
+        if (!e.countryCode.trim()) missing.push("Country Code");
+        if (!e.mobile.trim()) missing.push("Mobile");
+        if (!e.email.trim()) missing.push("Email");
+        if (!e.relationship.trim()) missing.push("Relationship");
+        if (!e.referredFor.trim()) missing.push("Referred For");
+        return missing;
     }
 
     function isFormComplete() {
         if (guestAllowedReferral === "no") return doerRemarks.trim() !== "";
         if (guestAllowedReferral === "yes") {
-            return entries.length > 0 && entries.every(isReferralEntryComplete) && mobileDuplicateError() === "";
+            return entries.length > 0 && entries.every(isReferralEntryComplete);
         }
         return false;
     }
@@ -178,24 +185,36 @@ export default function ReferralCollectionModal({
     function handleSubmit() {
         if (saved) return;
 
+        if (guestAllowedReferral === "") {
+            const err = "Please select whether the guest is giving a referral (Yes / No).";
+            setFormError(err);
+            toast.error(err);
+            return;
+        }
+
         if (guestAllowedReferral === "no") {
             if (doerRemarks.trim() === "") {
-                setFormError("Remarks are compulsory when the guest is not giving a referral.");
+                const err = "Remarks are compulsory when the guest is not giving a referral.";
+                setFormError(err);
+                toast.error(err);
                 return;
             }
         } else if (guestAllowedReferral === "yes") {
-            if (!entries.every(isReferralEntryComplete)) {
-                setFormError("Please fill in every field for each referred person before saving.");
+            if (entries.length === 0) {
+                const err = "Please add at least one referral before saving.";
+                setFormError(err);
+                toast.error(err);
                 return;
             }
-            const dupError = mobileDuplicateError();
-            if (dupError) {
-                setFormError(dupError);
+
+            const firstIncompleteIdx = entries.findIndex((e) => !isReferralEntryComplete(e));
+            if (firstIncompleteIdx !== -1) {
+                const missing = getMissingFields(entries[firstIncompleteIdx]);
+                const err = `Referral #${firstIncompleteIdx + 1} is missing: ${missing.join(", ")}. Please fill in all required fields${entries.length > 1 ? " or remove this referral" : ""} before saving.`;
+                setFormError(err);
+                toast.error(err);
                 return;
             }
-        } else {
-            setFormError("Please select whether the guest is giving a referral.");
-            return;
         }
 
         setFormError("");
@@ -529,16 +548,16 @@ export default function ReferralCollectionModal({
                             size="sm"
                             onClick={onClose}
                             disabled={saved}
-                            className="h-9 px-4 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 hover:text-slate-900 rounded-lg shadow-2xs transition-colors"
+                            className="h-9 px-4 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 hover:text-slate-900 rounded-lg shadow-2xs transition-colors cursor-pointer"
                         >
                             Close
                         </Button>
-                        {!isReadOnly && isFormComplete() && (
+                        {!isReadOnly && (
                             <Button
                                 size="sm"
                                 onClick={handleSubmit}
                                 disabled={disabled || saved}
-                                className="h-9 min-w-[100px] px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-lg shadow-xs disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 transition-colors"
+                                className="h-9 min-w-[100px] px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-lg shadow-xs disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                             >
                                 {saved ? (
                                     <>

@@ -141,6 +141,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }, [searchQuery])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (pathname.startsWith("/fms")) setFmsExpanded(true)
     if (pathname.startsWith("/employee")) setEmployeeExpanded(true)
     if (pathname.startsWith("/marketing") || pathname === "/google-adword-reports") setMarketingExpanded(true)
@@ -155,7 +156,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       pathname.startsWith("/leads") ||
       pathname.startsWith("/lead-search") ||
       pathname.startsWith("/good-lead-leakage") ||
-      pathname === "/voicecall/kserve-lead-lost"
+      pathname === "/voicecall/kserve-lead-lost" ||
+      pathname.startsWith("/lead-lost-monitor")
     ) {
       setLeadManagementExpanded(true)
     }
@@ -240,6 +242,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "Lead Search Dashboard", href: "/lead-search", icon: Search, permission: "lead_search.view" },
     { name: "Good Lead Leakage", href: "/good-lead-leakage", icon: Search, permission: "good_lead_leakage.view" },
     { name: "K-Serve Lead Lost", href: "/voicecall/kserve-lead-lost", icon: PhoneCall, permission: "voicecall_kserve_lead_lost.view" },
+    { name: "Lead Lost Monitor", href: "/lead-lost-monitor", icon: AlertTriangle, permission: "lead_lost_monitor.view" },
   ]
   const kapplNewOrderSubMenu = [
     { name: "New Order FMS", href: "/new-order-fms", icon: FileText, permission: "new-order-fms.view" },
@@ -267,6 +270,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const guestExperienceSubMenu = [
     { name: "Guest Experience (Dark)", href: "/guest-experience", icon: Moon, permission: "guest_experience.view" },
     { name: "Guest Experience (Light)", href: "/guest-experience-light", icon: Sun, permission: "guest_experience.view" },
+    { name: "Kiosk Setup (Config)", href: "/guest-experience/config", icon: Settings, permission: "guest_experience.view" },
     { name: "Guest Feedback", href: "/guest-experience/feedback", icon: MessageSquare, permission: "guest_experience.view" },
     { name: "Guest Explore", href: "/guest-experience/explore", icon: Map, permission: "guest_experience.view" },
   ]
@@ -507,6 +511,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (hasLeadSearchPermission()) searchableItems.push({ name: "Lead Search Dashboard", href: "/lead-search", description: "Lead Search Dashboard", icon: Search })
     if (hasGoodLeadLeakagePermission()) searchableItems.push({ name: "Good Lead Leakage", href: "/good-lead-leakage", description: "Good lead leakage report", icon: Search })
     if (hasKserveLeadLostPermission()) searchableItems.push({ name: "K-Serve Lead Lost", href: "/voicecall/kserve-lead-lost", description: "K-Serve lead lost tracker", icon: PhoneCall })
+    searchableItems.push({ name: "Lead Lost Monitor", href: "/lead-lost-monitor", description: "Lead Lost Monitor", icon: AlertTriangle })
   }
   if (hasClientDatabasePermission() || hasClientDatabaseUploadPermission()) {
     if (hasClientDatabasePermission()) searchableItems.push({ name: "Client Database", href: "/client-database", description: "Client Database records", icon: Database })
@@ -643,16 +648,19 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       const isLeadSearchRoute = pathname.startsWith("/lead-search")
       const isGoodLeadLeakageRoute = pathname.startsWith("/good-lead-leakage")
       const isKserveLeadLostRoute = pathname === "/voicecall/kserve-lead-lost"
+      const isLeadLostMonitorRoute = pathname.startsWith("/lead-lost-monitor")
       const isActive = (hasLeadsAssignPermission() && isLeadsAssignRoute) ||
                        (hasLeadSearchPermission() && isLeadSearchRoute) ||
                        (hasGoodLeadLeakagePermission() && isGoodLeadLeakageRoute) ||
-                       (hasKserveLeadLostPermission() && isKserveLeadLostRoute)
+                       (hasKserveLeadLostPermission() && isKserveLeadLostRoute) ||
+                       isLeadLostMonitorRoute
 
       const visibleSubMenu = leadManagementSubMenu.filter((subItem) => {
         if (subItem.href === "/leads/assign") return hasLeadsAssignPermission()
         if (subItem.href === "/lead-search") return hasLeadSearchPermission()
         if (subItem.href === "/good-lead-leakage") return hasGoodLeadLeakagePermission()
         if (subItem.href === "/voicecall/kserve-lead-lost") return hasKserveLeadLostPermission()
+        if (subItem.href === "/lead-lost-monitor") return isSuperAdmin || hasPermission("lead_lost_monitor.view") || hasPermission("voicecall_kserve_lead_lost.view") || user?.permissions?.includes("all")
         return hasPermission(subItem.permission) || hasPermission("all")
       })
       if (visibleSubMenu.length === 0) return null
