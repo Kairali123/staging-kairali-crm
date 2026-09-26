@@ -4,9 +4,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { ArrowLeft, CheckCircle2, ChevronRight } from "lucide-react"
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
-const questions = [
+const defaultQuestions = [
   "How was your journey from the airport?",
   "Did your driver arrive on time?",
   "Was the airport pickup easy and well coordinated?",
@@ -19,6 +19,18 @@ export default function GuestFeedbackPage() {
   const [currentStep, setCurrentStep] = useState(0)
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [isSubmitted, setIsSubmitted] = useState(false)
+  const [questions, setQuestions] = useState(defaultQuestions)
+
+  useEffect(() => {
+    fetch("/api/guest-experience/config")
+      .then(r => r.json())
+      .then(d => {
+        if (d.feedbackQuestions && d.feedbackQuestions.length > 0) {
+          setQuestions(d.feedbackQuestions)
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   const handleAnswer = (answer: string) => {
     setAnswers(prev => ({ ...prev, [currentStep]: answer }))
@@ -27,6 +39,17 @@ export default function GuestFeedbackPage() {
     if (currentStep < questions.length - 1) {
       setCurrentStep(prev => prev + 1)
     } else {
+      // Submit to backend API
+      const finalAnswers = { ...answers, [currentStep]: answer }
+      const formattedAnswers: Record<string, string> = {}
+      questions.forEach((q, i) => { formattedAnswers[q] = finalAnswers[i] })
+      
+      fetch("/api/guest-experience/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ _action: "feedback_submit", answers: formattedAnswers })
+      }).catch(() => {})
+      
       setIsSubmitted(true)
     }
   }

@@ -1,20 +1,21 @@
 "use client"
 import { useState, useEffect } from "react"
+import { DashboardLayout } from "@/components/dashboard-layout"
 import {
   MonitorDown, CheckCircle2, User, BedDouble, Calendar, Settings2,
   Globe, LayoutGrid, Save, RefreshCw, Loader2, MessageSquare, Star,
-  ChevronDown, ChevronUp, Smartphone, Info
+  ChevronDown, ChevronUp, Smartphone, Info, Edit3, Plus, Trash2, List
 } from "lucide-react"
 
 const SLIDES_META = [
-  { id: 1, label: "Welcome & Clock" },
-  { id: 2, label: "Clinical Treatments (NABH)" },
-  { id: 3, label: "Healing Villas" },
-  { id: 4, label: "Ayurvedic Cuisine" },
-  { id: 5, label: "Services & Feedback" },
-  { id: 6, label: "115 Years Legacy & Group" },
-  { id: 7, label: "Awards & CSR" },
-  { id: 8, label: "Riya AI Services" },
+  { id: 1, label: "Welcome & Clock", defaultTitle: "Kairali", defaultSub: "The Ayurvedic Healing Village" },
+  { id: 2, label: "Clinical Treatments", defaultTitle: "Clinical & Traditional", defaultSub: "NABH Accredited Ayurveda" },
+  { id: 3, label: "Healing Villas", defaultTitle: "Healing Architecture", defaultSub: "Villas based on Vedic astrology" },
+  { id: 4, label: "Ayurvedic Cuisine", defaultTitle: "Ayurvedic Cuisine", defaultSub: "Farm-to-table organic meals" },
+  { id: 5, label: "Services & Feedback", defaultTitle: "Guest Services", defaultSub: "How can we assist you today?" },
+  { id: 6, label: "115 Years Legacy", defaultTitle: "Our Heritage", defaultSub: "115 years of Ayurvedic excellence" },
+  { id: 7, label: "Awards & CSR", defaultTitle: "Global Recognition", defaultSub: "Top Ayurvedic Resort" },
+  { id: 8, label: "Riya AI Services", defaultTitle: "Meet Riya Sharma", defaultSub: "Your AI Guest Manager" },
 ]
 
 const LANGUAGES = ["EN", "HI", "ML", "DE", "RU", "FR", "NL", "ES", "AR", "ZH"]
@@ -41,23 +42,27 @@ export default function GuestAppConfig() {
     enabledSlides: [1, 2, 3, 4, 5, 6, 7, 8],
     defaultLanguage: "EN",
     kioskLabel: "Reception Lobby",
+    slideOverrides: {} as Record<string, { title: string; subtitle: string }>,
+    feedbackQuestions: [] as string[],
     lastUpdated: "",
   })
 
   useEffect(() => {
-    // PWA Install detection
-    if (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone) {
-      setIsInstalled(true)
-    }
+    if (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone) setIsInstalled(true)
     const handler = (e: any) => { e.preventDefault(); setDeferredPrompt(e) }
     window.addEventListener('beforeinstallprompt', handler)
 
-    // Load config from API
     fetch("/api/guest-experience/config")
       .then(r => r.json())
-      .then(data => { setConfig(data); setLoading(false) })
+      .then(data => { 
+        setConfig({
+          ...data, 
+          slideOverrides: data.slideOverrides || {},
+          feedbackQuestions: data.feedbackQuestions || []
+        })
+        setLoading(false) 
+      })
       .catch(() => setLoading(false))
-
     return () => window.removeEventListener('beforeinstallprompt', handler)
   }, [])
 
@@ -67,7 +72,7 @@ export default function GuestAppConfig() {
       const { outcome } = await deferredPrompt.userChoice
       if (outcome === 'accepted') { setDeferredPrompt(null); setIsInstalled(true) }
     } else {
-      alert("iPad/iPhone: Safari ▸ Share icon ▸ 'Add to Home Screen' — Kairali app icon will appear on your device.")
+      alert("iPad/iPhone: Safari ▸ Share icon ▸ 'Add to Home Screen'.")
     }
   }
 
@@ -94,8 +99,33 @@ export default function GuestAppConfig() {
     }))
   }
 
+  const updateSlideOverride = (id: number, field: "title" | "subtitle", value: string) => {
+    setConfig(c => {
+      const overrides = { ...c.slideOverrides }
+      if (!overrides[id]) overrides[id] = { title: "", subtitle: "" }
+      overrides[id][field] = value
+      return { ...c, slideOverrides: overrides }
+    })
+  }
+
+  const updateQuestion = (index: number, value: string) => {
+    const qs = [...config.feedbackQuestions]
+    qs[index] = value
+    setConfig(c => ({ ...c, feedbackQuestions: qs }))
+  }
+  
+  const removeQuestion = (index: number) => {
+    const qs = [...config.feedbackQuestions]
+    qs.splice(index, 1)
+    setConfig(c => ({ ...c, feedbackQuestions: qs }))
+  }
+  
+  const addQuestion = () => {
+    setConfig(c => ({ ...c, feedbackQuestions: [...c.feedbackQuestions, ""] }))
+  }
+
   const Section = ({ id, title, icon: Icon, children }: any) => (
-    <div className="border border-[#E0D8C3] rounded-2xl overflow-hidden mb-4">
+    <div className="border border-[#E0D8C3] rounded-2xl overflow-hidden mb-4 shadow-sm bg-white">
       <button
         onClick={() => setOpenSection(openSection === id ? null : id)}
         className="w-full flex items-center justify-between px-5 py-4 bg-[#FDFBF7] hover:bg-[#F5F0E8] transition-colors"
@@ -107,7 +137,7 @@ export default function GuestAppConfig() {
         {openSection === id ? <ChevronUp className="w-4 h-4 text-[#4A5D4E]" /> : <ChevronDown className="w-4 h-4 text-[#4A5D4E]" />}
       </button>
       {openSection === id && (
-        <div className="px-5 py-5 bg-white border-t border-[#E0D8C3] space-y-4">
+        <div className="px-5 py-5 border-t border-[#E0D8C3] space-y-4">
           {children}
         </div>
       )}
@@ -124,151 +154,177 @@ export default function GuestAppConfig() {
   const inputCls = "w-full px-4 py-2.5 rounded-xl border border-[#E0D8C3] bg-[#FDFBF7] text-[#132A13] text-sm focus:outline-none focus:border-[#C74B26] focus:ring-1 focus:ring-[#C74B26]/30 transition"
 
   if (loading) return (
-    <div className="min-h-screen bg-[#F3F0E6] flex items-center justify-center">
-      <Loader2 className="w-8 h-8 animate-spin text-[#C74B26]" />
-    </div>
+    <DashboardLayout>
+      <div className="min-h-screen bg-[#F3F0E6] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#C74B26]" />
+      </div>
+    </DashboardLayout>
   )
 
   return (
-    <div className="min-h-screen bg-[#F3F0E6] p-4 md:p-8 font-sans">
-      <div className="max-w-2xl mx-auto">
+    <DashboardLayout>
+      <div className="min-h-screen bg-[#F3F0E6] p-4 md:p-8 font-sans">
+        <div className="max-w-3xl mx-auto">
 
-        {/* Header */}
-        <div className="mb-6">
-          <div className="flex items-center gap-3 mb-1">
-            <div className="w-10 h-10 bg-[#C74B26]/10 rounded-xl flex items-center justify-center">
-              <Settings2 className="w-5 h-5 text-[#C74B26]" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-serif text-[#132A13] font-bold">Guest Kiosk Config</h1>
-              <p className="text-xs text-[#708F7D]">
-                {config.lastUpdated ? `Last saved: ${new Date(config.lastUpdated).toLocaleString("en-IN")}` : "Not saved yet"}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Info Banner */}
-        <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4 mb-5 text-sm text-blue-700">
-          <Info className="w-5 h-5 shrink-0 mt-0.5" />
-          <p>Changes saved here will reflect <strong>instantly</strong> on the Guest Experience app when it refreshes. The guest app auto-refreshes every 60 seconds.</p>
-        </div>
-
-        {/* 1. Guest Details */}
-        <Section id="guest" title="Guest Assignment" icon={User}>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Guest Name">
-              <input className={inputCls} placeholder="e.g. Mr. Rajiv Mehta"
-                value={config.guestName} onChange={e => setConfig(c => ({ ...c, guestName: e.target.value }))} />
-            </Field>
-            <Field label="Room Number">
-              <input className={inputCls} placeholder="e.g. Villa 04"
-                value={config.roomNumber} onChange={e => setConfig(c => ({ ...c, roomNumber: e.target.value }))} />
-            </Field>
-            <Field label="Check-in Date">
-              <input type="date" className={inputCls}
-                value={config.checkIn} onChange={e => setConfig(c => ({ ...c, checkIn: e.target.value }))} />
-            </Field>
-            <Field label="Check-out Date">
-              <input type="date" className={inputCls}
-                value={config.checkOut} onChange={e => setConfig(c => ({ ...c, checkOut: e.target.value }))} />
-            </Field>
-          </div>
-          <Field label="Kiosk Location Label">
-            <input className={inputCls} placeholder="e.g. Reception Lobby / Room 04 TV"
-              value={config.kioskLabel} onChange={e => setConfig(c => ({ ...c, kioskLabel: e.target.value }))} />
-          </Field>
-          <Field label="Custom Welcome Message (optional)">
-            <textarea rows={2} className={inputCls + " resize-none"} placeholder="e.g. Welcome to Kairali, Mr. Rajiv! Enjoy your healing journey."
-              value={config.welcomeMessage} onChange={e => setConfig(c => ({ ...c, welcomeMessage: e.target.value }))} />
-          </Field>
-        </Section>
-
-        {/* 2. Theme & Language */}
-        <Section id="display" title="Display Settings" icon={Globe}>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Active Theme">
-              <select className={inputCls}
-                value={config.activeTheme} onChange={e => setConfig(c => ({ ...c, activeTheme: e.target.value }))}>
-                <option value="dark">Dark (Black Background)</option>
-                <option value="light">Light (Earthy/Cream)</option>
-              </select>
-            </Field>
-            <Field label="Default Language">
-              <select className={inputCls}
-                value={config.defaultLanguage} onChange={e => setConfig(c => ({ ...c, defaultLanguage: e.target.value }))}>
-                {LANGUAGES.map(l => <option key={l} value={l}>{LANG_LABELS[l]} ({l})</option>)}
-              </select>
-            </Field>
-          </div>
-        </Section>
-
-        {/* 3. Slides */}
-        <Section id="slides" title="Active Slides" icon={LayoutGrid}>
-          <p className="text-xs text-[#708F7D] mb-3">Toggle which slides appear in the Guest Experience slideshow.</p>
-          <div className="grid grid-cols-2 gap-2">
-            {SLIDES_META.map(s => (
-              <button key={s.id}
-                onClick={() => toggleSlide(s.id)}
-                className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all ${config.enabledSlides.includes(s.id) ? "bg-[#C74B26]/10 border-[#C74B26]/40 text-[#C74B26]" : "bg-[#F5F0E8] border-[#E0D8C3] text-[#708F7D]"}`}
-              >
-                <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 text-xs ${config.enabledSlides.includes(s.id) ? "border-[#C74B26] bg-[#C74B26] text-white" : "border-[#D9D3C1]"}`}>
-                  {config.enabledSlides.includes(s.id) ? "✓" : s.id}
-                </span>
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </Section>
-
-        {/* 4. Feedback preview */}
-        <Section id="feedback" title="Feedback & Reviews" icon={Star}>
-          <div className="text-sm text-[#4A5D4E] space-y-2">
-            <p>Guest feedback submitted via the app is available in:</p>
-            <a href="/guest-experience/feedback" target="_blank" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 font-medium hover:bg-amber-100 transition text-sm">
-              <MessageSquare className="w-4 h-4" /> View Guest Feedback Reports
-            </a>
-          </div>
-        </Section>
-
-        {/* 5. Install App */}
-        <Section id="install" title="Install App on Device" icon={Smartphone}>
-          <p className="text-sm text-[#4A5D4E] mb-4">
-            Open this config page on the iPad/Mobile you want to use as a kiosk, then tap <strong>Install Guest App</strong>. A Kairali icon will appear on the home screen.
-          </p>
-          {isInstalled ? (
-            <div className="flex items-center gap-3 text-green-700 bg-green-50 p-4 rounded-xl border border-green-200">
-              <CheckCircle2 className="w-6 h-6 shrink-0" />
+          {/* Header */}
+          <div className="mb-6">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-10 h-10 bg-[#C74B26]/10 rounded-xl flex items-center justify-center">
+                <Settings2 className="w-5 h-5 text-[#C74B26]" />
+              </div>
               <div>
-                <p className="font-semibold">App installed on this device!</p>
-                <p className="text-xs opacity-80 mt-0.5">Open from home screen icon whenever needed.</p>
+                <h1 className="text-2xl font-serif text-[#132A13] font-bold">Guest Kiosk & Content Config</h1>
+                <p className="text-xs text-[#708F7D]">
+                  {config.lastUpdated ? `Last saved: ${new Date(config.lastUpdated).toLocaleString("en-IN")}` : "Not saved yet"}
+                </p>
               </div>
             </div>
-          ) : (
-            <button onClick={handleInstallClick}
-              className="w-full py-3.5 rounded-xl bg-[#C74B26] hover:bg-[#A83D1E] text-white font-bold tracking-wide shadow-md flex items-center justify-center gap-2 transition active:scale-95">
-              <MonitorDown className="w-5 h-5" /> Install Guest App
+          </div>
+
+          <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4 mb-5 text-sm text-blue-700">
+            <Info className="w-5 h-5 shrink-0 mt-0.5" />
+            <p>Changes saved here reflect <strong>instantly</strong> on the Guest App (auto-refreshes every 60s). This configures the dynamic content.</p>
+          </div>
+
+          {/* 1. Guest Details */}
+          <Section id="guest" title="Guest Assignment" icon={User}>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Guest Name">
+                <input className={inputCls} placeholder="e.g. Mr. Rajiv Mehta"
+                  value={config.guestName} onChange={e => setConfig(c => ({ ...c, guestName: e.target.value }))} />
+              </Field>
+              <Field label="Room Number">
+                <input className={inputCls} placeholder="e.g. Villa 04"
+                  value={config.roomNumber} onChange={e => setConfig(c => ({ ...c, roomNumber: e.target.value }))} />
+              </Field>
+              <Field label="Check-in Date">
+                <input type="date" className={inputCls}
+                  value={config.checkIn} onChange={e => setConfig(c => ({ ...c, checkIn: e.target.value }))} />
+              </Field>
+              <Field label="Check-out Date">
+                <input type="date" className={inputCls}
+                  value={config.checkOut} onChange={e => setConfig(c => ({ ...c, checkOut: e.target.value }))} />
+              </Field>
+            </div>
+            <Field label="Kiosk Location Label">
+              <input className={inputCls} placeholder="e.g. Reception Lobby"
+                value={config.kioskLabel} onChange={e => setConfig(c => ({ ...c, kioskLabel: e.target.value }))} />
+            </Field>
+          </Section>
+
+          {/* 2. Display Settings */}
+          <Section id="display" title="Theme & Global Display" icon={Globe}>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Active Theme">
+                <select className={inputCls}
+                  value={config.activeTheme} onChange={e => setConfig(c => ({ ...c, activeTheme: e.target.value }))}>
+                  <option value="dark">Dark (Black Background)</option>
+                  <option value="light">Light (Earthy/Cream)</option>
+                </select>
+              </Field>
+              <Field label="Default Language">
+                <select className={inputCls}
+                  value={config.defaultLanguage} onChange={e => setConfig(c => ({ ...c, defaultLanguage: e.target.value }))}>
+                  {LANGUAGES.map(l => <option key={l} value={l}>{LANG_LABELS[l]} ({l})</option>)}
+                </select>
+              </Field>
+            </div>
+            <Field label="Custom Welcome Message (Slide 1 Overlay)">
+              <textarea rows={2} className={inputCls + " resize-none"} placeholder="Optional welcome note..."
+                value={config.welcomeMessage} onChange={e => setConfig(c => ({ ...c, welcomeMessage: e.target.value }))} />
+            </Field>
+          </Section>
+
+          {/* 3. Slide Content Editor */}
+          <Section id="slides" title="Dynamic Slide Editor" icon={Edit3}>
+            <p className="text-xs text-[#708F7D] mb-4">Toggle slides on/off, and customize their titles/subtitles (English base). Leave fields blank to use defaults.</p>
+            
+            <div className="space-y-4">
+              {SLIDES_META.map(s => {
+                const isActive = config.enabledSlides.includes(s.id)
+                const override = config.slideOverrides[s.id] || { title: "", subtitle: "" }
+                return (
+                  <div key={s.id} className={`p-4 rounded-xl border ${isActive ? 'border-[#C74B26]/30 bg-[#C74B26]/5' : 'border-gray-200 bg-gray-50'}`}>
+                    <div className="flex items-center gap-3 mb-3">
+                      <button onClick={() => toggleSlide(s.id)}
+                        className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 transition-colors ${isActive ? "bg-[#C74B26] text-white" : "bg-white border-2 border-gray-300"}`}>
+                        {isActive && <CheckCircle2 className="w-4 h-4" />}
+                      </button>
+                      <h4 className={`font-semibold ${isActive ? "text-[#132A13]" : "text-gray-400"}`}>Slide {s.id}: {s.label}</h4>
+                    </div>
+                    
+                    {isActive && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-9">
+                        <div>
+                          <label className="text-[10px] font-bold text-gray-500 uppercase">Custom Title</label>
+                          <input className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white" 
+                            placeholder={s.defaultTitle}
+                            value={override.title} onChange={e => updateSlideOverride(s.id, "title", e.target.value)} />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-gray-500 uppercase">Custom Subtitle</label>
+                          <input className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white" 
+                            placeholder={s.defaultSub}
+                            value={override.subtitle} onChange={e => updateSlideOverride(s.id, "subtitle", e.target.value)} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </Section>
+
+          {/* 4. Feedback Questions Config */}
+          <Section id="feedback" title="Dynamic Feedback Form" icon={List}>
+            <p className="text-xs text-[#708F7D] mb-4">Edit the questions asked in the quick feedback flow.</p>
+            
+            <div className="space-y-3">
+              {config.feedbackQuestions.map((q, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <div className="w-6 text-center text-xs font-bold text-gray-400">{i + 1}.</div>
+                  <input className={inputCls + " flex-1 !py-2"} placeholder="Enter question..."
+                    value={q} onChange={e => updateQuestion(i, e.target.value)} />
+                  <button onClick={() => removeQuestion(i)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+              <button onClick={addQuestion} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-[#C74B26] hover:bg-[#C74B26]/10 rounded-lg mt-2 ml-8">
+                <Plus className="w-4 h-4" /> Add Question
+              </button>
+            </div>
+
+            <div className="mt-6 pt-6 border-t border-[#E0D8C3] flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-bold text-[#132A13]">Guest Responses</h4>
+                <p className="text-xs text-[#708F7D]">View submitted feedback scores</p>
+              </div>
+              <a href="/guest-experience/feedback" target="_blank" className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#132A13] text-white text-sm font-medium hover:bg-[#1E3D1E] transition">
+                <Star className="w-4 h-4" /> View Feedback Report
+              </a>
+            </div>
+          </Section>
+
+          {/* 5. Install */}
+          <Section id="install" title="Install Device App" icon={Smartphone}>
+             <button onClick={handleInstallClick}
+              className="w-full py-3.5 rounded-xl bg-green-700 hover:bg-green-800 text-white font-bold tracking-wide shadow-md flex items-center justify-center gap-2 transition active:scale-95">
+              <MonitorDown className="w-5 h-5" /> Install Guest App Fullscreen
             </button>
-          )}
-        </Section>
+          </Section>
 
-        {/* Save Button */}
-        <div className="flex gap-3 mt-6">
-          <button onClick={handleSave} disabled={saving}
-            className="flex-1 py-4 rounded-2xl bg-[#132A13] hover:bg-[#1E3D1E] text-white font-bold flex items-center justify-center gap-2 shadow-lg transition active:scale-95 disabled:opacity-60">
-            {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : saved ? <CheckCircle2 className="w-5 h-5" /> : <Save className="w-5 h-5" />}
-            {saving ? "Saving..." : saved ? "Saved!" : "Save & Apply Config"}
-          </button>
-          <button onClick={() => { setLoading(true); fetch("/api/guest-experience/config").then(r=>r.json()).then(d=>{setConfig(d);setLoading(false)}) }}
-            className="px-5 py-4 rounded-2xl border border-[#D9D3C1] bg-white text-[#4A5D4E] hover:bg-[#F5F0E8] transition">
-            <RefreshCw className="w-5 h-5" />
-          </button>
+          {/* Save Button */}
+          <div className="flex gap-3 mt-6 pb-12">
+            <button onClick={handleSave} disabled={saving}
+              className="flex-1 py-4 rounded-2xl bg-[#C74B26] hover:bg-[#A83D1E] text-white font-bold flex items-center justify-center gap-2 shadow-lg transition active:scale-95 disabled:opacity-60 text-lg">
+              {saving ? <Loader2 className="w-6 h-6 animate-spin" /> : saved ? <CheckCircle2 className="w-6 h-6" /> : <Save className="w-6 h-6" />}
+              {saving ? "Saving..." : saved ? "Published Successfully!" : "Publish Kiosk Changes"}
+            </button>
+          </div>
+
         </div>
-
-        <p className="text-center text-xs text-[#708F7D] mt-4">
-          Guest app will auto-refresh with latest config. You can also send this page link to iPad via WhatsApp to set it up remotely.
-        </p>
       </div>
-    </div>
+    </DashboardLayout>
   )
 }

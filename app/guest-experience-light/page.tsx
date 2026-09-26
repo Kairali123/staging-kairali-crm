@@ -306,17 +306,23 @@ export default function GuestWelcomePage() {
   }
 
   const t = TRANSLATIONS[lang]
-  const currentSlide = SLIDES[currentSlideIndex]
+  const ACTIVE_SLIDES = SLIDES.filter(s => kioskConfig?.enabledSlides ? kioskConfig.enabledSlides.includes(s.id) : true)
+  const baseSlide = ACTIVE_SLIDES[currentSlideIndex] || SLIDES[0]
+  const currentSlide = {
+    ...baseSlide,
+    title: kioskConfig?.slideOverrides?.[baseSlide.id]?.title || baseSlide.title,
+    subtitle: kioskConfig?.slideOverrides?.[baseSlide.id]?.subtitle || baseSlide.subtitle,
+  }
 
   const nextSlide = useCallback(() => {
     setIsPlaying(false)
-    setCurrentSlideIndex((prev) => (prev + 1) % SLIDES.length)
-  }, [])
+    setCurrentSlideIndex((prev) => (prev + 1) % ACTIVE_SLIDES.length)
+  }, [ACTIVE_SLIDES.length])
 
   const prevSlide = useCallback(() => {
     setIsPlaying(false)
-    setCurrentSlideIndex((prev) => (prev - 1 + SLIDES.length) % SLIDES.length)
-  }, [])
+    setCurrentSlideIndex((prev) => (prev - 1 + ACTIVE_SLIDES.length) % ACTIVE_SLIDES.length)
+  }, [ACTIVE_SLIDES.length])
 
   // Kiosk config state — fetched from admin config page
   const [kioskConfig, setKioskConfig] = useState<{
@@ -800,7 +806,7 @@ export default function GuestWelcomePage() {
           {/* Slide counter */}
           <div className="ml-2 flex items-center gap-4 hidden md:flex">
             <span className="text-[#708F7D] text-xs tracking-widest font-medium">
-              {currentSlideIndex + 1} / {SLIDES.length}
+              {currentSlideIndex + 1} / {ACTIVE_SLIDES.length}
             </span>
             <span className="text-[#708F7D] text-[10px] tracking-[0.2em] uppercase px-3 py-1 border border-[#E6E2D3] rounded-full animate-pulse">
               Swipe to Explore
