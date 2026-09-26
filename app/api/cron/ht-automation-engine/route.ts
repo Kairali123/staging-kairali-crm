@@ -136,7 +136,7 @@ export async function GET(req: NextRequest) {
       try {
         await sheets.spreadsheets.values.append({
           spreadsheetId: SPREADSHEET_ID,
-          range: \`\${SHEET_NAME}!B:M\`,
+          range: `${SHEET_NAME}!B:M`,
           valueInputOption: 'USER_ENTERED',
           insertDataOption: 'INSERT_ROWS',
           requestBody: {
