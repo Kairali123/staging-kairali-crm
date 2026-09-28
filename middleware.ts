@@ -187,6 +187,7 @@ const publicRoutes = ['/', '/access-denied']
 const protectedRoutes = [
   '/dashboard',
   '/leads',
+  '/morning-lead-allocation',
   '/calls',
   '/reports',
   '/performance',
@@ -285,6 +286,7 @@ const exemptApiPaths = new Set([
   '/api/sales-call-audit',
   // Scheduled Vercel cron job — handler enforces Bearer $CRON_SECRET
   '/api/cron/sales-call-audit-daily-email',
+  '/api/cron/booking-pi-review-alert',
   '/api/cron/whatsapp-triggers', // Handler verifies an independent local worker secret.
   '/api/cron/email-triggers', // Handler verifies local worker secret; hosted execution is disabled.
   '/api/cron/kserve-lost-alert',

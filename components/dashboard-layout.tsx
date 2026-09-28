@@ -65,6 +65,8 @@ import {
   Sun,
   MessageSquare,
   Map,
+  Clock3,
+  Ticket,
 } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
@@ -154,6 +156,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (pathname.startsWith("/crr-fms") || pathname.startsWith("/ktahv-crr-process-report-alert")) setCrrFmsExpanded(true)
     if (
       pathname.startsWith("/leads") ||
+      pathname.startsWith("/morning-lead-allocation") ||
       pathname.startsWith("/lead-search") ||
       pathname.startsWith("/good-lead-leakage") ||
       pathname === "/voicecall/kserve-lead-lost" ||
@@ -239,6 +242,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   ]
   const leadManagementSubMenu = [
     { name: "Leads Assignment", href: "/leads/assign", icon: Shuffle, permission: "leads.assign" },
+    { name: "Morning Lead Allocation", href: "/morning-lead-allocation", icon: Clock3, permission: "leads.view" },
     { name: "Lead Search Dashboard", href: "/lead-search", icon: Search, permission: "lead_search.view" },
     { name: "Good Lead Leakage", href: "/good-lead-leakage", icon: Search, permission: "good_lead_leakage.view" },
     { name: "K-Serve Lead Lost", href: "/voicecall/kserve-lead-lost", icon: PhoneCall, permission: "voicecall_kserve_lead_lost.view" },
@@ -503,11 +507,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     searchableItems.push({ name: "Automation Settings", href: "/settings/automation", description: "Automation settings and modules hub", icon: Cpu })
     searchableItems.push({ name: "Email Triggers", href: "/settings/automation/email-triggers", description: "Scheduled email trigger configuration", icon: Mail })
     searchableItems.push({ name: "WhatsApp Triggers", href: "/settings/automation/whatsapp", description: "WhatsApp report image trigger configuration", icon: Mail })
+    searchableItems.push({ name: "Helpdesk Triggers", href: "/settings/automation/helpdesk", description: "Google Form helpdesk integration", icon: Ticket })
   }
   if (hasPermission("email_marketing.view") || isSuperAdmin) emailMarketingSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.name, icon: item.icon }))
   if (hasPermission("guest_experience.view") || isSuperAdmin) guestExperienceSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.name, icon: item.icon }))
   if (hasLeadManagementPermission()) {
     if (hasLeadsAssignPermission()) searchableItems.push({ name: "Leads Assignment", href: "/leads/assign", description: "Leads Assignment", icon: Shuffle })
+    if (hasLeadsAssignPermission()) searchableItems.push({ name: "Morning Lead Allocation", href: "/morning-lead-allocation", description: "Daily pending AppSheet allocation", icon: Clock3 })
     if (hasLeadSearchPermission()) searchableItems.push({ name: "Lead Search Dashboard", href: "/lead-search", description: "Lead Search Dashboard", icon: Search })
     if (hasGoodLeadLeakagePermission()) searchableItems.push({ name: "Good Lead Leakage", href: "/good-lead-leakage", description: "Good lead leakage report", icon: Search })
     if (hasKserveLeadLostPermission()) searchableItems.push({ name: "K-Serve Lead Lost", href: "/voicecall/kserve-lead-lost", description: "K-Serve lead lost tracker", icon: PhoneCall })
@@ -645,11 +651,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
     if (item.name === "Lead Management") {
       const isLeadsAssignRoute = pathname.startsWith("/leads/assign")
+      const isMorningAllocationRoute = pathname.startsWith("/morning-lead-allocation")
       const isLeadSearchRoute = pathname.startsWith("/lead-search")
       const isGoodLeadLeakageRoute = pathname.startsWith("/good-lead-leakage")
       const isKserveLeadLostRoute = pathname === "/voicecall/kserve-lead-lost"
       const isLeadLostMonitorRoute = pathname.startsWith("/lead-lost-monitor")
       const isActive = (hasLeadsAssignPermission() && isLeadsAssignRoute) ||
+                       (hasLeadsAssignPermission() && isMorningAllocationRoute) ||
                        (hasLeadSearchPermission() && isLeadSearchRoute) ||
                        (hasGoodLeadLeakagePermission() && isGoodLeadLeakageRoute) ||
                        (hasKserveLeadLostPermission() && isKserveLeadLostRoute) ||
@@ -657,6 +665,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
       const visibleSubMenu = leadManagementSubMenu.filter((subItem) => {
         if (subItem.href === "/leads/assign") return hasLeadsAssignPermission()
+        if (subItem.href === "/morning-lead-allocation") return hasLeadsAssignPermission()
         if (subItem.href === "/lead-search") return hasLeadSearchPermission()
         if (subItem.href === "/good-lead-leakage") return hasGoodLeadLeakagePermission()
         if (subItem.href === "/voicecall/kserve-lead-lost") return hasKserveLeadLostPermission()
@@ -1040,6 +1049,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     </Link>
                     <Link href="/settings/automation/whatsapp" className={`group flex items-center px-2.5 py-1.5 text-xs font-medium rounded-md ${pathname === '/settings/automation/whatsapp' ? 'bg-emerald-100 text-emerald-800' : 'text-gray-600 hover:bg-gray-100'}`} onClick={() => isMobile && setSidebarOpen(false)}>
                       <Mail className="mr-2 h-3.5 w-3.5 text-emerald-700" />WhatsApp Triggers
+                    </Link>
+                    <Link href="/settings/automation/helpdesk" className={`group flex items-center px-2.5 py-1.5 text-xs font-medium rounded-md ${pathname === '/settings/automation/helpdesk' ? 'bg-blue-100 text-blue-800' : 'text-gray-600 hover:bg-gray-100'}`} onClick={() => isMobile && setSidebarOpen(false)}>
+                      <Ticket className="mr-2 h-3.5 w-3.5 text-blue-600" />Helpdesk Triggers
                     </Link>
                     <Link
                       href="/settings/automation"

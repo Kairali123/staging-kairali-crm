@@ -76,6 +76,7 @@ img{display:block;border:0;outline:0;max-width:100%;height:auto}
 .split{width:100%}
 .split>tbody>tr>td{display:block;width:100%}
 .chart{text-align:center;padding:4px 0 16px}
+.chart svg text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif}
 .empty-chart{padding:24px 0;color:#64748b;font-size:13px;text-align:center}
 .crow{width:100%;margin-bottom:14px}
 .cname{font-weight:700;font-size:14px;color:#24324b;padding-bottom:6px}
@@ -295,5 +296,5 @@ export function buildSalesDonutSvg(report:DailySalesReport,scope:string):string{
  const cx=95,cy=95,r=62,sw=22,circ=2*Math.PI*r
  let off=circ/4
  const arcs=slices.map(s=>{const len=(s.v/totalSales)*circ;const a=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${s.col}" stroke-width="${sw}" stroke-dasharray="${len.toFixed(2)} ${circ.toFixed(2)}" stroke-dashoffset="${off.toFixed(2)}"/>`;off-=len;return a})
- return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 190 190" width="190" height="190" style="display:block;margin:0 auto" role="img" aria-label="ALL CONTRIBUTORS · Sales contribution donut chart"><title>ALL CONTRIBUTORS · Sales contribution donut chart</title><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#f1f5f9" stroke-width="${sw}"/>${arcs.join('')}<text x="${cx}" y="${cy-7}" text-anchor="middle" font-size="11" fill="#64748b" font-family="Arial,sans-serif">Sales</text><text x="${cx}" y="${cy+12}" text-anchor="middle" font-size="15" fill="#1e305b" font-weight="bold" font-family="Arial,sans-serif">${contributors.length}</text><text x="${cx}" y="${cy+27}" text-anchor="middle" font-size="10" fill="#64748b" font-family="Arial,sans-serif">${contributors.length===1?'contributor':'contributors'}</text></svg>`
+ return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 190 190" width="190" height="190" style="display:block;margin:0 auto" role="img" aria-label="ALL CONTRIBUTORS · Sales contribution donut chart"><title>ALL CONTRIBUTORS · Sales contribution donut chart</title><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#f1f5f9" stroke-width="${sw}"/>${arcs.join('')}<text x="${cx}" y="${cy-7}" text-anchor="middle" font-size="11" fill="#64748b" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">Sales</text><text x="${cx}" y="${cy+12}" text-anchor="middle" font-size="15" fill="#1e305b" font-weight="bold" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">${contributors.length}</text><text x="${cx}" y="${cy+27}" text-anchor="middle" font-size="10" fill="#64748b" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">${contributors.length===1?'contributor':'contributors'}</text></svg>`
 }
