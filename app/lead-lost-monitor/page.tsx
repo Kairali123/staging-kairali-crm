@@ -435,8 +435,50 @@ export default function Home() {
       <header className="topbar"><div><p>OPERATIONS / LEAD CONTROL</p><h1>CRM reconciliation command center</h1></div><div className="topbar-actions" style={{display: "flex", gap: "10px", marginLeft: "auto", marginRight: "20px"}}><button onClick={() => openDetailed("Open incidents", x => x.status !== "Resolved")} style={{padding: "8px 12px", background: "#f1f5f9", borderRadius: "6px", fontSize: "12px", fontWeight: "bold"}}>! Incidents {summary.breaches + openLoss}</button><button onClick={() => openDetailed("Duplicate proof", x => x.validDuplicate ?? Boolean(x.original))} style={{padding: "8px 12px", background: "#f1f5f9", borderRadius: "6px", fontSize: "12px", fontWeight: "bold"}}>⌘ Duplicate proof</button></div><div className="top-actions"><span className={`mode ${payload?.live ? "live" : "demo"}`}><i/>{payload?.live ? "LIVE DATA" : payload ? "SOURCE ERROR" : "CONNECTING"}</span><button className="refresh" onClick={() => load(false)} disabled={loading}>{loading && !forceRefreshing ? "Refreshing…" : "↻ Refresh now"}</button><button className="force-refresh" onClick={() => load(true)} disabled={loading}>{forceRefreshing ? "Scanning all sheets…" : "⟳ Force fresh scan"}</button></div></header>
       <section className={`alert-strip ${!payload?.live || summary.mismatches ? "tracker-stale" : ""}`}><div className="alert-icon">!</div><div><strong>{loading && !payload ? "Connecting to live Google Sheets…" : payload && !payload.live ? "Live reconciliation source unavailable" : summary.mismatches ? `${summary.mismatches} Data Mismatch row${summary.mismatches > 1 ? "s" : ""} found` : openLoss ? `${openLoss} lead reconciliation exception${openLoss > 1 ? "s" : ""}` : "All Lead IDs are reconciled"}</strong><p>{loading && !payload ? "Latest Date + Company + Source reconciliation is loading. Counts will appear automatically." : payload && !payload.live ? `${payload.diagnostic ?? "Secure Google Sheets bridge did not return live rows."} No demo counts are shown.` : summary.mismatches ? "Row formulas failed—highlighted rows par click karke exact Lead IDs audit karein." : openLoss ? "Lost radar exact pipeline stage aur records identify karta hai." : "Direct, duplicate, buffer and CRM formulas match."}</p></div><button onClick={() => payload?.live ? openDetailed("Reconciliation exceptions", x => x.status !== "Resolved") : load()} disabled={loading || detailsLoading}>{payload?.live ? detailsLoading ? "Loading Lead IDs…" : "Review leads →" : loading ? "Connecting…" : "Retry live sync →"}</button></section>
       <section className="filters"><label className="search"><span>⌕</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search company, source or date…"/></label><select value={company} onChange={e => setCompany(e.target.value)}><option>All companies</option>{companies.map(x => <option key={x}>{x}</option>)}</select><select value={source} onChange={e => setSource(e.target.value)}><option>All sources</option>{sources.map(x => <option key={x}>{x}</option>)}</select><select value={date} onChange={e => setDate(e.target.value)}><option>All dates</option>{dates.map(x => <option key={x} value={x}>{dateLabel(x)}</option>)}</select><select value={health} onChange={e => setHealth(e.target.value)}><option>All status</option><option>Data Mismatch</option><option>Lost</option><option>TAT breach</option><option>Reconciled</option></select><button className="clear" onClick={reset}>Clear</button></section>
-      <section className="kpis"><button className="kpi" onClick={() => openDetailed("All direct API leads", () => true)}><span className="kpi-icon teal">↓</span><div><small>DIRECT API LEADS</small><strong>{fmt(summary.direct)}</strong><p>Unique Lead IDs</p></div></button><button className="kpi danger" onClick={() => openDetailed("Open lost leads", x => lossStages.some(stage => stage.select(x)), "lost-map")}><span className="kpi-icon red">!</span><div><small>ACTUAL LOST / OPEN GAPS</small><strong>{fmt(openLoss)}</strong><p>Expected duplicates excluded</p></div></button><button className="kpi" onClick={() => openDetailed("Expected duplicate gaps", x => Boolean(x.expectedDuplicateGap))}><span className="kpi-icon amber">⌘</span><div><small>EXPECTED DUPLICATE GAPS</small><strong>{fmt(summary.expectedDuplicateGap)}</strong><p>Mobile + email · within 24h</p></div></button><button className="kpi" onClick={() => openDetailed("Late CRM transfers", x => Boolean(x.lateTransfer))}><span className="kpi-icon violet">◷</span><div><small>LATE TRANSFER</small><strong>{fmt(summary.lateTransfer)}</strong><p>Delayed, never Lost</p></div></button><button className="kpi" onClick={() => openDetailed("Sales / KServe assignments", x => x.assigned)}><span className="kpi-icon green">✓</span><div><small>SALES / KSERVE</small><strong>{fmt(summary.assigned)}</strong><p>{summary.direct ? Math.round(summary.assigned / summary.direct * 1000) / 10 : 0}% of intake</p></div></button></section>
-      <section className="kpis"><button className="kpi" onClick={() => setHealth("TAT breach")}><span className="kpi-icon amber">◷</span><div><small>TAT BREACH</small><strong>{fmt(tatBreachCount)}</strong><p>Over SLA, not lost yet</p></div></button><button className="kpi" onClick={() => setHealth("Data Mismatch")}><span className="kpi-icon teal">≠</span><div><small>DATA MISMATCH</small><strong>{fmt(summary.mismatches)}</strong><p>Field conflict across sheets</p></div></button><button className="kpi" onClick={() => setHealth("Reconciled")}><span className="kpi-icon green">✓</span><div><small>RECONCILED</small><strong>{fmt(reconciledCount)}</strong><p>{reconciledPercent}% fully matched</p></div></button><button className="kpi danger" onClick={() => openDetailed(`${biggestLeak.label} gaps`, biggestLeak.select, "lost-map")}><span className="kpi-icon red">!</span><div><small>BIGGEST LEAK STAGE</small><strong>{fmt(biggestLeak.count)}</strong><p>{biggestLeak.label}</p></div></button><button className="kpi" onClick={() => openDetailed("API to CRM entry TAT", x => x.inCrm)}><span className="kpi-icon violet">◴</span><div><small>AVG TAT</small><strong>{avgCrmTat}</strong><p>API to CRM entry</p></div></button></section>
+      <section className="kpis">
+        <button className="kpi" onClick={() => openDetailed("All direct API leads", () => true)}>
+          <span className="kpi-icon teal">↓</span>
+          <div><small>DIRECT API SOURCE</small><strong>{fmt(summary.direct)}</strong></div>
+        </button>
+        <button className="kpi danger" onClick={() => openDetailed("Gap 1 Direct to Medium", () => true)}>
+          <span className="kpi-icon red">!</span>
+          <div><small>GAP 1 DIRECT → MEDIUM</small><strong>{fmt(summary.direct - summary.medium)}</strong></div>
+        </button>
+        <button className="kpi" onClick={() => openDetailed("Master Medium", () => true)}>
+          <span className="kpi-icon violet">◷</span>
+          <div><small>MASTER MEDIUM MERGED</small><strong>{fmt(summary.medium)}</strong></div>
+        </button>
+        <button className="kpi danger" onClick={() => openDetailed("Gap 2 Medium to Buffer", () => true)}>
+          <span className="kpi-icon red">!</span>
+          <div><small>GAP 2 MEDIUM → BUFFER</small><strong>{fmt(summary.mediumLost)}</strong></div>
+        </button>
+        <button className="kpi" onClick={() => openDetailed("Buffer Staged", () => true)}>
+          <span className="kpi-icon amber">⌘</span>
+          <div><small>ACTUAL BUFFER STAGED</small><strong>{fmt(summary.buffer)}</strong></div>
+        </button>
+      </section>
+      <section className="kpis">
+        <button className="kpi danger" onClick={() => openDetailed("Gap 3 Buffer to CRM", () => true)}>
+          <span className="kpi-icon red">!</span>
+          <div><small>GAP 3 BUFFER → CRM</small><strong>{fmt(summary.masterLost)}</strong></div>
+        </button>
+        <button className="kpi" onClick={() => openDetailed("CRM Reconciled", () => true)}>
+          <span className="kpi-icon green">✓</span>
+          <div><small>ACTUAL CRM RECONCILED</small><strong>{fmt(summary.crm)}</strong></div>
+        </button>
+        <button className="kpi" onClick={() => openDetailed("Transfer to Sales", () => true)}>
+          <span className="kpi-icon teal">↓</span>
+          <div><small>TRANSFER TO SALES</small><strong>{fmt(summary.assigned)}</strong></div>
+        </button>
+        <button className="kpi" onClick={() => openDetailed("Transfer to KServe", () => true)}>
+          <span className="kpi-icon violet">◷</span>
+          <div><small>TRANSFER TO KSERVE</small><strong>0</strong></div>
+        </button>
+        <button className={openLoss > 0 ? "kpi danger" : "kpi"} onClick={() => openDetailed("Loss %", () => true)}>
+          <span className={openLoss > 0 ? "kpi-icon red" : "kpi-icon green"}>%</span>
+          <div><small>LOSS %</small><strong>{summary.direct?Math.round(openLoss/summary.direct*100):0}%</strong></div>
+        </button>
+      </section>
       <section className="pipeline-card"><div className="section-title"><div><p>LIVE ID FUNNEL</p><h2>Lead ID proof through every stage</h2></div><span>{payload?.crmMode ?? "CRM source unavailable"}</span></div><div className="pipeline">{pipelineKeys.map((key, index) => { const count = visible.reduce((n, row) => n + row[key], 0); return <div className="pipeline-wrap" key={key}><button className={`stage ${key === "assigned" ? "success" : ""}`} onClick={() => openDetailedStage(labels[key], key)}><span>{index + 1}</span><small>{labels[key]}</small><strong>{fmt(count)}</strong><em>{summary.direct ? Math.round(count / summary.direct * 100) : 0}%</em></button>{index < pipelineKeys.length - 1 && <i className="connector"><b>→</b></i>}</div>; })}</div><div className="funnel-note"><span className="green-dot"/> Duplicate/Delete is explained—not lost. Every count is deduplicated by Lead ID and grouped by Date + Company + Verified Source.</div></section>
       <section className="loss-command" id="lost-radar"><div className="section-title"><div><p>LOST LEAD RADAR</p><h2>Exactly where reconciliation is breaking</h2></div><span className={`health-chip ${summary.mismatches ? "stale" : "current"}`}>{summary.mismatches ? `⚠ ${summary.mismatches} formula mismatch` : "● Formula validation passed"}</span></div><div className="loss-grid"><article className="live-master-card"><div className="radar-visual"><i/><i/><i/><span><small>OPEN</small><strong>{fmt(openLoss)}</strong><em>exceptions</em></span></div><div className="master-copy"><p>LATEST RECONCILIATION · {payload?.currentSummary?.date ? dateLabel(payload.currentSummary.date) : "—"}</p><h3>Medium → Buffer and Master → CRM</h3><div className="master-metrics"><span><small>Buffer</small><strong>{fmt(summary.buffer)}</strong></span><span><small>Same-day CRM</small><strong>{fmt(summary.sameDayCrm)}</strong></span><span><small>Late transfer</small><strong>{fmt(summary.lateTransfer)}</strong></span><span className="danger"><small>Actual lost</small><strong>{fmt(summary.mediumLost + summary.masterLost)}</strong></span></div><button onClick={() => openDetailed("All open reconciliation exceptions", x => lossStages.some(stage => stage.select(x)), "lost-map")}>Open exact lost leads →</button></div></article><article className="break-map"><header><div><p>LIVE STAGE MAP</p><h3>Date + Company + Source</h3></div><span>Click a stage to audit</span></header><div className="break-list">{lossStages.map((stage, index) => <button key={stage.label} onClick={() => openDetailed(`${stage.label} lost leads`, stage.select, "lost-map")}><span className="break-rank">0{index + 1}</span><span className="break-copy"><strong>{stage.label}</strong><small>{stage.hint}</small><i><b style={{ width: `${Math.max(3, stage.count / largestLoss * 100)}%` }}/></i></span><em className={stage.count ? "hot" : "clear"}>{fmt(stage.count)}<small>{stage.count ? " lost" : " clear"}</small></em></button>)}</div></article></div></section>
       {/* ═══ PREMIUM RECONCILIATION TABLE ═══════════════════════════════════ */}
@@ -548,7 +590,7 @@ export default function Home() {
                 </span>
               </button>
 
-              {isDateOpen && (
+              {isDateOpen && (<>
                 <div style={{borderTop:"1px solid #e8edf2", overflowX:"auto"}}>
                   <table style={{width:"100%",borderCollapse:"collapse",minWidth:1200}}>
                     <thead>
@@ -669,7 +711,25 @@ export default function Home() {
                     </tbody>
                   </table>
                 </div>
-              )}
+<div style={{background:"#f8fafc",borderTop:"2px solid #cbd5e1",padding:"20px 24px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:24,overflowX:"auto"}}>
+                    <span style={{fontWeight:900,color:"#0f172a",whiteSpace:"nowrap"}}>Grand Total<br/><small style={{color:"#64748b",fontSize:11}}>All Dates</small></span>
+                    <div style={{display:"flex",gap:32,fontSize:14,minWidth:"max-content"}}>
+                      <div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Direct API<br/>Source</div><div style={{fontWeight:900,color:"#1e293b",fontSize:16}}>{fmt(summary.direct)}</div></div>
+                      <div style={{textAlign:"center"}}><div style={{color:"#92400e",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Gap 1<br/>(Lost)</div><div style={{fontWeight:900,color:"#92400e",fontSize:16}}>{fmt(summary.direct - summary.medium)}</div></div>
+                      <div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Master<br/>Medium</div><div style={{fontWeight:900,color:"#334e68",fontSize:16}}>{fmt(summary.medium)}</div></div>
+                      <div style={{textAlign:"center"}}><div style={{color:"#92400e",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Gap 2<br/>(Lost)</div><div style={{fontWeight:900,color:"#92400e",fontSize:16}}>{fmt(summary.mediumLost)}</div></div>
+                      <div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Actual<br/>Buffer</div><div style={{fontWeight:900,color:"#334e68",fontSize:16}}>{fmt(summary.buffer)}</div></div>
+                      <div style={{textAlign:"center"}}><div style={{color:"#991b1b",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Gap 3<br/>(Lost)</div><div style={{fontWeight:900,color:"#991b1b",fontSize:16}}>{fmt(summary.masterLost)}</div></div>
+                      <div style={{textAlign:"center"}}><div style={{color:"#166534",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Actual CRM<br/>Reconciled</div><div style={{fontWeight:900,color:"#166534",fontSize:16}}>{fmt(summary.crm)}</div></div>
+                      <div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Transfer to<br/>Sales</div><div style={{fontWeight:900,color:"#334e68",fontSize:16}}>{fmt(summary.assigned)}</div></div>
+                      <div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Transfer to<br/>KServe</div><div style={{fontWeight:900,color:"#334e68",fontSize:16}}>0</div></div>
+                      <div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Total<br/>Loss %</div><div style={{fontWeight:900,color:openLoss>0?"#991b1b":"#166534",fontSize:16}}>{summary.direct?Math.round(openLoss/summary.direct*100):0}%</div></div>
+                    </div>
+                  </div>
+                </div>
+
+              </>)}
             </div>
           );
         })}
@@ -701,24 +761,20 @@ export default function Home() {
               <div className="gap-trace-actions">{lead.directUrl && <a href={lead.directUrl} target="_blank" rel="noreferrer">Open source row ↗</a>}{lead.destinationUrl && <a href={lead.destinationUrl} target="_blank" rel="noreferrer">Open Buffer row ↗</a>}{lead.crmUrl && <a href={lead.crmUrl} target="_blank" rel="noreferrer">Open CRM ↗</a>}</div>
             </td></tr>}
           </Fragment>; })}
-                        <tr style={{background:"#1e293b", borderTop:"4px solid #cbd5e1"}}>
-                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff", textAlign:"left", display:"flex", alignItems:"center", gap: 12, justifyContent:"flex-start"}}>
-                              <span style={{fontSize:12, textTransform:"uppercase"}}>Grand Total (All Dates)</span>
-                              <span>{fmt(summary.direct)}</span>
-                            </td>
-                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff",textAlign:"center"}}>{fmt(summary.direct - summary.medium)}</td>
-                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff",textAlign:"center"}}>{fmt(summary.medium)}</td>
-                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff",textAlign:"center"}}>{fmt(summary.mediumLost)}</td>
-                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff",textAlign:"center"}}>{fmt(summary.buffer)}</td>
-                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff",textAlign:"center"}}>{fmt(summary.masterLost)}</td>
-                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff",textAlign:"center"}}>{fmt(summary.crm)}</td>
-                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff",textAlign:"center"}}>{fmt(summary.assigned)}</td>
-                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff",textAlign:"center"}}>{fmt(summary.kserve || 0)}</td>
-                            <td style={{padding:"14px 12px"}}></td>
-                            <td style={{padding:"14px 12px"}}></td>
-                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff",textAlign:"center"}}>{summary.direct?Math.round(openLoss/summary.direct*100):0}%</td>
-                        </tr>
-    </tbody></table></div> : <div className="gap-section-empty">No {section.title.toLowerCase()} records on this page.</div>)}</div>}
+                        
+    </tbody></table></div>
+                <div style={{textAlign:"center"}}><div style={{color:"#92400e",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Gap 1<br/>(Lost)</div><div style={{fontWeight:900,color:"#92400e",fontSize:16}}>{fmt(summary.direct - summary.medium)}</div></div>
+                <div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Master<br/>Medium</div><div style={{fontWeight:900,color:"#334e68",fontSize:16}}>{fmt(summary.medium)}</div></div>
+                <div style={{textAlign:"center"}}><div style={{color:"#92400e",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Gap 2<br/>(Lost)</div><div style={{fontWeight:900,color:"#92400e",fontSize:16}}>{fmt(summary.mediumLost)}</div></div>
+                <div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Actual<br/>Buffer</div><div style={{fontWeight:900,color:"#334e68",fontSize:16}}>{fmt(summary.buffer)}</div></div>
+                <div style={{textAlign:"center"}}><div style={{color:"#991b1b",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Gap 3<br/>(Lost)</div><div style={{fontWeight:900,color:"#991b1b",fontSize:16}}>{fmt(summary.masterLost)}</div></div>
+                <div style={{textAlign:"center"}}><div style={{color:"#166534",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Actual CRM<br/>Reconciled</div><div style={{fontWeight:900,color:"#166534",fontSize:16}}>{fmt(summary.crm)}</div></div>
+                <div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Transfer to<br/>Sales</div><div style={{fontWeight:900,color:"#334e68",fontSize:16}}>{fmt(summary.assigned)}</div></div>
+                <div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Transfer to<br/>KServe</div><div style={{fontWeight:900,color:"#334e68",fontSize:16}}>0</div></div>
+                <div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Total<br/>Loss %</div><div style={{fontWeight:900,color:openLoss>0?"#991b1b":"#166534",fontSize:16}}>{summary.direct?Math.round(openLoss/summary.direct*100):0}%</div></div>
+              </div>
+            </div>
+          </div> : <div className="gap-section-empty">No {section.title.toLowerCase()} records on this page.</div>)}</div>}
         </section>; }) : <div className="gap-console-empty"><strong>No matching leads</strong><span>Search clear karke dobara dekhein.</span></div>}</div>
         <footer className="gap-console-foot"><span>{detailsLoading ? "Loading exact records…" : `${filteredDrawer.length} rows · Page ${page} of ${pageCount}`}</span><button disabled={detailsLoading} onClick={() => setOpenAuditSections(openAuditSections.size === 3 ? new Set() : new Set(["unexplained", "transient", "deleted"]))}>{openAuditSections.size === 3 ? "Hide all sections" : "Show all sections"}</button><div>{filteredDrawer.length > pageSize && <><button disabled={page === 1} onClick={() => setPage(p => p - 1)}>Previous</button><button disabled={page === pageCount} onClick={() => setPage(p => p + 1)}>Next</button></>}<button onClick={() => setSelected(null)}>Close</button></div></footer>
       </section>
