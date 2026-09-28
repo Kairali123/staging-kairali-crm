@@ -34,4 +34,5 @@ next-env.d.ts
 temp/
 *.tmp
 scratch/
-.local/
+.local/
+tmp-email-preview/
