@@ -567,7 +567,7 @@ export default function Home() {
                           "STATUS",
                           "loss%"
                         ].map(h=>(
-                          <th key={h} style={{ padding:"9px 12px",fontSize:9,fontWeight:800, color:"#64748b",textTransform:"uppercase", letterSpacing:".5px",textAlign:"left", borderBottom:"1px solid #e2e8f0",whiteSpace:"normal" }}>{h}</th>
+                          <th key={h} style={{ padding:"9px 12px",fontSize:9,fontWeight:800, color:"#64748b",textTransform:"uppercase", letterSpacing:".5px",textAlign: h==="DIRECT API SOURCE SHEET"?"left":"center", borderBottom:"1px solid #e2e8f0",whiteSpace:"normal" }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -597,51 +597,51 @@ export default function Home() {
                                 borderLeft: rowLost>0?"3px solid #ef4444":row.crm>0?"3px solid #22c55e":"3px solid #e2e8f0"
                               }}>
                                 {/* 1. DIRECT API SOURCE SHEET */}
-                                <td style={{padding:"10px 12px"}}>
-                                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:9}}>
+                                <td style={{padding:"10px 12px", textAlign:"left"}}>
+                                  <div style={{display:"flex",alignItems:"center",justifyContent:"flex-start",gap:12}}>
                                     <div style={{display:"flex",alignItems:"center",gap:6}}>
                                       <span style={{ width:24,height:24,borderRadius:6,flexShrink:0, background: rowLost>0?"#fee2e2":"#e8f5f4", color: rowLost>0?"#991b1b":"#178b7c", display:"grid",placeItems:"center", fontWeight:800,fontSize:10 }}>{row.source.slice(0,1)}</span>
                                       <strong style={{fontSize:11,color:"#12202f",display:"block"}}>{row.source}</strong>
                                     </div>
-                                    <span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.direct)}</span>
+                                    <span style={{fontSize:13,fontWeight:900,color:"#0f172a",background:"#e2e8f0",padding:"2px 8px",borderRadius:6}}>{fmt(row.direct)}</span>
                                   </div>
                                 </td>
                                 {/* 2. GAP 1 DIRECT → MEDIUM */}
-                                <td style={{padding:"10px 12px"}}>
+                                <td style={{padding:"10px 12px", textAlign:"center"}}>
                                   {row.directMediumGap>0?(
                                     <button className="count-link warn" onClick={()=>openGapRow(row,"gap1")} style={{fontSize:12,fontWeight:700,color:"#92400e",background:"#fef3c7", borderRadius:6,padding:"3px 8px"}}>{fmt(row.directMediumGap)}</button>
                                   ):<span style={{color:"#94a3b8",fontSize:12}}>0</span>}
                                 </td>
                                 {/* 3. MASTER MEDIUM MERGED */}
-                                <td style={{padding:"10px 12px"}}><span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.medium)}</span></td>
+                                <td style={{padding:"10px 12px", textAlign:"center"}}><span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.medium)}</span></td>
                                 {/* 4. GAP 2 MEDIUM → BUFFER */}
-                                <td style={{padding:"10px 12px"}}>
+                                <td style={{padding:"10px 12px", textAlign:"center"}}>
                                   {row.mediumBufferLost>0?(
                                     <button className="count-link warn" onClick={()=>openGapRow(row,"gap2")} style={{fontSize:12,fontWeight:700,color:"#92400e",background:"#fef3c7", borderRadius:6,padding:"3px 8px"}}>{fmt(row.mediumBufferLost)}</button>
                                   ):<span style={{color:"#94a3b8",fontSize:12}}>0</span>}
                                 </td>
                                 {/* 5. ACTUAL BUFFER STAGED */}
-                                <td style={{padding:"10px 12px"}}><span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.buffer)}</span></td>
+                                <td style={{padding:"10px 12px", textAlign:"center"}}><span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.buffer)}</span></td>
                                 {/* 6. GAP 3 BUFFER → CRM */}
-                                <td style={{padding:"10px 12px"}}>
+                                <td style={{padding:"10px 12px", textAlign:"center"}}>
                                   {row.masterCrmLost>0?(
                                     <button className="count-link bad" onClick={()=>openGapRow(row,"gap3")} style={{fontSize:12,fontWeight:800,color:"#991b1b",background:"#fee2e2", borderRadius:6,padding:"3px 8px",border:"1px solid #fca5a5"}}>{fmt(row.masterCrmLost)}</button>
                                   ):<span style={{color:"#22c55e",fontWeight:700,fontSize:12}}>0</span>}
                                 </td>
                                 {/* 7. ACTUAL CRM RECONCILED */}
-                                <td style={{padding:"10px 12px"}}><span style={{fontSize:13,fontWeight:800,color:"#166534",background:"#f0fdf4", borderRadius:6,padding:"3px 8px"}}>{fmt(row.crm)}</span></td>
+                                <td style={{padding:"10px 12px", textAlign:"center"}}><span style={{fontSize:13,fontWeight:800,color:"#166534",background:"#f0fdf4", borderRadius:6,padding:"3px 8px"}}>{fmt(row.crm)}</span></td>
                                 {/* 8. TRANSFER TO SALES */}
-                                <td style={{padding:"10px 12px"}}><span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.sales)}</span></td>
+                                <td style={{padding:"10px 12px", textAlign:"center"}}><span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.sales)}</span></td>
                                 {/* 9. TRANSFER TO KSERVE */}
-                                <td style={{padding:"10px 12px"}}><span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.kserve)}</span></td>
+                                <td style={{padding:"10px 12px", textAlign:"center"}}><span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.kserve)}</span></td>
                                 {/* 10. TAT */}
-                                <td style={{padding:"10px 12px"}}><span style={{fontSize:12,color:"#64748b"}}>—</span></td>
+                                <td style={{padding:"10px 12px", textAlign:"center"}}><span style={{fontSize:12,color:"#64748b"}}>—</span></td>
                                 {/* 11. STATUS */}
-                                <td style={{padding:"10px 12px"}}>
+                                <td style={{padding:"10px 12px", textAlign:"center"}}>
                                   <span style={{ display:"inline-flex",alignItems:"center",gap:4, padding:"4px 8px",borderRadius:20,fontSize:9,fontWeight:700, background: rowClear?"#f0fdf4":rowLost>0?"#fff0f0":"#fff9f0", color: rowClear?"#166534":rowLost>0?"#991b1b":"#92400e", whiteSpace:"normal" }}>{rowClear?"✓ Clear":rowLost>0?"✕ Lost":"◷ Pending"}</span>
                                 </td>
                                 {/* 12. loss% */}
-                                <td style={{padding:"10px 12px"}}>
+                                <td style={{padding:"10px 12px", textAlign:"center"}}>
                                   <span style={{ display:"inline-block",padding:"4px 8px",borderRadius:20, fontSize:10,fontWeight:800, background: rowClear?"#dcfce7":rowRate>30?"#fee2e2":rowRate>10?"#fef3c7":"#fff9f0", color: rowClear?"#166534":rowRate>30?"#991b1b":rowRate>10?"#92400e":"#78350f" }}>{rowClear?"0%":`${rowRate}%`}</span>
                                 </td>
                               </tr>
@@ -660,9 +660,9 @@ export default function Home() {
                             <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:"#166534"}}>{fmt(cg.total.crm)}</td>
                             <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:"#334e68"}}>{fmt(cg.total.sales)}</td>
                             <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:"#334e68"}}>{fmt(cg.total.kserve)}</td>
-                            <td style={{padding:"10px 12px"}}></td>
-                            <td style={{padding:"10px 12px"}}></td>
-                            <td style={{padding:"10px 12px"}}><span style={{fontWeight:800,fontSize:11, color:(cg.total.masterCrmLost+cg.total.mediumBufferLost+cg.total.directMediumGap)>0?"#991b1b":"#166534"}}>{cg.total.direct>0?Math.round((cg.total.masterCrmLost+cg.total.mediumBufferLost+cg.total.directMediumGap)/cg.total.direct*100):0}%</span></td>
+                            <td style={{padding:"10px 12px", textAlign:"center"}}></td>
+                            <td style={{padding:"10px 12px", textAlign:"center"}}></td>
+                            <td style={{padding:"10px 12px", textAlign:"center"}}><span style={{fontWeight:800,fontSize:11, color:(cg.total.masterCrmLost+cg.total.mediumBufferLost+cg.total.directMediumGap)>0?"#991b1b":"#166534"}}>{cg.total.direct>0?Math.round((cg.total.masterCrmLost+cg.total.mediumBufferLost+cg.total.directMediumGap)/cg.total.direct*100):0}%</span></td>
                           </tr>
                         </Fragment>
                       ))}
@@ -702,21 +702,21 @@ export default function Home() {
             </td></tr>}
           </Fragment>; })}
                         <tr style={{background:"#1e293b", borderTop:"4px solid #cbd5e1"}}>
-                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff", display:"flex", justifyContent:"space-between"}}>
+                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff", textAlign:"left", display:"flex", alignItems:"center", gap: 12, justifyContent:"flex-start"}}>
                               <span style={{fontSize:12, textTransform:"uppercase"}}>Grand Total (All Dates)</span>
                               <span>{fmt(summary.direct)}</span>
                             </td>
-                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff"}}>{fmt(summary.direct - summary.medium)}</td>
-                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff"}}>{fmt(summary.medium)}</td>
-                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff"}}>{fmt(summary.mediumLost)}</td>
-                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff"}}>{fmt(summary.buffer)}</td>
-                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff"}}>{fmt(summary.masterLost)}</td>
-                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff"}}>{fmt(summary.crm)}</td>
-                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff"}}>{fmt(summary.assigned)}</td>
-                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff"}}>{fmt(summary.kserve || 0)}</td>
+                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff",textAlign:"center"}}>{fmt(summary.direct - summary.medium)}</td>
+                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff",textAlign:"center"}}>{fmt(summary.medium)}</td>
+                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff",textAlign:"center"}}>{fmt(summary.mediumLost)}</td>
+                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff",textAlign:"center"}}>{fmt(summary.buffer)}</td>
+                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff",textAlign:"center"}}>{fmt(summary.masterLost)}</td>
+                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff",textAlign:"center"}}>{fmt(summary.crm)}</td>
+                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff",textAlign:"center"}}>{fmt(summary.assigned)}</td>
+                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff",textAlign:"center"}}>{fmt(summary.kserve || 0)}</td>
                             <td style={{padding:"14px 12px"}}></td>
                             <td style={{padding:"14px 12px"}}></td>
-                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff"}}>{summary.direct?Math.round(openLoss/summary.direct*100):0}%</td>
+                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff",textAlign:"center"}}>{summary.direct?Math.round(openLoss/summary.direct*100):0}%</td>
                         </tr>
     </tbody></table></div> : <div className="gap-section-empty">No {section.title.toLowerCase()} records on this page.</div>)}</div>}
         </section>; }) : <div className="gap-console-empty"><strong>No matching leads</strong><span>Search clear karke dobara dekhein.</span></div>}</div>
