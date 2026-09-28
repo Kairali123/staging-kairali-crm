@@ -70,6 +70,15 @@ export async function buildEmail(t:Trigger,at:number){
    hasData=alertData.totalPIs>0
    html=buildPIReviewAlertEmail(alertData)
   }
+  else if(t.reportId==='morning-lead-allocation'){
+   reportTitle='Morning Lead Allocation Alert'
+   reportSlug='Morning-Lead-Allocation-Alert'
+   const { buildAssignmentSnapshot } = await import('@/lib/morning-lead-allocation')
+   const { renderAllocationSnapshotEmail } = await import('@/lib/morning-allocation-email')
+   const summary = await buildAssignmentSnapshot()
+   hasData = summary.totalLeads > 0
+   html = renderAllocationSnapshotEmail(summary).html
+  }
   else{
    throw new Error(`Unhandled email trigger report template: "${t.reportId}"`)
   }
