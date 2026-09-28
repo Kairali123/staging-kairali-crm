@@ -28,3 +28,18 @@
 .pagination span { font-weight: 600; color: #536879; }
 @keyframes spinAnim { 100% { transform: rotate(360deg); } }
 .spin { animation: spinAnim 1s linear infinite; }
+
+/* ── Progress bar ──────────────────────────────────────────────────────────── */
+.progressWrap{max-width:1600px;margin:-6px auto 18px;background:white;border:1px solid #e1e9ee;border-radius:13px;padding:16px 22px 14px;box-shadow:0 3px 12px #173c5206;cursor:default}
+.progressWrap:hover .progressTrack{box-shadow:0 0 0 3px #2da68a22}
+.progressMeta{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.progressLabel{font-size:13px;color:#536879;font-weight:600}
+.progressLabel strong{color:#193049;font-size:16px;font-weight:800}
+.progressUnassigned{color:#bf792f;font-size:12px}
+.progressPct{font-size:22px;font-weight:900;color:#1b8374;letter-spacing:-.03em;transition:color .4s}
+.progressTrack{position:relative;height:12px;background:#eef2f4;border-radius:999px;overflow:visible;transition:box-shadow .25s}
+.progressFill{height:100%;background:linear-gradient(90deg,#1b8374,#35aa8d);border-radius:999px;transition:width .5s cubic-bezier(.4,0,.2,1);position:relative;min-width:0}
+@keyframes glowPulse{0%,100%{opacity:.7;transform:scaleY(1.2)}50%{opacity:1;transform:scaleY(1.8)}}
+.progressGlow{position:absolute;top:50%;transform:translateY(-50%);width:4px;height:22px;background:#35aa8d;border-radius:999px;box-shadow:0 0 8px 3px #35aa8d88;animation:glowPulse 1.4s ease-in-out infinite;pointer-events:none;margin-left:-2px}
+.progressHint{margin-top:8px;font-size:11px;color:#8a99a5;line-height:1.4}
+.progressWrap:hover .progressHint{color:#536879}

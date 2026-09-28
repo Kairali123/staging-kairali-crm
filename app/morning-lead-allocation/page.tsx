@@ -71,6 +71,7 @@ export default function MorningLeadAllocationPage() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
   const [loading, setLoading] = useState(false)
   const [initialLoadDone, setInitialLoadDone] = useState(false)
+  const [initialTotal, setInitialTotal] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
   const [demo, setDemo] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
@@ -112,6 +113,8 @@ export default function MorningLeadAllocationPage() {
       setLeads(result.leads)
       setStaff(result.staff)
       setChanges(result.recentChanges || [])
+      // Capture the total lead count the first time data loads (never reset it — used for progress bar)
+      setInitialTotal((prev) => prev === null ? result.leads.length : prev)
       setSelectedStaff((current) =>
         result.staff.some((p) => p.name === current) ? current : result.staff[0]?.name || "",
       )
@@ -130,6 +133,8 @@ export default function MorningLeadAllocationPage() {
 
   // ── Derived state ────────────────────────────────────────────────────────────
 
+  // A lead is unassigned if it has no owner OR its owner is not in the current staff list
+  // When staff list is not yet loaded, only use !l.owner so we don't miscount
   const isUnassigned = (l: Lead) => !l.owner || (staff.length > 0 && !staff.some(p => p.name === l.owner))
   const unassigned = leads.filter(isUnassigned).length
   const overdue = leads.filter((l) => l.status === "Overdue").length
@@ -138,6 +143,11 @@ export default function MorningLeadAllocationPage() {
   const exceptions = leads.filter(
     (l) => isUnassigned(l) || l.note || staff.some((p) => p.name === l.owner && !p.available),
   ).length
+
+  // Progress bar: assigned this session = leads removed from queue (optimistic)
+  const progressTotal = demo ? sampleLeads.length : (initialTotal ?? leads.length)
+  const assignedCount = Math.max(0, progressTotal - leads.length)
+  const progressPct = progressTotal > 0 ? Math.round((assignedCount / progressTotal) * 100) : 0
   // Sort: Overdue (most overdue first by ms), then Due today, Upcoming, Needs review
   const STATUS_ORDER: Record<string, number> = { "Overdue": 0, "Due today": 1, "Upcoming": 2, "Needs review": 3 }
   const visible = leads
@@ -178,6 +188,7 @@ export default function MorningLeadAllocationPage() {
 
   function showDemo() {
     setDemo(true); setLeads(sampleLeads); setStaff(sampleStaff)
+    setInitialTotal(sampleLeads.length)
     setSelectedStaff(sampleStaff[0].name); setChanges([])
     setConfirmed(false); setConfirmedElapsed(null); setDemoStart(null)
     setPendingTransfer(null); setNotice("")
@@ -449,6 +460,35 @@ export default function MorningLeadAllocationPage() {
             <small>Owner and data issues</small>
           </div>
         </section>
+
+        {/* ── Progress bar ─────────────────────────────────────────────────── */}
+        {hasQueue && (
+          <div className={styles.progressWrap} title={`${assignedCount} of ${progressTotal} leads assigned this session (${progressPct}%). ${unassigned} still unassigned.`}>
+            <div className={styles.progressMeta}>
+              <span className={styles.progressLabel}>
+                <strong>{assignedCount}</strong> / {progressTotal} assigned
+                {unassigned > 0 && <span className={styles.progressUnassigned}> · {unassigned} unassigned</span>}
+              </span>
+              <span className={styles.progressPct}>{progressPct}%</span>
+            </div>
+            <div className={styles.progressTrack}>
+              <div
+                className={styles.progressFill}
+                style={{ width: `${progressPct}%` }}
+              />
+              {progressPct > 0 && progressPct < 100 && (
+                <div className={styles.progressGlow} style={{ left: `${progressPct}%` }} />
+              )}
+            </div>
+            <div className={styles.progressHint}>
+              {progressPct === 100
+                ? "✓ All leads assigned — ready to confirm!"
+                : progressPct === 0
+                  ? "Start assigning leads to track progress"
+                  : `${progressTotal - leads.length} done · ${unassigned} remaining unassigned · ${overdue} overdue`}
+            </div>
+          </div>
+        )}
 
         {/* Main content grid */}
         <div className={styles.columns}>
