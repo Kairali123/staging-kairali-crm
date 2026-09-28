@@ -512,7 +512,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Groups by date */}
+        {/* Groups by date — unified table matching reference design */}
         {groups.length === 0 && (
           <div style={{textAlign:"center",padding:"48px 20px",color:"#8a9bae"}}>
             <div style={{fontSize:28,marginBottom:10}}>📊</div>
@@ -523,217 +523,225 @@ export default function Home() {
           </div>
         )}
 
-        {groups.map((group, gi) => {
-          const isDateOpen = activeExpandedDate === group.date;
-          // create date based on group.date for visual badge
-          const isToday = group.date === new Date(new Date().getTime() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
-          const totalLost = group.total.masterCrmLost + group.total.mediumBufferLost;
-          const lossRate = group.total.direct > 0 ? Math.round(totalLost / group.total.direct * 100) : 0;
-          const allClear = totalLost === 0;
-
-          return (
-            <div key={group.date} style={{borderBottom: gi < groups.length-1 ? "2px solid #edf2f6" : "none"}}>
-              <button
-                style={{
-                  width:"100%",display:"flex",alignItems:"center",gap:16,
-                  padding:"14px 22px",border:0,textAlign:"left",cursor:"pointer",
-                  background: isToday ? "linear-gradient(90deg,#eff8f1,#f8fcf9)" : isDateOpen ? "#f4f8fc" : "#fafcfd",
-                  borderLeft: isToday ? "4px solid #22c55e" : isDateOpen ? "4px solid #3b82f6" : "4px solid transparent",
-                  transition:".15s",
-                }}
-                onClick={()=>setExpandedDate(isDateOpen?null:group.date)}
-              >
-                <span style={{
-                  width:26,height:26,borderRadius:6,border:"1.5px solid #d1dbe6",
-                  display:"grid",placeItems:"center",fontSize:14,fontWeight:800,
-                  background:"#fff",color:"#334e68",flexShrink:0
-                }}>{isDateOpen?"-":"+"}</span>
-
-                <div style={{minWidth:120}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <strong style={{fontSize:14,fontWeight:800,color:"#12202f",letterSpacing:"-.2px"}}>
-                      {dateLabel(group.date)}
-                    </strong>
-                    {isToday && (
-                      <span style={{background:"#22c55e",color:"#fff",borderRadius:20,padding:"2px 8px",fontSize:9,fontWeight:800,letterSpacing:".5px"}}>TODAY</span>
-                    )}
-                  </div>
-                  <small style={{fontSize:10,color:"#7e8d9b"}}>{group.companies.length} companies · {group.rows.length} sources</small>
-                </div>
-
-                <div style={{display:"flex",gap:8,flex:1,flexWrap:"wrap"}}>
-                  <span style={{background:"#f0f4f8",color:"#334e68",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,minWidth:64,textAlign:"center"}}>
-                    <span style={{display:"block",fontSize:8,fontWeight:700,letterSpacing:".8px",color:"#7e8d9b",marginBottom:2}}>SENT</span>
-                    {fmt(group.total.direct)}
-                  </span>
-                  <span style={{background:"#f0fdf4",color:"#166534",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,minWidth:64,textAlign:"center"}}>
-                    <span style={{display:"block",fontSize:8,fontWeight:700,letterSpacing:".8px",color:"#16a34a",marginBottom:2}}>RECEIVED</span>
-                    {fmt(group.total.crm)}
-                  </span>
-                  <span style={{background: totalLost>0 ? "#fff0f0" : "#f0fdf4", color: totalLost>0 ? "#991b1b" : "#166534", borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,minWidth:64,textAlign:"center"}}>
-                    <span style={{display:"block",fontSize:8,fontWeight:700,letterSpacing:".8px",marginBottom:2,color:"inherit",opacity:.7}}>LOST</span>
-                    {fmt(totalLost)}
-                  </span>
-                  <span style={{background:"#fff9f0",color:"#92400e",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,minWidth:64,textAlign:"center"}}>
-                    <span style={{display:"block",fontSize:8,fontWeight:700,letterSpacing:".8px",marginBottom:2,opacity:.7}}>PENDING</span>
-                    {fmt(group.total.mediumBufferLost)}
-                  </span>
-                </div>
-
-                <span style={{
-                  padding:"7px 14px",borderRadius:20,fontSize:12,fontWeight:800,flexShrink:0,
-                  background: allClear?"#dcfce7":lossRate>20?"#fee2e2":lossRate>5?"#fef3c7":"#fef9c3",
-                  color: allClear?"#166534":lossRate>20?"#991b1b":lossRate>5?"#92400e":"#713f12",
-                  border: `1.5px solid ${allClear?"#86efac":lossRate>20?"#fca5a5":lossRate>5?"#fde68a":"#fde047"}`,
-                }}>
-                  {allClear ? "✓ All clear" : `${lossRate}% lost`}
-                </span>
-              </button>
-
-              {isDateOpen && (<>
-                <div style={{borderTop:"1px solid #e8edf2", overflowX:"auto"}}>
-                  <table style={{width:"100%",borderCollapse:"collapse",minWidth:1200}}>
-                    <thead>
-                      <tr style={{background:"#f8fafc"}}>
-                        {[
-                          "DIRECT API SOURCE SHEET",
-                          "GAP 1 DIRECT → MEDIUM",
-                          "MASTER MEDIUM MERGED",
-                          "GAP 2 MEDIUM → BUFFER",
-                          "ACTUAL BUFFER STAGED",
-                          "GAP 3 BUFFER → CRM",
-                          "ACTUAL CRM RECONCILED",
-                          "TRANSFER TO SALES",
-                          "TRANSFER TO KSERVE",
-                          "TAT",
-                          "STATUS",
-                          "loss%"
-                        ].map(h=>(
-                          <th key={h} style={{ padding:"9px 12px",fontSize:9,fontWeight:800, color:"#64748b",textTransform:"uppercase", letterSpacing:".5px",textAlign: h==="DIRECT API SOURCE SHEET"?"left":"center", borderBottom:"1px solid #e2e8f0",whiteSpace:"normal" }}>{h}</th>
-                        ))}
+        {groups.length > 0 && (
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",minWidth:1300}}>
+              <thead>
+                <tr style={{background:"#f8fafc",borderBottom:"2px solid #e2e8f0"}}>
+                  <th style={{padding:"10px 18px",fontSize:10,fontWeight:800,color:"#334e68",textTransform:"uppercase",letterSpacing:".5px",textAlign:"left",minWidth:200,borderBottom:"2px solid #e2e8f0"}}>
+                    Date
+                  </th>
+                  {[
+                    {label:"Direct API\nSource Sheet", color:"#2563eb"},
+                    {label:"Gap 1\nDirect → Medium", color:"#64748b"},
+                    {label:"Master Medium\nMerged", color:"#2563eb"},
+                    {label:"Gap 2\nMedium → Buffer", color:"#f59e0b"},
+                    {label:"Actual Buffer\nStaged", color:"#2563eb"},
+                    {label:"Gap 3\nBuffer → CRM", color:"#ef4444"},
+                    {label:"Actual CRM\nReconciled", color:"#16a34a"},
+                    {label:"Transfer to\nSales", color:"#2563eb"},
+                    {label:"Transfer to\nKServe", color:"#2563eb"},
+                    {label:"TAT", color:"#64748b"},
+                    {label:"Status", color:"#64748b"},
+                    {label:"Loss %", color:"#ef4444"},
+                  ].map(h=>(
+                    <th key={h.label} style={{
+                      padding:"10px 10px",fontSize:9,fontWeight:800,color:h.color,
+                      textTransform:"uppercase",letterSpacing:".4px",textAlign:"center",
+                      borderBottom:"2px solid #e2e8f0",whiteSpace:"pre-wrap",
+                      lineHeight:1.3,minWidth:80
+                    }}>{h.label.replace("\\n","\n")}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {groups.map((group, gi) => {
+                  const isDateOpen = activeExpandedDate === group.date;
+                  const isToday = group.date === new Date(new Date().getTime() + 5.5*60*60*1000).toISOString().slice(0,10);
+                  const totalLost = group.total.masterCrmLost + group.total.mediumBufferLost;
+                  const lossRate = group.total.direct > 0 ? Math.round(totalLost / group.total.direct * 100) : 0;
+                  const allClear = totalLost === 0;
+                  return (
+                    <Fragment key={group.date}>
+                      {/* ── Date summary row ── */}
+                      <tr
+                        onClick={()=>setExpandedDate(isDateOpen?null:group.date)}
+                        style={{
+                          cursor:"pointer",
+                          background: isToday?"linear-gradient(90deg,#eff8f1,#f8fcf9)": isDateOpen?"#f4f8fc":"#fafcfd",
+                          borderLeft: isToday?"4px solid #22c55e": isDateOpen?"4px solid #3b82f6":"4px solid transparent",
+                          borderBottom:"1px solid #e8edf2",
+                        }}
+                      >
+                        <td style={{padding:"12px 18px",textAlign:"left"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:10}}>
+                            <span style={{
+                              width:22,height:22,borderRadius:5,border:"1.5px solid #d1dbe6",
+                              display:"grid",placeItems:"center",fontSize:13,fontWeight:800,
+                              background:"#fff",color:"#334e68",flexShrink:0
+                            }}>{isDateOpen?"-":"+"}</span>
+                            <div>
+                              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                                <strong style={{fontSize:13,fontWeight:800,color:"#12202f"}}>{dateLabel(group.date)}</strong>
+                                {isToday && <span style={{background:"#22c55e",color:"#fff",borderRadius:20,padding:"2px 7px",fontSize:8,fontWeight:800,letterSpacing:".5px"}}>TODAY</span>}
+                              </div>
+                              <small style={{fontSize:9,color:"#7e8d9b"}}>{group.companies.length} companies · {group.rows.length} sources</small>
+                            </div>
+                          </div>
+                        </td>
+                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:800,fontSize:13,color:"#2563eb"}}>{fmt(group.total.direct)}</td>
+                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:700,fontSize:13,color:"#64748b"}}>{fmt(group.total.directMediumGap||0)}</td>
+                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:800,fontSize:13,color:"#2563eb"}}>{fmt(group.total.medium)}</td>
+                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:800,fontSize:13,color:group.total.mediumBufferLost>0?"#f59e0b":"#64748b"}}>{fmt(group.total.mediumBufferLost)}</td>
+                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:800,fontSize:13,color:"#2563eb"}}>{fmt(group.total.buffer)}</td>
+                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:800,fontSize:13,color:group.total.masterCrmLost>0?"#ef4444":"#64748b"}}>{fmt(group.total.masterCrmLost)}</td>
+                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:800,fontSize:13,color:"#16a34a"}}>{fmt(group.total.crm)}</td>
+                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:700,fontSize:13,color:"#334e68"}}>{fmt(group.total.assigned||0)}</td>
+                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:700,fontSize:13,color:"#334e68"}}>{fmt(group.total.kserve||0)}</td>
+                        <td style={{padding:"12px 10px",textAlign:"center",color:"#94a3b8",fontSize:13}}>—</td>
+                        <td style={{padding:"12px 10px",textAlign:"center",color:"#94a3b8",fontSize:13}}>—</td>
+                        <td style={{padding:"12px 10px",textAlign:"center"}}>
+                          <span style={{
+                            padding:"4px 10px",borderRadius:20,fontSize:11,fontWeight:800,
+                            background:allClear?"#dcfce7":lossRate>20?"#fee2e2":lossRate>5?"#fef3c7":"#fef9c3",
+                            color:allClear?"#166534":lossRate>20?"#991b1b":lossRate>5?"#92400e":"#713f12",
+                          }}>{allClear?"0%":`${lossRate}%`}</span>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {group.companies.map((cg,ci) => (
+
+                      {/* ── Expanded: company + source rows ── */}
+                      {isDateOpen && group.companies.map((cg, ci) => (
                         <Fragment key={cg.company}>
-                          <tr style={{ background:"linear-gradient(90deg,#e8f4fd,#f4f8fc)", borderBottom:"1px solid #dbeafe" }}>
-                            <td colSpan={12} style={{ padding: "0" }}>
-                              <div style={{ display:"flex",alignItems:"center",gap:12, padding:"9px 22px" }}>
-                                <span style={{ background:"#3b82f6",color:"#fff",borderRadius:5, padding:"3px 8px",fontSize:8,fontWeight:800,letterSpacing:".7px" }}>
-                                  CO {String(ci+1).padStart(2,"0")}
-                                </span>
+                          {/* Company header row */}
+                          <tr style={{background:"linear-gradient(90deg,#e8f4fd,#f4f8fc)",borderBottom:"1px solid #dbeafe"}}>
+                            <td colSpan={13} style={{padding:"0"}}>
+                              <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 18px"}}>
+                                <span style={{background:"#3b82f6",color:"#fff",borderRadius:5,padding:"3px 8px",fontSize:8,fontWeight:800,letterSpacing:".7px"}}>CO {String(ci+1).padStart(2,"0")}</span>
                                 <strong style={{fontSize:12,color:"#1e3a5f",fontWeight:700}}>{cg.company}</strong>
-                                <span style={{fontSize:10,color:"#4b7fb8",marginLeft:"auto"}}>
-                                  {fmt(cg.total.direct)} direct · {fmt(cg.total.medium)} medium · {fmt(cg.total.buffer)} buffer · {fmt(cg.total.crm)} crm
-                                </span>
+                                <span style={{fontSize:10,color:"#4b7fb8",marginLeft:"auto"}}>{fmt(cg.total.direct)} direct · {fmt(cg.total.medium)} medium · {fmt(cg.total.buffer)} buffer · {fmt(cg.total.crm)} crm</span>
                               </div>
                             </td>
                           </tr>
-                          {cg.rows.map(row=>{
+                          {/* Source rows */}
+                          {cg.rows.map(row => {
                             const rowLost = row.masterCrmLost+row.mediumBufferLost+row.directMediumGap;
                             const rowRate = row.direct>0?Math.round(rowLost/row.direct*100):0;
                             const rowClear = rowLost===0;
                             return (
                               <tr key={row.id} style={{
-                                background: rowLost>0?"#fffafa":"#fff", borderBottom:"1px solid #f1f5f9",
-                                borderLeft: rowLost>0?"3px solid #ef4444":row.crm>0?"3px solid #22c55e":"3px solid #e2e8f0"
+                                background:rowLost>0?"#fffafa":"#fff",
+                                borderBottom:"1px solid #f1f5f9",
+                                borderLeft:rowLost>0?"3px solid #ef4444":row.crm>0?"3px solid #22c55e":"3px solid #e2e8f0"
                               }}>
-                                {/* 1. DIRECT API SOURCE SHEET */}
-                                <td style={{padding:"10px 12px", textAlign:"left"}}>
-                                  <div style={{display:"flex",alignItems:"center",justifyContent:"flex-start",gap:12}}>
-                                    <div style={{display:"flex",alignItems:"center",gap:6}}>
-                                      <span style={{ width:24,height:24,borderRadius:6,flexShrink:0, background: rowLost>0?"#fee2e2":"#e8f5f4", color: rowLost>0?"#991b1b":"#178b7c", display:"grid",placeItems:"center", fontWeight:800,fontSize:10 }}>{row.source.slice(0,1)}</span>
-                                      <strong style={{fontSize:11,color:"#12202f",display:"block"}}>{row.source}</strong>
-                                    </div>
-                                    <span style={{fontSize:13,fontWeight:900,color:"#0f172a",background:"#e2e8f0",padding:"2px 8px",borderRadius:6}}>{fmt(row.direct)}</span>
+                                <td style={{padding:"9px 18px",textAlign:"left"}}>
+                                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                    <span style={{width:22,height:22,borderRadius:5,flexShrink:0,background:rowLost>0?"#fee2e2":"#e8f5f4",color:rowLost>0?"#991b1b":"#178b7c",display:"grid",placeItems:"center",fontWeight:800,fontSize:10}}>{row.source.slice(0,1)}</span>
+                                    <strong style={{fontSize:11,color:"#12202f"}}>{row.source}</strong>
                                   </div>
                                 </td>
-                                {/* 2. GAP 1 DIRECT → MEDIUM */}
-                                <td style={{padding:"10px 12px", textAlign:"center"}}>
-                                  {row.directMediumGap>0?(
-                                    <button className="count-link warn" onClick={()=>openGapRow(row,"gap1")} style={{fontSize:12,fontWeight:700,color:"#92400e",background:"#fef3c7", borderRadius:6,padding:"3px 8px"}}>{fmt(row.directMediumGap)}</button>
-                                  ):<span style={{color:"#94a3b8",fontSize:12}}>0</span>}
+                                <td style={{padding:"9px 10px",textAlign:"center"}}>
+                                  <span style={{fontSize:13,fontWeight:800,color:"#2563eb",background:"#eff6ff",padding:"2px 8px",borderRadius:6}}>{fmt(row.direct)}</span>
                                 </td>
-                                {/* 3. MASTER MEDIUM MERGED */}
-                                <td style={{padding:"10px 12px", textAlign:"center"}}><span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.medium)}</span></td>
-                                {/* 4. GAP 2 MEDIUM → BUFFER */}
-                                <td style={{padding:"10px 12px", textAlign:"center"}}>
-                                  {row.mediumBufferLost>0?(
-                                    <button className="count-link warn" onClick={()=>openGapRow(row,"gap2")} style={{fontSize:12,fontWeight:700,color:"#92400e",background:"#fef3c7", borderRadius:6,padding:"3px 8px"}}>{fmt(row.mediumBufferLost)}</button>
-                                  ):<span style={{color:"#94a3b8",fontSize:12}}>0</span>}
+                                <td style={{padding:"9px 10px",textAlign:"center"}}>
+                                  {row.directMediumGap>0
+                                    ?<button className="count-link warn" onClick={()=>openGapRow(row,"gap1")} style={{fontSize:12,fontWeight:700,color:"#92400e",background:"#fef3c7",borderRadius:6,padding:"2px 8px",border:"none",cursor:"pointer"}}>{fmt(row.directMediumGap)}</button>
+                                    :<span style={{color:"#94a3b8",fontSize:12}}>0</span>}
                                 </td>
-                                {/* 5. ACTUAL BUFFER STAGED */}
-                                <td style={{padding:"10px 12px", textAlign:"center"}}><span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.buffer)}</span></td>
-                                {/* 6. GAP 3 BUFFER → CRM */}
-                                <td style={{padding:"10px 12px", textAlign:"center"}}>
-                                  {row.masterCrmLost>0?(
-                                    <button className="count-link bad" onClick={()=>openGapRow(row,"gap3")} style={{fontSize:12,fontWeight:800,color:"#991b1b",background:"#fee2e2", borderRadius:6,padding:"3px 8px",border:"1px solid #fca5a5"}}>{fmt(row.masterCrmLost)}</button>
-                                  ):<span style={{color:"#22c55e",fontWeight:700,fontSize:12}}>0</span>}
+                                <td style={{padding:"9px 10px",textAlign:"center"}}>
+                                  <span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.medium)}</span>
                                 </td>
-                                {/* 7. ACTUAL CRM RECONCILED */}
-                                <td style={{padding:"10px 12px", textAlign:"center"}}><span style={{fontSize:13,fontWeight:800,color:"#166534",background:"#f0fdf4", borderRadius:6,padding:"3px 8px"}}>{fmt(row.crm)}</span></td>
-                                {/* 8. TRANSFER TO SALES */}
-                                <td style={{padding:"10px 12px", textAlign:"center"}}><span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.sales)}</span></td>
-                                {/* 9. TRANSFER TO KSERVE */}
-                                <td style={{padding:"10px 12px", textAlign:"center"}}><span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.kserve)}</span></td>
-                                {/* 10. TAT */}
-                                <td style={{padding:"10px 12px", textAlign:"center"}}><span style={{fontSize:12,color:"#64748b"}}>—</span></td>
-                                {/* 11. STATUS */}
-                                <td style={{padding:"10px 12px", textAlign:"center"}}>
-                                  <span style={{ display:"inline-flex",alignItems:"center",gap:4, padding:"4px 8px",borderRadius:20,fontSize:9,fontWeight:700, background: rowClear?"#f0fdf4":rowLost>0?"#fff0f0":"#fff9f0", color: rowClear?"#166534":rowLost>0?"#991b1b":"#92400e", whiteSpace:"normal" }}>{rowClear?"✓ Clear":rowLost>0?"✕ Lost":"◷ Pending"}</span>
+                                <td style={{padding:"9px 10px",textAlign:"center"}}>
+                                  {row.mediumBufferLost>0
+                                    ?<button className="count-link warn" onClick={()=>openGapRow(row,"gap2")} style={{fontSize:12,fontWeight:700,color:"#f59e0b",background:"#fffbeb",borderRadius:6,padding:"2px 8px",border:"1px solid #fde68a",cursor:"pointer"}}>{fmt(row.mediumBufferLost)}</button>
+                                    :<span style={{color:"#94a3b8",fontSize:12}}>0</span>}
                                 </td>
-                                {/* 12. loss% */}
-                                <td style={{padding:"10px 12px", textAlign:"center"}}>
-                                  <span style={{ display:"inline-block",padding:"4px 8px",borderRadius:20, fontSize:10,fontWeight:800, background: rowClear?"#dcfce7":rowRate>30?"#fee2e2":rowRate>10?"#fef3c7":"#fff9f0", color: rowClear?"#166534":rowRate>30?"#991b1b":rowRate>10?"#92400e":"#78350f" }}>{rowClear?"0%":`${rowRate}%`}</span>
+                                <td style={{padding:"9px 10px",textAlign:"center"}}>
+                                  <span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.buffer)}</span>
+                                </td>
+                                <td style={{padding:"9px 10px",textAlign:"center"}}>
+                                  {row.masterCrmLost>0
+                                    ?<button className="count-link bad" onClick={()=>openGapRow(row,"gap3")} style={{fontSize:12,fontWeight:800,color:"#991b1b",background:"#fee2e2",borderRadius:6,padding:"2px 8px",border:"1px solid #fca5a5",cursor:"pointer"}}>{fmt(row.masterCrmLost)}</button>
+                                    :<span style={{color:"#22c55e",fontWeight:700,fontSize:12}}>0</span>}
+                                </td>
+                                <td style={{padding:"9px 10px",textAlign:"center"}}>
+                                  <span style={{fontSize:13,fontWeight:800,color:"#166534",background:"#f0fdf4",borderRadius:6,padding:"2px 8px"}}>{fmt(row.crm)}</span>
+                                </td>
+                                <td style={{padding:"9px 10px",textAlign:"center"}}>
+                                  <span style={{fontSize:13,fontWeight:700,color:"#334e68"}}>{fmt(row.sales)}</span>
+                                </td>
+                                <td style={{padding:"9px 10px",textAlign:"center"}}>
+                                  <span style={{fontSize:13,fontWeight:700,color:"#334e68"}}>{fmt(row.kserve)}</span>
+                                </td>
+                                <td style={{padding:"9px 10px",textAlign:"center"}}>
+                                  <span style={{fontSize:12,color:"#64748b"}}>—</span>
+                                </td>
+                                <td style={{padding:"9px 10px",textAlign:"center"}}>
+                                  <span style={{display:"inline-flex",alignItems:"center",gap:3,padding:"3px 8px",borderRadius:20,fontSize:9,fontWeight:700,background:rowClear?"#f0fdf4":rowLost>0?"#fff0f0":"#fff9f0",color:rowClear?"#166534":rowLost>0?"#991b1b":"#92400e"}}>{rowClear?"Clear":rowLost>0?"Lost":"Pending"}</span>
+                                </td>
+                                <td style={{padding:"9px 10px",textAlign:"center"}}>
+                                  <span style={{display:"inline-block",padding:"3px 8px",borderRadius:20,fontSize:10,fontWeight:800,background:rowClear?"#dcfce7":rowRate>30?"#fee2e2":rowRate>10?"#fef3c7":"#fff9f0",color:rowClear?"#166534":rowRate>30?"#991b1b":rowRate>10?"#92400e":"#78350f"}}>{rowClear?"0%":`${rowRate}%`}</span>
                                 </td>
                               </tr>
                             );
                           })}
-                          <tr style={{background:"#f8fafc",borderTop:"2px solid #e2e8f0"}}>
-                            <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:"#334e68", display:"flex", justifyContent:"space-between"}}>
-                              <span style={{fontSize:11}}>↳ {cg.company} Total</span>
-                              <span>{fmt(cg.total.direct)}</span>
+                          {/* Company subtotal */}
+                          <tr style={{background:"#f8fafc",borderTop:"1px solid #e2e8f0",borderBottom:"2px solid #dbeafe"}}>
+                            <td style={{padding:"8px 18px",fontWeight:800,fontSize:12,color:"#334e68"}}>↳ {cg.company} Total</td>
+                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:"#2563eb"}}>{fmt(cg.total.direct)}</td>
+                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:cg.total.directMediumGap>0?"#92400e":"#64748b"}}>{fmt(cg.total.directMediumGap)}</td>
+                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:"#334e68"}}>{fmt(cg.total.medium)}</td>
+                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:cg.total.mediumBufferLost>0?"#f59e0b":"#64748b"}}>{fmt(cg.total.mediumBufferLost)}</td>
+                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:"#334e68"}}>{fmt(cg.total.buffer)}</td>
+                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:cg.total.masterCrmLost>0?"#ef4444":"#22c55e"}}>{fmt(cg.total.masterCrmLost)}</td>
+                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:"#166534"}}>{fmt(cg.total.crm)}</td>
+                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:"#334e68"}}>{fmt(cg.total.assigned||0)}</td>
+                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:"#334e68"}}>{fmt(cg.total.kserve||0)}</td>
+                            <td style={{padding:"8px 10px",textAlign:"center",color:"#94a3b8",fontSize:12}}>—</td>
+                            <td style={{padding:"8px 10px",textAlign:"center",color:"#94a3b8",fontSize:12}}>—</td>
+                            <td style={{padding:"8px 10px",textAlign:"center"}}>
+                              <span style={{fontSize:11,fontWeight:800,color:(cg.total.masterCrmLost+cg.total.mediumBufferLost+cg.total.directMediumGap)>0?"#991b1b":"#166534"}}>
+                                {cg.total.direct>0?Math.round((cg.total.masterCrmLost+cg.total.mediumBufferLost+cg.total.directMediumGap)/cg.total.direct*100):0}%
+                              </span>
                             </td>
-                            <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:cg.total.directMediumGap>0?"#92400e":"#64748b"}}>{fmt(cg.total.directMediumGap)}</td>
-                            <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:"#334e68"}}>{fmt(cg.total.medium)}</td>
-                            <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:cg.total.mediumBufferLost>0?"#92400e":"#64748b"}}>{fmt(cg.total.mediumBufferLost)}</td>
-                            <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:"#334e68"}}>{fmt(cg.total.buffer)}</td>
-                            <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:cg.total.masterCrmLost>0?"#991b1b":"#22c55e"}}>{fmt(cg.total.masterCrmLost)}</td>
-                            <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:"#166534"}}>{fmt(cg.total.crm)}</td>
-                            <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:"#334e68"}}>{fmt(cg.total.sales)}</td>
-                            <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:"#334e68"}}>{fmt(cg.total.kserve)}</td>
-                            <td style={{padding:"10px 12px", textAlign:"center"}}></td>
-                            <td style={{padding:"10px 12px", textAlign:"center"}}></td>
-                            <td style={{padding:"10px 12px", textAlign:"center"}}><span style={{fontWeight:800,fontSize:11, color:(cg.total.masterCrmLost+cg.total.mediumBufferLost+cg.total.directMediumGap)>0?"#991b1b":"#166534"}}>{cg.total.direct>0?Math.round((cg.total.masterCrmLost+cg.total.mediumBufferLost+cg.total.directMediumGap)/cg.total.direct*100):0}%</span></td>
                           </tr>
                         </Fragment>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
-<div style={{background:"#f8fafc",borderTop:"2px solid #cbd5e1",padding:"20px 24px"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:24,overflowX:"auto"}}>
-                    <span style={{fontWeight:900,color:"#0f172a",whiteSpace:"nowrap"}}>Grand Total<br/><small style={{color:"#64748b",fontSize:11}}>All Dates</small></span>
-                    <div style={{display:"flex",gap:32,fontSize:14,minWidth:"max-content"}}>
-                      <div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Direct API<br/>Source</div><div style={{fontWeight:900,color:"#1e293b",fontSize:16}}>{fmt(summary.direct)}</div></div>
-                      <div style={{textAlign:"center"}}><div style={{color:"#92400e",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Gap 1<br/>(Lost)</div><div style={{fontWeight:900,color:"#92400e",fontSize:16}}>{fmt(summary.direct - summary.medium)}</div></div>
-                      <div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Master<br/>Medium</div><div style={{fontWeight:900,color:"#334e68",fontSize:16}}>{fmt(summary.medium)}</div></div>
-                      <div style={{textAlign:"center"}}><div style={{color:"#92400e",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Gap 2<br/>(Lost)</div><div style={{fontWeight:900,color:"#92400e",fontSize:16}}>{fmt(summary.mediumLost)}</div></div>
-                      <div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Actual<br/>Buffer</div><div style={{fontWeight:900,color:"#334e68",fontSize:16}}>{fmt(summary.buffer)}</div></div>
-                      <div style={{textAlign:"center"}}><div style={{color:"#991b1b",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Gap 3<br/>(Lost)</div><div style={{fontWeight:900,color:"#991b1b",fontSize:16}}>{fmt(summary.masterLost)}</div></div>
-                      <div style={{textAlign:"center"}}><div style={{color:"#166534",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Actual CRM<br/>Reconciled</div><div style={{fontWeight:900,color:"#166534",fontSize:16}}>{fmt(summary.crm)}</div></div>
-                      <div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Transfer to<br/>Sales</div><div style={{fontWeight:900,color:"#334e68",fontSize:16}}>{fmt(summary.assigned)}</div></div>
-                      <div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Transfer to<br/>KServe</div><div style={{fontWeight:900,color:"#334e68",fontSize:16}}>0</div></div>
-                      <div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Total<br/>Loss %</div><div style={{fontWeight:900,color:openLoss>0?"#991b1b":"#166534",fontSize:16}}>{summary.direct?Math.round(openLoss/summary.direct*100):0}%</div></div>
-                    </div>
-                  </div>
-                </div>
+                    </Fragment>
+                  );
+                })}
 
-              </>)}
-            </div>
-          );
-        })}
-
+                {/* ── GRAND TOTAL ROW ── */}
+                {groups.length > 0 && (() => {
+                  const totalCompanies = [...new Set(groups.flatMap(g=>g.companies.map(c=>c.company)))].length;
+                  const totalSources = [...new Set(groups.flatMap(g=>g.rows.map(r=>r.source)))].length;
+                  const grandLossRate = summary.direct>0?Math.round(openLoss/summary.direct*100):0;
+                  return (
+                    <tr style={{background:"#f1f5f9",borderTop:"3px solid #cbd5e1"}}>
+                      <td style={{padding:"14px 18px",textAlign:"left"}}>
+                        <strong style={{fontSize:13,fontWeight:900,color:"#0f172a",display:"block"}}>Grand Total</strong>
+                        <small style={{fontSize:10,color:"#64748b"}}>All Dates · {totalCompanies} companies · {totalSources} sources</small>
+                      </td>
+                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#2563eb"}}>{fmt(summary.direct)}</td>
+                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#64748b"}}>{fmt(summary.direct - summary.medium)}</td>
+                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#334e68"}}>{fmt(summary.medium)}</td>
+                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:summary.mediumLost>0?"#f59e0b":"#64748b"}}>{fmt(summary.mediumLost)}</td>
+                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#334e68"}}>{fmt(summary.buffer)}</td>
+                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:summary.masterLost>0?"#ef4444":"#64748b"}}>{fmt(summary.masterLost)}</td>
+                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#166534"}}>{fmt(summary.crm)}</td>
+                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#334e68"}}>{fmt(summary.assigned)}</td>
+                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#334e68"}}>0</td>
+                      <td style={{padding:"14px 10px",textAlign:"center",color:"#94a3b8",fontSize:14}}>—</td>
+                      <td style={{padding:"14px 10px",textAlign:"center",color:"#94a3b8",fontSize:14}}>—</td>
+                      <td style={{padding:"14px 10px",textAlign:"center"}}>
+                        <span style={{padding:"5px 12px",borderRadius:20,fontSize:12,fontWeight:900,background:grandLossRate>20?"#fee2e2":"#fef3c7",color:grandLossRate>20?"#991b1b":"#92400e"}}>{grandLossRate}%</span>
+                      </td>
+                    </tr>
+                  );
+                })()}
+              </tbody>
+            </table>
+          </div>
+        )}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center", padding:"12px 22px",background:"#f8fafc",borderTop:"1px solid #e8edf2", fontSize:10,color:"#7e8d9b",flexWrap:"wrap",gap:8}}>
           <span>
             <span style={{display:"inline-block",width:7,height:7,borderRadius:"50%",background:"#ef4444",marginRight:5}}/>Lost = sent to KServe, no return after threshold ·
