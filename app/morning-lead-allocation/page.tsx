@@ -69,7 +69,8 @@ export default function MorningLeadAllocationPage() {
   const [selectedStaff, setSelectedStaff] = useState("")
   const [changes, setChanges] = useState<string[]>([])
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [initialLoadDone, setInitialLoadDone] = useState(false)
   const [saving, setSaving] = useState(false)
   const [demo, setDemo] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
@@ -89,6 +90,7 @@ export default function MorningLeadAllocationPage() {
 
   const reload = useCallback(async (preserveError = false) => {
     setLoading(true)
+    setInitialLoadDone(true)
     if (!preserveError) setError("")
     setDemo(false)
     const [queueResult, dialerResult] = await Promise.allSettled([
@@ -122,32 +124,28 @@ export default function MorningLeadAllocationPage() {
   }, [])
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => void reload())
-    return () => cancelAnimationFrame(frame)
-  }, [reload])
-
-  useEffect(() => {
     const timer = window.setInterval(() => setClock(Date.now()), 1000)
     return () => window.clearInterval(timer)
   }, [])
 
   // ── Derived state ────────────────────────────────────────────────────────────
 
-  const unassigned = leads.filter((l) => !l.owner).length
+  const isUnassigned = (l: Lead) => !l.owner || (staff.length > 0 && !staff.some(p => p.name === l.owner))
+  const unassigned = leads.filter(isUnassigned).length
   const overdue = leads.filter((l) => l.status === "Overdue").length
   const hasQueue = demo || !!snapshot
   const unavailableOwner = staff.some((p) => !p.available && leads.some((l) => l.owner === p.name))
   const exceptions = leads.filter(
-    (l) => !l.owner || l.note || staff.some((p) => p.name === l.owner && !p.available),
+    (l) => isUnassigned(l) || l.note || staff.some((p) => p.name === l.owner && !p.available),
   ).length
   // Sort: Overdue (most overdue first by ms), then Due today, Upcoming, Needs review
   const STATUS_ORDER: Record<string, number> = { "Overdue": 0, "Due today": 1, "Upcoming": 2, "Needs review": 3 }
   const visible = leads
     .filter((l) =>
       filter === "All leads" ||
-      (filter === "Unassigned" && !l.owner) ||
+      (filter === "Unassigned" && isUnassigned(l)) ||
       (filter === "Overdue" && l.status === "Overdue") ||
-      (filter === "Exceptions" && (!l.owner || !!l.note || staff.some((p) => p.name === l.owner && !p.available))),
+      (filter === "Exceptions" && (isUnassigned(l) || !!l.note || staff.some((p) => p.name === l.owner && !p.available))),
     )
     .sort((a, b) => {
       const statusDiff = (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9)
@@ -315,12 +313,18 @@ export default function MorningLeadAllocationPage() {
   // ── Availability / start / confirm ──────────────────────────────────────────
 
   async function toggleAvailability(person: Staff) {
+    // Optimistically update
+    setStaff((current) => current.map((p) => p.name === person.name ? { ...p, available: !p.available } : p))
+    
     if (demo) {
-      setStaff((current) => current.map((p) => p.name === person.name ? { ...p, available: !p.available } : p))
       return
     }
+    
     if (await save({ action: "AVAILABILITY", key: person.name, availability: person.available ? "unavailable" : "available" })) {
       await reload(); setNotice("Availability saved in the master Sheet log.")
+    } else {
+      // Revert if save fails
+      setStaff((current) => current.map((p) => p.name === person.name ? { ...p, available: person.available } : p))
     }
   }
 
@@ -365,10 +369,12 @@ export default function MorningLeadAllocationPage() {
           </div>
           <div className={styles.heroActions}>
             <button type="button" className={styles.secondary} onClick={() => void reload()} disabled={loading || saving}>
-              <RefreshCw size={16} /> Refresh live
+              <RefreshCw size={16} className={loading ? styles.spin : undefined} />
+              {loading ? "Refreshing…" : "Refresh live"}
             </button>
             <button
               type="button" className={styles.secondary}
+              title="Records your morning check start time in the master sheet so the timer starts"
               disabled={loading || saving || !!startedAt || (!demo && (!snapshot?.complete || !snapshot?.canEdit))}
               onClick={() => void startCheck()}
             >
@@ -384,8 +390,19 @@ export default function MorningLeadAllocationPage() {
           </div>
         </header>
 
-        {/* Notice / warning banner */}
-        {(error || loading || demo || (snapshot && !snapshot.complete) || !!snapshot?.transferAccessMissingCount) && (
+        {/* Welcome / idle state — shown before first refresh */}
+        {!initialLoadDone && !demo && (
+          <section className={styles.notice} role="status" style={{ background: "#f0f7ff", borderColor: "#b8d4f0", color: "#1b4b82" }}>
+            <CircleAlert size={18} style={{ color: "#2563eb" }} />
+            <div>
+              <strong>Ready to load.</strong>{" "}
+              Click <strong>Refresh live</strong> to pull today&apos;s AppSheet queue from the source sheets.
+            </div>
+          </section>
+        )}
+
+        {/* Notice / warning banner — only after first load attempt */}
+        {initialLoadDone && (error || loading || demo || (snapshot && !snapshot.complete) || !!snapshot?.transferAccessMissingCount) && (
           <section className={styles.notice} role="status">
             <CircleAlert size={18} />
             <div>

@@ -24,6 +24,10 @@
     {
       "path": "/api/cron/morning-allocation-snapshot",
       "schedule": "30 5 * * *"
+    },
+    {
+      "path": "/api/cron/morning-owner-notify",
+      "schedule": "30 5 * * *"
     }
   ],
   "git": {

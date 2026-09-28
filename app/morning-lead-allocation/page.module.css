@@ -26,3 +26,5 @@
 .pagination button:disabled { opacity: .4; cursor: not-allowed; }
 .pagination button:not(:disabled):hover { background: #f0f6f8; }
 .pagination span { font-weight: 600; color: #536879; }
+@keyframes spinAnim { 100% { transform: rotate(360deg); } }
+.spin { animation: spinAnim 1s linear infinite; }

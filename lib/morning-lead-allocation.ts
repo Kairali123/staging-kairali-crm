@@ -52,6 +52,7 @@ export type AssignmentSummary = {
   overdueLeads: number
   changes: AssignmentLine[]
   byOwner: { owner: string; assigned: number; received: number }[]
+  leads: { id: string; name: string; owner: string; business: string; source: string; status: string }[]
 }
 
 type EmployeeSheet = { name: string; id: string }
@@ -511,6 +512,14 @@ export async function buildAssignmentSnapshot(): Promise<AssignmentSummary> {
     overdueLeads: snapshot.leads.filter((l) => l.status === 'Overdue').length,
     changes,
     byOwner,
+    leads: snapshot.leads.map((l) => ({
+      id: l.id,
+      name: l.name,
+      owner: l.owner || '',
+      business: l.business || '',
+      source: l.source || '',
+      status: l.status || '',
+    })),
   }
 }
 
