@@ -326,7 +326,7 @@ export default function Home() {
       return { date: groupDate, rows: groupRows, companies: companiesForDate, total: totalRows(groupRows) };
     });
   }, [visible]);
-  const activeExpandedDate = expandedDate && groups.some(group => group.date === expandedDate) ? expandedDate : groups[0]?.date ?? null;
+  const activeExpandedDate = expandedDate; // Minimise by default
   const allRecords = visible.flatMap(r => r.records ?? r.issues ?? []);
   const summary = visible.reduce((a, r) => ({ direct: a.direct + r.direct, medium: a.medium + r.medium, duplicate: a.duplicate + r.duplicate, expectedDuplicateGap: a.expectedDuplicateGap + r.expectedDuplicateGap, toBuffer: a.toBuffer + r.bufferTransfer, buffer: a.buffer + r.buffer, mediumLost: a.mediumLost + r.mediumBufferLost, crm: a.crm + r.crm, sameDayCrm: a.sameDayCrm + r.sameDayCrm, lateTransfer: a.lateTransfer + r.lateTransfer, masterLost: a.masterLost + r.masterCrmLost, assigned: a.assigned + r.assigned, breaches: a.breaches + r.slaBreaches, tatSum: a.tatSum + r.avgTatMin * r.buffer, tatWeight: a.tatWeight + r.buffer, mismatches: a.mismatches + Number(r.mismatch) }), { direct: 0, medium: 0, duplicate: 0, expectedDuplicateGap: 0, toBuffer: 0, buffer: 0, mediumLost: 0, crm: 0, sameDayCrm: 0, lateTransfer: 0, masterLost: 0, assigned: 0, breaches: 0, tatSum: 0, tatWeight: 0, mismatches: 0 });
   const openLoss = visible.reduce((total, row) => total + row.directMediumGap + row.mediumBufferLost + row.masterCrmLost + Math.max(0, row.crm - row.assigned), 0);
@@ -567,7 +567,7 @@ export default function Home() {
                           "STATUS",
                           "loss%"
                         ].map(h=>(
-                          <th key={h} style={{ padding:"9px 12px",fontSize:9,fontWeight:800, color:"#64748b",textTransform:"uppercase", letterSpacing:".5px",textAlign:"left", borderBottom:"1px solid #e2e8f0",whiteSpace:"nowrap" }}>{h}</th>
+                          <th key={h} style={{ padding:"9px 12px",fontSize:9,fontWeight:800, color:"#64748b",textTransform:"uppercase", letterSpacing:".5px",textAlign:"left", borderBottom:"1px solid #e2e8f0",whiteSpace:"normal" }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -638,7 +638,7 @@ export default function Home() {
                                 <td style={{padding:"10px 12px"}}><span style={{fontSize:12,color:"#64748b"}}>—</span></td>
                                 {/* 11. STATUS */}
                                 <td style={{padding:"10px 12px"}}>
-                                  <span style={{ display:"inline-flex",alignItems:"center",gap:4, padding:"4px 8px",borderRadius:20,fontSize:9,fontWeight:700, background: rowClear?"#f0fdf4":rowLost>0?"#fff0f0":"#fff9f0", color: rowClear?"#166534":rowLost>0?"#991b1b":"#92400e", whiteSpace:"nowrap" }}>{rowClear?"✓ Clear":rowLost>0?"✕ Lost":"◷ Pending"}</span>
+                                  <span style={{ display:"inline-flex",alignItems:"center",gap:4, padding:"4px 8px",borderRadius:20,fontSize:9,fontWeight:700, background: rowClear?"#f0fdf4":rowLost>0?"#fff0f0":"#fff9f0", color: rowClear?"#166534":rowLost>0?"#991b1b":"#92400e", whiteSpace:"normal" }}>{rowClear?"✓ Clear":rowLost>0?"✕ Lost":"◷ Pending"}</span>
                                 </td>
                                 {/* 12. loss% */}
                                 <td style={{padding:"10px 12px"}}>
@@ -700,7 +700,25 @@ export default function Home() {
               {section.key === "deleted" && original ? <div className="gap-evidence"><header><span>PRIMARY TRANSFERRED LEAD ↔ ACTUAL DUPLICATE</span><strong>{deleteStatus.label}</strong><em>Matched by {original.matchBasis || "Mobile / Email / Enquiry ID"} within 24 hours</em></header><div className="gap-evidence-table"><span className="qualified">✓</span><strong>{original.id}</strong><b>PRIMARY · TRANSFERRED</b><span>{original.generatedAt || "—"}</span><span>{original.source}</span><span>Transferred to {original.assignee || "Sales / KServe"}</span><span className="current">×</span><strong>{lead.id}</strong><b>ACTUAL DUPLICATE · DELETED</b><span>{lead.generatedAt || lead.timestamp || "—"}</span><span>{lead.source}</span><span>Deleted · {deleteStatus.label}</span></div></div> : section.key === "deleted" ? <div className="gap-evidence missing"><strong>{deleteStatus.label}</strong><p>{deleteStatus.detail} Primary transferred record is not available in the current payload.</p></div> : section.key === "unexplained" ? <div className="gap-loss-warning"><strong>HIGH ALERT · NO QUALIFIED LEAD</strong><p>No valid duplicate, late transfer or destination record explains this gap. Audit the exact source window and script execution.</p></div> : <div className="gap-late-note"><strong>LATE TRANSFER · NOT LOST</strong><p>This lead reached CRM after its source date and remains anchored to the original intake day.</p></div>}
               <div className="gap-trace-actions">{lead.directUrl && <a href={lead.directUrl} target="_blank" rel="noreferrer">Open source row ↗</a>}{lead.destinationUrl && <a href={lead.destinationUrl} target="_blank" rel="noreferrer">Open Buffer row ↗</a>}{lead.crmUrl && <a href={lead.crmUrl} target="_blank" rel="noreferrer">Open CRM ↗</a>}</div>
             </td></tr>}
-          </Fragment>; })}</tbody></table></div> : <div className="gap-section-empty">No {section.title.toLowerCase()} records on this page.</div>)}</div>}
+          </Fragment>; })}
+                        <tr style={{background:"#1e293b", borderTop:"4px solid #cbd5e1"}}>
+                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff", display:"flex", justifyContent:"space-between"}}>
+                              <span style={{fontSize:12, textTransform:"uppercase"}}>Grand Total (All Dates)</span>
+                              <span>{fmt(summary.direct)}</span>
+                            </td>
+                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff"}}>{fmt(summary.direct - summary.medium)}</td>
+                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff"}}>{fmt(summary.medium)}</td>
+                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff"}}>{fmt(summary.mediumLost)}</td>
+                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff"}}>{fmt(summary.buffer)}</td>
+                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff"}}>{fmt(summary.masterLost)}</td>
+                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff"}}>{fmt(summary.crm)}</td>
+                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff"}}>{fmt(summary.assigned)}</td>
+                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff"}}>{fmt(summary.kserve || 0)}</td>
+                            <td style={{padding:"14px 12px"}}></td>
+                            <td style={{padding:"14px 12px"}}></td>
+                            <td style={{padding:"14px 12px",fontWeight:900,fontSize:14,color:"#fff"}}>{summary.direct?Math.round(openLoss/summary.direct*100):0}%</td>
+                        </tr>
+    </tbody></table></div> : <div className="gap-section-empty">No {section.title.toLowerCase()} records on this page.</div>)}</div>}
         </section>; }) : <div className="gap-console-empty"><strong>No matching leads</strong><span>Search clear karke dobara dekhein.</span></div>}</div>
         <footer className="gap-console-foot"><span>{detailsLoading ? "Loading exact records…" : `${filteredDrawer.length} rows · Page ${page} of ${pageCount}`}</span><button disabled={detailsLoading} onClick={() => setOpenAuditSections(openAuditSections.size === 3 ? new Set() : new Set(["unexplained", "transient", "deleted"]))}>{openAuditSections.size === 3 ? "Hide all sections" : "Show all sections"}</button><div>{filteredDrawer.length > pageSize && <><button disabled={page === 1} onClick={() => setPage(p => p - 1)}>Previous</button><button disabled={page === pageCount} onClick={() => setPage(p => p + 1)}>Next</button></>}<button onClick={() => setSelected(null)}>Close</button></div></footer>
       </section>
