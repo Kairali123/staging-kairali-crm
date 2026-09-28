@@ -34,6 +34,7 @@ type Filter = "All leads" | "Unassigned" | "Overdue" | "Exceptions"
 const NO_CHANGE_SENTINEL = "__no_change__"
 
 const WORK_LIST_COLS = ["Time Stamp", "Date & Time", "ID", "Name of Client", "Mobile", "Email Id", "Subjects", "Notes", "IVR Url", "WebSite Name", "Data Source", "Assign To MR", "Remarks - History"]
+const PAGE_SIZE = 15
 
 // ─── Sample data ──────────────────────────────────────────────────────────────
 
@@ -80,6 +81,7 @@ export default function MorningLeadAllocationPage() {
   const [demoStart, setDemoStart] = useState<string | null>(null)
   const [clock, setClock] = useState(Date.now())
   const [confirmedElapsed, setConfirmedElapsed] = useState<number | null>(null)
+  const [queuePage, setQueuePage] = useState(0)
   // Background save queue: keys that are being saved in background
   const bgSaving = useRef(new Set<string>())
 
@@ -138,12 +140,23 @@ export default function MorningLeadAllocationPage() {
   const exceptions = leads.filter(
     (l) => !l.owner || l.note || staff.some((p) => p.name === l.owner && !p.available),
   ).length
-  const visible = leads.filter((l) =>
-    filter === "All leads" ||
-    (filter === "Unassigned" && !l.owner) ||
-    (filter === "Overdue" && l.status === "Overdue") ||
-    (filter === "Exceptions" && (!l.owner || !!l.note || staff.some((p) => p.name === l.owner && !p.available))),
-  )
+  // Sort: Overdue (most overdue first by ms), then Due today, Upcoming, Needs review
+  const STATUS_ORDER: Record<string, number> = { "Overdue": 0, "Due today": 1, "Upcoming": 2, "Needs review": 3 }
+  const visible = leads
+    .filter((l) =>
+      filter === "All leads" ||
+      (filter === "Unassigned" && !l.owner) ||
+      (filter === "Overdue" && l.status === "Overdue") ||
+      (filter === "Exceptions" && (!l.owner || !!l.note || staff.some((p) => p.name === l.owner && !p.available))),
+    )
+    .sort((a, b) => {
+      const statusDiff = (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9)
+      if (statusDiff !== 0) return statusDiff
+      return (b.overdueMs ?? 0) - (a.overdueMs ?? 0) // most overdue first within same status
+    })
+  const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE))
+  const safePage = Math.min(queuePage, totalPages - 1)
+  const pagedVisible = visible.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE)
 
   const refreshed = snapshot?.capturedAt
     ? new Date(snapshot.capturedAt).toLocaleString("en-GB", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
@@ -424,6 +437,43 @@ export default function MorningLeadAllocationPage() {
         <div className={styles.columns}>
           <div className={styles.mainColumn}>
 
+            {/* Snapshot / assignment report section — shown FIRST */}
+            <section className={styles.panel}>
+              <div className={styles.panelHead}>
+                <div>
+                  <h2><BarChart2 size={18} style={{ verticalAlign: "middle", marginRight: 6 }} />Today&apos;s assignment snapshot</h2>
+                  <p>Who assigned to whom · transfer count · totals · sent by email at 11:00 IST</p>
+                </div>
+              </div>
+              {ownerStats.length > 0 ? (
+                <div className={styles.snapshotGrid}>
+                  {ownerStats.map((o) => (
+                    <div key={o.name} className={styles.snapshotCard}>
+                      <span className={styles.snapshotAvatar}>
+                        {o.name.split(" ").map((p) => p[0]).slice(0, 2).join("")}
+                      </span>
+                      <div className={styles.snapshotInfo}>
+                        <strong>{o.name}</strong>
+                        <small>{o.count} lead{o.count !== 1 ? "s" : ""} assigned</small>
+                        {o.received > 0 && <small className={styles.snapshotReceived}>{o.received} received today via transfer</small>}
+                      </div>
+                      <span className={`${styles.snapshotBadge} ${o.count === 0 ? styles.snapshotZero : ""}`}>{o.count}</span>
+                    </div>
+                  ))}
+                  <div className={styles.snapshotSummary}>
+                    <span>Total transfers today: <b>{changes.length}</b></span>
+                    <span>Unassigned: <b>{unassigned}</b></span>
+                    <span>Overdue: <b className={overdue > 0 ? styles.overdueText : ""}>{overdue}</b></span>
+                    <small>Email snapshot sent daily at 11:00 IST to all owners</small>
+                  </div>
+                </div>
+              ) : (
+                <p className={styles.sideIntro} style={{ padding: "14px 22px" }}>
+                  No assignments recorded yet. Once leads are assigned, the snapshot will appear here.
+                </p>
+              )}
+            </section>
+
             {/* Pending queue table */}
             <section className={styles.panel}>
               <div className={styles.panelHead}>
@@ -445,7 +495,7 @@ export default function MorningLeadAllocationPage() {
               </div>
               <div className={styles.tabs} role="group" aria-label="Filter leads">
                 {(["All leads", "Unassigned", "Overdue", "Exceptions"] as Filter[]).map((item) => (
-                  <button key={item} type="button" className={filter === item ? styles.activeTab : ""} onClick={() => setFilter(item)}>
+                  <button key={item} type="button" className={filter === item ? styles.activeTab : ""} onClick={() => { setFilter(item); setQueuePage(0) }}>
                     {item}
                   </button>
                 ))}
@@ -463,7 +513,7 @@ export default function MorningLeadAllocationPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {visible.map((lead) => (
+                    {pagedVisible.map((lead) => (
                       <tr key={lead.key}>
                         <td>
                           <strong>{lead.name}</strong>
@@ -537,6 +587,13 @@ export default function MorningLeadAllocationPage() {
                     {error ? "Live queue unavailable. Use the source sheets manually." : "No leads in this view."}
                   </p>
                 )}
+                {totalPages > 1 && (
+                  <div className={styles.pagination}>
+                    <button type="button" disabled={safePage === 0} onClick={() => setQueuePage(safePage - 1)}>← Prev</button>
+                    <span>Page {safePage + 1} of {totalPages} &nbsp;·&nbsp; {visible.length} leads</span>
+                    <button type="button" disabled={safePage >= totalPages - 1} onClick={() => setQueuePage(safePage + 1)}>Next →</button>
+                  </div>
+                )}
               </div>
             </section>
 
@@ -598,43 +655,6 @@ export default function MorningLeadAllocationPage() {
                   )
                 })()}
               </div>
-            </section>
-
-            {/* Snapshot / assignment report section */}
-            <section className={styles.panel}>
-              <div className={styles.panelHead}>
-                <div>
-                  <h2><BarChart2 size={18} style={{ verticalAlign: "middle", marginRight: 6 }} />Today&apos;s assignment snapshot</h2>
-                  <p>Who assigned to whom · transfer count · totals · sent by email at 11:00 IST</p>
-                </div>
-              </div>
-              {ownerStats.length > 0 ? (
-                <div className={styles.snapshotGrid}>
-                  {ownerStats.map((o) => (
-                    <div key={o.name} className={styles.snapshotCard}>
-                      <span className={styles.snapshotAvatar}>
-                        {o.name.split(" ").map((p) => p[0]).slice(0, 2).join("")}
-                      </span>
-                      <div className={styles.snapshotInfo}>
-                        <strong>{o.name}</strong>
-                        <small>{o.count} lead{o.count !== 1 ? "s" : ""} assigned</small>
-                        {o.received > 0 && <small className={styles.snapshotReceived}>{o.received} received today via transfer</small>}
-                      </div>
-                      <span className={`${styles.snapshotBadge} ${o.count === 0 ? styles.snapshotZero : ""}`}>{o.count}</span>
-                    </div>
-                  ))}
-                  <div className={styles.snapshotSummary}>
-                    <span>Total transfers today: <b>{changes.length}</b></span>
-                    <span>Unassigned: <b>{unassigned}</b></span>
-                    <span>Overdue: <b className={overdue > 0 ? styles.overdueText : ""}>{overdue}</b></span>
-                    <small>Email snapshot sent daily at 11:00 IST to all owners</small>
-                  </div>
-                </div>
-              ) : (
-                <p className={styles.sideIntro} style={{ padding: "14px 22px" }}>
-                  No assignments recorded yet. Once leads are assigned, the snapshot will appear here.
-                </p>
-              )}
             </section>
           </div>
 

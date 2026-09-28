@@ -21,3 +21,8 @@
 .snapshotSummary { grid-column: 1 / -1; display: flex; gap: 20px; align-items: center; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid #edf1f3; margin-top: 4px; font-size: 12px; color: #536879; }
 .snapshotSummary b { color: #193049; }
 .overdueText { color: #c25b4c !important; }
+.pagination { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 14px 22px; border-top: 1px solid #edf1f3; font-size: 12px; color: #536879; }
+.pagination button { padding: 6px 14px; border: 1px solid #d3dde3; border-radius: 7px; background: white; color: #244257; font-size: 12px; font-weight: 700; cursor: pointer; }
+.pagination button:disabled { opacity: .4; cursor: not-allowed; }
+.pagination button:not(:disabled):hover { background: #f0f6f8; }
+.pagination span { font-weight: 600; color: #536879; }
