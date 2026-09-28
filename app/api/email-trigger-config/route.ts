@@ -161,6 +161,69 @@ export async function GET(req: NextRequest) {
         console.warn('[email-trigger-config] Auto-seed booking-pi-review-alert skipped:', err)
       }
     }
+    // Auto-seed: Morning Lead Allocation Alert (daily 11:00 IST) if not yet present
+    if (!state.triggers.some(t => t.reportId === 'morning-lead-allocation') && !auditSeedSuppressed(state)) {
+      try {
+        state = await transaction(s => {
+          if (!s.triggers.some(t => t.reportId === 'morning-lead-allocation')) {
+            const now3 = Date.now()
+            s.triggers.push({
+              id: randomUUID(),
+              revision: 1,
+              name: emailReportTemplates['morning-lead-allocation'].name,
+              reportId: 'morning-lead-allocation',
+              source: emailReportTemplates['morning-lead-allocation'].name,
+              template: emailReportTemplates['morning-lead-allocation'].name,
+              department: 'Sales',
+              company: 'All companies',
+              to: '',
+              cc: '',
+              bcc: '',
+              subject: '[Morning Allocation] Lead Assignment Snapshot — {{report_date}}',
+              body: '',
+              bodyType: 'Full report in email body',
+              intro: '',
+              closing: '',
+              period: 'Today',
+              reportDetail: 'Full report',
+              status: 'Draft',
+              frequency: 'Daily',
+              time: '11:00',
+              custom: '11:00',
+              interval: '6',
+              weekday: 'Monday',
+              monthday: '1',
+              timezone: 'Asia/Kolkata',
+              start: new Date(now3).toISOString().slice(0, 10),
+              end: '',
+              attachment: 'None',
+              mode: 'Same email to all recipients',
+              condition: 'Always send',
+              retry: 'No retries',
+              missed: 'Skip missed run',
+              replyTo: '',
+              owner: 'system',
+              updatedAt: new Date(now3).toISOString(),
+              nextRun: nextRun({
+                frequency: 'Daily',
+                time: '11:00',
+                custom: '11:00',
+                interval: '6',
+                weekday: 'Monday',
+                monthday: '1',
+                timezone: 'Asia/Kolkata',
+                start: new Date(now3).toISOString().slice(0, 10),
+                end: '',
+              } as any, now3),
+              lastResult: '—',
+            })
+          }
+          return s
+        })
+      } catch (err) {
+        console.warn('[email-trigger-config] Auto-seed morning-lead-allocation skipped:', err)
+      }
+    }
     if (!process.env.VERCEL) {
       try {
         const { ensureEmailSchedulerRunning } = await import('@/lib/email-triggers/scheduler-service')

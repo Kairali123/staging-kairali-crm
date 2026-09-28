@@ -762,19 +762,7 @@ export default function Home() {
             </td></tr>}
           </Fragment>; })}
                         
-    </tbody></table></div>
-                <div style={{textAlign:"center"}}><div style={{color:"#92400e",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Gap 1<br/>(Lost)</div><div style={{fontWeight:900,color:"#92400e",fontSize:16}}>{fmt(summary.direct - summary.medium)}</div></div>
-                <div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Master<br/>Medium</div><div style={{fontWeight:900,color:"#334e68",fontSize:16}}>{fmt(summary.medium)}</div></div>
-                <div style={{textAlign:"center"}}><div style={{color:"#92400e",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Gap 2<br/>(Lost)</div><div style={{fontWeight:900,color:"#92400e",fontSize:16}}>{fmt(summary.mediumLost)}</div></div>
-                <div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Actual<br/>Buffer</div><div style={{fontWeight:900,color:"#334e68",fontSize:16}}>{fmt(summary.buffer)}</div></div>
-                <div style={{textAlign:"center"}}><div style={{color:"#991b1b",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Gap 3<br/>(Lost)</div><div style={{fontWeight:900,color:"#991b1b",fontSize:16}}>{fmt(summary.masterLost)}</div></div>
-                <div style={{textAlign:"center"}}><div style={{color:"#166534",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Actual CRM<br/>Reconciled</div><div style={{fontWeight:900,color:"#166534",fontSize:16}}>{fmt(summary.crm)}</div></div>
-                <div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Transfer to<br/>Sales</div><div style={{fontWeight:900,color:"#334e68",fontSize:16}}>{fmt(summary.assigned)}</div></div>
-                <div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Transfer to<br/>KServe</div><div style={{fontWeight:900,color:"#334e68",fontSize:16}}>0</div></div>
-                <div style={{textAlign:"center"}}><div style={{color:"#64748b",fontSize:9,textTransform:"uppercase",fontWeight:800,marginBottom:4}}>Total<br/>Loss %</div><div style={{fontWeight:900,color:openLoss>0?"#991b1b":"#166534",fontSize:16}}>{summary.direct?Math.round(openLoss/summary.direct*100):0}%</div></div>
-              </div>
-            </div>
-          </div> : <div className="gap-section-empty">No {section.title.toLowerCase()} records on this page.</div>)}</div>}
+    </tbody></table></div> : <div className="gap-section-empty">No {section.title.toLowerCase()} records on this page.</div>)}</div>}
         </section>; }) : <div className="gap-console-empty"><strong>No matching leads</strong><span>Search clear karke dobara dekhein.</span></div>}</div>
         <footer className="gap-console-foot"><span>{detailsLoading ? "Loading exact records…" : `${filteredDrawer.length} rows · Page ${page} of ${pageCount}`}</span><button disabled={detailsLoading} onClick={() => setOpenAuditSections(openAuditSections.size === 3 ? new Set() : new Set(["unexplained", "transient", "deleted"]))}>{openAuditSections.size === 3 ? "Hide all sections" : "Show all sections"}</button><div>{filteredDrawer.length > pageSize && <><button disabled={page === 1} onClick={() => setPage(p => p - 1)}>Previous</button><button disabled={page === pageCount} onClick={() => setPage(p => p + 1)}>Next</button></>}<button onClick={() => setSelected(null)}>Close</button></div></footer>
       </section>
