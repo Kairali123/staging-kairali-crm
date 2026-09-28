@@ -6,6 +6,7 @@
 //
 // report-id: daily-sales-report | ktahv-crr-process-report-alert | booking-pi-review-alert | ...
 // No address = dry run: writes the HTML and attachments to ./tmp-email-preview/ without sending.
+// Marketing with source-wise tables: prefix REPORT_DETAIL="Include source-wise details"
 import { mkdir, writeFile } from 'node:fs/promises'
 import nodemailer from 'nodemailer'
 import { buildEmail } from '@/lib/email-triggers/dispatch'
@@ -21,7 +22,8 @@ async function main() {
   const t = {
     id: 'local-test', name: 'Local test', reportId, company: 'All companies', to: to || '', cc: '', bcc: '',
     subject: `[TEST] ${reportId} | {{report_date}} | {{company_name}}`, body: '', bodyType: 'Full report in email body',
-    intro: '', closing: '', period: date ? 'Selected date' : 'Yesterday', previewDate: date, reportDetail: 'Full report',
+    intro: '', closing: '', period: date ? 'Selected date' : 'Yesterday', previewDate: date,
+    reportDetail: process.env.REPORT_DETAIL || 'Full report',
   } as unknown as Trigger
 
   const email = await buildEmail(t, Date.now())
