@@ -7,7 +7,7 @@ import { reportExportHTML } from '@/lib/marketing-daily-report'
 import { loadScheduledSales } from './load-sales'
 import { loadScheduledMarketing } from './load-marketing'
 import { loadScheduledCrr } from './load-crr-report'
-import { exportCrrReportHTML } from '@/lib/ktahv-crr-report'
+import { exportCrrReportHTML, buildCrrJourneyDonutSvg } from '@/lib/ktahv-crr-report'
 import { loadScheduledBookingPiReview } from './load-booking-pi-review'
 import { exportBookingPiReviewHTML } from '@/lib/booking-pi-review-report'
 import { localDay, nextRun } from './schedule'
@@ -23,11 +23,20 @@ export class IncompleteReportError extends Error {
   }
 }
 
+// Vercel's runtime has no fonts, so sharp draws SVG <text> as empty boxes: rasterize the ring only
+// and carry the centre label as HTML under the image.
+const SVG_TEXT=/<text[^>]*>([^<]*)<\/text>/g
+function donutImgHtml(svg: string, cid: string, size: number, alt: string): string {
+  const caption=[...svg.matchAll(SVG_TEXT)].map(m=>m[1]).join(' ')
+  return `<img src="cid:${cid}" width="${size}" height="${size}" alt="${alt}" style="display:block;margin:0 auto;border:0;width:${size}px;height:${size}px" />`+
+    (caption?`<div style="margin-top:8px;text-align:center;font:700 14px/1.4 Arial,sans-serif;color:#1e305b">${caption}</div>`:'')
+}
+
 async function getDonutChartPng(donutSvg: string, contributors: { agent: string; sales: number }[]): Promise<Buffer | null> {
   // 1. Try sharp
   try {
     const sharp = (await import('sharp')).default
-    const png = await sharp(Buffer.from(donutSvg)).resize(380, 380).png().toBuffer()
+    const png = await sharp(Buffer.from(donutSvg.replace(SVG_TEXT, ''))).resize(380, 380).png().toBuffer()
     if (png && png.length > 0) return png
   } catch (sharpErr) {
     console.warn('[email-trigger] sharp rasterize failed, attempting QuickChart:', (sharpErr as any)?.message || sharpErr)
@@ -48,14 +57,7 @@ async function getDonutChartPng(donutSvg: string, contributors: { agent: string;
           cutoutPercentage: 65,
           plugins: {
             legend: false,
-            datalabels: false,
-            doughnutlabel: {
-              labels: [
-                { text: 'Sales', font: { size: 18 } },
-                { text: String(contributors.length), font: { size: 28, weight: 'bold' } },
-                { text: contributors.length === 1 ? 'contributor' : 'contributors', font: { size: 14 } }
-              ]
-            }
+            datalabels: false
           }
         }
       }
@@ -100,7 +102,7 @@ export async function buildEmail(t:Trigger,at:number){
   else if(t.reportId==='ktahv-crr-process-report-alert'){
    reportTitle='KTAHV CRR Process Report'
    reportSlug='KTAHV-CRR-Process-Report'
-   const report=await loadScheduledCrr(date);hasData=report.chartData.totalActive>0||report.dailyDoneReport.totals.some(c=>c>0);html=exportCrrReportHTML(report,t.company)
+   const report=await loadScheduledCrr(date);hasData=report.chartData.totalActive>0||report.dailyDoneReport.totals.some(c=>c>0);html=exportCrrReportHTML(report,t.company);donutSvg=buildCrrJourneyDonutSvg(report.chartData.totalActive,report.chartData.totalComplete)||null
   }
   else if(t.reportId==='marketing-daily-report'){
    reportTitle='Marketing Daily Report'
@@ -158,6 +160,14 @@ export async function buildEmail(t:Trigger,at:number){
   const p=(s:string)=>(s||'').trim()?'<div style="padding:18px 24px;white-space:pre-wrap;font:14px/1.8 Arial">'+esc(replace(s))+'</div>':''
   // Reports with in-layout markers keep the note inside their centered column; others get it around <body>.
   html=html.includes('<!--email-intro-->')?html.replace('<!--email-intro-->',()=>p(t.intro)).replace('<!--email-closing-->',()=>p(t.closing)):html.replace(/(<body[^>]*>)/,'$1'+p(t.intro)).replace('</body>',p(t.closing)+'</body>')
+  // Gmail strips inline <svg>, leaving only the donut's "420GUESTS" text; send it as a CID PNG instead.
+  if(t.reportId==='ktahv-crr-process-report-alert'&&donutSvg){
+   const png=await getDonutChartPng(donutSvg,[])
+   if(png&&png.length>0){
+    html=html.replace(donutSvg,()=>donutImgHtml(donutSvg!,'crr-donut-chart',160,'Total journeys donut chart'))
+    attachments=[...(attachments||[]),{filename:'crr-donut-chart.png',content:png,cid:'crr-donut-chart'}]
+   }
+  }
   if(t.reportId!=='sales-call-audit' && t.reportId!=='kserve-lead-lost-alert' && t.reportId!=='ktahv-crr-process-report-alert' && t.reportId!=='booking-pi-review-alert'){
    try{
     const {renderJPEG}=await import('@/lib/whatsapp-triggers/render')
@@ -175,7 +185,7 @@ export async function buildEmail(t:Trigger,at:number){
       const contributors = salesReport ? salesContributors(salesReport.rows) : []
       const png = await getDonutChartPng(donutSvg, contributors)
       if (png && png.length > 0) {
-       html=html.replace(donutSvg,'<img src="cid:sales-donut-chart" width="190" height="190" alt="Sales contribution donut chart" style="display:block;margin:0 auto;border:0;width:190px;height:190px" />')
+       html=html.replace(donutSvg,()=>donutImgHtml(donutSvg!,'sales-donut-chart',190,'Sales contribution donut chart'))
        attachments=[...(attachments||[]),{filename:'sales-donut-chart.png',content:png,cid:'sales-donut-chart'}]
       }
      }catch(pngErr){console.warn('[email-trigger] donut PNG fallback failed:',pngErr)}
