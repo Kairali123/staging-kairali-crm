@@ -29,6 +29,8 @@ export type AllocationLead = {
   sourceRow: number
   occurrenceCount: number
   transferWritable?: boolean
+  /** Raw sheet values for columns A–M (indices 0–12), formatted as strings */
+  rawRow: string[]
 }
 
 /** Per-person assignment line for the snapshot report */
@@ -177,6 +179,22 @@ export function parsePendingMainRows(
       sourceSpreadsheetId: employee.id,
       sourceRow,
       occurrenceCount: 1,
+      // Raw A–M columns for the work list table
+      rawRow: [
+        dateLabel(parseSheetDate(row[0]) || parseSheetDate(row[1])),  // A: Time Stamp
+        dateLabel(parseSheetDate(row[1]) || parseSheetDate(row[0])),  // B: Date & Time
+        value(row[2]),   // C: ID
+        value(row[3]),   // D: Name of Client
+        value(row[4]),   // E: Mobile
+        value(row[5]),   // F: Email Id
+        value(row[6]),   // G: Subjects
+        value(row[7]),   // H: Notes
+        value(row[8]),   // I: IVR Url
+        value(row[9]),   // J: WebSite Name
+        value(row[10]),  // K: Data Source
+        value(row[11]),  // L: Assign To MR
+        value(row[12]),  // M: Remarks - History
+      ],
     })
   })
   return result

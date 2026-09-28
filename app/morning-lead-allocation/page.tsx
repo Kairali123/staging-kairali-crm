@@ -18,6 +18,7 @@ type Lead = {
   overdueMs: number
   note?: string; sourceSpreadsheetId: string; sourceRow: number
   occurrenceCount: number; transferWritable?: boolean
+  rawRow?: string[]
 }
 type Staff = { name: string; available: boolean; workload: number }
 type Snapshot = {
@@ -32,15 +33,17 @@ type Filter = "All leads" | "Unassigned" | "Overdue" | "Exceptions"
 // Sentinel value for "No change / keep same owner" option
 const NO_CHANGE_SENTINEL = "__no_change__"
 
+const WORK_LIST_COLS = ["Time Stamp", "Date & Time", "ID", "Name of Client", "Mobile", "Email Id", "Subjects", "Notes", "IVR Url", "WebSite Name", "Data Source", "Assign To MR", "Remarks - History"]
+
 // ─── Sample data ──────────────────────────────────────────────────────────────
 
 const sampleStaff: Staff[] = ["Pushpanshu Kumar", "Pawan Kamra", "Harpal Singh", "Zaki Ahmed"].map((name) => ({
   name, available: true, workload: 0,
 }))
 const sampleLeads: Lead[] = [
-  { id: "DEMO-101", key: "demo-101", name: "Sample lead A", business: "KTAHV", source: "AppSheet", age: "2 days", lastAction: "Status: Warm", nextAction: "Complete planned call", due: "25 Sep 2026, 09:30 am", owner: "Harpal Singh", status: "Overdue", overdueMs: 5400000, sourceSpreadsheetId: "", sourceRow: 7, occurrenceCount: 1 },
-  { id: "DEMO-102", key: "demo-102", name: "Sample lead B", business: "Villa Raag", source: "AppSheet", age: "1 day", lastAction: "No completed action recorded", nextAction: "Complete planned call", due: "25 Sep 2026, 10:00 am", owner: "", status: "Needs review", overdueMs: 0, note: "Unassigned", sourceSpreadsheetId: "", sourceRow: 8, occurrenceCount: 1 },
-  { id: "DEMO-103", key: "demo-103", name: "Sample lead C", business: "KAPPL", source: "AppSheet", age: "3 days", lastAction: "Status: Follow-up", nextAction: "Complete planned call", due: "25 Sep 2026, 11:00 am", owner: "Zaki Ahmed", status: "Due today", overdueMs: 0, note: "Repeated ID; counted once", sourceSpreadsheetId: "", sourceRow: 9, occurrenceCount: 2 },
+  { id: "DEMO-101", key: "demo-101", name: "Sample lead A", business: "KTAHV", source: "AppSheet", age: "2 days", lastAction: "Status: Warm", nextAction: "Complete planned call", due: "25 Sep 2026, 09:30 am", owner: "Harpal Singh", status: "Overdue", overdueMs: 5400000, sourceSpreadsheetId: "", sourceRow: 7, occurrenceCount: 1, rawRow: ["25 Sep 2026", "25 Sep 2026, 09:30 am", "DEMO-101", "Sample lead A", "9876543210", "sample@email.com", "Ayurveda", "Interested", "", "KTAHV", "AppSheet", "Harpal Singh", "—"] },
+  { id: "DEMO-102", key: "demo-102", name: "Sample lead B", business: "Villa Raag", source: "AppSheet", age: "1 day", lastAction: "No completed action recorded", nextAction: "Complete planned call", due: "25 Sep 2026, 10:00 am", owner: "", status: "Needs review", overdueMs: 0, note: "Unassigned", sourceSpreadsheetId: "", sourceRow: 8, occurrenceCount: 1, rawRow: ["25 Sep 2026", "25 Sep 2026, 10:00 am", "DEMO-102", "Sample lead B", "9123456780", "b@email.com", "Rooms", "—", "", "Villa Raag", "AppSheet", "", "—"] },
+  { id: "DEMO-103", key: "demo-103", name: "Sample lead C", business: "KAPPL", source: "AppSheet", age: "3 days", lastAction: "Status: Follow-up", nextAction: "Complete planned call", due: "25 Sep 2026, 11:00 am", owner: "Zaki Ahmed", status: "Due today", overdueMs: 0, note: "Repeated ID; counted once", sourceSpreadsheetId: "", sourceRow: 9, occurrenceCount: 2, rawRow: ["25 Sep 2026", "25 Sep 2026, 11:00 am", "DEMO-103", "Sample lead C", "9000000001", "c@email.com", "Products", "—", "", "KAPPL", "AppSheet", "Zaki Ahmed", "Called once"] },
 ]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -554,63 +557,46 @@ export default function MorningLeadAllocationPage() {
                 </select>
               </div>
               <div className={styles.workListTable}>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>A · Due time</th>
-                      <th>B · Lead ID</th>
-                      <th>C · Lead name</th>
-                      <th>D · Business</th>
-                      <th>E · Status</th>
-                      <th>F · Source</th>
-                      <th>G · Age</th>
-                      <th>H · Last action</th>
-                      <th>I · Next action</th>
-                      <th>J · Owner</th>
-                      <th>K · Note</th>
-                      <th>L · Source row</th>
-                      <th>M · Sheet link</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {leads
-                      .filter((l) => l.owner === selectedStaff)
-                      .map((lead) => (
-                        <tr key={lead.key}>
-                          <td>{lead.due}</td>
-                          <td><code>{lead.id}</code></td>
-                          <td><strong>{lead.name}</strong></td>
-                          <td>{lead.business}</td>
-                          <td>
-                            <span className={`${styles.status} ${lead.status === "Overdue" ? styles.late : lead.status === "Needs review" ? styles.review : styles.today}`}>
-                              {lead.status}
-                            </span>
-                          </td>
-                          <td>{lead.source}</td>
-                          <td>{lead.age}</td>
-                          <td>{lead.lastAction}</td>
-                          <td>{lead.nextAction}</td>
-                          <td>{lead.owner}</td>
-                          <td>{lead.note || "—"}</td>
-                          <td>{lead.sourceRow}</td>
-                          <td>
-                            {lead.sourceSpreadsheetId ? (
-                              <a
-                                href={`https://docs.google.com/spreadsheets/d/${lead.sourceSpreadsheetId}/edit#gid=93793889&range=A${lead.sourceRow}`}
-                                target="_blank" rel="noreferrer"
-                                className={styles.sourceLink}
-                              >
-                                Open row
-                              </a>
-                            ) : "—"}
-                          </td>
+                {(() => {
+                  const personLeads = leads.filter(lead => lead.owner === selectedStaff);
+                  if (!personLeads.length) return <p className={styles.empty}>No leads assigned to {selectedStaff || "this person"}.</p>;
+                  return (
+                    <table>
+                      <thead>
+                        <tr>
+                          {WORK_LIST_COLS.map((col, i) => <th key={i}>{col}</th>)}
                         </tr>
-                      ))}
-                  </tbody>
-                </table>
-                {!leads.some((l) => l.owner === selectedStaff) && (
-                  <p className={styles.empty}>No leads assigned to this person.</p>
-                )}
+                      </thead>
+                      <tbody>
+                        {personLeads.map(lead => (
+                          <tr key={lead.key}>
+                            {WORK_LIST_COLS.map((_, i) => {
+                              const cell = (lead.rawRow || [])[i] || "";
+                              const isMissing = !cell || cell === "Missing / invalid";
+                              return (
+                                <td key={i} title={cell}>
+                                  <span className={isMissing ? styles.overdueText : undefined}>
+                                    {isMissing ? "—" : i === 2 && lead.sourceSpreadsheetId ? (
+                                      <a
+                                        href={`https://docs.google.com/spreadsheets/d/${lead.sourceSpreadsheetId}/edit#gid=93793889&range=C${lead.sourceRow}`}
+                                        target="_blank" rel="noreferrer"
+                                        style={{ color: "#168770", fontWeight: 700 }}
+                                      >
+                                        {cell}
+                                      </a>
+                                    ) : (
+                                      cell
+                                    )}
+                                  </span>
+                                </td>
+                              )
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )
+                })()}
               </div>
             </section>
 
