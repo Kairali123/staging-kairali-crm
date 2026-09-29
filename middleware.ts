@@ -290,6 +290,8 @@ const exemptApiPaths = new Set([
   '/api/cron/whatsapp-triggers', // Handler verifies an independent local worker secret.
   '/api/cron/email-triggers', // Handler verifies local worker secret; hosted execution is disabled.
   '/api/cron/kserve-lost-alert',
+  // Handler enforces Bearer $CRON_SECRET or a signed-in session (manual "Run Cron" button).
+  '/api/cron/ht-automation-engine',
   '/api/kserve-alert-preview',
   '/api/voicecall/kserve-lead-lost/export',
 ])
