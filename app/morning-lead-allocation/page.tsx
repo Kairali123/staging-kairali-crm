@@ -5,7 +5,7 @@ import Link from "next/link"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import {
   ArrowLeft, ArrowRight, Check, CircleAlert, Clock3,
-  RefreshCw, Users, BarChart2,
+  RefreshCw, Users, BarChart2, Mail,
 } from "lucide-react"
 import styles from "./page.module.css"
 
@@ -348,6 +348,13 @@ export default function MorningLeadAllocationPage() {
             </p>
           </div>
           <div className={styles.heroActions}>
+            <Link
+              href="/settings/automation/email-triggers?report=morning-lead-allocation"
+              className={styles.secondary}
+              title="Configure automated Morning Lead Allocation email alert"
+            >
+              <Mail size={16} /> Email Trigger
+            </Link>
             <button type="button" className={styles.secondary} onClick={() => void reload()} disabled={loading || saving}>
               <RefreshCw size={16} /> Refresh live
             </button>

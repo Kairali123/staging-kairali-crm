@@ -106,24 +106,8 @@ export function buildKserveLostAlertEmail(
       `
     })
     .join('')
-  // Ensure downloadUrl never points to localhost in outbound emails
-  let baseAppUrl = (appUrl || '').trim().replace(/\/+$/, '')
-  const liveFallback =
-    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    process.env.APP_URL?.trim() ||
-    (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : null) ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
-    'https://kairali-group-crm.vercel.app'
 
-  if (!baseAppUrl || baseAppUrl.includes('localhost') || baseAppUrl.includes('127.0.0.1')) {
-    if (liveFallback && !liveFallback.includes('localhost')) {
-      baseAppUrl = liveFallback.replace(/\/+$/, '')
-    } else if (!baseAppUrl) {
-      baseAppUrl = 'https://kairali-group-crm.vercel.app'
-    }
-  }
-
-  const downloadUrl = `${baseAppUrl}/api/voicecall/kserve-lead-lost/export`
+  const downloadUrl = `${appUrl}/api/voicecall/kserve-lead-lost/export`
 
   return `
 <!DOCTYPE html>

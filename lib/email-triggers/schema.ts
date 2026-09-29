@@ -5,7 +5,7 @@ const time=z.string().transform(s=>s.length===4&&s[1]===':'?'0'+s:s).refine(s=>/
 const addresses=z.string().max(3000).refine(s=>!/[\r\n]/.test(s)&&s.split(',').filter(x=>x.trim()).every(x=>z.string().email().safeParse(x.trim()).success),'Use comma-separated email addresses')
 export const triggerSchema=z.object({
  id:z.string().uuid().optional(),revision:z.number().int().nonnegative().optional(),name:z.string().trim().min(1).max(120),
- reportId:z.enum(['daily-sales-report','marketing-daily-report','sales-call-audit','ktahv-crr-process-report-alert','kserve-lead-lost-alert','booking-pi-review-alert']),source:z.preprocess(v=>typeof v==='string'?canonicalTemplateName(v):v,z.enum([emailReportTemplates['daily-sales-report'].name,emailReportTemplates['marketing-daily-report'].name,emailReportTemplates['sales-call-audit'].name,emailReportTemplates['ktahv-crr-process-report-alert'].name,emailReportTemplates['kserve-lead-lost-alert'].name,emailReportTemplates['booking-pi-review-alert'].name])),template:z.string().max(120).transform(canonicalTemplateName),department:z.string().max(60),
+ reportId:z.enum(['daily-sales-report','marketing-daily-report','sales-call-audit','ktahv-crr-process-report-alert','kserve-lead-lost-alert','booking-pi-review-alert','morning-lead-allocation']),source:z.preprocess(v=>typeof v==='string'?canonicalTemplateName(v):v,z.enum([emailReportTemplates['daily-sales-report'].name,emailReportTemplates['marketing-daily-report'].name,emailReportTemplates['sales-call-audit'].name,emailReportTemplates['ktahv-crr-process-report-alert'].name,emailReportTemplates['kserve-lead-lost-alert'].name,emailReportTemplates['booking-pi-review-alert'].name,emailReportTemplates['morning-lead-allocation'].name])),template:z.string().max(120).transform(canonicalTemplateName),department:z.string().max(60),
  company:z.enum(['All companies','KTAHV','VILARAAG','KAPPL']),to:addresses,cc:addresses,bcc:addresses,
  subject:z.string().trim().min(1).max(250).refine(s=>!/[\r\n]/.test(s)),body:z.string().max(20000).default(''),bodyType:z.enum(['Full report in email body','Static','Dynamic','Mixed']),
  intro:z.string().max(3000).default(''),closing:z.string().max(3000).default(''),period:z.enum(['Today','Yesterday','Selected date']),previewDate:z.union([day,z.literal('')]).optional().transform(v=>v||undefined),
@@ -13,7 +13,8 @@ export const triggerSchema=z.object({
  frequency:z.enum(['Daily','Every 6 hours','Custom','Weekly','Monthly','One-time']),time,custom:z.string().max(180),interval:z.union([z.string().regex(/^\d+$/),z.number().int()]).transform(v=>String(v)).refine(s=>+s>=1&&+s<=168),
  weekday:z.enum(['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']),monthday:z.enum(['1','5','10','15','20','25','Last day']),timezone:z.enum(['Asia/Kolkata','Asia/Dubai','UTC']),start:day,end:z.union([day,z.literal('')]),
  attachment:z.literal('None'),mode:z.literal('Same email to all recipients'),condition:z.enum(['Always send','Only when data is available']),retry:z.literal('No retries'),missed:z.literal('Skip missed run'),replyTo:z.union([z.string().email(),z.literal('')]),
-}).superRefine((c,ctx)=>{
+}).superRefine((raw,ctx)=>{
+ const c=raw as {bodyType:string;body:string;end:string;start:string;frequency:string;custom:string;period:string;previewDate?:string;reportId:string;source:string;to:string;cc:string;bcc:string;status:string;time:string;interval:string;weekday:string;monthday:string;timezone:string}
  const issue=(message:string)=>ctx.addIssue({code:z.ZodIssueCode.custom,message})
  if(c.bodyType!=='Full report in email body'&&!c.body.trim())issue('Email body is required')
  if(c.end&&c.end<c.start)issue('End date must be after start date')
@@ -22,11 +23,28 @@ export const triggerSchema=z.object({
  if(c.reportId==='marketing-daily-report'&&c.period==='Today')issue('Marketing reports require a completed reporting day')
  const expectedSources:Record<string,string[]>=Object.fromEntries(Object.entries(emailReportTemplates).map(([id,t])=>[id,[t.name]]))
  if(!(expectedSources[c.reportId]||[]).includes(c.source))issue('Report template mismatch')
- const recipients=[c.to,c.cc,c.bcc].flatMap(x=>x.split(',').map(x=>x.trim()).filter(Boolean))
+ const recipients=[c.to,c.cc,c.bcc].flatMap((x:string)=>x.split(',').map((x:string)=>x.trim()).filter(Boolean))
  if(recipients.length>50)issue('Maximum 50 recipients')
  if(c.status==='Active'&&!c.to.trim())issue('To recipients are required to activate')
- if(c.status==='Active'&&!nextRun(c,Date.now()))issue('Schedule has no future run')
+ if(c.status==='Active'&&!nextRun(c as import('./schedule').Schedule,Date.now()))issue('Schedule has no future run')
 })
-export type TriggerInput=z.infer<typeof triggerSchema>
+export type TriggerInput={
+ id?:string;revision?:number;name:string;
+ reportId:'daily-sales-report'|'marketing-daily-report'|'sales-call-audit'|'ktahv-crr-process-report-alert'|'kserve-lead-lost-alert'|'booking-pi-review-alert'|'morning-lead-allocation';
+ source:string;template:string;department:string;
+ company:'All companies'|'KTAHV'|'VILARAAG'|'KAPPL';
+ to:string;cc:string;bcc:string;subject:string;body:string;
+ bodyType:'Full report in email body'|'Static'|'Dynamic'|'Mixed';
+ intro:string;closing:string;period:'Today'|'Yesterday'|'Selected date';previewDate?:string;
+ reportDetail:'Full report'|'Summary only'|'Include source-wise details';
+ status:'Draft'|'Active'|'Paused';
+ frequency:'Daily'|'Every 6 hours'|'Custom'|'Weekly'|'Monthly'|'One-time';
+ time:string;custom:string;interval:string;
+ weekday:'Monday'|'Tuesday'|'Wednesday'|'Thursday'|'Friday'|'Saturday'|'Sunday';
+ monthday:'1'|'5'|'10'|'15'|'20'|'25'|'Last day';
+ timezone:'Asia/Kolkata'|'Asia/Dubai'|'UTC';start:string;end:string;
+ attachment:'None';mode:'Same email to all recipients';
+ condition:'Always send'|'Only when data is available';retry:'No retries';missed:'Skip missed run';replyTo:string
+}
 export type Trigger=TriggerInput&{id:string;revision:number;owner:string;updatedAt:string;nextRun:string|null;lastResult:string}
 export type Run={id:string;triggerId:string;name:string;scheduledAt:string;startedAt:string;finishedAt?:string;status:'Preparing'|'Sending'|'Accepted'|'Failed'|'Unknown'|'Skipped'|'Partial';detail:string;recipientCount:number}

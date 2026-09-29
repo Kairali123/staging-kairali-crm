@@ -85,3 +85,79 @@ test('deleting a trigger removes only it, keeps run history and enforces safety 
   s=mk();removeTrigger(s,'b');assert.equal(auditSeedSuppressed(s),false);
   removeTrigger(s,'c');assert.equal(auditSeedSuppressed(s),true);assert.equal(JSON.stringify(s.seedSuppressed),'["sales-call-audit"]');
 });
+
+test('morning-lead-allocation trigger validates against schema and normalises correctly',()=>{
+  const schema=env.load('lib/email-triggers/schema.ts').triggerSchema,tpl=env.load('lib/email-report-template.ts');
+  const NAME=tpl.emailReportTemplates['morning-lead-allocation'].name;
+  assert.equal(NAME,'Morning Lead Allocation Alert');
+
+  const validMorningTrigger={
+    ...base,
+    name:'Morning Lead Allocation Alert',
+    reportId:'morning-lead-allocation',
+    source:'Morning Lead Allocation Alert',
+    template:'Morning Lead Allocation Alert',
+    department:'Sales',
+    company:'All companies',
+    to:'sales.lead@kairali.com',
+    cc:'',
+    bcc:'',
+    subject:'[Morning Allocation] Lead Assignment Snapshot — {{report_date}}',
+    body:'',
+    bodyType:'Full report in email body',
+    intro:'Hello Team,\nPlease find today\'s lead allocations below.',
+    closing:'Regards,\nSales Operations',
+    period:'Today',
+    reportDetail:'Full report',
+    status:'Active',
+    attachment:'None',
+    mode:'Same email to all recipients',
+    condition:'Always send',
+    retry:'No retries',
+    missed:'Skip missed run',
+    replyTo:''
+  };
+  const res=schema.safeParse(validMorningTrigger);
+  assert.equal(res.success,true);
+
+  // Mismatched source should fail validation
+  const invalid=schema.safeParse({...validMorningTrigger,source:'Marketing Daily Report'});
+  assert.equal(invalid.success,false);
+});
+
+test('morning-lead-allocation deletion suppresses auto-recreation',()=>{
+  const {removeTrigger,isSeedSuppressed}=env.load('lib/email-triggers/delete.ts');
+  const trig=(id,reportId='morning-lead-allocation',revision=1)=>({id,revision,reportId,name:id});
+  const s={version:1,triggers:[trig('m1')],runs:[]};
+  assert.equal(isSeedSuppressed(s,'morning-lead-allocation'),false);
+  removeTrigger(s,'m1');
+  assert.equal(s.triggers.length,0);
+  assert.equal(isSeedSuppressed(s,'morning-lead-allocation'),true);
+});
+
+test('renderAllocationSnapshotEmail formats email with intro/closing hooks and dynamic link',()=>{
+  const {renderAllocationSnapshotEmail}=env.load('lib/morning-allocation-email.ts');
+  const summary={
+    date:'2026-09-29',
+    totalLeads:48,
+    assignedLeads:42,
+    unassignedLeads:2,
+    overdueLeads:4,
+    byOwner:[
+      {owner:'Priya',assigned:14,received:3},
+      {owner:'Anjali Menon',assigned:12,received:2},
+    ],
+    changes:[
+      {time:'09:42 AM',leadId:'APP-10824',leadName:'Rajesh Malhotra',fromOwner:'Unassigned',toOwner:'Priya',actor:'Admin'}
+    ]
+  };
+  const {subject,html}=renderAllocationSnapshotEmail(summary,'http://localhost:3000');
+  assert.match(subject,/\[Kairali CRM\] Morning Allocation Snapshot/);
+  assert.equal(html.includes('<!--email-intro-->'),true);
+  assert.equal(html.includes('<!--email-closing-->'),true);
+  assert.equal(html.includes('http://localhost:3000/morning-lead-allocation'),true);
+  assert.equal(html.includes('Priya'),true);
+  assert.equal(html.includes('APP-10824'),true);
+});
+
+
