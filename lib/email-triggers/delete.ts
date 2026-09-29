@@ -7,6 +7,7 @@ export class TriggerDeleteError extends Error {
 }
 
 const AUDIT_REPORT_ID = 'sales-call-audit'
+const AUTO_SEEDED_REPORT_IDS = ['sales-call-audit', 'morning-lead-allocation', 'booking-pi-review-alert']
 
 /** Removes one trigger from state. Run history is kept so past sends stay auditable. */
 export function removeTrigger(s: State, id: string, revision?: number) {
@@ -17,13 +18,17 @@ export function removeTrigger(s: State, id: string, revision?: number) {
     throw new TriggerDeleteError('A send is in progress for this trigger. Try again in a minute.', 409)
   }
   s.triggers = s.triggers.filter(t => t.id !== id)
-  // The default audit trigger is re-created whenever none exists; remember the delete so it stays gone.
-  if (trigger.reportId === AUDIT_REPORT_ID && !s.triggers.some(t => t.reportId === AUDIT_REPORT_ID)) {
-    s.seedSuppressed = [...new Set([...(s.seedSuppressed || []), AUDIT_REPORT_ID])]
+  // Auto-seeded triggers are re-created whenever none exists; remember the delete so it stays gone.
+  if (AUTO_SEEDED_REPORT_IDS.includes(trigger.reportId) && !s.triggers.some(t => t.reportId === trigger.reportId)) {
+    s.seedSuppressed = [...new Set([...(s.seedSuppressed || []), trigger.reportId])]
   }
   return trigger
 }
 
+export function isSeedSuppressed(s: State, reportId: string) {
+  return Boolean(s.seedSuppressed?.includes(reportId))
+}
+
 export function auditSeedSuppressed(s: State) {
-  return Boolean(s.seedSuppressed?.includes(AUDIT_REPORT_ID))
+  return isSeedSuppressed(s, AUDIT_REPORT_ID)
 }

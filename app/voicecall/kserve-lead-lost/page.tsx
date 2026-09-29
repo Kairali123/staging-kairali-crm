@@ -31,6 +31,10 @@ interface ReconciledLead {
     status: "FOUND" | "LOST";
     qualification: "Qualified" | "Non-Qualified" | "Pending";
     reason: string;
+    // Only meaningful when status === "LOST": which side of the 72-hour
+    // threshold this unresolved lead falls on. A subset flag, not a
+    // separate bucket — see Totals.criticalLost.
+    retryStage?: "RETRY_PENDING" | "CRITICAL_LOST" | null;
     callCount: number;
     daysPending: number;
     receivedStatuses?: string;
@@ -46,6 +50,8 @@ interface DailySummaryRow {
     nq: number;
     noLog: number;
     notFinal: number;
+    retryPending: number;
+    criticalLost: number;
 }
 
 interface Totals {
@@ -56,6 +62,8 @@ interface Totals {
     nq: number;
     noLog: number;
     notFinal: number;
+    retryPending: number;
+    criticalLost: number;
 }
 
 interface CallLogItem {
@@ -98,20 +106,30 @@ function getAvailableMonths() {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function Th({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+function fmtPct(num: number, den: number): string {
+    if (!den || den === 0 || !num || num === 0) return "0%";
+    const pct = (num / den) * 100;
+    return pct % 1 === 0 ? `${pct}%` : `${pct.toFixed(1)}%`;
+}
+
+function Th({ children, style, colSpan, rowSpan }: { children: React.ReactNode; style?: React.CSSProperties; colSpan?: number; rowSpan?: number }) {
     return (
-        <th style={{
-            padding: "10px 12px",
-            fontSize: 10.5,
-            fontWeight: 700,
-            color: "rgba(255,255,255,.9)",
-            textTransform: "uppercase",
-            letterSpacing: ".6px",
-            whiteSpace: "nowrap",
-            textAlign: "left",
-            borderRight: "1px solid rgba(255,255,255,.08)",
-            ...style
-        }}>
+        <th
+            colSpan={colSpan}
+            rowSpan={rowSpan}
+            style={{
+                padding: "10px 12px",
+                fontSize: 10.5,
+                fontWeight: 700,
+                color: "rgba(255,255,255,.9)",
+                textTransform: "uppercase",
+                letterSpacing: ".6px",
+                whiteSpace: "nowrap",
+                textAlign: "left",
+                borderRight: "1px solid rgba(255,255,255,.08)",
+                ...style
+            }}
+        >
             {children}
         </th>
     );
@@ -133,13 +151,14 @@ function Td({ children, style }: { children: React.ReactNode; style?: React.CSSP
     );
 }
 
-function KPICard({ label, value, icon, bg, color, sub, highlight }: {
-    label: string; value: number | string; icon: string; bg: string; color: string; sub?: string; highlight?: boolean;
+function KPICard({ label, value, icon, bg, color, sub, highlight, solidBg }: {
+    label: string; value: number | string; icon: string; bg: string; color: string; sub?: string; highlight?: boolean; solidBg?: string;
 }) {
+    const cardBg = highlight ? (solidBg || color) : bg;
     return (
         <div style={{
-            background: highlight ? color : bg,
-            border: `1.5px solid ${color}33`,
+            background: cardBg,
+            border: `1.5px solid ${highlight ? "rgba(0,0,0,0.06)" : color + "33"}`,
             borderRadius: 14,
             padding: "16px 20px",
             display: "flex",
@@ -147,10 +166,10 @@ function KPICard({ label, value, icon, bg, color, sub, highlight }: {
             gap: 4,
             flex: 1,
             minWidth: 160,
-            boxShadow: highlight ? `0 4px 18px ${color}33` : "0 2px 8px rgba(0,0,0,0.03)"
+            boxShadow: highlight ? `0 4px 18px ${color}40` : "0 2px 8px rgba(0,0,0,0.03)"
         }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div style={{ fontSize: 10.5, fontWeight: 700, color: highlight ? "rgba(255,255,255,.85)" : color, textTransform: "uppercase", letterSpacing: ".8px" }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, color: highlight ? "rgba(255,255,255,.9)" : color, textTransform: "uppercase", letterSpacing: ".8px" }}>
                     {label}
                 </div>
                 <span style={{ fontSize: 20 }}>{icon}</span>
@@ -159,7 +178,7 @@ function KPICard({ label, value, icon, bg, color, sub, highlight }: {
                 {value}
             </div>
             {sub && (
-                <div style={{ fontSize: 11, color: highlight ? "rgba(255,255,255,.8)" : color, fontWeight: 600, marginTop: 4 }}>
+                <div style={{ fontSize: 11, color: highlight ? "rgba(255,255,255,.9)" : color, fontWeight: 600, marginTop: 4 }}>
                     {sub}
                 </div>
             )}
@@ -284,7 +303,7 @@ function CallLogsModal({
     useEffect(() => {
         let active = true;
         setLoading(true);
-        fetch(`/api/kserve-lost-leads?view=lead_logs&enquiryId=${encodeURIComponent(lead.id)}&taskId=${encodeURIComponent(lead.sentTaskId || "")}`)
+        fetch(`/api/kserve-lost-leads?view=lead_logs&enquiryId=${encodeURIComponent(lead.id)}&taskId=${encodeURIComponent(lead.sentTaskId || "")}&mode=an`)
             .then(r => r.json())
             .then(data => {
                 if (active) {
@@ -342,10 +361,12 @@ function CallLogsModal({
                                 fontSize: 11,
                                 padding: "2px 8px",
                                 borderRadius: 12,
-                                background: lead.status === "FOUND" ? "#059669" : "#dc2626",
+                                background: lead.status === "FOUND" ? "#059669" : lead.retryStage === "CRITICAL_LOST" ? "#dc2626" : "#d97706",
                                 color: "#fff"
                             }}>
-                                {lead.status} ({lead.qualification})
+                                {lead.status === "FOUND"
+                                    ? `RECEIVED (${lead.qualification})`
+                                    : lead.retryStage === "CRITICAL_LOST" ? "CRITICAL LOST" : "RETRY PENDING"}
                             </span>
                         </div>
                         <div style={{ fontSize: 12, color: "#cbd5e1", marginTop: 4 }}>
@@ -397,7 +418,8 @@ function CallLogsModal({
                             <div style={{ fontSize: 36, marginBottom: 8 }}>📭</div>
                             <div style={{ fontSize: 14, fontWeight: 700, color: "#1e293b" }}>No received call logs found</div>
                             <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>
-                                This lead was successfully sent to KServe but no call records have been logged back yet (LOST — NO LOG).
+                                This lead was successfully sent to KServe but no call records have been logged back yet
+                                ({lead.retryStage === "CRITICAL_LOST" ? "CRITICAL LOST — unresolved 72h+" : "RETRY PENDING"}).
                             </div>
                         </div>
                     )}
@@ -575,8 +597,7 @@ export default function KserveLeadLostPage() {
     const [customStart, setCustomStart] = useState("");
     const [customEnd, setCustomEnd] = useState("");
 
-    const [activeTab, setActiveTab] = useState<"summary" | "leads" | "lost" | "not_judged">("summary");
-    const [lostSubFilter, setLostSubFilter] = useState<"all" | "no_log" | "not_final">("all");
+    const [activeTab, setActiveTab] = useState<"summary" | "leads" | "retry" | "critical">("summary");
 
     const [selectedDay, setSelectedDay] = useState<string>("all");
     const [company, setCompany] = useState("all");
@@ -593,7 +614,7 @@ export default function KserveLeadLostPage() {
     const [error, setError] = useState<string | null>(null);
 
     const [windowInfo, setWindowInfo] = useState<{ label: string; startDate: string; endDate: string } | null>(null);
-    const [totals, setTotals] = useState<Totals>({ sent: 0, found: 0, lost: 0, q: 0, nq: 0, noLog: 0, notFinal: 0 });
+    const [totals, setTotals] = useState<Totals>({ sent: 0, found: 0, lost: 0, q: 0, nq: 0, noLog: 0, notFinal: 0, retryPending: 0, criticalLost: 0 });
     const [dailySummary, setDailySummary] = useState<DailySummaryRow[]>([]);
     const [leads, setLeads] = useState<ReconciledLead[]>([]);
     const [pagination, setPagination] = useState({ total: 0, page: 1, perPage: 25, totalPages: 1 });
@@ -612,7 +633,7 @@ export default function KserveLeadLostPage() {
     // Reset pagination on filter change
     useEffect(() => {
         setPage(1);
-    }, [selectedMonth, dateMode, customStart, customEnd, selectedDay, company, dataSource, debouncedSearch, activeTab, lostSubFilter]);
+    }, [selectedMonth, dateMode, customStart, customEnd, selectedDay, company, dataSource, debouncedSearch, activeTab]);
 
     // Fetch Reconciliation Data
     const fetchData = useCallback(async (isRefresh = false) => {
@@ -620,6 +641,7 @@ export default function KserveLeadLostPage() {
         setError(null);
         try {
             const params = new URLSearchParams();
+            params.set("mode", "an");
             if (dateMode === "month") {
                 params.set("month", selectedMonth);
             } else if (customStart && customEnd) {
@@ -637,12 +659,10 @@ export default function KserveLeadLostPage() {
             params.set("perPage", String(perPage));
 
             // Status tab filter
-            if (activeTab === "lost") {
-                if (lostSubFilter === "no_log") params.set("status", "LOST_NO_LOG");
-                else if (lostSubFilter === "not_final") params.set("status", "LOST_NOT_FINAL");
-                else params.set("status", "LOST");
-            } else if (activeTab === "not_judged") {
-                params.set("status", "LOST_NOT_FINAL");
+            if (activeTab === "retry") {
+                params.set("status", "RETRY_PENDING");
+            } else if (activeTab === "critical") {
+                params.set("status", "CRITICAL_LOST");
             }
 
             const res = await fetch(`/api/kserve-lost-leads?${params.toString()}`, { cache: "no-store" });
@@ -661,7 +681,7 @@ export default function KserveLeadLostPage() {
         } finally {
             setLoading(false);
         }
-    }, [dateMode, selectedMonth, customStart, customEnd, company, dataSource, selectedDay, debouncedSearch, page, perPage, activeTab, lostSubFilter]);
+    }, [dateMode, selectedMonth, customStart, customEnd, company, dataSource, selectedDay, debouncedSearch, page, perPage, activeTab]);
 
     useEffect(() => {
         fetchData();
@@ -678,41 +698,10 @@ export default function KserveLeadLostPage() {
 
     const hasActiveFilters = company !== "all" || dataSource !== "all" || selectedDay !== "all" || search !== "";
 
-    // Export Excel (.xlsx)
-    const [exportingExcel, setExportingExcel] = useState(false);
-    const handleExportExcel = async () => {
-        try {
-            setExportingExcel(true);
-            const params = new URLSearchParams();
-            if (windowInfo?.startDate && windowInfo?.endDate) {
-                params.set("startDate", windowInfo.startDate);
-                params.set("endDate", windowInfo.endDate);
-            }
-            const res = await fetch(`/api/voicecall/kserve-lead-lost/export?${params.toString()}`);
-            if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                throw new Error(data.message || data.error || "Failed to download Excel report");
-            }
-            const blob = await res.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `KServe_Lost_Leads_Report_${windowInfo?.label || new Date().toISOString().slice(0, 10)}.xlsx`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-        } catch (err: any) {
-            alert(`Excel Export Failed: ${err?.message || err}`);
-        } finally {
-            setExportingExcel(false);
-        }
-    };
-
     // Export CSV
     const handleExportCSV = () => {
         if (!leads.length) return;
-        const headers = ["Enquiry ID", "Sent Task ID", "Client Name", "Mobile", "Company", "Data Source", "Sent Date", "Status", "Qualification", "Reason", "Call Count", "Outcome", "Call Status"];
+        const headers = ["Enquiry ID", "Sent Task ID", "Client Name", "Mobile", "Company", "Data Source", "Sent Date", "Status", "Qualification", "Call Count", "Outcome", "Call Status"];
         const rows = leads.map(l => [
             l.id,
             l.sentTaskId,
@@ -721,9 +710,8 @@ export default function KserveLeadLostPage() {
             l.company,
             l.data_source,
             l.sent_date,
-            l.status,
+            l.status === "FOUND" ? "RECEIVED" : (l.retryStage === "CRITICAL_LOST" ? "CRITICAL LOST" : "RETRY PENDING"),
             l.qualification,
-            l.reason,
             l.callCount,
             l.deciding ? l.deciding.outcome : "",
             l.deciding ? l.deciding.call_status : ""
@@ -741,6 +729,9 @@ export default function KserveLeadLostPage() {
     // Calculate rates
     const returnRate = totals.sent > 0 ? ((totals.found / totals.sent) * 100).toFixed(1) : "0.0";
     const qualifiedRate = totals.found > 0 ? ((totals.q / totals.found) * 100).toFixed(1) : "0.0";
+    const nonQualifiedRate = totals.found > 0 ? ((totals.nq / totals.found) * 100).toFixed(1) : "0.0";
+    const retryPendingRate = totals.sent > 0 ? ((totals.retryPending / totals.sent) * 100).toFixed(1) : "0.0";
+    const criticalLostRate = totals.retryPending > 0 ? ((totals.criticalLost / totals.retryPending) * 100).toFixed(1) : "0.0";
 
     return (
         <div style={{ minHeight: "100vh", background: "#f0f4ff", padding: "20px 24px 60px" }}>
@@ -752,7 +743,7 @@ export default function KserveLeadLostPage() {
                         <span>🔴 KServe Sent vs Received Reconciliation</span>
                     </div>
                     <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
-                        Reconciliation window: <strong style={{ color: "#312e81" }}>{windowInfo?.label || "Loading..."}</strong> | Reports leads as <strong>FOUND</strong> (Qualified / Non-Qualified) or <strong>LOST</strong> (No Log / Not Final).
+                        Reconciliation window: <strong style={{ color: "#312e81" }}>{windowInfo?.label || "Loading..."}</strong> | Reports leads as <strong>RECEIVED</strong> (Qualified / Non-Qualified) or, while unresolved, <strong>RETRY PENDING</strong> — escalating to <strong>CRITICAL LOST</strong> once 72 hours have passed since sending.
                     </div>
                 </div>
 
@@ -849,27 +840,6 @@ export default function KserveLeadLostPage() {
                     </button>
 
                     <button
-                        onClick={handleExportExcel}
-                        disabled={loading || exportingExcel}
-                        style={{
-                            height: 36,
-                            padding: "0 14px",
-                            border: "none",
-                            borderRadius: 8,
-                            fontSize: 12.5,
-                            fontWeight: 700,
-                            cursor: (loading || exportingExcel) ? "not-allowed" : "pointer",
-                            background: "#1e3a8a",
-                            color: "#fff",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 6
-                        }}
-                    >
-                        {exportingExcel ? "⏳ Generating Excel…" : "📥 Export Excel (.xlsx)"}
-                    </button>
-
-                    <button
                         onClick={handleExportCSV}
                         disabled={loading || leads.length === 0}
                         style={{
@@ -892,46 +862,79 @@ export default function KserveLeadLostPage() {
             {/* ── Reconciliation KPI Cards ───────────────────────────────────── */}
             <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
                 <KPICard
-                    label="Total Sent to KServe"
+                    label="Sent"
                     value={loading ? "…" : totals.sent}
                     icon="📤"
                     bg="#eff6ff"
                     color="#1d4ed8"
-                    sub="Successful transfers in window"
+                    sub="Total records sent to KServe"
+                />
+                <div style={{
+                    background: "#f0fdf4",
+                    border: "1.5px solid #15803d33",
+                    borderRadius: 14,
+                    padding: "16px 20px",
+                    display: "flex",
+                    flexDirection: "column",
+                    flex: 1.4,
+                    minWidth: 260,
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.03)"
+                }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div style={{ fontSize: 10.5, fontWeight: 700, color: "#15803d", textTransform: "uppercase", letterSpacing: ".8px" }}>
+                            Received
+                        </div>
+                        <span style={{ fontSize: 20 }}>✅</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 4 }}>
+                        <div style={{ fontSize: 32, fontWeight: 800, color: "#111827", lineHeight: 1.1 }}>
+                            {loading ? "…" : totals.found}
+                        </div>
+                        <div style={{ fontSize: 11, color: "#15803d", fontWeight: 600 }}>
+                            {returnRate}% of Sent
+                        </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "stretch", marginTop: 12, paddingTop: 12, borderTop: "1px solid #15803d26" }}>
+                        <div style={{ flex: 1, textAlign: "left" }}>
+                            <div style={{ fontSize: 9.5, fontWeight: 700, color: "#059669", textTransform: "uppercase", letterSpacing: ".6px" }}>
+                                Qualified
+                            </div>
+                            <div style={{ marginTop: 3 }}>
+                                <span style={{ fontSize: 18, fontWeight: 800, color: "#065f46" }}>{loading ? "…" : totals.q}</span>
+                                <span style={{ fontSize: 11.5, fontWeight: 700, color: "#059669", marginLeft: 6 }}>({qualifiedRate}%)</span>
+                            </div>
+                        </div>
+                        <div style={{ width: 1, alignSelf: "stretch", background: "#15803d26", margin: "0 14px" }} />
+                        <div style={{ flex: 1, textAlign: "right" }}>
+                            <div style={{ fontSize: 9.5, fontWeight: 700, color: "#d97706", textTransform: "uppercase", letterSpacing: ".6px" }}>
+                                Non-Qualified
+                            </div>
+                            <div style={{ marginTop: 3 }}>
+                                <span style={{ fontSize: 18, fontWeight: 800, color: "#92400e" }}>{loading ? "…" : totals.nq}</span>
+                                <span style={{ fontSize: 11.5, fontWeight: 700, color: "#d97706", marginLeft: 6 }}>({nonQualifiedRate}%)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <KPICard
+                    label="Retry Pending"
+                    value={loading ? "…" : totals.retryPending}
+                    icon="🔄"
+                    bg="#fffbeb"
+                    color="#d97706"
+                    solidBg="linear-gradient(135deg, #f59e0b 0%, #d97706 100%)"
+                    sub={`${retryPendingRate}% of Sent · not yet received`}
+                    highlight={totals.retryPending > 0}
                 />
                 <KPICard
-                    label="Reconciled / Found"
-                    value={loading ? "…" : totals.found}
-                    icon="✅"
-                    bg="#f0fdf4"
-                    color="#15803d"
-                    sub={`${returnRate}% return & resolution rate`}
-                />
-                <KPICard
-                    label="Lost — No Log"
-                    value={loading ? "…" : totals.noLog}
+                    label="Critical Lost"
+                    value={loading ? "…" : totals.criticalLost}
                     icon="⚠️"
                     bg="#fef2f2"
                     color="#dc2626"
-                    sub="0 received call logs"
-                    highlight={totals.noLog > 0}
-                />
-                <KPICard
-                    label="Lost — Not Final"
-                    value={loading ? "…" : totals.notFinal}
-                    icon="⏳"
-                    bg="#fffbeb"
-                    color="#b45309"
-                    sub="Logs exist, but not judged / pending"
-                    highlight={totals.notFinal > 0}
-                />
-                <KPICard
-                    label="Qualified / Non-Qualified"
-                    value={loading ? "…" : `${totals.q} / ${totals.nq}`}
-                    icon="🎯"
-                    bg="#f5f3ff"
-                    color="#6d28d9"
-                    sub={`${qualifiedRate}% qualification rate`}
+                    solidBg="linear-gradient(135deg, #ef4444 0%, #dc2626 100%)"
+                    sub={`${criticalLostRate}% of Retry Pending · unresolved 72h+`}
+                    highlight={totals.criticalLost > 0}
                 />
             </div>
 
@@ -977,7 +980,7 @@ export default function KserveLeadLostPage() {
                     📋 Sent Leads Reconciliation (KServeLeads)
                 </button>
                 <button
-                    onClick={() => setActiveTab("lost")}
+                    onClick={() => setActiveTab("retry")}
                     style={{
                         padding: "10px 18px",
                         borderRadius: "8px 8px 0 0",
@@ -985,15 +988,15 @@ export default function KserveLeadLostPage() {
                         fontSize: 13,
                         fontWeight: 700,
                         cursor: "pointer",
-                        background: activeTab === "lost" ? "#fff" : "transparent",
-                        color: activeTab === "lost" ? "#dc2626" : "#64748b",
-                        borderBottom: activeTab === "lost" ? "3px solid #dc2626" : "none"
+                        background: activeTab === "retry" ? "#fff" : "transparent",
+                        color: activeTab === "retry" ? "#d97706" : "#64748b",
+                        borderBottom: activeTab === "retry" ? "3px solid #d97706" : "none"
                     }}
                 >
-                    🔴 Lost Leads ({totals.lost})
+                    🔄 Retry Pending ({totals.retryPending})
                 </button>
                 <button
-                    onClick={() => setActiveTab("not_judged")}
+                    onClick={() => setActiveTab("critical")}
                     style={{
                         padding: "10px 18px",
                         borderRadius: "8px 8px 0 0",
@@ -1001,12 +1004,12 @@ export default function KserveLeadLostPage() {
                         fontSize: 13,
                         fontWeight: 700,
                         cursor: "pointer",
-                        background: activeTab === "not_judged" ? "#fff" : "transparent",
-                        color: activeTab === "not_judged" ? "#b45309" : "#64748b",
-                        borderBottom: activeTab === "not_judged" ? "3px solid #b45309" : "none"
+                        background: activeTab === "critical" ? "#fff" : "transparent",
+                        color: activeTab === "critical" ? "#dc2626" : "#64748b",
+                        borderBottom: activeTab === "critical" ? "3px solid #dc2626" : "none"
                     }}
                 >
-                    ⏳ Received — Not Judged ({totals.notFinal})
+                    ⚠️ Critical Lost ({totals.criticalLost})
                 </button>
             </div>
 
@@ -1085,56 +1088,6 @@ export default function KserveLeadLostPage() {
                             </span>
                         )}
 
-                        {/* Sub-filter toggle for Lost tab */}
-                        {activeTab === "lost" && (
-                            <div style={{ display: "flex", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: 8, padding: 2 }}>
-                                <button
-                                    onClick={() => setLostSubFilter("all")}
-                                    style={{
-                                        padding: "4px 10px",
-                                        borderRadius: 6,
-                                        border: "none",
-                                        fontSize: 11.5,
-                                        fontWeight: 700,
-                                        cursor: "pointer",
-                                        background: lostSubFilter === "all" ? "#dc2626" : "transparent",
-                                        color: lostSubFilter === "all" ? "#fff" : "#475569"
-                                    }}
-                                >
-                                    All Lost ({totals.lost})
-                                </button>
-                                <button
-                                    onClick={() => setLostSubFilter("no_log")}
-                                    style={{
-                                        padding: "4px 10px",
-                                        borderRadius: 6,
-                                        border: "none",
-                                        fontSize: 11.5,
-                                        fontWeight: 700,
-                                        cursor: "pointer",
-                                        background: lostSubFilter === "no_log" ? "#dc2626" : "transparent",
-                                        color: lostSubFilter === "no_log" ? "#fff" : "#475569"
-                                    }}
-                                >
-                                    No Log ({totals.noLog})
-                                </button>
-                                <button
-                                    onClick={() => setLostSubFilter("not_final")}
-                                    style={{
-                                        padding: "4px 10px",
-                                        borderRadius: 6,
-                                        border: "none",
-                                        fontSize: 11.5,
-                                        fontWeight: 700,
-                                        cursor: "pointer",
-                                        background: lostSubFilter === "not_final" ? "#dc2626" : "transparent",
-                                        color: lostSubFilter === "not_final" ? "#fff" : "#475569"
-                                    }}
-                                >
-                                    Not Final ({totals.notFinal})
-                                </button>
-                            </div>
-                        )}
                     </div>
 
                     {hasActiveFilters && (
@@ -1190,7 +1143,7 @@ export default function KserveLeadLostPage() {
                         <div>
                             <div style={{ fontSize: 14, fontWeight: 800, color: "#1e1b4b" }}>📊 Daily Summary — {windowInfo?.label}</div>
                             <div style={{ fontSize: 11.5, color: "#64748b", marginTop: 2 }}>
-                                Daily reconciliation breakdown of Sent leads, Found (Qualified / Non-Qualified), and Lost (No Log / Not Final).
+                                Daily reconciliation breakdown of Sent leads, Received (Qualified / Non-Qualified), and unresolved leads (Retry Pending, with Critical Lost as the 72h+ subset).
                             </div>
                         </div>
                         <div style={{ fontSize: 12, color: "#64748b" }}>
@@ -1204,12 +1157,25 @@ export default function KserveLeadLostPage() {
                                 <tr style={{ background: "#1e1b4b" }}>
                                     <Th>Date</Th>
                                     <Th style={{ textAlign: "right" }}>Total Sent</Th>
-                                    <Th style={{ textAlign: "right" }}>Found</Th>
-                                    <Th style={{ textAlign: "right" }}>Lost</Th>
-                                    <Th style={{ textAlign: "right" }}>Qualified</Th>
-                                    <Th style={{ textAlign: "right" }}>Non-Qualified</Th>
-                                    <Th style={{ textAlign: "right" }}>Lost — No Log</Th>
-                                    <Th style={{ textAlign: "right" }}>Lost — Not Final</Th>
+                                    <Th style={{ textAlign: "right" }}>Received</Th>
+                                    <Th style={{ textAlign: "center" }} colSpan={2}>
+                                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
+                                            <span>Qualified</span>
+                                            <div style={{ display: "flex", gap: 6, fontSize: 10, fontWeight: 600, textTransform: "none", color: "rgba(255,255,255,0.65)" }}>
+                                                <span>Count</span><span style={{ opacity: 0.35 }}>|</span><span>%</span>
+                                            </div>
+                                        </div>
+                                    </Th>
+                                    <Th style={{ textAlign: "center" }} colSpan={2}>
+                                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
+                                            <span>Non-Qualified</span>
+                                            <div style={{ display: "flex", gap: 6, fontSize: 10, fontWeight: 600, textTransform: "none", color: "rgba(255,255,255,0.65)" }}>
+                                                <span>Count</span><span style={{ opacity: 0.35 }}>|</span><span>%</span>
+                                            </div>
+                                        </div>
+                                    </Th>
+                                    <Th style={{ textAlign: "right" }}>Retry Pending</Th>
+                                    <Th style={{ textAlign: "right" }}>Critical Lost (72 H+)</Th>
                                     <Th style={{ textAlign: "center" }}>Action</Th>
                                 </tr>
                             </thead>
@@ -1224,11 +1190,16 @@ export default function KserveLeadLostPage() {
                                         <Td style={{ fontWeight: 700, color: "#1e293b" }}>{d.dayKey}</Td>
                                         <Td style={{ textAlign: "right", fontWeight: 700, color: "#1d4ed8" }}>{d.sent}</Td>
                                         <Td style={{ textAlign: "right", fontWeight: 700, color: "#15803d" }}>{d.found}</Td>
-                                        <Td style={{ textAlign: "right", fontWeight: 700, color: d.lost > 0 ? "#dc2626" : "#64748b" }}>{d.lost}</Td>
-                                        <Td style={{ textAlign: "right", color: "#059669", fontWeight: 600 }}>{d.q}</Td>
-                                        <Td style={{ textAlign: "right", color: "#d97706", fontWeight: 600 }}>{d.nq}</Td>
-                                        <Td style={{ textAlign: "right", color: d.noLog > 0 ? "#dc2626" : "#64748b", fontWeight: 600 }}>{d.noLog}</Td>
-                                        <Td style={{ textAlign: "right", color: d.notFinal > 0 ? "#b45309" : "#64748b", fontWeight: 600 }}>{d.notFinal}</Td>
+                                        {/* Qualified: Count & % */}
+                                        <Td style={{ textAlign: "right", color: "#059669", fontWeight: 700, paddingRight: 6, borderRight: "1px dashed #e2e8f0" }}>{d.q}</Td>
+                                        <Td style={{ textAlign: "center", color: "#059669", fontSize: 11, fontWeight: 600, paddingLeft: 6 }}>{fmtPct(d.q, d.found)}</Td>
+                                        {/* Non-Qualified: Count & % */}
+                                        <Td style={{ textAlign: "right", color: "#d97706", fontWeight: 700, paddingRight: 6, borderRight: "1px dashed #e2e8f0" }}>{d.nq}</Td>
+                                        <Td style={{ textAlign: "center", color: "#d97706", fontSize: 11, fontWeight: 600, paddingLeft: 6 }}>{fmtPct(d.nq, d.found)}</Td>
+                                        {/* Retry Pending (count only) */}
+                                        <Td style={{ textAlign: "right", fontWeight: 700, color: d.retryPending > 0 ? "#d97706" : "#64748b" }}>{d.retryPending}</Td>
+                                        {/* Critical Lost */}
+                                        <Td style={{ textAlign: "right", fontWeight: 700, color: d.criticalLost > 0 ? "#dc2626" : "#64748b" }}>{d.criticalLost}</Td>
                                         <Td style={{ textAlign: "center" }}>
                                             <button
                                                 onClick={() => {
@@ -1257,11 +1228,16 @@ export default function KserveLeadLostPage() {
                                     <Td style={{ fontWeight: 800, fontSize: 13, color: "#0f172a" }}>TOTAL</Td>
                                     <Td style={{ textAlign: "right", fontWeight: 800, fontSize: 13, color: "#1d4ed8" }}>{totals.sent}</Td>
                                     <Td style={{ textAlign: "right", fontWeight: 800, fontSize: 13, color: "#15803d" }}>{totals.found}</Td>
-                                    <Td style={{ textAlign: "right", fontWeight: 800, fontSize: 13, color: totals.lost > 0 ? "#dc2626" : "#0f172a" }}>{totals.lost}</Td>
-                                    <Td style={{ textAlign: "right", fontWeight: 800, fontSize: 13, color: "#059669" }}>{totals.q}</Td>
-                                    <Td style={{ textAlign: "right", fontWeight: 800, fontSize: 13, color: "#d97706" }}>{totals.nq}</Td>
-                                    <Td style={{ textAlign: "right", fontWeight: 800, fontSize: 13, color: totals.noLog > 0 ? "#dc2626" : "#64748b" }}>{totals.noLog}</Td>
-                                    <Td style={{ textAlign: "right", fontWeight: 800, fontSize: 13, color: totals.notFinal > 0 ? "#b45309" : "#64748b" }}>{totals.notFinal}</Td>
+                                    {/* Qualified Total */}
+                                    <Td style={{ textAlign: "right", fontWeight: 800, fontSize: 13, color: "#059669", paddingRight: 6, borderRight: "1px dashed #cbd5e1" }}>{totals.q}</Td>
+                                    <Td style={{ textAlign: "center", fontWeight: 700, fontSize: 11.5, color: "#059669", paddingLeft: 6 }}>{fmtPct(totals.q, totals.found)}</Td>
+                                    {/* Non-Qualified Total */}
+                                    <Td style={{ textAlign: "right", fontWeight: 800, fontSize: 13, color: "#d97706", paddingRight: 6, borderRight: "1px dashed #cbd5e1" }}>{totals.nq}</Td>
+                                    <Td style={{ textAlign: "center", fontWeight: 700, fontSize: 11.5, color: "#d97706", paddingLeft: 6 }}>{fmtPct(totals.nq, totals.found)}</Td>
+                                    {/* Retry Pending Total */}
+                                    <Td style={{ textAlign: "right", fontWeight: 800, fontSize: 13, color: totals.retryPending > 0 ? "#d97706" : "#0f172a" }}>{totals.retryPending}</Td>
+                                    {/* Critical Lost Total */}
+                                    <Td style={{ textAlign: "right", fontWeight: 800, fontSize: 13, color: totals.criticalLost > 0 ? "#dc2626" : "#64748b" }}>{totals.criticalLost}</Td>
                                     <Td style={{ textAlign: "center" }}>—</Td>
                                 </tr>
                             </tfoot>
@@ -1275,7 +1251,7 @@ export default function KserveLeadLostPage() {
                 <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #e5e7eb", overflow: "hidden", boxShadow: "0 1px 8px rgba(0,0,0,0.04)" }}>
                     <div style={{
                         padding: "14px 20px",
-                        background: activeTab === "lost" ? "linear-gradient(90deg, #fef2f2 0%, #fff 100%)" : "linear-gradient(90deg, #f8fafc 0%, #fff 100%)",
+                        background: activeTab === "retry" || activeTab === "critical" ? "linear-gradient(90deg, #fef2f2 0%, #fff 100%)" : "linear-gradient(90deg, #f8fafc 0%, #fff 100%)",
                         borderBottom: "1px solid #e2e8f0",
                         display: "flex",
                         justifyContent: "space-between",
@@ -1283,13 +1259,13 @@ export default function KserveLeadLostPage() {
                     }}>
                         <div>
                             <div style={{ fontSize: 14, fontWeight: 800, color: "#1e1b4b" }}>
-                                {activeTab === "lost" ? "🔴 Lost Leads Tracker" : activeTab === "not_judged" ? "⏳ Received — But Not Judged" : "📋 Sent Leads Reconciliation"}
+                                {activeTab === "retry" ? "🔄 Retry Pending Tracker" : activeTab === "critical" ? "⚠️ Critical Lost Tracker" : "📋 Sent Leads Reconciliation"}
                             </div>
                             <div style={{ fontSize: 11.5, color: "#64748b", marginTop: 2 }}>
-                                {activeTab === "lost"
-                                    ? "Leads with no return log or inconclusive call logs"
-                                    : activeTab === "not_judged"
-                                        ? "Leads that have call records but have not yet reached Qualified or Non-Qualified conclusion"
+                                {activeTab === "retry"
+                                    ? "Sent leads not yet received or finalized, still within the retry window."
+                                    : activeTab === "critical"
+                                        ? "Unresolved leads that have crossed 72 hours since being sent — a subset of Retry Pending."
                                         : "Complete record of sent leads, showing final received status, call count, and deciding log outcome."}
                             </div>
                         </div>
@@ -1298,8 +1274,8 @@ export default function KserveLeadLostPage() {
                             fontWeight: 700,
                             padding: "4px 12px",
                             borderRadius: 16,
-                            background: activeTab === "lost" ? "#fee2e2" : "#e0e7ff",
-                            color: activeTab === "lost" ? "#dc2626" : "#4338ca"
+                            background: activeTab === "retry" || activeTab === "critical" ? "#fee2e2" : "#e0e7ff",
+                            color: activeTab === "retry" || activeTab === "critical" ? "#dc2626" : "#4338ca"
                         }}>
                             {pagination.total} leads found
                         </div>
@@ -1315,7 +1291,7 @@ export default function KserveLeadLostPage() {
                         <div style={{ overflowX: "auto" }}>
                             <table style={{ width: "100%", borderCollapse: "collapse" }}>
                                 <thead>
-                                    <tr style={{ background: activeTab === "lost" ? "#7f1d1d" : "#1e1b4b" }}>
+                                    <tr style={{ background: activeTab === "retry" || activeTab === "critical" ? "#7f1d1d" : "#1e1b4b" }}>
                                         <Th>#</Th>
                                         <Th>Sent Date</Th>
                                         <Th>Enquiry ID</Th>
@@ -1358,10 +1334,10 @@ export default function KserveLeadLostPage() {
                                                         borderRadius: 12,
                                                         fontSize: 11,
                                                         fontWeight: 800,
-                                                        background: r.status === "FOUND" ? "#dcfce7" : "#fee2e2",
-                                                        color: r.status === "FOUND" ? "#15803d" : "#dc2626"
+                                                        background: r.status === "FOUND" ? "#dcfce7" : r.retryStage === "CRITICAL_LOST" ? "#fee2e2" : "#fef3c7",
+                                                        color: r.status === "FOUND" ? "#15803d" : r.retryStage === "CRITICAL_LOST" ? "#dc2626" : "#b45309"
                                                     }}>
-                                                        {r.status}
+                                                        {r.status === "FOUND" ? "RECEIVED" : r.retryStage === "CRITICAL_LOST" ? "CRITICAL LOST" : "RETRY PENDING"}
                                                     </span>
                                                 </Td>
                                                 <Td>

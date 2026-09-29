@@ -102,8 +102,10 @@ export default function EmailConfigBridge({ document: documentHtml }: { document
           if (!response.ok) throw new Error(data.error || 'Report unavailable')
           const { exportCrrReportHTML } = await import('@/lib/ktahv-crr-report')
           html = exportCrrReportHTML(data, scope)
-        } else if (id === 'kserve-lead-lost-alert') {
-          const response = await fetch('/api/kserve-alert-preview', { signal: current.signal, cache: 'no-store' })
+        } else if (id === 'morning-lead-allocation') {
+          const params = new URLSearchParams()
+          if (message.date) params.set('date', message.date)
+          const response = await fetch('/api/morning-allocation-preview?' + params, { signal: current.signal, cache: 'no-store' })
           html = await response.text()
           if (!response.ok) throw new Error('Preview unavailable')
         } else if (id === 'booking-pi-review-alert') {
@@ -112,6 +114,10 @@ export default function EmailConfigBridge({ document: documentHtml }: { document
           if (!response.ok || !data.ok) throw new Error(data.error || 'Report unavailable')
           const { exportBookingPiReviewHTML } = await import('@/lib/booking-pi-review-report')
           html = exportBookingPiReviewHTML(data, window.location.origin)
+        } else if (id === 'kserve-lead-lost-alert') {
+          const response = await fetch('/api/kserve-alert-preview', { signal: current.signal, cache: 'no-store' })
+          html = await response.text()
+          if (!response.ok) throw new Error('Preview unavailable')
         } else {
           const response = await fetch('/api/marketing-daily-report?' + new URLSearchParams({ date: message.date }), { signal: current.signal, cache: 'no-store' })
           const data = await response.json()

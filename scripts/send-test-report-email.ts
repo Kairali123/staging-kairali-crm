@@ -27,7 +27,7 @@ async function main() {
   } as unknown as Trigger
 
   const email = await buildEmail(t, Date.now())
-  console.log(email.diag, '| attachments:', (email.attachments || []).map((a: any) => a.cid).join(', ') || 'none')
+  console.log('hasData:', email.hasData, '| attachments:', (email.attachments || []).map((a: any) => a.cid).join(', ') || 'none')
 
   if (!to) {
     await mkdir('tmp-email-preview', { recursive: true })

@@ -22,11 +22,13 @@ function overdueBar(pct: number): string {
   </div>`
 }
 
-export function renderAllocationSnapshotEmail(summary: AssignmentSummary): { subject: string; html: string } {
+export function renderAllocationSnapshotEmail(summary: AssignmentSummary, appUrl?: string): { subject: string; html: string } {
   const dateLabel = new Date(summary.date + 'T00:00:00+05:30').toLocaleDateString('en-GB', {
     day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata',
   })
   const overduePct = summary.totalLeads > 0 ? (summary.overdueLeads / summary.totalLeads) * 100 : 0
+  const baseUrl = (appUrl || process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'http://localhost:3000').replace(/\/+$/, '')
+  const allocationPageUrl = `${baseUrl}/morning-lead-allocation`
 
   const byOwnerRows = summary.byOwner.length > 0
     ? summary.byOwner.map((o) => `
@@ -63,6 +65,9 @@ export function renderAllocationSnapshotEmail(summary: AssignmentSummary): { sub
       <h1 style="margin:0;font-size:22px;font-weight:700">Morning Lead Allocation Snapshot</h1>
       <div style="margin-top:6px;font-size:13px;opacity:.85">${dateLabel} · Generated at 11:00 IST</div>
     </td></tr>
+
+    <!-- Optional Opening Note Hook -->
+    <!--email-intro-->
 
     <!-- Summary cards -->
     <tr><td style="padding:24px 32px 16px">
@@ -132,10 +137,13 @@ export function renderAllocationSnapshotEmail(summary: AssignmentSummary): { sub
       </table>
     </td></tr>
 
+    <!-- Optional Closing Note Hook -->
+    <!--email-closing-->
+
     <!-- Footer -->
     <tr><td style="background:#f8fafc;border-top:1px solid #e5e7eb;padding:16px 32px;text-align:center;font-size:11px;color:#9ca3af">
       Kairali CRM · Morning Allocation Snapshot · ${dateLabel}<br>
-      <a href="https://staging-kairali-crm.vercel.app/morning-lead-allocation" style="color:#15803d">Open allocation page</a>
+      <a href="${allocationPageUrl}" style="color:#15803d;font-weight:600;text-decoration:none">Open Morning Allocation Dashboard &rarr;</a>
     </td></tr>
   </table>
 </td></tr>
