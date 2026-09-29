@@ -55,6 +55,57 @@ export interface DetailedConsultationItem {
 export const DOCTOR_REPORT_GAS_URL =
   "https://script.google.com/macros/s/AKfycbznKCwlrWAdI-Oic-ZjjrLtfVR-xyoD4c37KvLHtWr513g0stY69k_AQgZlrd6R_2ysKw/exec"
 
+// ─── Month / Quarter / Financial-Year date ranges ──────────────────────────────
+// Indian Financial Year: Apr 1 – Mar 31. Quarters: Q1 Apr-Jun, Q2 Jul-Sep, Q3 Oct-Dec, Q4 Jan-Mar.
+export interface DateRangeWindow {
+  start: string
+  end: string
+  label: string
+}
+
+const pad2 = (n: number) => String(n).padStart(2, "0")
+const toIso = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+const MONTH_LONG = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+
+/** The financial year's starting calendar year for a given date (FY24-25 starts in 2024). */
+function fyStartYear(d: Date): number {
+  return d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1
+}
+
+/** offset in whole months; -1 = previous month, +1 = next month, 0 = current. */
+export function currentMonthRange(now: Date = new Date(), offset = 0): DateRangeWindow {
+  const ref = new Date(now.getFullYear(), now.getMonth() + offset, 1)
+  const start = new Date(ref.getFullYear(), ref.getMonth(), 1)
+  const end = new Date(ref.getFullYear(), ref.getMonth() + 1, 0)
+  return { start: toIso(start), end: toIso(end), label: `${MONTH_LONG[ref.getMonth()]} ${ref.getFullYear()}` }
+}
+
+/** offset in whole FY quarters; -1 = previous quarter, +1 = next quarter, 0 = current. */
+export function currentQuarterRange(now: Date = new Date(), offset = 0): DateRangeWindow {
+  const fy0 = fyStartYear(now)
+  const m0 = now.getMonth()
+  const quarterIndex0 = m0 >= 3 && m0 <= 5 ? 0 : m0 >= 6 && m0 <= 8 ? 1 : m0 >= 9 && m0 <= 11 ? 2 : 3 // 0-based within FY
+  // Flatten to an absolute quarter count from FY epoch, shift by offset, then re-derive fy/quarterIndex.
+  const absQuarter = fy0 * 4 + quarterIndex0 + offset
+  const fy = Math.floor(absQuarter / 4)
+  const quarterIndex = ((absQuarter % 4) + 4) % 4
+  const quarterStartMonth = [3, 6, 9, 0][quarterIndex]
+  const startYear = quarterIndex === 3 ? fy + 1 : fy
+  const start = new Date(startYear, quarterStartMonth, 1)
+  const end = new Date(startYear, quarterStartMonth + 3, 0)
+  const fyLabel = `FY${String(fy).slice(2)}-${String(fy + 1).slice(2)}`
+  return { start: toIso(start), end: toIso(end), label: `Q${quarterIndex + 1} ${fyLabel} (${MONTH_SHORT[start.getMonth()]}-${MONTH_SHORT[end.getMonth()]} ${end.getFullYear()})` }
+}
+
+/** offset in whole financial years; -1 = previous FY, +1 = next FY, 0 = current. */
+export function currentFinancialYearRange(now: Date = new Date(), offset = 0): DateRangeWindow {
+  const fy = fyStartYear(now) + offset
+  const start = new Date(fy, 3, 1)
+  const end = new Date(fy + 1, 2, 31)
+  return { start: toIso(start), end: toIso(end), label: `FY ${fy}-${String(fy + 1).slice(2)} (Apr ${fy} – Mar ${fy + 1})` }
+}
+
 // Data mirroring reference email template:
 // Weekly Period (31-08-2026 to 06-09-2026)
 const WEEKLY_SOURCE_DATA: SourceReportRow[] = [
@@ -118,7 +169,7 @@ function parseGasItem(item: any): SourceReportRow {
   }
 }
 
-async function fetchLiveDoctorReport(force = false): Promise<{
+export async function fetchLiveDoctorReport(force = false): Promise<{
   rows: SourceReportRow[]
   totals: any
   isLive: boolean
@@ -316,7 +367,7 @@ export const AVAILABLE_WEEKS: WeekOption[] = [
 // Website: 10 (5 done, 1 cancelled, 4 pending), IVR: 7 (1 done, 5 cancelled, 1 pending),
 // PriyaSharma AI Chat: 4 (3 done, 1 cancelled, 0 pending), Site Exit Pop-Up: 1 (0 done, 0 cancelled, 1 pending),
 // Facebook: 1 (0 done, 0 cancelled, 1 pending) -> Total 23 Consults.
-const SAMPLE_CONSULTATION_RECORDS: DetailedConsultationItem[] = [
+export const SAMPLE_CONSULTATION_RECORDS: DetailedConsultationItem[] = [
   // ─── WEEK 36 (31-08-2026 to 06-09-2026) Benchmark Week (23 Records) ───
   // Website (10 total: 5 done, 1 cancelled, 4 pending)
   {
@@ -1279,6 +1330,13 @@ export async function GET(request: NextRequest) {
   const status = searchParams.get("status") || "all"
   const q = (searchParams.get("q") || "").toLowerCase().trim()
   const force = searchParams.get("force") === "true"
+  const clampOffset = (v: string | null, min: number, max: number) => {
+    const n = parseInt(v || "0", 10)
+    return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : 0
+  }
+  const monthOffset = clampOffset(searchParams.get("monthOffset"), -60, 12)
+  const quarterOffset = clampOffset(searchParams.get("quarterOffset"), -20, 4)
+  const yearOffset = clampOffset(searchParams.get("yearOffset"), -10, 2)
 
   // Fetch live aggregated report data from Google Apps Script endpoint
   const {
@@ -1304,6 +1362,15 @@ export async function GET(request: NextRequest) {
     source,
     doctor
   )
+
+  // Monthly / Quarterly / Financial-Year rollups — same aggregation function and same
+  // underlying sample records as the weekly report, just over wider date windows.
+  const monthWindow = currentMonthRange(new Date(), monthOffset)
+  const quarterWindow = currentQuarterRange(new Date(), quarterOffset)
+  const fyWindow = currentFinancialYearRange(new Date(), yearOffset)
+  const { rows: monthlyRows, totals: monthlyTotals } = aggregateConsultationsBySource(SAMPLE_CONSULTATION_RECORDS, monthWindow.start, monthWindow.end, source, doctor)
+  const { rows: quarterlyRows, totals: quarterlyTotals } = aggregateConsultationsBySource(SAMPLE_CONSULTATION_RECORDS, quarterWindow.start, quarterWindow.end, source, doctor)
+  const { rows: yearlyRows, totals: yearlyTotals } = aggregateConsultationsBySource(SAMPLE_CONSULTATION_RECORDS, fyWindow.start, fyWindow.end, source, doctor)
 
   // Filter overall rows by source if requested
   let overallRows = [...liveOverallRows]
@@ -1375,6 +1442,21 @@ export async function GET(request: NextRequest) {
     weeklyReport: {
       rows: weeklyRows,
       totals: weeklyTotals,
+    },
+    monthlyReport: {
+      rows: monthlyRows,
+      totals: monthlyTotals,
+      dateRange: monthWindow,
+    },
+    quarterlyReport: {
+      rows: quarterlyRows,
+      totals: quarterlyTotals,
+      dateRange: quarterWindow,
+    },
+    yearlyReport: {
+      rows: yearlyRows,
+      totals: yearlyTotals,
+      dateRange: fyWindow,
     },
     overallReport: {
       rows: overallRows,

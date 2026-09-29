@@ -140,6 +140,121 @@ function formatDateDDMMYYYY(isoDate: string): string {
   return isoDate
 }
 
+// Reusable collapsed-by-default report card used for Monthly / Quarterly / Yearly —
+// same 8-column source breakdown as the Weekly report, collapsed to just its header
+// until expanded.
+function ConsultationSourceTable({
+  title,
+  subtitle,
+  badge,
+  totals,
+  rows,
+  formatCurrency,
+  gradientClass,
+  totalRowLabel,
+  totalRowAccentClass,
+}: {
+  title: string
+  subtitle: string
+  badge?: React.ReactNode
+  totals: any
+  rows: SourceReportRow[]
+  formatCurrency: (val: number) => string
+  gradientClass: string
+  totalRowLabel: string
+  totalRowAccentClass: string
+}) {
+  const [open, setOpen] = useState(false)
+  const t = totals || { totalConsults: 0, done: 0, cancelled: 0, pending: 0, converted: 0, conversionRate: 0, revenue: 0 }
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className={`bg-gradient-to-r ${gradientClass} text-white p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4`}>
+        <div className="space-y-1">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h2 className="text-lg sm:text-xl font-black text-white">{title}</h2>
+            {badge}
+          </div>
+          <p className="text-xs sm:text-sm text-slate-300">{subtitle}</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="text-right">
+            <div className="text-xs text-emerald-300 font-semibold uppercase tracking-wider">Total Revenue</div>
+            <div className="text-2xl font-black text-emerald-400 tabular-nums">{formatCurrency(t.revenue || 0)}</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}
+            className="h-9 w-9 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-white transition-colors flex-shrink-0"
+            title={open ? "Collapse" : "Expand"}
+          >
+            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+          </button>
+        </div>
+      </div>
+
+      {open && (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader className="bg-slate-50 border-b border-slate-200">
+              <TableRow>
+                <TableHead className="font-black text-slate-800 py-3.5 pl-6 text-xs uppercase tracking-wider">Enquiry Source</TableHead>
+                <TableHead className="font-black text-slate-800 text-center py-3.5 text-xs uppercase tracking-wider">Total Consults</TableHead>
+                <TableHead className="font-black text-emerald-800 text-center py-3.5 text-xs uppercase tracking-wider">Done</TableHead>
+                <TableHead className="font-black text-rose-800 text-center py-3.5 text-xs uppercase tracking-wider">Cancelled</TableHead>
+                <TableHead className="font-black text-amber-800 text-center py-3.5 text-xs uppercase tracking-wider">Pending</TableHead>
+                <TableHead className="font-black text-purple-800 text-center py-3.5 text-xs uppercase tracking-wider">Converted</TableHead>
+                <TableHead className="font-black text-slate-800 text-center py-3.5 text-xs uppercase tracking-wider">Conv. %</TableHead>
+                <TableHead className="font-black text-slate-800 text-right py-3.5 pr-6 text-xs uppercase tracking-wider">Revenue (₹)</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((r, idx) => (
+                <TableRow key={r.source} className={`hover:bg-blue-50/80 transition-colors border-b border-slate-200/70 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/60"}`}>
+                  <TableCell className="font-bold text-slate-900 pl-6 py-3.5 text-sm flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-blue-600 inline-block" />
+                    {r.source}
+                  </TableCell>
+                  <TableCell className="text-center font-bold text-slate-900 py-3.5 text-sm tabular-nums">{r.totalConsults}</TableCell>
+                  <TableCell className="text-center font-bold text-emerald-700 py-3.5 text-sm tabular-nums">{r.done}</TableCell>
+                  <TableCell className="text-center font-bold text-rose-700 py-3.5 text-sm tabular-nums">{r.cancelled}</TableCell>
+                  <TableCell className="text-center font-bold text-amber-700 py-3.5 text-sm tabular-nums">{r.pending}</TableCell>
+                  <TableCell className="text-center font-bold text-purple-700 py-3.5 text-sm tabular-nums">{r.converted}</TableCell>
+                  <TableCell className="text-center font-bold text-slate-900 py-3.5 text-sm tabular-nums">
+                    <Badge variant="outline" className={r.conversionRate > 0 ? "bg-purple-100 text-purple-800 border-purple-300 font-bold" : "bg-slate-100 text-slate-700 border-slate-200 font-medium"}>
+                      {r.conversionRate.toFixed(2)}%
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right font-black text-slate-900 pr-6 py-3.5 text-sm tabular-nums">{formatCurrency(r.revenue)}</TableCell>
+                </TableRow>
+              ))}
+
+              {rows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={8} className="h-24 text-center py-6 text-slate-500">
+                    <div className="font-bold text-slate-700 text-sm">No consultation records for this period.</div>
+                  </TableCell>
+                </TableRow>
+              )}
+
+              <TableRow className={`!bg-slate-950 hover:!bg-slate-900 text-white font-extrabold border-t-2 ${totalRowAccentClass} [&>td]:!bg-slate-950 hover:[&>td]:!bg-slate-900 transition-colors`}>
+                <TableCell className="pl-6 py-4 text-sm font-black !text-blue-300 uppercase tracking-wide">{totalRowLabel}</TableCell>
+                <TableCell className="text-center text-sm py-4 !text-white font-black tabular-nums">{t.totalConsults}</TableCell>
+                <TableCell className="text-center text-sm py-4 !text-emerald-400 font-black tabular-nums">{t.done}</TableCell>
+                <TableCell className="text-center text-sm py-4 !text-rose-400 font-black tabular-nums">{t.cancelled}</TableCell>
+                <TableCell className="text-center text-sm py-4 !text-amber-400 font-black tabular-nums">{t.pending}</TableCell>
+                <TableCell className="text-center text-sm py-4 !text-purple-300 font-black tabular-nums">{t.converted}</TableCell>
+                <TableCell className="text-center text-sm py-4 !text-white font-black tabular-nums">{(t.conversionRate ?? 0).toFixed(2)}%</TableCell>
+                <TableCell className="text-right pr-6 py-4 text-sm font-black !text-emerald-400 tabular-nums">{formatCurrency(t.revenue || 0)}</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function DoctorConsultationReportPage() {
   const { user, isLoading } = useAuth()
   const router = useRouter()
@@ -167,6 +282,9 @@ export default function DoctorConsultationReportPage() {
   const [isLive, setIsLive] = useState<boolean>(true)
   const [lastSyncedAt, setLastSyncedAt] = useState<string>("")
   const [weeklyReport, setWeeklyReport] = useState<{ rows: SourceReportRow[]; totals: any }>({ rows: [], totals: null })
+  const [monthlyReport, setMonthlyReport] = useState<{ rows: SourceReportRow[]; totals: any; dateRange?: { label: string } }>({ rows: [], totals: null })
+  const [quarterlyReport, setQuarterlyReport] = useState<{ rows: SourceReportRow[]; totals: any; dateRange?: { label: string } }>({ rows: [], totals: null })
+  const [yearlyReport, setYearlyReport] = useState<{ rows: SourceReportRow[]; totals: any; dateRange?: { label: string } }>({ rows: [], totals: null })
   const [overallReport, setOverallReport] = useState<{ rows: SourceReportRow[]; totals: any }>({ rows: [], totals: null })
   const [doctorsPerformance, setDoctorsPerformance] = useState<DoctorPerformanceRow[]>([])
   const [detailedConsultations, setDetailedConsultations] = useState<DetailedConsultationItem[]>([])
@@ -179,6 +297,16 @@ export default function DoctorConsultationReportPage() {
   const [isEmailModalOpen, setIsEmailModalOpen] = useState<boolean>(false)
   const [emailRecipients, setEmailRecipients] = useState<string>("director@kairali.com, dme@kairali.com")
   const [isSendingEmail, setIsSendingEmail] = useState<boolean>(false)
+
+  // Accordion state — Weekly and Overall are wrapped by default, same as the new
+  // Monthly / Quarterly / Yearly sections; only the header shows until expanded.
+  const [weeklySectionOpen, setWeeklySectionOpen] = useState<boolean>(true)
+  const [overallSectionOpen, setOverallSectionOpen] = useState<boolean>(false)
+
+  // Month / Quarter / Year period navigation (Filter section) — 0 = current period.
+  const [monthOffset, setMonthOffset] = useState<number>(0)
+  const [quarterOffset, setQuarterOffset] = useState<number>(0)
+  const [yearOffset, setYearOffset] = useState<number>(0)
 
   // ── Active Week Bounds ────────────────────────────────────────────────────────
   const activeWeekBounds = useMemo(() => {
@@ -231,6 +359,9 @@ export default function DoctorConsultationReportPage() {
       params.set("source", sourceFilter)
       params.set("doctor", doctorFilter)
       params.set("status", statusFilter)
+      params.set("monthOffset", String(monthOffset))
+      params.set("quarterOffset", String(quarterOffset))
+      params.set("yearOffset", String(yearOffset))
       if (searchQuery) params.set("q", searchQuery)
       if (force) params.set("force", "true")
 
@@ -239,6 +370,9 @@ export default function DoctorConsultationReportPage() {
       const data = await res.json()
 
       setWeeklyReport(data.weeklyReport)
+      if (data.monthlyReport) setMonthlyReport(data.monthlyReport)
+      if (data.quarterlyReport) setQuarterlyReport(data.quarterlyReport)
+      if (data.yearlyReport) setYearlyReport(data.yearlyReport)
       setOverallReport(data.overallReport)
       setDoctorsPerformance(data.doctorsPerformance || [])
       setDetailedConsultations(data.detailedConsultations || [])
@@ -347,7 +481,7 @@ export default function DoctorConsultationReportPage() {
     if (user) {
       fetchReportData()
     }
-  }, [user, period, selectedWeekId, customStartDate, customEndDate, isCustomMode, sourceFilter, doctorFilter, statusFilter])
+  }, [user, period, selectedWeekId, customStartDate, customEndDate, isCustomMode, sourceFilter, doctorFilter, statusFilter, monthOffset, quarterOffset, yearOffset])
 
   // Reset pagination on filter change
   useEffect(() => {
@@ -569,7 +703,7 @@ export default function DoctorConsultationReportPage() {
   }
 
   // Active filter count
-  const hasActiveFilters = period !== "this_week" || sourceFilter !== "all" || doctorFilter !== "all" || statusFilter !== "all" || searchQuery !== "" || isCustomMode
+  const hasActiveFilters = period !== "this_week" || sourceFilter !== "all" || doctorFilter !== "all" || statusFilter !== "all" || searchQuery !== "" || isCustomMode || monthOffset !== 0 || quarterOffset !== 0 || yearOffset !== 0
 
   const clearFilters = () => {
     setPeriod("this_week")
@@ -580,6 +714,9 @@ export default function DoctorConsultationReportPage() {
     setDoctorFilter("all")
     setStatusFilter("all")
     setSearchQuery("")
+    setMonthOffset(0)
+    setQuarterOffset(0)
+    setYearOffset(0)
     toast.info("All filters reset to default")
   }
 
@@ -644,18 +781,37 @@ export default function DoctorConsultationReportPage() {
     window.print()
   }
 
-  // Send Email Digest Simulation
+  // Send Email Digest
   const handleSendEmailDigest = async () => {
     if (!emailRecipients.trim()) {
       toast.error("Please enter recipient email addresses")
       return
     }
     setIsSendingEmail(true)
-    setTimeout(() => {
-      setIsSendingEmail(false)
+    try {
+      const week = availableWeeks.find((w) => w.id === selectedWeekId)
+      const periodLabel = isCustomMode ? `${customStartDate} to ${customEndDate}` : (week?.shortLabel || week?.label || "Selected period")
+      const res = await fetch("/api/doctor/report/send-digest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: emailRecipients,
+          periodLabel,
+          company: "All companies",
+          weekStart: isCustomMode ? customStartDate : week?.startDate,
+          weekEnd: isCustomMode ? customEndDate : week?.endDate,
+          weekLabel: periodLabel,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || "Failed to send report")
       setIsEmailModalOpen(false)
-      toast.success(`Executive Doctor Consultation Report digest sent to: ${emailRecipients}`)
-    }, 1200)
+      toast.success(`Doctor Consultation Report digest sent to: ${emailRecipients}`)
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to send report")
+    } finally {
+      setIsSendingEmail(false)
+    }
   }
 
   if (isLoading || !user) {
@@ -767,7 +923,7 @@ export default function DoctorConsultationReportPage() {
                     </div>
                   </div>
 
-                  {/* Unified Hub Navigation Bar */}
+                  {/* Unified Hub Navigation Bar — commented out per request: Overview Hub, Reports Hub, Doctor Calendar, Call History, New Prescription
                   <div className="flex items-center gap-2 flex-wrap pt-1">
                     <Button
                       variant="outline"
@@ -808,6 +964,7 @@ export default function DoctorConsultationReportPage() {
                       + New Prescription
                     </Button>
                   </div>
+                  */}
                 </div>
 
                 {/* Right Section - Action Buttons */}
@@ -839,6 +996,7 @@ export default function DoctorConsultationReportPage() {
                     <Printer className="w-3.5 h-3.5 mr-1.5 text-blue-200" />
                     Print Sheet
                   </Button>
+                  {/* Email Digest button — commented out per request
                   <Button
                     onClick={() => setIsEmailModalOpen(true)}
                     size="sm"
@@ -847,150 +1005,14 @@ export default function DoctorConsultationReportPage() {
                     <Mail className="w-3.5 h-3.5 mr-1.5" />
                     Email Digest
                   </Button>
+                  */}
                 </div>
               </div>
             </div>
           </div>
 
           {/* ═══════════════════════════════════════════════════════════════════
-              2. EXECUTIVE KPI METRIC CARDS
-          ════════════════════════════════════════════════════════════════════ */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5">
-            {/* KPI 1: Total Consultations */}
-            <Card className="border-blue-100/80 bg-gradient-to-br from-white via-blue-50/20 to-blue-50/50 shadow-sm hover:shadow-md transition-all rounded-xl">
-              <CardContent className="p-4 sm:p-5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-blue-700">Total Consults</span>
-                  <div className="p-2 rounded-xl bg-blue-100 text-blue-700 shadow-sm">
-                    <BarChart3 className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <div className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">
-                    {wTotals.totalConsults}
-                  </div>
-                  <div className="text-[11px] font-medium text-slate-500 mt-1 flex items-center justify-between pt-1 border-t border-slate-100">
-                    <span>Overall Cumulative:</span>
-                    <span className="font-bold text-slate-800">{oTotals.totalConsults?.toLocaleString()}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* KPI 2: Done / Completed */}
-            <Card className="border-emerald-100/80 bg-gradient-to-br from-white via-emerald-50/20 to-emerald-50/50 shadow-sm hover:shadow-md transition-all rounded-xl">
-              <CardContent className="p-4 sm:p-5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Done (Completed)</span>
-                  <div className="p-2 rounded-xl bg-emerald-100 text-emerald-700 shadow-sm">
-                    <CheckCircle2 className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <div className="text-2xl sm:text-3xl font-black text-emerald-600 tabular-nums">
-                    {wTotals.done}
-                  </div>
-                  <div className="text-[11px] font-medium text-slate-500 mt-1 flex items-center justify-between pt-1 border-t border-slate-100">
-                    <span>Completion Rate:</span>
-                    <span className="font-bold text-emerald-700">
-                      {oTotals.totalConsults > 0
-                        ? `${Math.round((oTotals.done / oTotals.totalConsults) * 100)}%`
-                        : "0%"}
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* KPI 3: Cancelled */}
-            <Card className="border-rose-100/80 bg-gradient-to-br from-white via-rose-50/20 to-rose-50/50 shadow-sm hover:shadow-md transition-all rounded-xl">
-              <CardContent className="p-4 sm:p-5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-rose-700">Cancelled</span>
-                  <div className="p-2 rounded-xl bg-rose-100 text-rose-700 shadow-sm">
-                    <XCircle className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <div className="text-2xl sm:text-3xl font-black text-rose-600 tabular-nums">
-                    {wTotals.cancelled}
-                  </div>
-                  <div className="text-[11px] font-medium text-slate-500 mt-1 flex items-center justify-between pt-1 border-t border-slate-100">
-                    <span>Overall Cancelled:</span>
-                    <span className="font-bold text-rose-700">{oTotals.cancelled?.toLocaleString()}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* KPI 4: Pending Queue */}
-            <Card className="border-amber-100/80 bg-gradient-to-br from-white via-amber-50/20 to-amber-50/50 shadow-sm hover:shadow-md transition-all rounded-xl">
-              <CardContent className="p-4 sm:p-5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700">Pending Queue</span>
-                  <div className="p-2 rounded-xl bg-amber-100 text-amber-700 shadow-sm">
-                    <Clock className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <div className="text-2xl sm:text-3xl font-black text-amber-600 tabular-nums">
-                    {wTotals.pending}
-                  </div>
-                  <div className="text-[11px] font-medium text-slate-500 mt-1 flex items-center justify-between pt-1 border-t border-slate-100">
-                    <span>Overall Pending:</span>
-                    <span className="font-bold text-amber-700">{oTotals.pending?.toLocaleString()}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* KPI 5: Conversion Rate */}
-            <Card className="border-purple-100/80 bg-gradient-to-br from-white via-purple-50/20 to-purple-50/50 shadow-sm hover:shadow-md transition-all rounded-xl">
-              <CardContent className="p-4 sm:p-5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-purple-700">Conversion Rate</span>
-                  <div className="p-2 rounded-xl bg-purple-100 text-purple-700 shadow-sm">
-                    <Target className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <div className="text-2xl sm:text-3xl font-black text-purple-700 tabular-nums">
-                    {oTotals.conversionRate}%
-                  </div>
-                  <div className="text-[11px] font-medium text-slate-500 mt-1 flex items-center justify-between pt-1 border-t border-slate-100">
-                    <span>Converted Patients:</span>
-                    <span className="font-bold text-purple-800">{oTotals.converted} leads</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* KPI 6: Overall Revenue Attributed */}
-            <Card className="border-indigo-900 bg-gradient-to-br from-slate-900 via-indigo-950 to-blue-950 text-white shadow-md hover:shadow-lg transition-all rounded-xl">
-              <CardContent className="p-4 sm:p-5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-300">Total Revenue</span>
-                  <div className="p-2 rounded-xl bg-white/10 text-emerald-400">
-                    <IndianRupee className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <div className="text-2xl sm:text-3xl font-black text-emerald-300 tabular-nums">
-                    ₹{(oTotals.revenue / 10000000).toFixed(2)} Cr
-                  </div>
-                  <div className="text-[11px] font-medium text-slate-300 mt-1 flex items-center justify-between pt-1 border-t border-white/10">
-                    <span>Avg / Conversion:</span>
-                    <span className="font-bold text-white">
-                      ₹{Math.round(oTotals.avgRevenuePerConsult / 1000)}k
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* ═══════════════════════════════════════════════════════════════════
-              3. ADVANCED FILTERS & CONTROLS CARD
+              2. ADVANCED FILTERS & CONTROLS CARD
           ════════════════════════════════════════════════════════════════════ */}
           <div className="rounded-xl border border-slate-200 bg-white shadow-sm no-print">
             {/* Filter Header */}
@@ -1139,7 +1161,243 @@ export default function DoctorConsultationReportPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Period Navigation — Month / Quarter / Year. Week already has its own
+                  navigator in the Weekly Doctor Consultation Report section's header. */}
+              <div className="mt-4 pt-4 border-t border-slate-200">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5 block">
+                  Period Navigation
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                  {/* Month */}
+                  <div>
+                    <div className="flex items-center gap-1 bg-slate-50 border border-slate-300 rounded-md h-9 px-1">
+                      <button
+                        type="button"
+                        onClick={() => setMonthOffset((o) => Math.max(-60, o - 1))}
+                        className="h-7 w-7 flex items-center justify-center rounded hover:bg-slate-200 text-slate-600 flex-shrink-0"
+                        title="Previous month"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                      </button>
+                      <span className="flex-1 text-center text-xs font-bold text-slate-800 truncate">
+                        {monthlyReport.dateRange?.label || "This Month"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setMonthOffset((o) => Math.min(12, o + 1))}
+                        className="h-7 w-7 flex items-center justify-center rounded hover:bg-slate-200 text-slate-600 flex-shrink-0"
+                        title="Next month"
+                      >
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    {monthOffset !== 0 && (
+                      <button onClick={() => setMonthOffset(0)} className="text-[10px] text-blue-600 hover:underline mt-1">
+                        Jump to current month
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Quarter */}
+                  <div>
+                    <div className="flex items-center gap-1 bg-slate-50 border border-slate-300 rounded-md h-9 px-1">
+                      <button
+                        type="button"
+                        onClick={() => setQuarterOffset((o) => Math.max(-20, o - 1))}
+                        className="h-7 w-7 flex items-center justify-center rounded hover:bg-slate-200 text-slate-600 flex-shrink-0"
+                        title="Previous quarter"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                      </button>
+                      <span className="flex-1 text-center text-xs font-bold text-slate-800 truncate">
+                        {quarterlyReport.dateRange?.label || "This Quarter"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setQuarterOffset((o) => Math.min(4, o + 1))}
+                        className="h-7 w-7 flex items-center justify-center rounded hover:bg-slate-200 text-slate-600 flex-shrink-0"
+                        title="Next quarter"
+                      >
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    {quarterOffset !== 0 && (
+                      <button onClick={() => setQuarterOffset(0)} className="text-[10px] text-blue-600 hover:underline mt-1">
+                        Jump to current quarter
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Year */}
+                  <div>
+                    <div className="flex items-center gap-1 bg-slate-50 border border-slate-300 rounded-md h-9 px-1">
+                      <button
+                        type="button"
+                        onClick={() => setYearOffset((o) => Math.max(-10, o - 1))}
+                        className="h-7 w-7 flex items-center justify-center rounded hover:bg-slate-200 text-slate-600 flex-shrink-0"
+                        title="Previous financial year"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                      </button>
+                      <span className="flex-1 text-center text-xs font-bold text-slate-800 truncate">
+                        {yearlyReport.dateRange?.label || "This Financial Year"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setYearOffset((o) => Math.min(2, o + 1))}
+                        className="h-7 w-7 flex items-center justify-center rounded hover:bg-slate-200 text-slate-600 flex-shrink-0"
+                        title="Next financial year"
+                      >
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    {yearOffset !== 0 && (
+                      <button onClick={() => setYearOffset(0)} className="text-[10px] text-blue-600 hover:underline mt-1">
+                        Jump to current FY
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
+          </div>
+
+          {/* ═══════════════════════════════════════════════════════════════════
+              3. EXECUTIVE KPI METRIC CARDS
+          ════════════════════════════════════════════════════════════════════ */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5">
+            {/* KPI 1: Total Consultations */}
+            <Card className="border-blue-100/80 bg-gradient-to-br from-white via-blue-50/20 to-blue-50/50 shadow-sm hover:shadow-md transition-all rounded-xl">
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-blue-700">Total Consults</span>
+                  <div className="p-2 rounded-xl bg-blue-100 text-blue-700 shadow-sm">
+                    <BarChart3 className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <div className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">
+                    {wTotals.totalConsults}
+                  </div>
+                  <div className="text-[11px] font-medium text-slate-500 mt-1 flex items-center justify-between pt-1 border-t border-slate-100">
+                    <span>Overall Cumulative:</span>
+                    <span className="font-bold text-slate-800">{oTotals.totalConsults?.toLocaleString()}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* KPI 2: Done / Completed */}
+            <Card className="border-emerald-100/80 bg-gradient-to-br from-white via-emerald-50/20 to-emerald-50/50 shadow-sm hover:shadow-md transition-all rounded-xl">
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Done (Completed)</span>
+                  <div className="p-2 rounded-xl bg-emerald-100 text-emerald-700 shadow-sm">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <div className="text-2xl sm:text-3xl font-black text-emerald-600 tabular-nums">
+                    {wTotals.done}
+                  </div>
+                  <div className="text-[11px] font-medium text-slate-500 mt-1 flex items-center justify-between pt-1 border-t border-slate-100">
+                    <span>Completion Rate:</span>
+                    <span className="font-bold text-emerald-700">
+                      {oTotals.totalConsults > 0
+                        ? `${Math.round((oTotals.done / oTotals.totalConsults) * 100)}%`
+                        : "0%"}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* KPI 3: Cancelled */}
+            <Card className="border-rose-100/80 bg-gradient-to-br from-white via-rose-50/20 to-rose-50/50 shadow-sm hover:shadow-md transition-all rounded-xl">
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-rose-700">Cancelled</span>
+                  <div className="p-2 rounded-xl bg-rose-100 text-rose-700 shadow-sm">
+                    <XCircle className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <div className="text-2xl sm:text-3xl font-black text-rose-600 tabular-nums">
+                    {wTotals.cancelled}
+                  </div>
+                  <div className="text-[11px] font-medium text-slate-500 mt-1 flex items-center justify-between pt-1 border-t border-slate-100">
+                    <span>Overall Cancelled:</span>
+                    <span className="font-bold text-rose-700">{oTotals.cancelled?.toLocaleString()}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* KPI 4: Pending Queue */}
+            <Card className="border-amber-100/80 bg-gradient-to-br from-white via-amber-50/20 to-amber-50/50 shadow-sm hover:shadow-md transition-all rounded-xl">
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700">Pending Queue</span>
+                  <div className="p-2 rounded-xl bg-amber-100 text-amber-700 shadow-sm">
+                    <Clock className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <div className="text-2xl sm:text-3xl font-black text-amber-600 tabular-nums">
+                    {wTotals.pending}
+                  </div>
+                  <div className="text-[11px] font-medium text-slate-500 mt-1 flex items-center justify-between pt-1 border-t border-slate-100">
+                    <span>Overall Pending:</span>
+                    <span className="font-bold text-amber-700">{oTotals.pending?.toLocaleString()}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* KPI 5: Conversion Rate */}
+            <Card className="border-purple-100/80 bg-gradient-to-br from-white via-purple-50/20 to-purple-50/50 shadow-sm hover:shadow-md transition-all rounded-xl">
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-purple-700">Conversion Rate</span>
+                  <div className="p-2 rounded-xl bg-purple-100 text-purple-700 shadow-sm">
+                    <Target className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <div className="text-2xl sm:text-3xl font-black text-purple-700 tabular-nums">
+                    {oTotals.conversionRate}%
+                  </div>
+                  <div className="text-[11px] font-medium text-slate-500 mt-1 flex items-center justify-between pt-1 border-t border-slate-100">
+                    <span>Converted Patients:</span>
+                    <span className="font-bold text-purple-800">{oTotals.converted} leads</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* KPI 6: Overall Revenue Attributed */}
+            <Card className="border-indigo-900 bg-gradient-to-br from-slate-900 via-indigo-950 to-blue-950 text-white shadow-md hover:shadow-lg transition-all rounded-xl">
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-300">Total Revenue</span>
+                  <div className="p-2 rounded-xl bg-white/10 text-emerald-400">
+                    <IndianRupee className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <div className="text-2xl sm:text-3xl font-black text-emerald-300 tabular-nums">
+                    ₹{(oTotals.revenue / 10000000).toFixed(2)} Cr
+                  </div>
+                  <div className="text-[11px] font-medium text-slate-300 mt-1 flex items-center justify-between pt-1 border-t border-white/10">
+                    <span>Avg / Conversion:</span>
+                    <span className="font-bold text-white">
+                      ₹{Math.round(oTotals.avgRevenuePerConsult / 1000)}k
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           {/* ═══════════════════════════════════════════════════════════════════
@@ -1209,6 +1467,15 @@ export default function DoctorConsultationReportPage() {
                           {formatCurrency(wTotals.revenue)}
                         </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => setWeeklySectionOpen((o) => !o)}
+                        aria-expanded={weeklySectionOpen}
+                        className="h-9 w-9 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-white transition-colors flex-shrink-0 ml-1"
+                        title={weeklySectionOpen ? "Collapse" : "Expand"}
+                      >
+                        <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${weeklySectionOpen ? "rotate-180" : ""}`} />
+                      </button>
                     </div>
                   </div>
 
@@ -1365,7 +1632,8 @@ export default function DoctorConsultationReportPage() {
                   )}
                 </div>
 
-                {/* Table Content */}
+                {/* Table Content — wrapped by default */}
+                {weeklySectionOpen && (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader className="bg-slate-50 border-b border-slate-200">
@@ -1488,7 +1756,57 @@ export default function DoctorConsultationReportPage() {
                     </TableBody>
                   </Table>
                 </div>
+                )}
               </div>
+
+              {/* SECTION A.1 / A.2 / A.3: MONTHLY, QUARTERLY, YEARLY — wrapped by default */}
+              <ConsultationSourceTable
+                title="Monthly Doctor Consultation Report"
+                subtitle="Inbound consultations by enquiry source for the current calendar month"
+                badge={
+                  <Badge className="bg-blue-400/20 text-blue-200 border-blue-400/40 text-xs font-bold px-2.5 py-0.5">
+                    📅 {monthlyReport.dateRange?.label || "This Month"}
+                  </Badge>
+                }
+                totals={monthlyReport.totals}
+                rows={monthlyReport.rows}
+                formatCurrency={formatCurrency}
+                gradientClass="from-teal-800 via-teal-900 to-slate-900"
+                totalRowLabel="TOTAL (MONTHLY)"
+                totalRowAccentClass="border-teal-600"
+              />
+
+              <ConsultationSourceTable
+                title="Quarterly Doctor Consultation Report"
+                subtitle="Inbound consultations by enquiry source for the current financial-year quarter"
+                badge={
+                  <Badge className="bg-blue-400/20 text-blue-200 border-blue-400/40 text-xs font-bold px-2.5 py-0.5">
+                    📅 {quarterlyReport.dateRange?.label || "This Quarter"}
+                  </Badge>
+                }
+                totals={quarterlyReport.totals}
+                rows={quarterlyReport.rows}
+                formatCurrency={formatCurrency}
+                gradientClass="from-purple-800 via-purple-900 to-slate-900"
+                totalRowLabel="TOTAL (QUARTERLY)"
+                totalRowAccentClass="border-purple-600"
+              />
+
+              <ConsultationSourceTable
+                title="Yearly Doctor Consultation Report"
+                subtitle="Inbound consultations by enquiry source for the current financial year"
+                badge={
+                  <Badge className="bg-blue-400/20 text-blue-200 border-blue-400/40 text-xs font-bold px-2.5 py-0.5">
+                    📅 {yearlyReport.dateRange?.label || "This Financial Year"}
+                  </Badge>
+                }
+                totals={yearlyReport.totals}
+                rows={yearlyReport.rows}
+                formatCurrency={formatCurrency}
+                gradientClass="from-amber-800 via-amber-900 to-slate-900"
+                totalRowLabel="TOTAL (YEARLY)"
+                totalRowAccentClass="border-amber-600"
+              />
 
               {/* SECTION B: OVER ALL CUMULATIVE REPORT TABLE */}
               <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -1512,10 +1830,20 @@ export default function DoctorConsultationReportPage() {
                         ₹{(oTotals.revenue / 10000000).toFixed(2)} Cr
                       </div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setOverallSectionOpen((o) => !o)}
+                      aria-expanded={overallSectionOpen}
+                      className="h-9 w-9 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-white transition-colors flex-shrink-0"
+                      title={overallSectionOpen ? "Collapse" : "Expand"}
+                    >
+                      <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${overallSectionOpen ? "rotate-180" : ""}`} />
+                    </button>
                   </div>
                 </div>
 
-                {/* Table Content */}
+                {/* Table Content — wrapped by default */}
+                {overallSectionOpen && (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader className="bg-slate-50 border-b border-slate-200">
@@ -1639,6 +1967,7 @@ export default function DoctorConsultationReportPage() {
                     </TableBody>
                   </Table>
                 </div>
+                )}
               </div>
 
               {/* Strategic Insights Cards */}

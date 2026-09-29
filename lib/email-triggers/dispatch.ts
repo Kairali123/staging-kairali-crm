@@ -80,6 +80,26 @@ export async function buildEmail(t:Trigger,at:number){
    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'http://localhost:3000'
    html = renderAllocationSnapshotEmail(summary, appUrl).html
   }
+  else if(t.reportId==='doctor-consultation-report'){
+   reportTitle='Doctor Consultation Report'
+   reportSlug='Doctor-Consultation-Report'
+   const { liveDoctorConsultDigest, buildDoctorConsultDigestHTML } = await import('@/lib/doctor-consultation-report-email')
+   const { fetchLiveDoctorReport, aggregateConsultationsBySource, SAMPLE_CONSULTATION_RECORDS, AVAILABLE_WEEKS } = await import('@/app/api/doctor/report/route')
+   // Overall Cumulative is real (fetchLiveDoctorReport, a manually verified Google Apps
+   // Script feed). Weekly reuses the same sample-data aggregation the page's own Weekly
+   // section uses — not GAS-sourced, same known limitation as the page. Doctors
+   // Performance still has no live source at all, so it stays out of this email.
+   const scope=t.company==='All companies'?'All companies':t.company
+   const { rows, totals, isLive, lastSyncedAt } = await fetchLiveDoctorReport()
+   hasData = totals.totalConsults > 0
+   const periodLabel = `All-Time Cumulative${isLive?'':' (cached — GAS feed unreachable)'} · synced ${new Date(lastSyncedAt).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})} IST`
+   const currentWeek = AVAILABLE_WEEKS.find((w:any)=>w.isCurrent) || AVAILABLE_WEEKS[0]
+   const weekly = currentWeek ? {
+    label: currentWeek.shortLabel,
+    ...aggregateConsultationsBySource(SAMPLE_CONSULTATION_RECORDS, currentWeek.startDate, currentWeek.endDate, 'all', 'all'),
+   } : undefined
+   html=buildDoctorConsultDigestHTML(liveDoctorConsultDigest(rows,totals,periodLabel,scope,weekly))
+  }
   else{
    throw new Error(`Unhandled email trigger report template: "${t.reportId}"`)
   }

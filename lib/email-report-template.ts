@@ -7,6 +7,7 @@ export const emailReportTemplates = {
   'kserve-lead-lost-alert': { name: 'KServe Lead Lost Alert', path: '/ai-voice-leads' },
   'booking-pi-review-alert': { name: 'Booking PI Review Alert', path: '/fms/booking-pi-review-tracker' },
   'morning-lead-allocation': { name: 'Morning Lead Allocation Alert', path: '/morning-lead-allocation' },
+  'doctor-consultation-report': { name: 'Doctor Consultation Report Alert', path: '/doctor-consultation/report' },
 } as const
 export type EmailReportId = keyof typeof emailReportTemplates
 /** Names this report was saved under before it was renamed; still accepted and shown under the current name. */
