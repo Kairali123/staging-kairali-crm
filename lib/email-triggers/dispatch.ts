@@ -2,30 +2,97 @@ import nodemailer from 'nodemailer'
 import { randomUUID } from 'node:crypto'
 import { marketingMailConfig } from '@/lib/marketing-report-email'
 import { scopedEmployees } from '@/lib/daily-sales-calling'
-import { exportSalesHTML, buildSalesDonutSvg } from '@/lib/daily-sales-report'
+import { exportSalesHTML, buildSalesDonutSvg, salesContributors } from '@/lib/daily-sales-report'
 import { reportExportHTML } from '@/lib/marketing-daily-report'
 import { loadScheduledSales } from './load-sales'
 import { loadScheduledMarketing } from './load-marketing'
 import { loadScheduledCrr } from './load-crr-report'
-import { exportCrrReportHTML } from '@/lib/ktahv-crr-report'
+import { exportCrrReportHTML, buildCrrJourneyDonutSvg } from '@/lib/ktahv-crr-report'
 import { buildKserveLostAlertEmail } from './templates/kserve-lead-lost-alert'
 import { buildPIReviewAlertEmail } from './templates/booking-pi-review-alert'
 import { loadBookingPIReviewAlertData } from './load-booking-pi-review'
 import { localDay, nextRun } from './schedule'
 import { transaction } from './store'
+import { resolveAppUrl } from './app-url'
 import type { Trigger, Run } from './schema'
 const esc=(s:string)=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!))
+export class IncompleteReportError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'IncompleteReportError'
+  }
+}
+
+// Vercel's runtime has no fonts, so sharp draws SVG <text> as empty boxes: rasterize the ring only
+// and carry the centre label as HTML under the image.
+const SVG_TEXT=/<text[^>]*>([^<]*)<\/text>/g
+function donutImgHtml(svg: string, cid: string, size: number, alt: string): string {
+  const caption=[...svg.matchAll(SVG_TEXT)].map(m=>m[1]).join(' ')
+  return `<img src="cid:${cid}" width="${size}" height="${size}" alt="${alt}" style="display:block;margin:0 auto;border:0;width:${size}px;height:${size}px" />`+
+    (caption?`<div style="margin-top:8px;text-align:center;font:700 14px/1.4 Arial,sans-serif;color:#1e305b">${caption}</div>`:'')
+}
+
+async function getDonutChartPng(donutSvg: string, contributors: { agent: string; sales: number }[]): Promise<Buffer | null> {
+  // 1. Try sharp
+  try {
+    const sharp = (await import('sharp')).default
+    const png = await sharp(Buffer.from(donutSvg.replace(SVG_TEXT, ''))).resize(380, 380).png().toBuffer()
+    if (png && png.length > 0) return png
+  } catch (sharpErr) {
+    console.warn('[email-trigger] sharp rasterize failed, attempting QuickChart:', (sharpErr as any)?.message || sharpErr)
+  }
+  // 2. Try QuickChart fallback
+  try {
+    if (contributors.length > 0) {
+      const chartConfig = {
+        type: 'doughnut',
+        data: {
+          labels: contributors.map(c => c.agent),
+          datasets: [{
+            data: contributors.map(c => c.sales),
+            backgroundColor: ['#4f6de0', '#9270cf', '#31a2ad', '#e4a04d', '#dc7d9b', '#6788a8']
+          }]
+        },
+        options: {
+          cutoutPercentage: 65,
+          plugins: {
+            legend: false,
+            datalabels: false
+          }
+        }
+      }
+      const qcUrl = `https://quickchart.io/chart?w=380&h=380&c=${encodeURIComponent(JSON.stringify(chartConfig))}`
+      const res = await fetch(qcUrl, { signal: AbortSignal.timeout(10000) })
+      if (res.ok) {
+        return Buffer.from(await res.arrayBuffer())
+      }
+    }
+  } catch (qcErr) {
+    console.warn('[email-trigger] QuickChart fallback failed:', qcErr)
+  }
+  return null
+}
+
 export async function buildEmail(t:Trigger,at:number){
  let date=localDay(at,'Asia/Kolkata');if(t.period==='Yesterday')date=new Date(Date.parse(date+'T00:00:00Z')-86400000).toISOString().slice(0,10);if(t.period==='Selected date')date=t.previewDate!
  const replace=(s:string)=>s.replaceAll('{{report_date}}',date).replaceAll('{{company_name}}',t.company).replaceAll('{{recipient_name}}','Team')
- let html='',hasData=true,attachments:any[]|undefined,donutSvg:string|null=null
+ let html='',hasData=true,attachments:any[]|undefined,donutSvg:string|null=null,salesReport:any=null
  if(t.bodyType==='Full report in email body'){
   let reportTitle='Daily Report'
   let reportSlug='Daily-Report'
   if(t.reportId==='daily-sales-report'){
    reportTitle='Daily Sales Report'
    reportSlug='Daily-Sales-Report'
-   const report=await loadScheduledSales(date);const scope=t.company==='All companies'?'ALL':t.company==='VILARAAG'?'VILLARAAG':t.company;hasData=report.rows.some(r=>scope==='ALL'||r.company===scope)||scopedEmployees(report.calling,scope).length>0;html=exportSalesHTML(report,scope);donutSvg=buildSalesDonutSvg(report,scope)||null
+   const report=await loadScheduledSales(date, { waitForFullData: true });
+   salesReport=report
+   const scope=t.company==='All companies'?'ALL':t.company==='VILARAAG'?'VILLARAAG':t.company;
+   const callingLoaded=Boolean(report.calling && Array.isArray(report.calling.employees) && report.calling.employees.length > 0)
+   if(!callingLoaded){
+    throw new IncompleteReportError('Employee calling activity data is not loaded yet (0 employees). Waiting for full data before sending report.')
+   }
+   hasData=report.rows.some(r=>scope==='ALL'||r.company===scope)||scopedEmployees(report.calling,scope).length>0;
+   html=exportSalesHTML(report,scope);
+   donutSvg=buildSalesDonutSvg(report,scope)||null
   }
   else if(t.reportId==='sales-call-audit'){
    reportTitle='Sales Call Audit Report'
@@ -35,7 +102,7 @@ export async function buildEmail(t:Trigger,at:number){
   else if(t.reportId==='ktahv-crr-process-report-alert'){
    reportTitle='KTAHV CRR Process Report'
    reportSlug='KTAHV-CRR-Process-Report'
-   const report=await loadScheduledCrr(date);hasData=report.chartData.totalActive>0||report.dailyDoneReport.totals.some(c=>c>0);html=exportCrrReportHTML(report,t.company)
+   const report=await loadScheduledCrr(date);hasData=report.chartData.totalActive>0||report.dailyDoneReport.totals.some(c=>c>0);html=exportCrrReportHTML(report,t.company);donutSvg=buildCrrJourneyDonutSvg(report.chartData.totalActive,report.chartData.totalComplete)||null
   }
   else if(t.reportId==='marketing-daily-report'){
    reportTitle='Marketing Daily Report'
@@ -55,8 +122,7 @@ export async function buildEmail(t:Trigger,at:number){
     const { getKserveReconciledLostLeads } = await import('@/lib/kserve-reconciliation');
     const { leads, stats } = await getKserveReconciledLostLeads({ minDays: lostDays });
     hasData = leads && leads.length > 0;
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    html = buildKserveLostAlertEmail(leads, stats, appUrl);
+    html = buildKserveLostAlertEmail(leads, stats, resolveAppUrl());
    } finally {
     connection.release()
    }
@@ -103,11 +169,40 @@ export async function buildEmail(t:Trigger,at:number){
   else{
    throw new Error(`Unhandled email trigger report template: "${t.reportId}"`)
   }
+  if(t.reportId==='ktahv-crr-process-report-alert'){
+   if(html.includes('Marketing Daily Report') || !html.includes('CRR')){
+    throw new Error('[email-trigger dispatch] INTEGRITY GUARD: Report output does not match KTAHV CRR Process Report. Aborting email send.')
+   }
+  }else if(t.reportId==='marketing-daily-report'){
+   if(!html.includes('Marketing Daily Report')){
+    throw new Error('[email-trigger dispatch] INTEGRITY GUARD: Report output does not match Marketing Daily Report. Aborting email send.')
+   }
+  }else if(t.reportId==='daily-sales-report'){
+   if(html.includes('Marketing Daily Report')){
+    throw new Error('[email-trigger dispatch] INTEGRITY GUARD: Report output contains Marketing Daily Report instead of Daily Sales Report. Aborting email send.')
+   }
+  }else if(t.reportId==='kserve-lead-lost-alert'){
+   if(html.includes('Marketing Daily Report') || !html.includes('KServe Lead Lost Alert')){
+    throw new Error('[email-trigger dispatch] INTEGRITY GUARD: Report output does not match KServe Lead Lost Alert. Aborting email send.')
+   }
+  }else if(t.reportId==='booking-pi-review-alert'){
+   if(html.includes('Marketing Daily Report') || !html.includes('Booking PI Review Alert')){
+    throw new Error('[email-trigger dispatch] INTEGRITY GUARD: Report output does not match Booking PI Review Alert. Aborting email send.')
+   }
+  }
   const p=(s:string)=>(s||'').trim()?'<div style="padding:18px 24px;white-space:pre-wrap;font:14px/1.8 Arial">'+esc(replace(s))+'</div>':''
   // Reports with in-layout markers keep the note inside their centered column; others get it around <body>.
   html=html.includes('<!--email-intro-->')?html.replace('<!--email-intro-->',()=>p(t.intro)).replace('<!--email-closing-->',()=>p(t.closing)):html.replace(/(<body[^>]*>)/,'$1'+p(t.intro)).replace('</body>',p(t.closing)+'</body>')
-  // booking-pi-review-alert, morning-lead-allocation, kserve-lead-lost-alert and sales-call-audit skip JPEG rendering — they use inline HTML tables
-  if(t.reportId!=='sales-call-audit'&&t.reportId!=='kserve-lead-lost-alert'&&t.reportId!=='booking-pi-review-alert'&&t.reportId!=='morning-lead-allocation'){
+  // Gmail strips inline <svg>, leaving only the donut's "420GUESTS" text; send it as a CID PNG instead.
+  if(t.reportId==='ktahv-crr-process-report-alert'&&donutSvg){
+   const png=await getDonutChartPng(donutSvg,[])
+   if(png&&png.length>0){
+    html=html.replace(donutSvg,()=>donutImgHtml(donutSvg!,'crr-donut-chart',160,'Total journeys donut chart'))
+    attachments=[...(attachments||[]),{filename:'crr-donut-chart.png',content:png,cid:'crr-donut-chart'}]
+   }
+  }
+  // ktahv-crr-process-report-alert, booking-pi-review-alert, morning-lead-allocation, kserve-lead-lost-alert and sales-call-audit skip JPEG rendering — they use inline HTML tables
+  if(t.reportId!=='sales-call-audit'&&t.reportId!=='kserve-lead-lost-alert'&&t.reportId!=='ktahv-crr-process-report-alert'&&t.reportId!=='booking-pi-review-alert'&&t.reportId!=='morning-lead-allocation'){
    try{
     const {renderJPEG}=await import('@/lib/whatsapp-triggers/render')
     if(typeof renderJPEG==='function'){
@@ -124,16 +219,19 @@ export async function buildEmail(t:Trigger,at:number){
     // the donut chart to a CID-attached PNG instead of shipping markup that silently disappears.
     if(donutSvg){
      try{
-      const sharp=(await import('sharp')).default
-      const png=await sharp(Buffer.from(donutSvg)).resize(380,380).png().toBuffer()
-      html=html.replace(donutSvg,'<img src="cid:sales-donut-chart" width="190" height="190" alt="Sales contribution donut chart" style="display:block;margin:0 auto;border:0;width:190px;height:190px" />')
-      attachments=[...(attachments||[]),{filename:'sales-donut-chart.png',content:png,cid:'sales-donut-chart'}]
+      const contributors = salesReport ? salesContributors(salesReport.rows) : []
+      const png = await getDonutChartPng(donutSvg, contributors)
+      if (png && png.length > 0) {
+       html=html.replace(donutSvg,()=>donutImgHtml(donutSvg!,'sales-donut-chart',190,'Sales contribution donut chart'))
+       attachments=[...(attachments||[]),{filename:'sales-donut-chart.png',content:png,cid:'sales-donut-chart'}]
+      }
      }catch(pngErr){console.warn('[email-trigger] donut PNG fallback failed:',pngErr)}
     }
    }
   }
  }else html='<div style="white-space:pre-wrap;font:14px/1.8 Arial">'+esc(t.bodyType==='Static'?t.body:replace(t.body))+'</div>'
- return {subject:replace(t.subject),html,hasData,...(attachments?{attachments}:{})}
+ const diag=`reportId=${t.reportId} kserveMarker=${html.includes('KServe Lead Lost Alert')} marketingMarker=${html.includes('Marketing Daily Report')} len=${html.length}`
+ return {subject:replace(t.subject),html,hasData,diag,...(attachments?{attachments}:{})}
 }
 export type DispatchDeps={build:typeof buildEmail;send:(t:Trigger,email:{subject:string;html:string;attachments?:any[]})=>Promise<{accepted:number;rejected:number}>}
 const deps:DispatchDeps={build:buildEmail,send:async(t,email)=>{
@@ -163,9 +261,20 @@ export async function dispatchDue(now=Date.now(),io=deps){
    else{
     const allowed=await transaction(s=>{const current=s.triggers.find(x=>x.id===t.id),r=s.runs.find(x=>x.id===run.id)!;if(!current||current.status!=='Active'||current.revision!==t.revision){r.status='Skipped';return false}r.status='Sending';r.detail='Handing message to provider';return true})
     if(!allowed){status='Skipped';detail='Configuration changed or paused before delivery'}
-    else{sending=true;const result=await io.send(t,email);status=result.rejected?'Partial':result.accepted?'Accepted':'Failed';detail=result.rejected?'Some recipients rejected; inspect mailbox before retrying':result.accepted?'Accepted by email provider (not delivery confirmation)':'Provider accepted no recipients'}
+    else{sending=true;const result=await io.send(t,email);status=result.rejected?'Partial':result.accepted?'Accepted':'Failed';detail=(result.rejected?'Some recipients rejected; inspect mailbox before retrying':result.accepted?'Accepted by email provider (not delivery confirmation)':'Provider accepted no recipients')+' | DIAG:'+((email as any).diag||'none')}
    }
-  }catch(err:any){if(sending){status='Unknown';detail='Delivery outcome uncertain. Verify mailbox before resuming.'}else{console.error('[email-trigger dispatch error]', err);detail=err?.message?`Report generation failed: ${err.message}. No email sent.`:'Report generation failed. No email sent.'}}
+  }catch(err:any){
+   if(err instanceof IncompleteReportError || err?.name === 'IncompleteReportError'){
+    await transaction(s=>{
+     const r=s.runs.find(x=>x.id===run.id)
+     if(r){r.status='Preparing';r.detail=err.message}
+     const current=s.triggers.find(x=>x.id===t.id)
+     if(current){current.nextRun=new Date(now+5*60000).toISOString();current.lastResult='Waiting for data'}
+    })
+    continue
+   }
+   if(sending){status='Unknown';detail='Delivery outcome uncertain. Verify mailbox before resuming.'}else{console.error('[email-trigger dispatch error]', err);detail=err?.message?`Report generation failed: ${err.message}. No email sent.`:'Report generation failed. No email sent.'}
+  }
   await transaction(s=>{const r=s.runs.find(x=>x.id===run.id)!;Object.assign(r,{status,detail,finishedAt:new Date().toISOString()});const current=s.triggers.find(x=>x.id===t.id);if(current){current.lastResult=status;if(['Unknown','Partial'].includes(status)){current.status='Paused';current.nextRun=null}}})
  }
  return {processed:claims.length,workerId:randomUUID()}
