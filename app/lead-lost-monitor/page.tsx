@@ -285,6 +285,8 @@ export default function Home() {
   const [expandedAuditLead, setExpandedAuditLead] = useState<string | null>(null);
   const [deletedReasonFilter, setDeletedReasonFilter] = useState<DeletedReasonKey>("all");
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
+  const [tablePage, setTablePage] = useState(1);
+  const TABLE_PAGE_SIZE = 7;
 
   const load = async (force = false) => {
     setLoading(true);
@@ -326,7 +328,9 @@ export default function Home() {
       return { date: groupDate, rows: groupRows, companies: companiesForDate, total: totalRows(groupRows) };
     });
   }, [visible]);
-  const activeExpandedDate = expandedDate && groups.some(group => group.date === expandedDate) ? expandedDate : groups[0]?.date ?? null;
+  const tablePageCount = Math.max(1, Math.ceil(groups.length / TABLE_PAGE_SIZE));
+  const pagedGroups = groups.slice((tablePage - 1) * TABLE_PAGE_SIZE, tablePage * TABLE_PAGE_SIZE);
+  const activeExpandedDate = expandedDate; // Minimise by default
   const allRecords = visible.flatMap(r => r.records ?? r.issues ?? []);
   const summary = visible.reduce((a, r) => ({ direct: a.direct + r.direct, medium: a.medium + r.medium, duplicate: a.duplicate + r.duplicate, expectedDuplicateGap: a.expectedDuplicateGap + r.expectedDuplicateGap, toBuffer: a.toBuffer + r.bufferTransfer, buffer: a.buffer + r.buffer, mediumLost: a.mediumLost + r.mediumBufferLost, crm: a.crm + r.crm, sameDayCrm: a.sameDayCrm + r.sameDayCrm, lateTransfer: a.lateTransfer + r.lateTransfer, masterLost: a.masterLost + r.masterCrmLost, assigned: a.assigned + r.assigned, breaches: a.breaches + r.slaBreaches, tatSum: a.tatSum + r.avgTatMin * r.buffer, tatWeight: a.tatWeight + r.buffer, mismatches: a.mismatches + Number(r.mismatch) }), { direct: 0, medium: 0, duplicate: 0, expectedDuplicateGap: 0, toBuffer: 0, buffer: 0, mediumLost: 0, crm: 0, sameDayCrm: 0, lateTransfer: 0, masterLost: 0, assigned: 0, breaches: 0, tatSum: 0, tatWeight: 0, mismatches: 0 });
   const openLoss = visible.reduce((total, row) => total + row.directMediumGap + row.mediumBufferLost + row.masterCrmLost + Math.max(0, row.crm - row.assigned), 0);
@@ -413,6 +417,7 @@ export default function Home() {
     const anchor = document.createElement("a"); anchor.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); anchor.download = `lead-audit-${new Date().toISOString().slice(0, 10)}.csv`; anchor.click(); URL.revokeObjectURL(anchor.href);
   };
   const reset = () => { setQuery(""); setCompany("All companies"); setSource("All sources"); setDate("All dates"); setHealth("All status"); };
+  useEffect(() => { setTablePage(1); setExpandedDate(null); }, [visible]);
 
   const lossStages: Array<{ label: string; count: number; hint: string; select: (lead: LeadRecord) => boolean }> = [
     { label: "Direct API → Master Medium", count: visible.reduce((n, row) => n + row.directMediumGap, 0), hint: "Lead ID did not enter Master Medium", select: x => !x.inMedium },
@@ -435,8 +440,50 @@ export default function Home() {
       <header className="topbar"><div><p>OPERATIONS / LEAD CONTROL</p><h1>CRM reconciliation command center</h1></div><div className="topbar-actions" style={{display: "flex", gap: "10px", marginLeft: "auto", marginRight: "20px"}}><button onClick={() => openDetailed("Open incidents", x => x.status !== "Resolved")} style={{padding: "8px 12px", background: "#f1f5f9", borderRadius: "6px", fontSize: "12px", fontWeight: "bold"}}>! Incidents {summary.breaches + openLoss}</button><button onClick={() => openDetailed("Duplicate proof", x => x.validDuplicate ?? Boolean(x.original))} style={{padding: "8px 12px", background: "#f1f5f9", borderRadius: "6px", fontSize: "12px", fontWeight: "bold"}}>⌘ Duplicate proof</button></div><div className="top-actions"><span className={`mode ${payload?.live ? "live" : "demo"}`}><i/>{payload?.live ? "LIVE DATA" : payload ? "SOURCE ERROR" : "CONNECTING"}</span><button className="refresh" onClick={() => load(false)} disabled={loading}>{loading && !forceRefreshing ? "Refreshing…" : "↻ Refresh now"}</button><button className="force-refresh" onClick={() => load(true)} disabled={loading}>{forceRefreshing ? "Scanning all sheets…" : "⟳ Force fresh scan"}</button></div></header>
       <section className={`alert-strip ${!payload?.live || summary.mismatches ? "tracker-stale" : ""}`}><div className="alert-icon">!</div><div><strong>{loading && !payload ? "Connecting to live Google Sheets…" : payload && !payload.live ? "Live reconciliation source unavailable" : summary.mismatches ? `${summary.mismatches} Data Mismatch row${summary.mismatches > 1 ? "s" : ""} found` : openLoss ? `${openLoss} lead reconciliation exception${openLoss > 1 ? "s" : ""}` : "All Lead IDs are reconciled"}</strong><p>{loading && !payload ? "Latest Date + Company + Source reconciliation is loading. Counts will appear automatically." : payload && !payload.live ? `${payload.diagnostic ?? "Secure Google Sheets bridge did not return live rows."} No demo counts are shown.` : summary.mismatches ? "Row formulas failed—highlighted rows par click karke exact Lead IDs audit karein." : openLoss ? "Lost radar exact pipeline stage aur records identify karta hai." : "Direct, duplicate, buffer and CRM formulas match."}</p></div><button onClick={() => payload?.live ? openDetailed("Reconciliation exceptions", x => x.status !== "Resolved") : load()} disabled={loading || detailsLoading}>{payload?.live ? detailsLoading ? "Loading Lead IDs…" : "Review leads →" : loading ? "Connecting…" : "Retry live sync →"}</button></section>
       <section className="filters"><label className="search"><span>⌕</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search company, source or date…"/></label><select value={company} onChange={e => setCompany(e.target.value)}><option>All companies</option>{companies.map(x => <option key={x}>{x}</option>)}</select><select value={source} onChange={e => setSource(e.target.value)}><option>All sources</option>{sources.map(x => <option key={x}>{x}</option>)}</select><select value={date} onChange={e => setDate(e.target.value)}><option>All dates</option>{dates.map(x => <option key={x} value={x}>{dateLabel(x)}</option>)}</select><select value={health} onChange={e => setHealth(e.target.value)}><option>All status</option><option>Data Mismatch</option><option>Lost</option><option>TAT breach</option><option>Reconciled</option></select><button className="clear" onClick={reset}>Clear</button></section>
-      <section className="kpis"><button className="kpi" onClick={() => openDetailed("All direct API leads", () => true)}><span className="kpi-icon teal">↓</span><div><small>DIRECT API LEADS</small><strong>{fmt(summary.direct)}</strong><p>Unique Lead IDs</p></div></button><button className="kpi danger" onClick={() => openDetailed("Open lost leads", x => lossStages.some(stage => stage.select(x)), "lost-map")}><span className="kpi-icon red">!</span><div><small>ACTUAL LOST / OPEN GAPS</small><strong>{fmt(openLoss)}</strong><p>Expected duplicates excluded</p></div></button><button className="kpi" onClick={() => openDetailed("Expected duplicate gaps", x => Boolean(x.expectedDuplicateGap))}><span className="kpi-icon amber">⌘</span><div><small>EXPECTED DUPLICATE GAPS</small><strong>{fmt(summary.expectedDuplicateGap)}</strong><p>Mobile + email · within 24h</p></div></button><button className="kpi" onClick={() => openDetailed("Late CRM transfers", x => Boolean(x.lateTransfer))}><span className="kpi-icon violet">◷</span><div><small>LATE TRANSFER</small><strong>{fmt(summary.lateTransfer)}</strong><p>Delayed, never Lost</p></div></button><button className="kpi" onClick={() => openDetailed("Sales / KServe assignments", x => x.assigned)}><span className="kpi-icon green">✓</span><div><small>SALES / KSERVE</small><strong>{fmt(summary.assigned)}</strong><p>{summary.direct ? Math.round(summary.assigned / summary.direct * 1000) / 10 : 0}% of intake</p></div></button></section>
-      <section className="kpis"><button className="kpi" onClick={() => setHealth("TAT breach")}><span className="kpi-icon amber">◷</span><div><small>TAT BREACH</small><strong>{fmt(tatBreachCount)}</strong><p>Over SLA, not lost yet</p></div></button><button className="kpi" onClick={() => setHealth("Data Mismatch")}><span className="kpi-icon teal">≠</span><div><small>DATA MISMATCH</small><strong>{fmt(summary.mismatches)}</strong><p>Field conflict across sheets</p></div></button><button className="kpi" onClick={() => setHealth("Reconciled")}><span className="kpi-icon green">✓</span><div><small>RECONCILED</small><strong>{fmt(reconciledCount)}</strong><p>{reconciledPercent}% fully matched</p></div></button><button className="kpi danger" onClick={() => openDetailed(`${biggestLeak.label} gaps`, biggestLeak.select, "lost-map")}><span className="kpi-icon red">!</span><div><small>BIGGEST LEAK STAGE</small><strong>{fmt(biggestLeak.count)}</strong><p>{biggestLeak.label}</p></div></button><button className="kpi" onClick={() => openDetailed("API to CRM entry TAT", x => x.inCrm)}><span className="kpi-icon violet">◴</span><div><small>AVG TAT</small><strong>{avgCrmTat}</strong><p>API to CRM entry</p></div></button></section>
+      <section className="kpis">
+        <button className="kpi" onClick={() => openDetailed("All direct API leads", () => true)}>
+          <span className="kpi-icon teal">↓</span>
+          <div><small>DIRECT API SOURCE</small><strong>{fmt(summary.direct)}</strong></div>
+        </button>
+        <button className="kpi danger" onClick={() => openDetailed("Gap 1 Direct to Medium", () => true)}>
+          <span className="kpi-icon red">!</span>
+          <div><small>GAP 1 DIRECT → MEDIUM</small><strong>{fmt(summary.direct - summary.medium)}</strong></div>
+        </button>
+        <button className="kpi" onClick={() => openDetailed("Master Medium", () => true)}>
+          <span className="kpi-icon violet">◷</span>
+          <div><small>MASTER MEDIUM MERGED</small><strong>{fmt(summary.medium)}</strong></div>
+        </button>
+        <button className="kpi danger" onClick={() => openDetailed("Gap 2 Medium to Buffer", () => true)}>
+          <span className="kpi-icon red">!</span>
+          <div><small>GAP 2 MEDIUM → BUFFER</small><strong>{fmt(summary.mediumLost)}</strong></div>
+        </button>
+        <button className="kpi" onClick={() => openDetailed("Buffer Staged", () => true)}>
+          <span className="kpi-icon amber">⌘</span>
+          <div><small>ACTUAL BUFFER STAGED</small><strong>{fmt(summary.buffer)}</strong></div>
+        </button>
+      </section>
+      <section className="kpis">
+        <button className="kpi danger" onClick={() => openDetailed("Gap 3 Buffer to CRM", () => true)}>
+          <span className="kpi-icon red">!</span>
+          <div><small>GAP 3 BUFFER → CRM</small><strong>{fmt(summary.masterLost)}</strong></div>
+        </button>
+        <button className="kpi" onClick={() => openDetailed("CRM Reconciled", () => true)}>
+          <span className="kpi-icon green">✓</span>
+          <div><small>ACTUAL CRM RECONCILED</small><strong>{fmt(summary.crm)}</strong></div>
+        </button>
+        <button className="kpi" onClick={() => openDetailed("Transfer to Sales", () => true)}>
+          <span className="kpi-icon teal">↓</span>
+          <div><small>TRANSFER TO SALES</small><strong>{fmt(summary.assigned)}</strong></div>
+        </button>
+        <button className="kpi" onClick={() => openDetailed("Transfer to KServe", () => true)}>
+          <span className="kpi-icon violet">◷</span>
+          <div><small>TRANSFER TO KSERVE</small><strong>0</strong></div>
+        </button>
+        <button className={openLoss > 0 ? "kpi danger" : "kpi"} onClick={() => openDetailed("Loss %", () => true)}>
+          <span className={openLoss > 0 ? "kpi-icon red" : "kpi-icon green"}>%</span>
+          <div><small>LOSS %</small><strong>{summary.direct?Math.round(openLoss/summary.direct*100):0}%</strong></div>
+        </button>
+      </section>
       <section className="pipeline-card"><div className="section-title"><div><p>LIVE ID FUNNEL</p><h2>Lead ID proof through every stage</h2></div><span>{payload?.crmMode ?? "CRM source unavailable"}</span></div><div className="pipeline">{pipelineKeys.map((key, index) => { const count = visible.reduce((n, row) => n + row[key], 0); return <div className="pipeline-wrap" key={key}><button className={`stage ${key === "assigned" ? "success" : ""}`} onClick={() => openDetailedStage(labels[key], key)}><span>{index + 1}</span><small>{labels[key]}</small><strong>{fmt(count)}</strong><em>{summary.direct ? Math.round(count / summary.direct * 100) : 0}%</em></button>{index < pipelineKeys.length - 1 && <i className="connector"><b>→</b></i>}</div>; })}</div><div className="funnel-note"><span className="green-dot"/> Duplicate/Delete is explained—not lost. Every count is deduplicated by Lead ID and grouped by Date + Company + Verified Source.</div></section>
       <section className="loss-command" id="lost-radar"><div className="section-title"><div><p>LOST LEAD RADAR</p><h2>Exactly where reconciliation is breaking</h2></div><span className={`health-chip ${summary.mismatches ? "stale" : "current"}`}>{summary.mismatches ? `⚠ ${summary.mismatches} formula mismatch` : "● Formula validation passed"}</span></div><div className="loss-grid"><article className="live-master-card"><div className="radar-visual"><i/><i/><i/><span><small>OPEN</small><strong>{fmt(openLoss)}</strong><em>exceptions</em></span></div><div className="master-copy"><p>LATEST RECONCILIATION · {payload?.currentSummary?.date ? dateLabel(payload.currentSummary.date) : "—"}</p><h3>Medium → Buffer and Master → CRM</h3><div className="master-metrics"><span><small>Buffer</small><strong>{fmt(summary.buffer)}</strong></span><span><small>Same-day CRM</small><strong>{fmt(summary.sameDayCrm)}</strong></span><span><small>Late transfer</small><strong>{fmt(summary.lateTransfer)}</strong></span><span className="danger"><small>Actual lost</small><strong>{fmt(summary.mediumLost + summary.masterLost)}</strong></span></div><button onClick={() => openDetailed("All open reconciliation exceptions", x => lossStages.some(stage => stage.select(x)), "lost-map")}>Open exact lost leads →</button></div></article><article className="break-map"><header><div><p>LIVE STAGE MAP</p><h3>Date + Company + Source</h3></div><span>Click a stage to audit</span></header><div className="break-list">{lossStages.map((stage, index) => <button key={stage.label} onClick={() => openDetailed(`${stage.label} lost leads`, stage.select, "lost-map")}><span className="break-rank">0{index + 1}</span><span className="break-copy"><strong>{stage.label}</strong><small>{stage.hint}</small><i><b style={{ width: `${Math.max(3, stage.count / largestLoss * 100)}%` }}/></i></span><em className={stage.count ? "hot" : "clear"}>{fmt(stage.count)}<small>{stage.count ? " lost" : " clear"}</small></em></button>)}</div></article></div></section>
       {/* ═══ PREMIUM RECONCILIATION TABLE ═══════════════════════════════════ */}
@@ -470,7 +517,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Groups by date */}
+        {/* Groups by date — unified table matching reference design */}
         {groups.length === 0 && (
           <div style={{textAlign:"center",padding:"48px 20px",color:"#8a9bae"}}>
             <div style={{fontSize:28,marginBottom:10}}>📊</div>
@@ -481,199 +528,251 @@ export default function Home() {
           </div>
         )}
 
-        {groups.map((group, gi) => {
-          const isDateOpen = activeExpandedDate === group.date;
-          // create date based on group.date for visual badge
-          const isToday = group.date === new Date(new Date().getTime() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
-          const totalLost = group.total.masterCrmLost + group.total.mediumBufferLost;
-          const lossRate = group.total.direct > 0 ? Math.round(totalLost / group.total.direct * 100) : 0;
-          const allClear = totalLost === 0;
-
-          return (
-            <div key={group.date} style={{borderBottom: gi < groups.length-1 ? "2px solid #edf2f6" : "none"}}>
-              <button
-                style={{
-                  width:"100%",display:"flex",alignItems:"center",gap:16,
-                  padding:"14px 22px",border:0,textAlign:"left",cursor:"pointer",
-                  background: isToday ? "linear-gradient(90deg,#eff8f1,#f8fcf9)" : isDateOpen ? "#f4f8fc" : "#fafcfd",
-                  borderLeft: isToday ? "4px solid #22c55e" : isDateOpen ? "4px solid #3b82f6" : "4px solid transparent",
-                  transition:".15s",
-                }}
-                onClick={()=>setExpandedDate(isDateOpen?null:group.date)}
-              >
-                <span style={{
-                  width:26,height:26,borderRadius:6,border:"1.5px solid #d1dbe6",
-                  display:"grid",placeItems:"center",fontSize:14,fontWeight:800,
-                  background:"#fff",color:"#334e68",flexShrink:0
-                }}>{isDateOpen?"-":"+"}</span>
-
-                <div style={{minWidth:120}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <strong style={{fontSize:14,fontWeight:800,color:"#12202f",letterSpacing:"-.2px"}}>
-                      {dateLabel(group.date)}
-                    </strong>
-                    {isToday && (
-                      <span style={{background:"#22c55e",color:"#fff",borderRadius:20,padding:"2px 8px",fontSize:9,fontWeight:800,letterSpacing:".5px"}}>TODAY</span>
-                    )}
-                  </div>
-                  <small style={{fontSize:10,color:"#7e8d9b"}}>{group.companies.length} companies · {group.rows.length} sources</small>
-                </div>
-
-                <div style={{display:"flex",gap:8,flex:1,flexWrap:"wrap"}}>
-                  <span style={{background:"#f0f4f8",color:"#334e68",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,minWidth:64,textAlign:"center"}}>
-                    <span style={{display:"block",fontSize:8,fontWeight:700,letterSpacing:".8px",color:"#7e8d9b",marginBottom:2}}>SENT</span>
-                    {fmt(group.total.direct)}
-                  </span>
-                  <span style={{background:"#f0fdf4",color:"#166534",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,minWidth:64,textAlign:"center"}}>
-                    <span style={{display:"block",fontSize:8,fontWeight:700,letterSpacing:".8px",color:"#16a34a",marginBottom:2}}>RECEIVED</span>
-                    {fmt(group.total.crm)}
-                  </span>
-                  <span style={{background: totalLost>0 ? "#fff0f0" : "#f0fdf4", color: totalLost>0 ? "#991b1b" : "#166534", borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,minWidth:64,textAlign:"center"}}>
-                    <span style={{display:"block",fontSize:8,fontWeight:700,letterSpacing:".8px",marginBottom:2,color:"inherit",opacity:.7}}>LOST</span>
-                    {fmt(totalLost)}
-                  </span>
-                  <span style={{background:"#fff9f0",color:"#92400e",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,minWidth:64,textAlign:"center"}}>
-                    <span style={{display:"block",fontSize:8,fontWeight:700,letterSpacing:".8px",marginBottom:2,opacity:.7}}>PENDING</span>
-                    {fmt(group.total.mediumBufferLost)}
-                  </span>
-                </div>
-
-                <span style={{
-                  padding:"7px 14px",borderRadius:20,fontSize:12,fontWeight:800,flexShrink:0,
-                  background: allClear?"#dcfce7":lossRate>20?"#fee2e2":lossRate>5?"#fef3c7":"#fef9c3",
-                  color: allClear?"#166534":lossRate>20?"#991b1b":lossRate>5?"#92400e":"#713f12",
-                  border: `1.5px solid ${allClear?"#86efac":lossRate>20?"#fca5a5":lossRate>5?"#fde68a":"#fde047"}`,
-                }}>
-                  {allClear ? "✓ All clear" : `${lossRate}% lost`}
-                </span>
-              </button>
-
-              {isDateOpen && (
-                <div style={{borderTop:"1px solid #e8edf2", overflowX:"auto"}}>
-                  <table style={{width:"100%",borderCollapse:"collapse",minWidth:1200}}>
-                    <thead>
-                      <tr style={{background:"#f8fafc"}}>
-                        {[
-                          "DIRECT API SOURCE SHEET",
-                          "GAP 1 DIRECT → MEDIUM",
-                          "MASTER MEDIUM MERGED",
-                          "GAP 2 MEDIUM → BUFFER",
-                          "ACTUAL BUFFER STAGED",
-                          "GAP 3 BUFFER → CRM",
-                          "ACTUAL CRM RECONCILED",
-                          "TRANSFER TO SALES",
-                          "TRANSFER TO KSERVE",
-                          "TAT",
-                          "STATUS",
-                          "loss%"
-                        ].map(h=>(
-                          <th key={h} style={{ padding:"9px 12px",fontSize:9,fontWeight:800, color:"#64748b",textTransform:"uppercase", letterSpacing:".5px",textAlign:"left", borderBottom:"1px solid #e2e8f0",whiteSpace:"nowrap" }}>{h}</th>
-                        ))}
+        {groups.length > 0 && (
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",minWidth:1300}}>
+              <thead>
+                <tr style={{background:"#f8fafc",borderBottom:"2px solid #e2e8f0"}}>
+                  <th style={{padding:"10px 18px",fontSize:10,fontWeight:800,color:"#334e68",textTransform:"uppercase",letterSpacing:".5px",textAlign:"left",minWidth:200,borderBottom:"2px solid #e2e8f0"}}>
+                    Date
+                  </th>
+                  {[
+                    {label:"Direct API\nSource Sheet", color:"#2563eb"},
+                    {label:"Gap 1\nDirect → Medium", color:"#64748b"},
+                    {label:"Master Medium\nMerged", color:"#2563eb"},
+                    {label:"Gap 2\nMedium → Buffer", color:"#f59e0b"},
+                    {label:"Actual Buffer\nStaged", color:"#2563eb"},
+                    {label:"Gap 3\nBuffer → CRM", color:"#ef4444"},
+                    {label:"Actual CRM\nReconciled", color:"#16a34a"},
+                    {label:"Transfer to\nSales", color:"#2563eb"},
+                    {label:"Transfer to\nKServe", color:"#2563eb"},
+                    {label:"TAT", color:"#64748b"},
+                    {label:"Status", color:"#64748b"},
+                    {label:"Loss %", color:"#ef4444"},
+                  ].map(h=>(
+                    <th key={h.label} style={{
+                      padding:"10px 10px",fontSize:9,fontWeight:800,color:h.color,
+                      textTransform:"uppercase",letterSpacing:".4px",textAlign:"center",
+                      borderBottom:"2px solid #e2e8f0",whiteSpace:"pre-wrap",
+                      lineHeight:1.3,minWidth:80
+                    }}>{h.label.replace("\\n","\n")}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {pagedGroups.map((group, gi) => {
+                  const isDateOpen = activeExpandedDate === group.date;
+                  const isToday = group.date === new Date(new Date().getTime() + 5.5*60*60*1000).toISOString().slice(0,10);
+                  const totalLost = group.total.masterCrmLost + group.total.mediumBufferLost;
+                  const lossRate = group.total.direct > 0 ? Math.round(totalLost / group.total.direct * 100) : 0;
+                  const allClear = totalLost === 0;
+                  return (
+                    <Fragment key={group.date}>
+                      {/* ── Date summary row ── */}
+                      <tr
+                        onClick={()=>setExpandedDate(isDateOpen?null:group.date)}
+                        style={{
+                          cursor:"pointer",
+                          background: isToday?"linear-gradient(90deg,#eff8f1,#f8fcf9)": isDateOpen?"#f4f8fc":"#fafcfd",
+                          borderLeft: isToday?"4px solid #22c55e": isDateOpen?"4px solid #3b82f6":"4px solid transparent",
+                          borderBottom:"1px solid #e8edf2",
+                        }}
+                      >
+                        <td style={{padding:"12px 18px",textAlign:"left"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:10}}>
+                            <span style={{
+                              width:22,height:22,borderRadius:5,border:"1.5px solid #d1dbe6",
+                              display:"grid",placeItems:"center",fontSize:13,fontWeight:800,
+                              background:"#fff",color:"#334e68",flexShrink:0
+                            }}>{isDateOpen?"-":"+"}</span>
+                            <div>
+                              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                                <strong style={{fontSize:13,fontWeight:800,color:"#12202f"}}>{dateLabel(group.date)}</strong>
+                                {isToday && <span style={{background:"#22c55e",color:"#fff",borderRadius:20,padding:"2px 7px",fontSize:8,fontWeight:800,letterSpacing:".5px"}}>TODAY</span>}
+                              </div>
+                              <small style={{fontSize:9,color:"#7e8d9b"}}>{group.companies.length} companies · {group.rows.length} sources</small>
+                            </div>
+                          </div>
+                        </td>
+                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:800,fontSize:13,color:"#2563eb"}}>{fmt(group.total.direct)}</td>
+                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:700,fontSize:13,color:"#64748b"}}>{fmt(group.total.directMediumGap||0)}</td>
+                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:800,fontSize:13,color:"#2563eb"}}>{fmt(group.total.medium)}</td>
+                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:800,fontSize:13,color:group.total.mediumBufferLost>0?"#f59e0b":"#64748b"}}>{fmt(group.total.mediumBufferLost)}</td>
+                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:800,fontSize:13,color:"#2563eb"}}>{fmt(group.total.buffer)}</td>
+                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:800,fontSize:13,color:group.total.masterCrmLost>0?"#ef4444":"#64748b"}}>{fmt(group.total.masterCrmLost)}</td>
+                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:800,fontSize:13,color:"#16a34a"}}>{fmt(group.total.crm)}</td>
+                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:700,fontSize:13,color:"#334e68"}}>{fmt(group.total.assigned||0)}</td>
+                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:700,fontSize:13,color:"#334e68"}}>{fmt(group.total.kserve||0)}</td>
+                        <td style={{padding:"12px 10px",textAlign:"center",color:"#94a3b8",fontSize:13}}>—</td>
+                        <td style={{padding:"12px 10px",textAlign:"center",color:"#94a3b8",fontSize:13}}>—</td>
+                        <td style={{padding:"12px 10px",textAlign:"center"}}>
+                          <span style={{
+                            padding:"4px 10px",borderRadius:20,fontSize:11,fontWeight:800,
+                            background:allClear?"#dcfce7":lossRate>20?"#fee2e2":lossRate>5?"#fef3c7":"#fef9c3",
+                            color:allClear?"#166534":lossRate>20?"#991b1b":lossRate>5?"#92400e":"#713f12",
+                          }}>{allClear?"0%":`${lossRate}%`}</span>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {group.companies.map((cg,ci) => (
+
+                      {/* ── Expanded: company + source rows ── */}
+                      {isDateOpen && group.companies.map((cg, ci) => (
                         <Fragment key={cg.company}>
-                          <tr style={{ background:"linear-gradient(90deg,#e8f4fd,#f4f8fc)", borderBottom:"1px solid #dbeafe" }}>
-                            <td colSpan={12} style={{ padding: "0" }}>
-                              <div style={{ display:"flex",alignItems:"center",gap:12, padding:"9px 22px" }}>
-                                <span style={{ background:"#3b82f6",color:"#fff",borderRadius:5, padding:"3px 8px",fontSize:8,fontWeight:800,letterSpacing:".7px" }}>
-                                  CO {String(ci+1).padStart(2,"0")}
-                                </span>
+                          {/* Company header row */}
+                          <tr style={{background:"linear-gradient(90deg,#e8f4fd,#f4f8fc)",borderBottom:"1px solid #dbeafe"}}>
+                            <td colSpan={13} style={{padding:"0"}}>
+                              <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 18px"}}>
+                                <span style={{background:"#3b82f6",color:"#fff",borderRadius:5,padding:"3px 8px",fontSize:8,fontWeight:800,letterSpacing:".7px"}}>CO {String(ci+1).padStart(2,"0")}</span>
                                 <strong style={{fontSize:12,color:"#1e3a5f",fontWeight:700}}>{cg.company}</strong>
-                                <span style={{fontSize:10,color:"#4b7fb8",marginLeft:"auto"}}>
-                                  {fmt(cg.total.direct)} direct · {fmt(cg.total.medium)} medium · {fmt(cg.total.buffer)} buffer · {fmt(cg.total.crm)} crm
-                                </span>
+                                <span style={{fontSize:10,color:"#4b7fb8",marginLeft:"auto"}}>{fmt(cg.total.direct)} direct · {fmt(cg.total.medium)} medium · {fmt(cg.total.buffer)} buffer · {fmt(cg.total.crm)} crm</span>
                               </div>
                             </td>
                           </tr>
-                          {cg.rows.map(row=>{
+                          {/* Source rows */}
+                          {cg.rows.map(row => {
                             const rowLost = row.masterCrmLost+row.mediumBufferLost+row.directMediumGap;
                             const rowRate = row.direct>0?Math.round(rowLost/row.direct*100):0;
                             const rowClear = rowLost===0;
                             return (
                               <tr key={row.id} style={{
-                                background: rowLost>0?"#fffafa":"#fff", borderBottom:"1px solid #f1f5f9",
-                                borderLeft: rowLost>0?"3px solid #ef4444":row.crm>0?"3px solid #22c55e":"3px solid #e2e8f0"
+                                background:rowLost>0?"#fffafa":"#fff",
+                                borderBottom:"1px solid #f1f5f9",
+                                borderLeft:rowLost>0?"3px solid #ef4444":row.crm>0?"3px solid #22c55e":"3px solid #e2e8f0"
                               }}>
-                                {/* 1. DIRECT API SOURCE SHEET */}
-                                <td style={{padding:"10px 12px"}}>
-                                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:9}}>
-                                    <div style={{display:"flex",alignItems:"center",gap:6}}>
-                                      <span style={{ width:24,height:24,borderRadius:6,flexShrink:0, background: rowLost>0?"#fee2e2":"#e8f5f4", color: rowLost>0?"#991b1b":"#178b7c", display:"grid",placeItems:"center", fontWeight:800,fontSize:10 }}>{row.source.slice(0,1)}</span>
-                                      <strong style={{fontSize:11,color:"#12202f",display:"block"}}>{row.source}</strong>
-                                    </div>
-                                    <span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.direct)}</span>
+                                <td style={{padding:"9px 18px",textAlign:"left"}}>
+                                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                    <span style={{width:22,height:22,borderRadius:5,flexShrink:0,background:rowLost>0?"#fee2e2":"#e8f5f4",color:rowLost>0?"#991b1b":"#178b7c",display:"grid",placeItems:"center",fontWeight:800,fontSize:10}}>{row.source.slice(0,1)}</span>
+                                    <strong style={{fontSize:11,color:"#12202f"}}>{row.source}</strong>
                                   </div>
                                 </td>
-                                {/* 2. GAP 1 DIRECT → MEDIUM */}
-                                <td style={{padding:"10px 12px"}}>
-                                  {row.directMediumGap>0?(
-                                    <button className="count-link warn" onClick={()=>openGapRow(row,"gap1")} style={{fontSize:12,fontWeight:700,color:"#92400e",background:"#fef3c7", borderRadius:6,padding:"3px 8px"}}>{fmt(row.directMediumGap)}</button>
-                                  ):<span style={{color:"#94a3b8",fontSize:12}}>0</span>}
+                                <td style={{padding:"9px 10px",textAlign:"center"}}>
+                                  <span style={{fontSize:13,fontWeight:800,color:"#2563eb",background:"#eff6ff",padding:"2px 8px",borderRadius:6}}>{fmt(row.direct)}</span>
                                 </td>
-                                {/* 3. MASTER MEDIUM MERGED */}
-                                <td style={{padding:"10px 12px"}}><span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.medium)}</span></td>
-                                {/* 4. GAP 2 MEDIUM → BUFFER */}
-                                <td style={{padding:"10px 12px"}}>
-                                  {row.mediumBufferLost>0?(
-                                    <button className="count-link warn" onClick={()=>openGapRow(row,"gap2")} style={{fontSize:12,fontWeight:700,color:"#92400e",background:"#fef3c7", borderRadius:6,padding:"3px 8px"}}>{fmt(row.mediumBufferLost)}</button>
-                                  ):<span style={{color:"#94a3b8",fontSize:12}}>0</span>}
+                                <td style={{padding:"9px 10px",textAlign:"center"}}>
+                                  {row.directMediumGap>0
+                                    ?<button className="count-link warn" onClick={()=>openGapRow(row,"gap1")} style={{fontSize:12,fontWeight:700,color:"#92400e",background:"#fef3c7",borderRadius:6,padding:"2px 8px",border:"none",cursor:"pointer"}}>{fmt(row.directMediumGap)}</button>
+                                    :<span style={{color:"#94a3b8",fontSize:12}}>0</span>}
                                 </td>
-                                {/* 5. ACTUAL BUFFER STAGED */}
-                                <td style={{padding:"10px 12px"}}><span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.buffer)}</span></td>
-                                {/* 6. GAP 3 BUFFER → CRM */}
-                                <td style={{padding:"10px 12px"}}>
-                                  {row.masterCrmLost>0?(
-                                    <button className="count-link bad" onClick={()=>openGapRow(row,"gap3")} style={{fontSize:12,fontWeight:800,color:"#991b1b",background:"#fee2e2", borderRadius:6,padding:"3px 8px",border:"1px solid #fca5a5"}}>{fmt(row.masterCrmLost)}</button>
-                                  ):<span style={{color:"#22c55e",fontWeight:700,fontSize:12}}>0</span>}
+                                <td style={{padding:"9px 10px",textAlign:"center"}}>
+                                  <span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.medium)}</span>
                                 </td>
-                                {/* 7. ACTUAL CRM RECONCILED */}
-                                <td style={{padding:"10px 12px"}}><span style={{fontSize:13,fontWeight:800,color:"#166534",background:"#f0fdf4", borderRadius:6,padding:"3px 8px"}}>{fmt(row.crm)}</span></td>
-                                {/* 8. TRANSFER TO SALES */}
-                                <td style={{padding:"10px 12px"}}><span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.sales)}</span></td>
-                                {/* 9. TRANSFER TO KSERVE */}
-                                <td style={{padding:"10px 12px"}}><span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.kserve)}</span></td>
-                                {/* 10. TAT */}
-                                <td style={{padding:"10px 12px"}}><span style={{fontSize:12,color:"#64748b"}}>—</span></td>
-                                {/* 11. STATUS */}
-                                <td style={{padding:"10px 12px"}}>
-                                  <span style={{ display:"inline-flex",alignItems:"center",gap:4, padding:"4px 8px",borderRadius:20,fontSize:9,fontWeight:700, background: rowClear?"#f0fdf4":rowLost>0?"#fff0f0":"#fff9f0", color: rowClear?"#166534":rowLost>0?"#991b1b":"#92400e", whiteSpace:"nowrap" }}>{rowClear?"✓ Clear":rowLost>0?"✕ Lost":"◷ Pending"}</span>
+                                <td style={{padding:"9px 10px",textAlign:"center"}}>
+                                  {row.mediumBufferLost>0
+                                    ?<button className="count-link warn" onClick={()=>openGapRow(row,"gap2")} style={{fontSize:12,fontWeight:700,color:"#f59e0b",background:"#fffbeb",borderRadius:6,padding:"2px 8px",border:"1px solid #fde68a",cursor:"pointer"}}>{fmt(row.mediumBufferLost)}</button>
+                                    :<span style={{color:"#94a3b8",fontSize:12}}>0</span>}
                                 </td>
-                                {/* 12. loss% */}
-                                <td style={{padding:"10px 12px"}}>
-                                  <span style={{ display:"inline-block",padding:"4px 8px",borderRadius:20, fontSize:10,fontWeight:800, background: rowClear?"#dcfce7":rowRate>30?"#fee2e2":rowRate>10?"#fef3c7":"#fff9f0", color: rowClear?"#166534":rowRate>30?"#991b1b":rowRate>10?"#92400e":"#78350f" }}>{rowClear?"0%":`${rowRate}%`}</span>
+                                <td style={{padding:"9px 10px",textAlign:"center"}}>
+                                  <span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.buffer)}</span>
+                                </td>
+                                <td style={{padding:"9px 10px",textAlign:"center"}}>
+                                  {row.masterCrmLost>0
+                                    ?<button className="count-link bad" onClick={()=>openGapRow(row,"gap3")} style={{fontSize:12,fontWeight:800,color:"#991b1b",background:"#fee2e2",borderRadius:6,padding:"2px 8px",border:"1px solid #fca5a5",cursor:"pointer"}}>{fmt(row.masterCrmLost)}</button>
+                                    :<span style={{color:"#22c55e",fontWeight:700,fontSize:12}}>0</span>}
+                                </td>
+                                <td style={{padding:"9px 10px",textAlign:"center"}}>
+                                  <span style={{fontSize:13,fontWeight:800,color:"#166534",background:"#f0fdf4",borderRadius:6,padding:"2px 8px"}}>{fmt(row.crm)}</span>
+                                </td>
+                                <td style={{padding:"9px 10px",textAlign:"center"}}>
+                                  <span style={{fontSize:13,fontWeight:700,color:"#334e68"}}>{fmt(row.sales)}</span>
+                                </td>
+                                <td style={{padding:"9px 10px",textAlign:"center"}}>
+                                  <span style={{fontSize:13,fontWeight:700,color:"#334e68"}}>{fmt(row.kserve)}</span>
+                                </td>
+                                <td style={{padding:"9px 10px",textAlign:"center"}}>
+                                  <span style={{fontSize:12,color:"#64748b"}}>—</span>
+                                </td>
+                                <td style={{padding:"9px 10px",textAlign:"center"}}>
+                                  <span style={{display:"inline-flex",alignItems:"center",gap:3,padding:"3px 8px",borderRadius:20,fontSize:9,fontWeight:700,background:rowClear?"#f0fdf4":rowLost>0?"#fff0f0":"#fff9f0",color:rowClear?"#166534":rowLost>0?"#991b1b":"#92400e"}}>{rowClear?"Clear":rowLost>0?"Lost":"Pending"}</span>
+                                </td>
+                                <td style={{padding:"9px 10px",textAlign:"center"}}>
+                                  <span style={{display:"inline-block",padding:"3px 8px",borderRadius:20,fontSize:10,fontWeight:800,background:rowClear?"#dcfce7":rowRate>30?"#fee2e2":rowRate>10?"#fef3c7":"#fff9f0",color:rowClear?"#166534":rowRate>30?"#991b1b":rowRate>10?"#92400e":"#78350f"}}>{rowClear?"0%":`${rowRate}%`}</span>
                                 </td>
                               </tr>
                             );
                           })}
-                          <tr style={{background:"#f8fafc",borderTop:"2px solid #e2e8f0"}}>
-                            <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:"#334e68", display:"flex", justifyContent:"space-between"}}>
-                              <span style={{fontSize:11}}>↳ {cg.company} Total</span>
-                              <span>{fmt(cg.total.direct)}</span>
+                          {/* Company subtotal */}
+                          <tr style={{background:"#f8fafc",borderTop:"1px solid #e2e8f0",borderBottom:"2px solid #dbeafe"}}>
+                            <td style={{padding:"8px 18px",fontWeight:800,fontSize:12,color:"#334e68"}}>↳ {cg.company} Total</td>
+                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:"#2563eb"}}>{fmt(cg.total.direct)}</td>
+                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:cg.total.directMediumGap>0?"#92400e":"#64748b"}}>{fmt(cg.total.directMediumGap)}</td>
+                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:"#334e68"}}>{fmt(cg.total.medium)}</td>
+                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:cg.total.mediumBufferLost>0?"#f59e0b":"#64748b"}}>{fmt(cg.total.mediumBufferLost)}</td>
+                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:"#334e68"}}>{fmt(cg.total.buffer)}</td>
+                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:cg.total.masterCrmLost>0?"#ef4444":"#22c55e"}}>{fmt(cg.total.masterCrmLost)}</td>
+                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:"#166534"}}>{fmt(cg.total.crm)}</td>
+                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:"#334e68"}}>{fmt(cg.total.assigned||0)}</td>
+                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:"#334e68"}}>{fmt(cg.total.kserve||0)}</td>
+                            <td style={{padding:"8px 10px",textAlign:"center",color:"#94a3b8",fontSize:12}}>—</td>
+                            <td style={{padding:"8px 10px",textAlign:"center",color:"#94a3b8",fontSize:12}}>—</td>
+                            <td style={{padding:"8px 10px",textAlign:"center"}}>
+                              <span style={{fontSize:11,fontWeight:800,color:(cg.total.masterCrmLost+cg.total.mediumBufferLost+cg.total.directMediumGap)>0?"#991b1b":"#166534"}}>
+                                {cg.total.direct>0?Math.round((cg.total.masterCrmLost+cg.total.mediumBufferLost+cg.total.directMediumGap)/cg.total.direct*100):0}%
+                              </span>
                             </td>
-                            <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:cg.total.directMediumGap>0?"#92400e":"#64748b"}}>{fmt(cg.total.directMediumGap)}</td>
-                            <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:"#334e68"}}>{fmt(cg.total.medium)}</td>
-                            <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:cg.total.mediumBufferLost>0?"#92400e":"#64748b"}}>{fmt(cg.total.mediumBufferLost)}</td>
-                            <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:"#334e68"}}>{fmt(cg.total.buffer)}</td>
-                            <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:cg.total.masterCrmLost>0?"#991b1b":"#22c55e"}}>{fmt(cg.total.masterCrmLost)}</td>
-                            <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:"#166534"}}>{fmt(cg.total.crm)}</td>
-                            <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:"#334e68"}}>{fmt(cg.total.sales)}</td>
-                            <td style={{padding:"10px 12px",fontWeight:800,fontSize:13,color:"#334e68"}}>{fmt(cg.total.kserve)}</td>
-                            <td style={{padding:"10px 12px"}}></td>
-                            <td style={{padding:"10px 12px"}}></td>
-                            <td style={{padding:"10px 12px"}}><span style={{fontWeight:800,fontSize:11, color:(cg.total.masterCrmLost+cg.total.mediumBufferLost+cg.total.directMediumGap)>0?"#991b1b":"#166534"}}>{cg.total.direct>0?Math.round((cg.total.masterCrmLost+cg.total.mediumBufferLost+cg.total.directMediumGap)/cg.total.direct*100):0}%</span></td>
                           </tr>
                         </Fragment>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          );
-        })}
+                    </Fragment>
+                  );
+                })}
 
+                {/* ── GRAND TOTAL ROW ── */}
+                {groups.length > 0 && (() => {
+                  const totalCompanies = [...new Set(groups.flatMap(g=>g.companies.map(c=>c.company)))].length;
+                  const totalSources = [...new Set(groups.flatMap(g=>g.rows.map(r=>r.source)))].length;
+                  const grandLossRate = summary.direct>0?Math.round(openLoss/summary.direct*100):0;
+                  return (
+                    <tr style={{background:"#f1f5f9",borderTop:"3px solid #cbd5e1"}}>
+                      <td style={{padding:"14px 18px",textAlign:"left"}}>
+                        <strong style={{fontSize:13,fontWeight:900,color:"#0f172a",display:"block"}}>Grand Total</strong>
+                        <small style={{fontSize:10,color:"#64748b"}}>All Dates · {totalCompanies} companies · {totalSources} sources</small>
+                      </td>
+                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#2563eb"}}>{fmt(summary.direct)}</td>
+                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#64748b"}}>{fmt(summary.direct - summary.medium)}</td>
+                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#334e68"}}>{fmt(summary.medium)}</td>
+                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:summary.mediumLost>0?"#f59e0b":"#64748b"}}>{fmt(summary.mediumLost)}</td>
+                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#334e68"}}>{fmt(summary.buffer)}</td>
+                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:summary.masterLost>0?"#ef4444":"#64748b"}}>{fmt(summary.masterLost)}</td>
+                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#166534"}}>{fmt(summary.crm)}</td>
+                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#334e68"}}>{fmt(summary.assigned)}</td>
+                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#334e68"}}>0</td>
+                      <td style={{padding:"14px 10px",textAlign:"center",color:"#94a3b8",fontSize:14}}>—</td>
+                      <td style={{padding:"14px 10px",textAlign:"center",color:"#94a3b8",fontSize:14}}>—</td>
+                      <td style={{padding:"14px 10px",textAlign:"center"}}>
+                        <span style={{padding:"5px 12px",borderRadius:20,fontSize:12,fontWeight:900,background:grandLossRate>20?"#fee2e2":"#fef3c7",color:grandLossRate>20?"#991b1b":"#92400e"}}>{grandLossRate}%</span>
+                      </td>
+                    </tr>
+                  );
+                })()}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {/* Pagination bar */}
+        {groups.length > TABLE_PAGE_SIZE && (
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 22px",background:"#f0f4f8",borderTop:"1px solid #dde4ec",flexWrap:"wrap",gap:8}}>
+            <span style={{fontSize:11,color:"#334e68",fontWeight:600}}>
+              Showing <strong>{(tablePage - 1) * TABLE_PAGE_SIZE + 1}–{Math.min(tablePage * TABLE_PAGE_SIZE, groups.length)}</strong> of <strong>{groups.length}</strong> dates
+            </span>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <button
+                disabled={tablePage === 1}
+                onClick={() => setTablePage(p => p - 1)}
+                style={{border:"1px solid #cbd5e1",background:tablePage===1?"#f8fafc":"#fff",color:tablePage===1?"#94a3b8":"#334e68",borderRadius:7,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:tablePage===1?"not-allowed":"pointer"}}
+              >← Previous</button>
+              {Array.from({length:tablePageCount},(_,i)=>i+1).map(p=>(
+                <button key={p}
+                  onClick={()=>setTablePage(p)}
+                  style={{border:"1px solid",borderColor:p===tablePage?"#3b82f6":"#cbd5e1",background:p===tablePage?"#3b82f6":"#fff",color:p===tablePage?"#fff":"#334e68",borderRadius:7,padding:"6px 11px",fontSize:12,fontWeight:700,cursor:"pointer",minWidth:34}}
+                >{p}</button>
+              ))}
+              <button
+                disabled={tablePage === tablePageCount}
+                onClick={() => setTablePage(p => p + 1)}
+                style={{border:"1px solid #cbd5e1",background:tablePage===tablePageCount?"#f8fafc":"#fff",color:tablePage===tablePageCount?"#94a3b8":"#334e68",borderRadius:7,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:tablePage===tablePageCount?"not-allowed":"pointer"}}
+              >Next →</button>
+            </div>
+          </div>
+        )}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center", padding:"12px 22px",background:"#f8fafc",borderTop:"1px solid #e8edf2", fontSize:10,color:"#7e8d9b",flexWrap:"wrap",gap:8}}>
           <span>
             <span style={{display:"inline-block",width:7,height:7,borderRadius:"50%",background:"#ef4444",marginRight:5}}/>Lost = sent to KServe, no return after threshold ·
@@ -700,7 +799,9 @@ export default function Home() {
               {section.key === "deleted" && original ? <div className="gap-evidence"><header><span>PRIMARY TRANSFERRED LEAD ↔ ACTUAL DUPLICATE</span><strong>{deleteStatus.label}</strong><em>Matched by {original.matchBasis || "Mobile / Email / Enquiry ID"} within 24 hours</em></header><div className="gap-evidence-table"><span className="qualified">✓</span><strong>{original.id}</strong><b>PRIMARY · TRANSFERRED</b><span>{original.generatedAt || "—"}</span><span>{original.source}</span><span>Transferred to {original.assignee || "Sales / KServe"}</span><span className="current">×</span><strong>{lead.id}</strong><b>ACTUAL DUPLICATE · DELETED</b><span>{lead.generatedAt || lead.timestamp || "—"}</span><span>{lead.source}</span><span>Deleted · {deleteStatus.label}</span></div></div> : section.key === "deleted" ? <div className="gap-evidence missing"><strong>{deleteStatus.label}</strong><p>{deleteStatus.detail} Primary transferred record is not available in the current payload.</p></div> : section.key === "unexplained" ? <div className="gap-loss-warning"><strong>HIGH ALERT · NO QUALIFIED LEAD</strong><p>No valid duplicate, late transfer or destination record explains this gap. Audit the exact source window and script execution.</p></div> : <div className="gap-late-note"><strong>LATE TRANSFER · NOT LOST</strong><p>This lead reached CRM after its source date and remains anchored to the original intake day.</p></div>}
               <div className="gap-trace-actions">{lead.directUrl && <a href={lead.directUrl} target="_blank" rel="noreferrer">Open source row ↗</a>}{lead.destinationUrl && <a href={lead.destinationUrl} target="_blank" rel="noreferrer">Open Buffer row ↗</a>}{lead.crmUrl && <a href={lead.crmUrl} target="_blank" rel="noreferrer">Open CRM ↗</a>}</div>
             </td></tr>}
-          </Fragment>; })}</tbody></table></div> : <div className="gap-section-empty">No {section.title.toLowerCase()} records on this page.</div>)}</div>}
+          </Fragment>; })}
+                        
+    </tbody></table></div> : <div className="gap-section-empty">No {section.title.toLowerCase()} records on this page.</div>)}</div>}
         </section>; }) : <div className="gap-console-empty"><strong>No matching leads</strong><span>Search clear karke dobara dekhein.</span></div>}</div>
         <footer className="gap-console-foot"><span>{detailsLoading ? "Loading exact records…" : `${filteredDrawer.length} rows · Page ${page} of ${pageCount}`}</span><button disabled={detailsLoading} onClick={() => setOpenAuditSections(openAuditSections.size === 3 ? new Set() : new Set(["unexplained", "transient", "deleted"]))}>{openAuditSections.size === 3 ? "Hide all sections" : "Show all sections"}</button><div>{filteredDrawer.length > pageSize && <><button disabled={page === 1} onClick={() => setPage(p => p - 1)}>Previous</button><button disabled={page === pageCount} onClick={() => setPage(p => p + 1)}>Next</button></>}<button onClick={() => setSelected(null)}>Close</button></div></footer>
       </section>

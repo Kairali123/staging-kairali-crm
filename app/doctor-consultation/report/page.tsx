@@ -1410,6 +1410,7 @@ export default function DoctorConsultationReportPage() {
                   <FileText className="w-4 h-4 mr-2 text-blue-600" />
                   Executive Report Tables
                 </TabsTrigger>
+{/* HIDDEN FOR NOW:
                 <TabsTrigger value="doctors" className="rounded-lg text-xs sm:text-sm font-semibold px-4 py-2">
                   <User className="w-4 h-4 mr-2 text-emerald-600" />
                   Doctor Analytics
@@ -1422,6 +1423,7 @@ export default function DoctorConsultationReportPage() {
                   <Stethoscope className="w-4 h-4 mr-2 text-teal-600" />
                   Consultation Register ({filteredRecords.length})
                 </TabsTrigger>
+*/}
               </TabsList>
             </div>
 
@@ -1578,7 +1580,7 @@ export default function DoctorConsultationReportPage() {
                       </Button>
                     </div>
 
-                    {/* Tab 4 quick bridge link */}
+{/* HIDDEN FOR NOW (links to hidden Consultation Register tab):
                     <button
                       onClick={() => {
                         setRegisterFilterMode("week")
@@ -1589,6 +1591,7 @@ export default function DoctorConsultationReportPage() {
                       <Eye className="w-3.5 h-3.5" />
                       Inspect Week Patient Dossiers ({weeklyRecordsCount})
                     </button>
+*/}
                   </div>
 
                   {/* Custom Date Range Picker Accordion / Bar */}
@@ -2019,9 +2022,10 @@ export default function DoctorConsultationReportPage() {
               </div>
             </TabsContent>
 
-            {/* ─────────────────────────────────────────────────────────────
+{/* HIDDEN FOR NOW: Doctor Analytics, Visual Intelligence & Consultation Register tabs (inner comment markers spaced so this block stays valid; restore to re-enable)
+            {/ * ─────────────────────────────────────────────────────────────
                 TAB 2: DOCTOR & SPECIALIST PERFORMANCE ANALYTICS
-            ────────────────────────────────────────────────────────────── */}
+            ────────────────────────────────────────────────────────────── * /}
             <TabsContent value="doctors" className="space-y-6">
               <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                 <div className="bg-gradient-to-r from-teal-800 via-teal-900 to-slate-900 text-white p-6">
@@ -2131,12 +2135,12 @@ export default function DoctorConsultationReportPage() {
               </div>
             </TabsContent>
 
-            {/* ─────────────────────────────────────────────────────────────
+            {/ * ─────────────────────────────────────────────────────────────
                 TAB 3: VISUAL INTELLIGENCE & CHARTS
-            ────────────────────────────────────────────────────────────── */}
+            ────────────────────────────────────────────────────────────── * /}
             <TabsContent value="charts" className="space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Chart 1: Volume & Conversion by Channel */}
+                {/ * Chart 1: Volume & Conversion by Channel * /}
                 <Card className="border-slate-200 bg-white shadow-sm rounded-xl">
                   <CardHeader className="pb-2 border-b border-slate-100">
                     <CardTitle className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -2174,7 +2178,7 @@ export default function DoctorConsultationReportPage() {
                   </CardContent>
                 </Card>
 
-                {/* Chart 2: Revenue Distribution per Channel */}
+                {/ * Chart 2: Revenue Distribution per Channel * /}
                 <Card className="border-slate-200 bg-white shadow-sm rounded-xl">
                   <CardHeader className="pb-2 border-b border-slate-100">
                     <CardTitle className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -2220,12 +2224,12 @@ export default function DoctorConsultationReportPage() {
               </div>
             </TabsContent>
 
-            {/* ─────────────────────────────────────────────────────────────
+            {/ * ─────────────────────────────────────────────────────────────
                 TAB 4: DETAILED CONSULTATION REGISTER
-            ────────────────────────────────────────────────────────────── */}
+            ────────────────────────────────────────────────────────────── * /}
             <TabsContent value="records" className="space-y-4">
               <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                {/* Table Header */}
+                {/ * Table Header * /}
                 <div className="bg-slate-900 text-white p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                   <div className="space-y-0.5">
                     <h3 className="text-base font-bold flex items-center gap-2 text-white">
@@ -2238,7 +2242,7 @@ export default function DoctorConsultationReportPage() {
                   </div>
 
                   <div className="flex items-center gap-2.5 flex-wrap">
-                    {/* Filter to week toggle */}
+                    {/ * Filter to week toggle * /}
                     <div className="flex items-center bg-slate-800 p-0.5 rounded-lg border border-slate-700 text-xs">
                       <button
                         onClick={() => setRegisterFilterMode("all")}
@@ -2264,7 +2268,7 @@ export default function DoctorConsultationReportPage() {
                   </div>
                 </div>
 
-                {/* Table Content */}
+                {/ * Table Content * /}
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader className="bg-slate-50 border-b border-slate-200">
@@ -2388,7 +2392,7 @@ export default function DoctorConsultationReportPage() {
                   </Table>
                 </div>
 
-                {/* Pagination Controls */}
+                {/ * Pagination Controls * /}
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3.5 border-t border-slate-200 bg-slate-50/60 no-print">
                   <div className="text-xs text-slate-500 font-medium">
                     Showing{" "}
@@ -2432,6 +2436,7 @@ export default function DoctorConsultationReportPage() {
                 </div>
               </div>
             </TabsContent>
+*/}
           </Tabs>
         </div>
 

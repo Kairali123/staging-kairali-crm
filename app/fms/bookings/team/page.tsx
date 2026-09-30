@@ -926,6 +926,16 @@ export default function SalesAccountsTeamPage() {
   // "checkin" | "checkout" | "inhouse" | null — drives the Today's Stay Activity popup
   const [todayStayModal, setTodayStayModal] = useState<"checkin" | "checkout" | "inhouse" | null>(null)
 
+  // Mobile-only: pin just Booking Date + Booking ID so other columns stay reachable on narrow screens
+  const [isMobileView, setIsMobileView] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)")
+    const update = () => setIsMobileView(mq.matches)
+    update()
+    mq.addEventListener("change", update)
+    return () => mq.removeEventListener("change", update)
+  }, [])
+
   const [table1Scrolled, setTable1Scrolled] = useState(false)
   const [table2Scrolled, setTable2Scrolled] = useState(false)
   const [table3Scrolled, setTable3Scrolled] = useState(false)
@@ -3867,16 +3877,20 @@ export default function SalesAccountsTeamPage() {
     isLastSticky = false,
     zIndex = 30
   ): React.CSSProperties => {
-    const widths = isScrolled
-      ? { bookingDate: 100, bookingId: 130, guestName: 240 }
-      : { bookingDate: 120, bookingId: 150, guestName: 260 };
+    const widths = isMobileView
+      ? { bookingDate: 90, bookingId: 150, guestName: 200 }
+      : isScrolled
+        ? { bookingDate: 100, bookingId: 130, guestName: 240 }
+        : { bookingDate: 120, bookingId: 150, guestName: 260 };
 
     const lefts = isScrolled
       ? { bookingDate: 0, bookingId: 100, guestName: 230 }
       : { bookingDate: 0, bookingId: 120, guestName: 270 };
 
     const width = widths[colType];
-    const left = lefts[colType];
+    // Mobile: only Booking Date and Booking ID are pinned; Guest Name and the rest scroll normally
+    const mobileLefts = { bookingDate: 0, bookingId: 90, guestName: undefined }
+    const left = isMobileView ? mobileLefts[colType] : lefts[colType];
 
     return {
       position: "sticky",
@@ -3888,12 +3902,14 @@ export default function SalesAccountsTeamPage() {
       maxWidth: width,
       boxSizing: "border-box",
       overflow: "hidden",
+      // Mobile: keep the unique Booking ID on one line, never wrapped or clipped
+      ...(isMobileView && colType === "bookingId" ? { whiteSpace: "nowrap" as const, textOverflow: "clip" } : {}),
       background: "#1F3A5F",
       backgroundClip: "padding-box",
       isolation: "isolate",
-      borderRight: isLastSticky ? "2px solid rgba(255,255,255,0.2)" : "1px solid rgba(255,255,255,0.15)",
-      paddingLeft: isScrolled ? "8px" : "12px",
-      paddingRight: isScrolled ? "8px" : "12px",
+      borderRight: (isMobileView ? colType === "bookingId" : isLastSticky) ? "2px solid rgba(255,255,255,0.2)" : "1px solid rgba(255,255,255,0.15)",
+      paddingLeft: isScrolled || isMobileView ? "8px" : "12px",
+      paddingRight: isScrolled || isMobileView ? "8px" : "12px",
       transition: "width 200ms ease-in-out, left 200ms ease-in-out, padding 200ms ease-in-out",
     };
   }
@@ -3905,16 +3921,20 @@ export default function SalesAccountsTeamPage() {
     isLastSticky = false,
     zIndex = 20
   ): React.CSSProperties => {
-    const widths = isScrolled
-      ? { bookingDate: 100, bookingId: 130, guestName: 240 }
-      : { bookingDate: 120, bookingId: 150, guestName: 260 };
+    const widths = isMobileView
+      ? { bookingDate: 90, bookingId: 150, guestName: 200 }
+      : isScrolled
+        ? { bookingDate: 100, bookingId: 130, guestName: 240 }
+        : { bookingDate: 120, bookingId: 150, guestName: 260 };
 
     const lefts = isScrolled
       ? { bookingDate: 0, bookingId: 100, guestName: 230 }
       : { bookingDate: 0, bookingId: 120, guestName: 270 };
 
     const width = widths[colType];
-    const left = lefts[colType];
+    // Mobile: only Booking Date and Booking ID are pinned; Guest Name and the rest scroll normally
+    const mobileLefts = { bookingDate: 0, bookingId: 90, guestName: undefined }
+    const left = isMobileView ? mobileLefts[colType] : lefts[colType];
 
     return {
       position: "sticky",
@@ -3925,11 +3945,13 @@ export default function SalesAccountsTeamPage() {
       maxWidth: width,
       boxSizing: "border-box",
       overflow: "hidden",
+      // Mobile: keep the unique Booking ID on one line, never wrapped or clipped
+      ...(isMobileView && colType === "bookingId" ? { whiteSpace: "nowrap" as const, textOverflow: "clip" } : {}),
       background,
       backgroundClip: "padding-box",
-      borderRight: isLastSticky ? "2px solid #e2e8f0" : "1px solid #e5e7eb",
-      paddingLeft: isScrolled ? "8px" : "12px",
-      paddingRight: isScrolled ? "8px" : "12px",
+      borderRight: (isMobileView ? colType === "bookingId" : isLastSticky) ? "2px solid #e2e8f0" : "1px solid #e5e7eb",
+      paddingLeft: isScrolled || isMobileView ? "8px" : "12px",
+      paddingRight: isScrolled || isMobileView ? "8px" : "12px",
       transition: "width 200ms ease-in-out, left 200ms ease-in-out, padding 200ms ease-in-out, background-color 200ms ease-in-out",
     };
   }
