@@ -22,6 +22,14 @@ function safeCompare(a: string, b: string): boolean {
   return timingSafeEqual(bufA, bufB)
 }
 
+// Manual "Run Now" from the settings page: only a signed-in session may force a run
+// (a Bearer CRON_SECRET or an unauthenticated local call never can).
+function isForcedManualRun(req: NextRequest): boolean {
+  if (req.nextUrl.searchParams.get('force') !== '1') return false
+  const sessionCookie = req.cookies.get('kairali_user')?.value
+  return Boolean(sessionCookie && verifySessionCookieValue(sessionCookie))
+}
+
 function isAuthorizedCronOrSession(req: NextRequest): boolean {
   const authHeader = req.headers.get('authorization') || ''
   const secret = process.env.CRON_SECRET
@@ -98,6 +106,7 @@ export async function GET(req: NextRequest) {
   }
   try {
     const pool = await getPool();
+    const forceRun = isForcedManualRun(req);
 
     // 1. Load active rules
     const [rules]: any[] = await pool.query("SELECT * FROM ht_automation_rules WHERE is_active = 1");
@@ -126,8 +135,8 @@ export async function GET(req: NextRequest) {
     for (const rule of rules) {
       const activeDays = (rule.trigger_days || "").split(",");
 
-      // a. Check day
-      if (!activeDays.includes(currentDayName)) {
+      // a. Check day (skipped for a manual forced run)
+      if (!forceRun && !activeDays.includes(currentDayName)) {
         results.push({ rule_id: rule.id, status: "skipped", reason: `Not scheduled for ${currentDayName}` });
         continue;
       }
@@ -137,7 +146,7 @@ export async function GET(req: NextRequest) {
       const triggerMinutes = parseInt(triggerTime.slice(0, 2)) * 60 + parseInt(triggerTime.slice(3, 5));
       const currentMinutes = parseInt(currentIstTime.slice(0, 2)) * 60 + parseInt(currentIstTime.slice(3, 5));
 
-      if (currentMinutes < triggerMinutes || currentMinutes > triggerMinutes + 10) {
+      if (!forceRun && (currentMinutes < triggerMinutes || currentMinutes > triggerMinutes + 10)) {
         results.push({ rule_id: rule.id, status: "skipped", reason: `Time mismatch. Trigger: ${triggerTime}, Current: ${currentIstTime}` });
         continue;
       }
@@ -148,7 +157,7 @@ export async function GET(req: NextRequest) {
         WHERE rule_id = ? AND DATE(triggered_at) = ? AND form_status = 'success'
       `, [rule.id, todayDate]);
 
-      if (logs.length > 0) {
+      if (!forceRun && logs.length > 0) {
         results.push({ rule_id: rule.id, status: "skipped", reason: `Already triggered today` });
         continue;
       }
@@ -197,6 +206,23 @@ export async function GET(req: NextRequest) {
           range: `${SHEET_NAME}!B:B`,
         });
         const nextRow = (timestampColumn.data.values?.length || 0) + 1;
+
+        // The tab has a fixed grid size; once data reaches its last row, values.update fails
+        // with "exceeds grid limits". Grow the grid by exactly the rows we're short.
+        const meta = await sheets.spreadsheets.get({
+          spreadsheetId: SPREADSHEET_ID,
+          fields: 'sheets.properties(sheetId,title,gridProperties.rowCount)',
+        });
+        const sheetProps = (meta.data.sheets || []).find((sh: any) => sh.properties?.title === SHEET_NAME)?.properties;
+        const gridRows: number = sheetProps?.gridProperties?.rowCount ?? 0;
+        if (sheetProps && nextRow > gridRows) {
+          await sheets.spreadsheets.batchUpdate({
+            spreadsheetId: SPREADSHEET_ID,
+            requestBody: {
+              requests: [{ appendDimension: { sheetId: sheetProps.sheetId, dimension: 'ROWS', length: nextRow - gridRows } }],
+            },
+          });
+        }
 
         await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
