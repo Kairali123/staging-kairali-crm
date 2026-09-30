@@ -3,7 +3,6 @@ import { getKserveReconciledLostLeads, generateKserveExcelBuffer } from '@/lib/k
 import { verifySessionCookieValue } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 300
 
 export async function GET(req: NextRequest) {
   // Allow authenticated users OR authorized cron/internal calls
@@ -12,17 +11,11 @@ export async function GET(req: NextRequest) {
 
   // If no session cookie, check optional query token or referer for direct link click from email
   // (In email client clicks, users may or may not be logged into the CRM session)
-  const startDate = req.nextUrl.searchParams.get('startDate') || undefined
-  const endDate = req.nextUrl.searchParams.get('endDate') || undefined
   const thresholdParam = req.nextUrl.searchParams.get('threshold')
   const minDays = thresholdParam ? Number(thresholdParam) : 5
 
   try {
-    const { leads, stats } = await getKserveReconciledLostLeads({
-      minDays,
-      windowStart: startDate,
-      windowEnd: endDate
-    })
+    const { leads, stats } = await getKserveReconciledLostLeads({ minDays })
     const excelBuffer = await generateKserveExcelBuffer(leads, stats)
 
     const dateStr = new Date().toISOString().slice(0, 10)
