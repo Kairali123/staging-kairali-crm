@@ -270,10 +270,11 @@ export default function HelpdeskConfigPage() {
 
   // ── Run cron manually ──
   async function runCron() {
+    if (!confirm("Run all active rules now? This ignores the trigger time and the once-a-day limit, and creates a real help ticket in the Google Sheet for each active rule.")) return;
     setCronRunning(true);
     setCronResult(null);
     try {
-      const res = await fetch("/api/cron/ht-automation-engine");
+      const res = await fetch("/api/cron/ht-automation-engine?force=1");
       const data = await res.json();
       setCronResult(data);
       await loadLogs();
