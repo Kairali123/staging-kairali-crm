@@ -221,6 +221,22 @@ export default function SalesReportsPage() {
     const searchLower = searchQuery.trim().toLowerCase()
 
     return salesData.filter(row => {
+      // 0. Exclude unwanted users
+      const empName = (row.empName || "").trim();
+      const empLower = empName.toLowerCase();
+      if (
+        !empName ||
+        empLower === "null" ||
+        empLower === "undefined" ||
+        empLower === "satyam kumar" ||
+        empLower.startsWith("satyam kumar") ||
+        empLower === "sunaj sahoo" ||
+        empLower.startsWith("sunaj sahoo") ||
+        empLower.includes("need to assign user")
+      ) {
+        return false;
+      }
+
       // 1. Company filter
       if (companyFilter !== "all" && row.company !== companyFilter) return false
 
@@ -794,7 +810,35 @@ export default function SalesReportsPage() {
       item.unverifiedSales += (row.unverifiedSalesAmount || 0)
     })
 
-    const list = Array.from(empMap.values()).map(item => {
+    const list = Array.from(empMap.values())
+      .filter(item => {
+        const empName = (item.empName || "").trim();
+        const empLower = empName.toLowerCase();
+        if (
+          !empName ||
+          empLower === "null" ||
+          empLower === "undefined" ||
+          empLower === "satyam kumar" ||
+          empLower.startsWith("satyam kumar") ||
+          empLower === "sunaj sahoo" ||
+          empLower.startsWith("sunaj sahoo") ||
+          empLower.includes("need to assign user")
+        ) {
+          return false;
+        }
+
+        // Hide rows where Planned Sales, Actual Sales, and Unverified Sales are all 0
+        if (
+          (item.plannedSales || 0) === 0 &&
+          (item.actualSales || 0) === 0 &&
+          (item.unverifiedSales || 0) === 0
+        ) {
+          return false;
+        }
+
+        return true;
+      })
+      .map(item => {
       // Verified Sales = Actual Sales - Unverified Sales
       const verifiedSales = Math.max(0, item.actualSales - item.unverifiedSales)
       const share = totalActual > 0 ? (item.actualSales / totalActual) * 100 : 0
@@ -1383,7 +1427,7 @@ export default function SalesReportsPage() {
 
         </div>{/* end w-full space-y-8 */}
 
-{/* ── EMPLOYEE-WISE SALES PERFORMANCE ───────────────────────────── */}
+        {/* ── EMPLOYEE-WISE SALES PERFORMANCE ───────────────────────────── */}
         <Card className="shadow-2xl border-0 rounded-2xl overflow-hidden bg-white mt-8">
           <div ref={resultsRef} className="w-full px-4 sm:px-6 py-4 bg-[#f5f9ff] border-b border-slate-200">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
@@ -1425,11 +1469,16 @@ export default function SalesReportsPage() {
                     <div className="overflow-x-auto w-full" style={{ WebkitOverflowScrolling: "touch" }}>
                       <table className="border-collapse" style={{ minWidth: "645px", width: "100%", tableLayout: "fixed" }}>
                         <colgroup>
-                          <col style={{ width: "210px" }} /> {/* Employee Name */}
-                          <col style={{ width: "115px" }} /> {/* Planned Sales */}
-                          <col style={{ width: "115px" }} /> {/* Actual Sales */}
-                          <col style={{ width: "85px" }} />  {/* % Share */}
-                          <col style={{ width: "120px" }} /> {/* Unverified Sales */}
+                          {/* Employee Name */}
+                          <col style={{ width: "210px" }} />
+                          {/* Planned Sales */}
+                          <col style={{ width: "115px" }} />
+                          {/* Actual Sales */}
+                          <col style={{ width: "115px" }} />
+                          {/* % Share */}
+                          <col style={{ width: "85px" }} />
+                          {/* Unverified Sales */}
+                          <col style={{ width: "120px" }} />
                         </colgroup>
                         <thead>
                           <tr style={{ background: "linear-gradient(to right, #1e293b, #334155, #1e293b)" }}>
@@ -1610,11 +1659,10 @@ export default function SalesReportsPage() {
                                   key={emp.empName}
                                   onMouseEnter={() => hasSales && setHoveredEmpName(emp.empName)}
                                   onMouseLeave={() => setHoveredEmpName(null)}
-                                  className={`flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
-                                    isHovered
-                                      ? "bg-blue-50/90 ring-1 ring-blue-300 font-semibold"
-                                      : "hover:bg-slate-50 text-slate-700"
-                                  } ${!hasSales ? "opacity-50" : ""}`}
+                                  className={`flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${isHovered
+                                    ? "bg-blue-50/90 ring-1 ring-blue-300 font-semibold"
+                                    : "hover:bg-slate-50 text-slate-700"
+                                    } ${!hasSales ? "opacity-50" : ""}`}
                                 >
                                   <div className="flex items-center gap-2 min-w-0 pr-2">
                                     <span
@@ -1630,9 +1678,8 @@ export default function SalesReportsPage() {
                                       ₹{formatCurrency(emp.actualSales)}
                                     </span>
                                     <span
-                                      className={`w-14 text-right font-extrabold ${
-                                        hasSales ? "text-blue-600" : "text-slate-400"
-                                      }`}
+                                      className={`w-14 text-right font-extrabold ${hasSales ? "text-blue-600" : "text-slate-400"
+                                        }`}
                                     >
                                       {emp.share.toFixed(1)}%
                                     </span>
@@ -1726,7 +1773,7 @@ export default function SalesReportsPage() {
           </CardContent>
         </Card>
 
-{/* ── MAIN TABLE CARD ────────────────────────────────────────────── */}
+        {/* ── MAIN TABLE CARD ────────────────────────────────────────────── */}
         <Card className="shadow-2xl border-0 rounded-2xl overflow-hidden bg-white mt-8">
           <div className="w-full -mt-2 sm:-mt-3 px-4 sm:px-6 py-2.5 bg-[#f5f9ff] border-b border-slate-200">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
@@ -1790,16 +1837,26 @@ export default function SalesReportsPage() {
                     <div className="overflow-x-auto w-full" style={{ WebkitOverflowScrolling: "touch" }}>
                       <table className="border-collapse" style={{ minWidth: "1200px", width: "100%", tableLayout: "fixed" }}>
                         <colgroup>
-                          <col style={{ width: "220px" }} /> {/* Date / Employee */}
-                          <col style={{ width: "100px" }} /> {/* Company */}
-                          <col style={{ width: "115px" }} /> {/* Planned Sales */}
-                          <col style={{ width: "115px" }} /> {/* Actual Sales */}
-                          <col style={{ width: "100px" }} /> {/* % Share of Total */}
-                          <col style={{ width: "105px" }} /> {/* Variance Amt */}
-                          <col style={{ width: "75px" }} />  {/* Variance % */}
-                          <col style={{ width: "115px" }} /> {/* Collection Amt */}
-                          <col style={{ width: "115px" }} /> {/* Unverified Amt */}
-                          <col style={{ width: "115px" }} /> {/* Cancelled Amt */}
+                          {/* Date / Employee */}
+                          <col style={{ width: "220px" }} />
+                          {/* Company */}
+                          <col style={{ width: "100px" }} />
+                          {/* Planned Sales */}
+                          <col style={{ width: "115px" }} />
+                          {/* Actual Sales */}
+                          <col style={{ width: "115px" }} />
+                          {/* % Share of Total */}
+                          <col style={{ width: "100px" }} />
+                          {/* Variance Amt */}
+                          <col style={{ width: "105px" }} />
+                          {/* Variance % */}
+                          <col style={{ width: "75px" }} />
+                          {/* Collection Amt */}
+                          <col style={{ width: "115px" }} />
+                          {/* Unverified Amt */}
+                          <col style={{ width: "115px" }} />
+                          {/* Cancelled Amt */}
+                          <col style={{ width: "115px" }} />
                         </colgroup>
 
                         {/* ── THEAD ─────────────────────────────────────────── */}
