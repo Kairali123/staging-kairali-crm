@@ -14,6 +14,8 @@ interface StageData {
   accountVerify: number
   finalTransfer: number
   deleteComplete: number
+  arrivalTickets: number
+  departureTickets: number
 }
 
 // Loading Skeleton Component
@@ -106,8 +108,10 @@ export function StageWisePendingsReport({ pendingCount, loading }: { pendingCoun
         accountVerify: acc.accountVerify + curr.accountVerify,
         finalTransfer: acc.finalTransfer + curr.finalTransfer,
         deleteComplete: acc.deleteComplete + curr.deleteComplete,
+        arrivalTickets: acc.arrivalTickets + (curr.arrivalTickets || 0),
+        departureTickets: acc.departureTickets + (curr.departureTickets || 0),
       }),
-      { newBookings: 0, accountVerify: 0, finalTransfer: 0, deleteComplete: 0 },
+      { newBookings: 0, accountVerify: 0, finalTransfer: 0, deleteComplete: 0, arrivalTickets: 0, departureTickets: 0 },
     ),
     [filteredData]
   )
@@ -119,7 +123,7 @@ export function StageWisePendingsReport({ pendingCount, loading }: { pendingCoun
 
   const getCellColor = (value: number, columnName: string) => {
     if (value === 0) {
-      if (columnName === "accountVerify" || columnName === "finalTransfer" || columnName === "deleteComplete") {
+      if (columnName === "accountVerify" || columnName === "finalTransfer" || columnName === "deleteComplete" || columnName === "arrivalTickets" || columnName === "departureTickets") {
         return "text-red-600 font-semibold"
       }
       return "text-slate-600"
@@ -175,9 +179,21 @@ export function StageWisePendingsReport({ pendingCount, loading }: { pendingCoun
                     <div className="text-xs font-normal text-slate-600">(Pendings)</div>
                   </div>
                 </TableHead>
-                <TableHead className="font-bold text-slate-800 text-center py-2 text-sm">
+                <TableHead className="font-bold text-slate-800 text-center border-r border-orange-200 py-2 text-sm">
                   <div className="space-y-0.5">
                     <div>Delete Complete</div>
+                    <div className="text-xs font-normal text-slate-600">(Pendings)</div>
+                  </div>
+                </TableHead>
+                <TableHead className="font-bold text-slate-800 text-center border-r border-orange-200 py-2 text-sm">
+                  <div className="space-y-0.5">
+                    <div>Arrival Tickets Upload</div>
+                    <div className="text-xs font-normal text-slate-600">(Pendings)</div>
+                  </div>
+                </TableHead>
+                <TableHead className="font-bold text-slate-800 text-center py-2 text-sm">
+                  <div className="space-y-0.5">
+                    <div>Departure Flight Details &amp; Ticket Upload</div>
                     <div className="text-xs font-normal text-slate-600">(Pendings)</div>
                   </div>
                 </TableHead>
@@ -208,9 +224,19 @@ export function StageWisePendingsReport({ pendingCount, loading }: { pendingCoun
                     {row.finalTransfer}
                   </TableCell>
                   <TableCell
-                    className={`text-center py-2 text-sm ${getCellColor(row.deleteComplete, "deleteComplete")}`}
+                    className={`text-center border-r border-slate-200 py-2 text-sm ${getCellColor(row.deleteComplete, "deleteComplete")}`}
                   >
                     {row.deleteComplete}
+                  </TableCell>
+                  <TableCell
+                    className={`text-center border-r border-slate-200 py-2 text-sm ${getCellColor(row.arrivalTickets || 0, "arrivalTickets")}`}
+                  >
+                    {row.arrivalTickets || 0}
+                  </TableCell>
+                  <TableCell
+                    className={`text-center py-2 text-sm ${getCellColor(row.departureTickets || 0, "departureTickets")}`}
+                  >
+                    {row.departureTickets || 0}
                   </TableCell>
                 </TableRow>
               ))}
@@ -227,15 +253,21 @@ export function StageWisePendingsReport({ pendingCount, loading }: { pendingCoun
                 <TableCell className="font-bold text-white text-center text-base border-r border-slate-600 py-2">
                   {totals.finalTransfer}
                 </TableCell>
-                <TableCell className="font-bold text-white text-center text-base py-2">
+                <TableCell className="font-bold text-white text-center text-base border-r border-slate-600 py-2">
                   {totals.deleteComplete}
+                </TableCell>
+                <TableCell className="font-bold text-white text-center text-base border-r border-slate-600 py-2">
+                  {totals.arrivalTickets}
+                </TableCell>
+                <TableCell className="font-bold text-white text-center text-base py-2">
+                  {totals.departureTickets}
                 </TableCell>
               </TableRow>
             </TableBody>
           </Table>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 p-3 bg-slate-50 border-t border-slate-200">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 p-3 bg-slate-50 border-t border-slate-200">
           <div className="bg-white rounded-lg p-2 border border-blue-200 shadow-sm">
             <div className="text-xs font-medium text-slate-600 mb-0.5">New Bookings</div>
             <div className="text-xl font-bold text-blue-600">{totals.newBookings}</div>
@@ -251,6 +283,14 @@ export function StageWisePendingsReport({ pendingCount, loading }: { pendingCoun
           <div className="bg-white rounded-lg p-2 border border-purple-200 shadow-sm">
             <div className="text-xs font-medium text-slate-600 mb-0.5">Delete Complete</div>
             <div className="text-xl font-bold text-purple-600">{totals.deleteComplete}</div>
+          </div>
+          <div className="bg-white rounded-lg p-2 border border-sky-200 shadow-sm">
+            <div className="text-xs font-medium text-slate-600 mb-0.5">Arrival Tickets Upload</div>
+            <div className="text-xl font-bold text-sky-600">{totals.arrivalTickets}</div>
+          </div>
+          <div className="bg-white rounded-lg p-2 border border-rose-200 shadow-sm">
+            <div className="text-xs font-medium text-slate-600 mb-0.5">Departure Flight &amp; Ticket Upload</div>
+            <div className="text-xl font-bold text-rose-600">{totals.departureTickets}</div>
           </div>
         </div>
       </CardContent>

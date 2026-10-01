@@ -54,7 +54,7 @@ type StageRow = [
     amount?: unknown,
 ];
 
-type EmpCounts = [number, number, number, number];
+type EmpCounts = [number, number, number, number, number, number];
 
 // ─── Route Handler ────────────────────────────────────────────────────────────
 
@@ -122,11 +122,11 @@ export async function GET(req: NextRequest) {
         const empMap: Record<string, EmpCounts> = {};
         const canonicalMap: Record<string, string> = {};
 
-        function incrementEmp(assigned: string, idx: 0 | 1 | 2 | 3) {
+        function incrementEmp(assigned: string, idx: 0 | 1 | 2 | 3 | 4 | 5) {
             if (!assigned) return;
             const name = resolveCanonicalName(assigned, names, canonicalMap, empMap);
             if (!name) return;
-            if (!(name in empMap)) empMap[name] = [0, 0, 0, 0];
+            if (!(name in empMap)) empMap[name] = [0, 0, 0, 0, 0, 0];
             empMap[name][idx]++;
         }
 
@@ -160,13 +160,20 @@ export async function GET(req: NextRequest) {
             if (isOverdue(d.accountsPlanned, d.accountsActual, d.accountsDoer)) incrementEmp(d.accountsDoer as string, 3);
         }
 
+        // Guest tracker: arrival / departure ticket stages (planned time passed, nothing uploaded yet)
+        for (const id in guesttrackerdata) {
+            const g = guesttrackerdata[id];
+            if (isOverdue(g.arrival_planned, g.arrival_actual, g.arrival_doer_name)) incrementEmp(g.arrival_doer_name, 4);
+            if (isOverdue(g.departure_planned, g.departure_actual, g.departure_doer_name)) incrementEmp(g.departure_doer_name, 5);
+        }
+
         // Consolidate canonical duplicates
         const finalEmpMap: Record<string, EmpCounts> = {};
         // console.log("Employee Map", empMap)
         for (const key in empMap) {
             const finalKey = canonicalMap[key] ?? key;
-            if (!(finalKey in finalEmpMap)) finalEmpMap[finalKey] = [0, 0, 0, 0];
-            for (let i = 0; i < 4; i++) finalEmpMap[finalKey][i] += empMap[key][i];
+            if (!(finalKey in finalEmpMap)) finalEmpMap[finalKey] = [0, 0, 0, 0, 0, 0];
+            for (let i = 0; i < 6; i++) finalEmpMap[finalKey][i] += empMap[key][i];
         }
 
         const pendingCounts = Object.entries(finalEmpMap).map(([employee, counts]) => ({
@@ -175,7 +182,9 @@ export async function GET(req: NextRequest) {
             accountsVerify: counts[1],
             finalTransfer: counts[2],
             deleteComplete: counts[3],
-            total: counts[0] + counts[1] + counts[2] + counts[3],
+            arrivalTickets: counts[4],
+            departureTickets: counts[5],
+            total: counts[0] + counts[1] + counts[2] + counts[3] + counts[4] + counts[5],
         }));
 
         // ── Build bookings array ──────────────────────────────────────────────
@@ -877,8 +886,8 @@ function resolveCanonicalName(
             }
             // Merge empMap counts
             if (canon in empMap) {
-                empMap[normalized] ??= [0, 0, 0, 0];
-                for (let i = 0; i < 4; i++) empMap[normalized][i] += empMap[canon][i];
+                empMap[normalized] ??= [0, 0, 0, 0, 0, 0];
+                for (let i = 0; i < 6; i++) empMap[normalized][i] += empMap[canon][i];
                 delete empMap[canon];
             }
             canonicalMap[normalized] = normalized;

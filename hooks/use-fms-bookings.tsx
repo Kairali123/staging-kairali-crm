@@ -195,6 +195,8 @@ export interface PendingCount {
   accountVerify: number;
   finalTransfer: number;
   deleteComplete: number;
+  arrivalTickets: number;
+  departureTickets: number;
 }
 
 // -----------------------------------------------------
@@ -551,12 +553,16 @@ export function useBookings() {
               accountVerify: 0,
               finalTransfer: 0,
               deleteComplete: 0,
+              arrivalTickets: 0,
+              departureTickets: 0,
             };
           }
           pendingMap[employeeName].newBookings += item.newBookings || 0;
           pendingMap[employeeName].accountVerify += item.accountsVerify || 0;
           pendingMap[employeeName].finalTransfer += item.finalTransfer || 0;
           pendingMap[employeeName].deleteComplete += item.deleteComplete || 0;
+          pendingMap[employeeName].arrivalTickets += item.arrivalTickets || 0;
+          pendingMap[employeeName].departureTickets += item.departureTickets || 0;
         }
         const formattedPending: PendingCount[] = Object.values(pendingMap);
 
