@@ -204,14 +204,6 @@ function classifyFromOutcome(callStatus: any, outcome: any, followupRequired: an
     return "PENDING";
 }
 
-function normalizePhoneNumber(mobileNum: any): string {
-    const cleaned = String(mobileNum || "").replace(/[-\s()]/g, "");
-    const digitsOnly = cleaned.replace(/\D/g, "");
-    if (digitsOnly.indexOf("91") === 0 && digitsOnly.length > 10) return digitsOnly.slice(-10);
-    if (digitsOnly.indexOf("0") === 0 && digitsOnly.length === 11) return digitsOnly.substring(1);
-    return digitsOnly;
-}
-
 function classifyLog(r: any, mode: Mode): LogClass {
     const calc = classifyFromCalcStatus(r.calculated_qualification_status);
     if (calc === "QUALIFIED") return "QUALIFIED";
@@ -226,18 +218,12 @@ function classifyLog(r: any, mode: Mode): LogClass {
 }
 
 /** classifyKServeLead_: matches Google Sheets reconciliation & backfill rule. */
-function classifyLead(logs: LogItem[], isDuplicateMobile = false): Verdict {
+function classifyLead(logs: LogItem[]): Verdict {
     const q = logs.find(l => l.cls === "QUALIFIED");
     if (q) return { status: "FOUND", reason: "", qualification: "Qualified", deciding: q };
 
     if (logs.length === 0) {
         return { status: "LOST", reason: REASON_NO_LOG, qualification: "", deciding: null };
-    }
-
-    // Google Sheets backfill rule:
-    // Duplicate mobiles in the batch stay in LOST (Pending / Not final)
-    if (isDuplicateMobile) {
-        return { status: "LOST", reason: "Duplicate mobile in this batch", qualification: "", deciding: logs[logs.length - 1] };
     }
 
     // A genuine Non-Qualified log finalizes the lead as Received.
@@ -251,6 +237,56 @@ function classifyLead(logs: LogItem[], isDuplicateMobile = false): Verdict {
     // unresolved (Retry Pending), and becomes Critical Lost once 72 real
     // hours have elapsed since it was sent without a final status arriving.
     return { status: "LOST", reason: REASON_NOT_FINAL, qualification: "", deciding: logs[logs.length - 1] };
+}
+
+/** Aggregates totals + a per-day summary from a given lead subset. Used both for
+ *  the whole-window cache-level totals and, when Company/Data Source/Day/Search
+ *  filters are active, recomputed on just the filtered scope — so the KPI cards,
+ *  tab labels and Daily Summary table always agree with the leads actually listed
+ *  instead of always reporting the unfiltered whole-window numbers. */
+function aggregateTotals(leadsSubset: any[], startIso: string, lastDayIso: string) {
+    const dailyMap: Record<string, any> = {};
+    listDays(startIso, lastDayIso).forEach(iso => {
+        dailyMap[iso] = {
+            iso, dayKey: dayKeyFromIso(iso),
+            sent: 0, found: 0, lost: 0, q: 0, nq: 0, noLog: 0, notFinal: 0,
+            retryPending: 0, criticalLost: 0,
+        };
+    });
+    const totals = { sent: 0, found: 0, lost: 0, q: 0, nq: 0, noLog: 0, notFinal: 0, retryPending: 0, criticalLost: 0 };
+
+    leadsSubset.forEach(r => {
+        if (!dailyMap[r.dayIso]) {
+            dailyMap[r.dayIso] = {
+                iso: r.dayIso, dayKey: r.dayKey,
+                sent: 0, found: 0, lost: 0, q: 0, nq: 0, noLog: 0, notFinal: 0,
+                retryPending: 0, criticalLost: 0,
+            };
+        }
+        const day = dailyMap[r.dayIso];
+        const v: Verdict = r.verdict;
+        day.sent++; totals.sent++;
+
+        if (v.qualification === "Qualified") {
+            day.q++; day.found++; totals.q++; totals.found++;
+        } else if (v.qualification === "Non-Qualified") {
+            day.nq++; day.found++; totals.nq++; totals.found++;
+        } else {
+            // Unresolved (Retry Pending). Critical Lost is a subset of this same
+            // bucket once 72 real hours have elapsed since the send timestamp —
+            // it is never added on top of Total Sent again.
+            if (v.reason === REASON_NO_LOG) { day.noLog++; totals.noLog++; }
+            else { day.notFinal++; totals.notFinal++; }
+            day.lost++; totals.lost++;
+            day.retryPending++; totals.retryPending++;
+            if (r.isCriticalLost) { day.criticalLost++; totals.criticalLost++; }
+        }
+    });
+
+    const dailySummary = Object.values(dailyMap).sort((a: any, b: any) =>
+        a.iso < b.iso ? -1 : a.iso > b.iso ? 1 : 0);
+
+    return { totals, dailySummary };
 }
 
 // ─── GET Handler ──────────────────────────────────────────────────────────────
@@ -499,33 +535,7 @@ export async function GET(request: NextRequest) {
                     } as LogItem);
                 });
 
-                // e. Daily summary skeleton: every day in the window, even with zero sends
-                const dailyMap: Record<string, any> = {};
-                listDays(startIso, lastDayIso).forEach(iso => {
-                    dailyMap[iso] = {
-                        iso, dayKey: dayKeyFromIso(iso),
-                        sent: 0, found: 0, lost: 0, q: 0, nq: 0, noLog: 0, notFinal: 0,
-                        retryPending: 0, criticalLost: 0,
-                    };
-                });
-                const totals = { sent: 0, found: 0, lost: 0, q: 0, nq: 0, noLog: 0, notFinal: 0, retryPending: 0, criticalLost: 0 };
                 const nowMs = Date.now();
-
-                // Google Sheets batch transfer rule: newest mobile first, older duplicates are skipped and stay in Pending
-                const seenMobiles = new Set<string>();
-                const sortedByDateDesc = [...allLeads].sort((a, b) => b.sentMs - a.sentMs);
-                const duplicateRowIds = new Set<number>();
-
-                sortedByDateDesc.forEach(lead => {
-                    const normPhone = normalizePhoneNumber(lead.mobile);
-                    if (normPhone && normPhone.length >= 10) {
-                        if (seenMobiles.has(normPhone)) {
-                            duplicateRowIds.add(lead.sent_row_id);
-                        } else {
-                            seenMobiles.add(normPhone);
-                        }
-                    }
-                });
 
                 // f. Per-lead verdict
                 allLeads.forEach(r => {
@@ -533,36 +543,12 @@ export async function GET(request: NextRequest) {
                     r.logs.sort((a: LogItem, b: LogItem) =>
                         ((a.callStartMs || a.tsMs) - (b.callStartMs || b.tsMs)) || (a.rowId - b.rowId));
 
-                    const isDup = duplicateRowIds.has(r.sent_row_id);
-                    const verdict = classifyLead(r.logs, isDup);
+                    const verdict = classifyLead(r.logs);
                     r.verdict = verdict;
 
-                    if (!dailyMap[r.dayIso]) {
-                        dailyMap[r.dayIso] = {
-                            iso: r.dayIso, dayKey: r.dayKey,
-                            sent: 0, found: 0, lost: 0, q: 0, nq: 0, noLog: 0, notFinal: 0,
-                            retryPending: 0, criticalLost: 0,
-                        };
-                    }
-                    const day = dailyMap[r.dayIso];
-                    day.sent++; totals.sent++;
-
-                    if (verdict.qualification === "Qualified") {
-                        day.q++; day.found++; totals.q++; totals.found++;
-                    } else if (verdict.qualification === "Non-Qualified") {
-                        day.nq++; day.found++; totals.nq++; totals.found++;
-                    } else {
-                        // Unresolved (Retry Pending). Critical Lost is a subset of this same
-                        // bucket once 72 real hours have elapsed since the send timestamp —
-                        // it is never added on top of Total Sent again.
-                        if (verdict.reason === REASON_NO_LOG) { day.noLog++; totals.noLog++; }
-                        else { day.notFinal++; totals.notFinal++; }
-                        day.lost++; totals.lost++;
-                        day.retryPending++; totals.retryPending++;
-
+                    if (verdict.status === "LOST") {
                         const hoursSinceSent = (nowMs - r.sentMs) / 3600000;
                         r.isCriticalLost = hoursSinceSent >= CRITICAL_LOST_HOURS;
-                        if (r.isCriticalLost) { day.criticalLost++; totals.criticalLost++; }
                     }
 
                     // Time to receive: FOUND leads only, send -> deciding log's Call End (else log timestamp)
@@ -577,8 +563,7 @@ export async function GET(request: NextRequest) {
                     }
                 });
 
-                const dailySummary = Object.values(dailyMap).sort((a: any, b: any) =>
-                    a.iso < b.iso ? -1 : a.iso > b.iso ? 1 : 0);
+                const { totals, dailySummary } = aggregateTotals(allLeads, startIso, lastDayIso);
 
                 reconciled = {
                     timestamp: Date.now(),
@@ -607,17 +592,36 @@ export async function GET(request: NextRequest) {
             const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
             const perPage = Math.min(200, Math.max(10, parseInt(searchParams.get("perPage") || "25")));
 
-            let filteredLeads = reconciled.leads;
+            // Scope filters (Day / Company / Data Source / Search) narrow both the
+            // leads table AND the KPI totals / Daily Summary below, so the "Retry
+            // Pending" count shown always matches what the Retry Pending tab lists.
+            // Only the tab's own status filter (applied after) is excluded from the
+            // scope — the KPI cards must keep showing every status's count even
+            // while a single status tab is active.
+            let scopedLeads = reconciled.leads;
 
             if (filterDay && filterDay !== "all") {
-                filteredLeads = filteredLeads.filter(r => r.dayKey === filterDay);
+                scopedLeads = scopedLeads.filter(r => r.dayKey === filterDay);
             }
             if (filterCompany !== "all") {
-                filteredLeads = filteredLeads.filter(r => r.company === filterCompany);
+                scopedLeads = scopedLeads.filter(r => r.company === filterCompany);
             }
             if (filterDataSource !== "all") {
-                filteredLeads = filteredLeads.filter(r => r.data_source === filterDataSource);
+                scopedLeads = scopedLeads.filter(r => r.data_source === filterDataSource);
             }
+            if (search) {
+                scopedLeads = scopedLeads.filter(r => {
+                    const text = `${r.name_of_client} ${r.mobile} ${r.email_id} ${r.id} ${r.sentTaskId} ${r.subjects} ${r.company} ${r.data_source} ${r.campaign_name}`.toLowerCase();
+                    return text.includes(search);
+                });
+            }
+
+            const scopeIsFiltered = scopedLeads !== reconciled.leads;
+            const { totals: responseTotals, dailySummary: responseDailySummary } = scopeIsFiltered
+                ? aggregateTotals(scopedLeads, startIso, lastDayIso)
+                : { totals: reconciled.totals, dailySummary: reconciled.dailySummary };
+
+            let filteredLeads = scopedLeads;
 
             if (filterStatus === "FOUND") {
                 filteredLeads = filteredLeads.filter(r => r.verdict.status === "FOUND");
@@ -633,13 +637,6 @@ export async function GET(request: NextRequest) {
                 filteredLeads = filteredLeads.filter(r => r.verdict.qualification === "Qualified");
             } else if (filterStatus === "NON_QUALIFIED") {
                 filteredLeads = filteredLeads.filter(r => r.verdict.qualification === "Non-Qualified");
-            }
-
-            if (search) {
-                filteredLeads = filteredLeads.filter(r => {
-                    const text = `${r.name_of_client} ${r.mobile} ${r.email_id} ${r.id} ${r.sentTaskId} ${r.subjects} ${r.company} ${r.data_source} ${r.campaign_name}`.toLowerCase();
-                    return text.includes(search);
-                });
             }
 
             const total = filteredLeads.length;
@@ -697,8 +694,8 @@ export async function GET(request: NextRequest) {
                     endDate: reconciled.endDate, // exclusive
                     lastDay: reconciled.lastDay, // inclusive, YYYY-MM-DD
                 },
-                totals: reconciled.totals,
-                dailySummary: reconciled.dailySummary,
+                totals: responseTotals,
+                dailySummary: responseDailySummary,
                 leads: paginated,
                 pagination: { total, page, perPage, totalPages },
                 companies: reconciled.companies,
