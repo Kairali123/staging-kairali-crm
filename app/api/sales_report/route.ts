@@ -536,6 +536,7 @@ async function getthecollectionamount(
             collectionconn.execute(`
                 SELECT
                     payment_received_date,
+                    DATE_FORMAT(payment_received_date, '%Y-%m-%d') AS payment_received_day,
                     received_amount,
                     payment_collected_by,
                     currency,
@@ -560,10 +561,18 @@ async function getthecollectionamount(
             const r = collectionrows[i];
             if (!r.payment_received_date) continue;
 
-            const paymentDate = IST_DATE_FORMATTER.format(new Date(r.payment_received_date));
+            // Use the database calendar date directly. The pool is already configured
+            // for IST, so converting this DATETIME through JavaScript can move it to
+            // the previous day.
+            const paymentDate = String(r.payment_received_day || "").trim();
+            if (!paymentDate) continue;
 
-            const employee = String(r.payment_collected_by ?? "").trim();
-            if (!employee) continue;
+            // KAPPL payment_collection rows in particular routinely have no
+            // payment_collected_by recorded at all (a data-entry gap, not
+            // something this route can infer) — attribute those to
+            // "Unassigned" instead of dropping the amount entirely, matching
+            // the existing convention elsewhere (e.g. lib/email-triggers/load-sales.ts).
+            const employee = String(r.payment_collected_by ?? "").trim() || "Unassigned";
 
             const rate =
                 conversionrationrows[0]?.[String(r.currency).toLowerCase().trim()];
@@ -729,6 +738,32 @@ function isExcludedEmployee(name?: string | null): boolean {
     );
 }
 
+// "Pushpanshu Kumar" is the one real employee who genuinely books under both
+// KAPPL and KTAHV using the SAME plain name (no "(KTAHV)"/"(KAPPL)" suffix)
+// in conversion_updates_employeewise and payment_collection — unlike every
+// other employee, who only ever appears under one company. gettheplannedamount
+// already splits his planned sales into "Pushpanshu Kumar (KTAHV)" /
+// "(KAPPL)" for this reason. Without the same split here, a row's own company
+// got ignored in favour of resolveCompanyFor's single majority-vote company
+// for the bare name, which silently moved money between companies whenever
+// his minority-company activity landed on a date that also had majority-
+// company activity (e.g. a KTAHV payment collection counted as KAPPL revenue
+// because most of his history is KAPPL).
+//
+// "Unassigned" is the fallback label for payment_collection rows with no
+// payment_collected_by (see getthecollectionamount) — it isn't a real person
+// and spans all three companies, so it needs the same per-company split or
+// a KAPPL collection with no name would get merged into whichever company's
+// "Unassigned" entry happened to be created first for that date.
+const ALWAYS_SPLIT_BY_COMPANY = new Set(["Pushpanshu Kumar", "Unassigned"]);
+
+function keyForEmployeeCompany(emp: string, rowCompany?: string): string {
+    if (ALWAYS_SPLIT_BY_COMPANY.has(emp) && rowCompany) {
+        return `${emp} (${rowCompany})`;
+    }
+    return emp;
+}
+
 function applyConversionMap(
     finalData: FinalData,
     map: ConversionMap,
@@ -742,11 +777,12 @@ function applyConversionMap(
             const rows = map[date][emp];
             if (!rows.length) continue;
 
-            const company = resolveCompanyFor(emp) || rows[0].company;
-            const entry = ensureEntry(finalData, date, emp, company);
-            if (company) entry.companyName = company;
-
             for (const r of rows) {
+                const empKey = keyForEmployeeCompany(emp, r.company);
+                const company = resolveCompanyFor(empKey) || r.company;
+                const entry = ensureEntry(finalData, date, empKey, company);
+                if (company) entry.companyName = company;
+
                 const amt = Number(r.conversion_amount) || 0;
                 (entry[blockKey] as any)[totalKey] += amt;
 
@@ -766,7 +802,8 @@ function applyCollectionMap(
         for (const emp in map[date]) {
             if (isExcludedEmployee(emp)) continue;
             const amt = map[date][emp] || 0;
-            const entry = ensureEntry(finalData, date, emp, company);
+            const empKey = keyForEmployeeCompany(emp, company);
+            const entry = ensureEntry(finalData, date, empKey, company);
             entry.collectionData.totalCollectionAmount += amt;
             entry.collectionData.breakdown.newClients += amt;
         }

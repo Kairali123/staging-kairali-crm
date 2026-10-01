@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect } from "react"
 import useSalesData from "@/hooks/useSalesData";
+import CollectionDetailModal from "@/components/CollectionDetailModal";
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -9,8 +10,8 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Download, Printer, TrendingUp, TrendingDown, TableIcon, BarChart3, ChevronUp, ChevronDown, Filter, Search, Award, Target, DollarSign, Activity, ChevronsUpDown, AlertCircle, XCircle, Calendar, ChevronRight, Trophy, PieChart as PieChartIcon } from "lucide-react"
-import { format } from "date-fns"
+import { Download, Printer, TrendingUp, TrendingDown, TableIcon, BarChart3, ChevronUp, ChevronDown, Filter, Search, Award, Target, DollarSign, Activity, ChevronsUpDown, AlertCircle, XCircle, Calendar, ChevronRight, Trophy, PieChart as PieChartIcon, X } from "lucide-react"
+import { format, getWeek } from "date-fns"
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, ReferenceLine, Cell, LabelList, Area, AreaChart } from "recharts"
 import type { SalesRow } from "@/hooks/useSalesData"
 import type { Border, Fill } from "exceljs"
@@ -70,6 +71,102 @@ export default function SalesReportsPage() {
   })
 
   const [hoveredEmpName, setHoveredEmpName] = useState<string | null>(null)
+
+  // ── Collection Modal State using CollectionDetailModal component ──
+  const [collectionModalOpen, setCollectionModalOpen] = useState(false)
+  const [collectionModalMeta, setCollectionModalMeta] = useState<any>(null)
+
+  const formatUploadedDateIST = (value: any) => {
+    if (!value) return "—"
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) return String(value)
+    return new Intl.DateTimeFormat("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: "Asia/Kolkata",
+    }).format(parsed).replace(",", "")
+  }
+
+  const openCollectionModal = async (params: {
+    date: string
+    displayDate: string
+    employee: string
+    company: string
+    amount: number
+    metric?: "collection" | "actual" | "unverified" | "cancelled"
+  }) => {
+    const q = new URLSearchParams()
+    if (params.date) q.set("date", params.date)
+    if (params.employee && params.employee !== "all") q.set("employee", params.employee)
+    if (params.company && params.company !== "all") q.set("company", params.company)
+    if (params.metric && params.metric !== "collection") q.set("type", params.metric)
+
+    // Open modal immediately with loading state
+    setCollectionModalMeta({
+      type: `Date: ${params.displayDate || params.date} | Company: ${params.company === "all" ? "All" : params.company} | Employee: ${params.employee === "all" ? "All" : params.employee}`,
+      leads: [],
+      reportKind: params.metric || "collection",
+    })
+    setCollectionModalOpen(true)
+
+    try {
+      const detailEndpoint = params.metric && params.metric !== "collection"
+        ? "/api/sales_report/conversion"
+        : "/api/sales_report/collection"
+      const res = await fetch(`${detailEndpoint}?${q.toString()}`)
+      const json = await res.json()
+      let rows = (json && json.success && Array.isArray(json.data)) ? json.data : []
+
+      // Some legacy payment rows store the collector with a suffix or a
+      // slightly different spacing. If the employee-scoped lookup is empty,
+      // retry by date/company so the payment records can still be displayed.
+      if (rows.length === 0 && params.employee && params.employee !== "all") {
+        const fallback = new URLSearchParams()
+        if (params.date) fallback.set("date", params.date)
+        if (params.company && params.company !== "all") fallback.set("company", params.company)
+        if (params.metric && params.metric !== "collection") fallback.set("type", params.metric)
+        const fallbackRes = await fetch(`${detailEndpoint}?${fallback.toString()}`)
+        const fallbackJson = await fallbackRes.json()
+        rows = (fallbackJson && fallbackJson.success && Array.isArray(fallbackJson.data)) ? fallbackJson.data : []
+      }
+        const displayDate = (value: any) => value ? String(value) : "—"
+        const mapped = rows.map((item: any, idx: number) => ({
+          id: item.id || item.collection_id || item.booking_order_id || item.booking_id || idx + 1,
+          srNo: idx + 1,
+          // payment_collection uses `timestamp` for the upload time.
+          // payment_collection has no separate uploaded_date; timestamp is the upload timestamp.
+          uploadedDate: formatUploadedDateIST(item.timestamp || item.uploaded_date || item.uploaded_at || item.created_at || item.date_and_time || item.uploadedAt),
+          paymentReceivedDate: displayDate(item.formatted_datetime || item.payment_received_date || item.payment_received_at || item.received_date),
+          bookingId: params.metric === "collection" ? (item.booking_id || "—") : (item.booking_order_id || "—"),
+          clientName: item.name || item.name_of_client || item.client_name || item.customer_name || item.guest_name || "—",
+          mobile: item.mobile_no || item.mobile || item.phone || item.contact_no || "—",
+          email: item.email || item.email_id || item.guest_email || item.client_email || "—",
+          invoiceAmount: String(item.invoice_amount ?? item.invoiceAmount ?? item.conversion_amount ?? item.total_amount ?? "0"),
+          amount: String(item.received_amount ?? item.receivedAmount ?? item.amount_received ?? item.conversion_amount ?? "0"),
+          receipt: item.receipt_number || item.receipt_transaction_number || item.receipt_no || item.receipt || item.collection_id || "—",
+          payment_mode: item.payment_mode || item.paymentMode || item.mode || "—",
+          salesPerson: item.payment_collected_by || item.payment_collection_by || item.sales_person_name || item.collected_by || item.collectedBy || "—",
+          weekNumber: item.date_and_time ? String(getWeek(new Date(item.date_and_time), { weekStartsOn: 1, firstWeekContainsDate: 4 })) : "—",
+          monthName: item.date_and_time ? new Intl.DateTimeFormat("en-IN", { month: "long", timeZone: "Asia/Kolkata" }).format(new Date(item.date_and_time)) : "—",
+          year: item.date_and_time ? new Intl.DateTimeFormat("en-IN", { year: "numeric", timeZone: "Asia/Kolkata" }).format(new Date(item.date_and_time)) : "—",
+          bookingStatus: item.booking_status || "—",
+          clientType: item.NBD_CRR || item.new_existing || item.client_type || "—",
+          company: item.company || params.company || "—",
+        }))
+
+      setCollectionModalMeta({
+        type: `Date: ${params.displayDate || params.date} | Company: ${params.company === "all" ? "All" : params.company} | Employee: ${params.employee === "all" ? "All" : params.employee}`,
+        leads: mapped,
+        reportKind: params.metric || "collection",
+      })
+    } catch (err: any) {
+      console.error("[CollectionDetailModal] Fetch error:", err)
+    }
+  }
 
   const PageLoader = () => (
     <div className="fixed inset-0 z-[30] flex items-center justify-center bg-white pointer-events-auto">
@@ -1850,7 +1947,7 @@ export default function SalesReportsPage() {
                           {/* Variance Amt */}
                           <col style={{ width: "105px" }} />
                           {/* Variance % */}
-                          <col style={{ width: "75px" }} />
+                          <col style={{ width: "90px" }} />
                           {/* Collection Amt */}
                           <col style={{ width: "115px" }} />
                           {/* Unverified Amt */}
@@ -2029,7 +2126,9 @@ export default function SalesReportsPage() {
                                     {varPct >= 0 ? "+" : ""}{varPct.toFixed(1)}%
                                   </Badge>
                                 </td>
-                                <td className="text-center px-3 py-3 font-bold text-xs text-violet-700 bg-violet-50/60">₹{formatCurrency(group.totalCollection)}</td>
+                                <td style={{ textDecoration: "none" }} className="text-center px-3 py-3 font-bold text-xs text-violet-700 no-underline bg-violet-50/60">
+                                  <span style={{ textDecoration: "none" }} className="no-underline">₹{formatCurrency(group.totalCollection)}</span>
+                                </td>
                                 <td className="text-center px-3 py-3 font-bold text-xs text-amber-700 bg-amber-50/60">₹{formatCurrency(group.totalUnverified)}</td>
                                 <td className="text-center px-3 py-3 font-bold text-xs text-red-700 bg-red-50/60">₹{formatCurrency(group.totalCancelled)}</td>
                               </tr>
@@ -2072,15 +2171,14 @@ export default function SalesReportsPage() {
                                     {/* Planned */}
                                     <td className="text-center px-3 py-2.5 text-xs font-bold text-blue-700">₹{formatCurrency(row.plannedSalesAmount)}</td>
 
-                                    {/* Actual — clickable */}
+                                    {/* Actual — clickable modal */}
                                     <td className="text-center px-3 py-2.5 text-xs font-bold text-green-700">
                                       {Number(row.actualSalesAmount) > 0 ? (
                                         <span className="relative group/tip">
-                                          <a href={`https://script.google.com/macros/s/AKfycbxGKmbfFeyKqfxF1JQucV8EC1JkPmwkIYW0b0I_n1bI_mwHmZiJOOlBdjKGm4hKuiKWrQ/exec?company=${encodeURIComponent(row.company)}&employee=${encodeURIComponent(normalizeEmployeeForApi(row.empName))}&date=${encodeURIComponent(row.date)}&day=${encodeURIComponent(row.day)}&month=${encodeURIComponent(monthNumToName(row.month))}&year=${encodeURIComponent(row.year)}`}
-                                            target="_blank" rel="noopener noreferrer" className="text-green-700 underline font-bold hover:text-green-900 transition-colors">
+                                          <button type="button" onClick={(e) => { e.stopPropagation(); openCollectionModal({ date: row.date, displayDate: group.displayDate, employee: normalizeEmployeeForApi(row.empName), company: row.company, amount: Number(row.actualSalesAmount), metric: "actual" }) }} className="text-green-700 underline font-bold hover:text-green-900 transition-colors cursor-pointer bg-transparent border-none p-0 inline font-inherit">
                                             ₹{formatCurrency(row.actualSalesAmount)}
-                                          </a>
-                                          <span className="absolute left-1/2 -translate-x-1/2 -top-8 hidden group-hover/tip:block bg-black text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-30">Click for detailed sales report</span>
+                                          </button>
+                                          <span className="absolute left-1/2 -translate-x-1/2 -top-8 hidden group-hover/tip:block bg-black text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-30">Click for actual sales report</span>
                                         </span>
                                       ) : <span className="text-green-700 font-medium">₹0</span>}
                                     </td>
@@ -2102,40 +2200,54 @@ export default function SalesReportsPage() {
                                       </Badge>
                                     </td>
 
-                                    {/* Collection — clickable */}
+                                    {/* Collection — clickable modal */}
                                     <td className="text-center px-3 py-2.5 text-xs font-semibold text-violet-700">
                                       {Number(row.collectionAmount) > 0 ? (
                                         <span className="relative group/tip">
-                                          <a href={`https://script.google.com/macros/s/AKfycbwMMPtbBYO3ndUSfiLkWnokeBxIzUbKvyJfeYmfRMayhP1akOOxMbnhkPyKE-Vl0-dG/exec?date=${encodeURIComponent(row.date)}&month=${encodeURIComponent(row.month)}&year=${encodeURIComponent(row.year)}&employee=${encodeURIComponent(normalizeEmployeeForApi(row.empName))}&company=${encodeURIComponent(row.company)}`}
-                                            target="_blank" rel="noopener noreferrer" className="text-violet-700 underline font-bold hover:text-violet-900 transition-colors">
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              openCollectionModal({
+                                                date: row.date,
+                                                displayDate: group.displayDate,
+                                                employee: normalizeEmployeeForApi(row.empName),
+                                                company: row.company,
+                                                amount: Number(row.collectionAmount), metric: "collection",
+                                              });
+                                            }}
+                                            className="text-violet-700 underline font-bold hover:text-violet-900 transition-colors cursor-pointer bg-transparent border-none p-0 inline font-inherit"
+                                          >
                                             ₹{formatCurrency(row.collectionAmount)}
-                                          </a>
-                                          <span className="absolute left-1/2 -translate-x-1/2 -top-8 hidden group-hover/tip:block bg-black text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-30">Click for collection report</span>
+                                          </button>
+                                          <span className="absolute left-1/2 -translate-x-1/2 -top-8 hidden group-hover/tip:block bg-black text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-30">
+                                            Click for collection report
+                                          </span>
                                         </span>
-                                      ) : <span className="text-violet-700 font-medium">₹0</span>}
+                                      ) : (
+                                        <span className="text-violet-700 font-medium">₹0</span>
+                                      )}
                                     </td>
 
-                                    {/* Unverified — clickable */}
+                                    {/* Unverified — clickable modal */}
                                     <td className="text-center px-3 py-2.5 text-xs font-semibold text-amber-700">
                                       {Number(row.unverifiedSalesAmount) > 0 ? (
                                         <span className="relative group/tip">
-                                          <a href={`https://script.google.com/macros/s/AKfycbyqoDenAH1VkFsDpMM9m9tl338QtOdFzaWJkuD3mDyvpdWpFpd2K76RSdDB8eEfi1fO/exec?company=${encodeURIComponent(row.company)}&employee=${encodeURIComponent(normalizeEmployeeForApi(row.empName))}&date=${encodeURIComponent(row.date)}&day=${encodeURIComponent(row.day)}&month=${encodeURIComponent(monthNumToName(row.month))}&year=${encodeURIComponent(row.year)}&type=unverified`}
-                                            target="_blank" rel="noopener noreferrer" className="text-amber-700 underline font-bold hover:text-amber-900 transition-colors">
+                                          <button type="button" onClick={(e) => { e.stopPropagation(); openCollectionModal({ date: row.date, displayDate: group.displayDate, employee: normalizeEmployeeForApi(row.empName), company: row.company, amount: Number(row.unverifiedSalesAmount), metric: "unverified" }) }} className="text-amber-700 underline font-bold hover:text-amber-900 transition-colors cursor-pointer bg-transparent border-none p-0 inline font-inherit">
                                             ₹{formatCurrency(row.unverifiedSalesAmount)}
-                                          </a>
+                                          </button>
                                           <span className="absolute left-1/2 -translate-x-1/2 -top-8 hidden group-hover/tip:block bg-black text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-30">Click for unverified report</span>
                                         </span>
                                       ) : <span className="text-amber-700 font-medium">₹0</span>}
                                     </td>
 
-                                    {/* Cancelled — clickable */}
+                                    {/* Cancelled — clickable modal */}
                                     <td className="text-center px-3 py-2.5 text-xs font-semibold text-red-700">
                                       {Number(row.cancelledSalesAmount) > 0 ? (
                                         <span className="relative group/tip">
-                                          <a href={`https://script.google.com/macros/s/AKfycbyqoDenAH1VkFsDpMM9m9tl338QtOdFzaWJkuD3mDyvpdWpFpd2K76RSdDB8eEfi1fO/exec?company=${encodeURIComponent(row.company)}&employee=${encodeURIComponent(normalizeEmployeeForApi(row.empName))}&date=${encodeURIComponent(row.date)}&day=${encodeURIComponent(row.day)}&month=${encodeURIComponent(monthNumToName(row.month))}&year=${encodeURIComponent(row.year)}&type=cancelled`}
-                                            target="_blank" rel="noopener noreferrer" className="text-red-700 underline font-bold hover:text-red-900 transition-colors">
+                                          <button type="button" onClick={(e) => { e.stopPropagation(); openCollectionModal({ date: row.date, displayDate: group.displayDate, employee: normalizeEmployeeForApi(row.empName), company: row.company, amount: Number(row.cancelledSalesAmount), metric: "cancelled" }) }} className="text-red-700 underline font-bold hover:text-red-900 transition-colors cursor-pointer bg-transparent border-none p-0 inline font-inherit">
                                             ₹{formatCurrency(row.cancelledSalesAmount)}
-                                          </a>
+                                          </button>
                                           <span className="absolute left-1/2 -translate-x-1/2 -top-8 hidden group-hover/tip:block bg-black text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-30">Click for cancelled report</span>
                                         </span>
                                       ) : <span className="text-red-700 font-medium">₹0</span>}
@@ -2388,6 +2500,13 @@ export default function SalesReportsPage() {
             )}
           </CardContent>
         </Card>
+
+
+      <CollectionDetailModal
+        isOpen={collectionModalOpen}
+        onClose={() => setCollectionModalOpen(false)}
+        meta={collectionModalMeta}
+      />
 
       </div>
     </div>
