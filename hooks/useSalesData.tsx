@@ -67,7 +67,8 @@ export default function useSalesData(): UseSalesDataReturn {
             const res = await fetch(
                 // "https://script.google.com/macros/s/AKfycbzl525FWFr612hJ_S_QUknj4UUORLESSPAS_b4_n5glD3AEXAXgw3G3H48nAZO8vmvl/exec"
                 // "https://script.google.com/macros/s/AKfycbyOfcVtcrDG71Xfz0nGGOhccni9I3IlnlEEzLIqkD7rFYSqUK8yoeFSNndIMqvzjSuY/exec"
-                "https://script.google.com/macros/s/AKfycbzl525FWFr612hJ_S_QUknj4UUORLESSPAS_b4_n5glD3AEXAXgw3G3H48nAZO8vmvl/exec"
+                // "https://script.google.com/macros/s/AKfycbzl525FWFr612hJ_S_QUknj4UUORLESSPAS_b4_n5glD3AEXAXgw3G3H48nAZO8vmvl/exec"
+                "/api/sales_report"
             );
 
             if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
@@ -86,6 +87,21 @@ export default function useSalesData(): UseSalesDataReturn {
 
                 // Second-level keys are employee names
                 Object.entries(empMap).forEach(([empName, empData]: [string, any]) => {
+                    const cleanEmpName = (empName || "").trim();
+                    const lowerEmpName = cleanEmpName.toLowerCase();
+                    if (
+                        !cleanEmpName ||
+                        lowerEmpName === "null" ||
+                        lowerEmpName === "undefined" ||
+                        lowerEmpName === "satyam kumar" ||
+                        lowerEmpName.startsWith("satyam kumar") ||
+                        lowerEmpName === "sunaj sahoo" ||
+                        lowerEmpName.startsWith("sunaj sahoo") ||
+                        lowerEmpName.includes("need to assign user")
+                    ) {
+                        return;
+                    }
+
                     const rawCompany = empData.companyName ?? "N/A";
                     const company = rawCompany.toString().trim().toUpperCase().replace(/\s+/g, "");
 

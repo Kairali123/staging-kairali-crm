@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSessionUser, hasAdminRole, hasPermission } from '@/lib/authz'
+import { getSessionUser, hasPermission } from '@/lib/authz'
 import { loadMorningDialerCounts } from '@/lib/morning-dialer-counts'
 
 export const dynamic = 'force-dynamic'
@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   const user = getSessionUser(request)
   const headers = { 'Cache-Control': 'private, no-store, max-age=0' }
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers })
-  if (!hasAdminRole(user, 'trimmed-lower') && !hasPermission(user, 'leads.morning_allocation')) {
+  if (!hasPermission(user, 'leads.morning_allocation')) {
     return NextResponse.json({ error: 'Access denied' }, { status: 403, headers })
   }
   return NextResponse.json(await loadMorningDialerCounts(), { headers })

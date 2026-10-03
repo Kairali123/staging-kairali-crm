@@ -95,6 +95,28 @@ const pagePermissions: Record<string, string> = {
   '/client-database': 'client_database.view',
   '/client-database/upload': 'client_database_upload.view',
   '/voicecall/kserve-lead-lost': 'voicecall_kserve_lead_lost.view',
+  // Pages that were reachable by any logged-in user because they had no entry here.
+  // Each uses the same permission as its sidebar entry in components/dashboard-layout.tsx.
+  '/deal-assistant': 'deal_assistant.view',
+  '/riya-sharma': 'riya_sharma.view',
+  '/sales-calling': 'sales_calling.view',
+  '/partners': 'partners.view',
+  '/email-marketing/campaigns': 'email_marketing.view',
+  '/email-marketing/campaigns/create': 'email_marketing.view',
+  '/admin/email-configuration': 'email_marketing.view',
+  '/guest-experience': 'guest_experience.view',
+  '/guest-experience/config': 'guest_experience.view',
+  '/guest-experience/explore': 'guest_experience.view',
+  '/guest-experience/feedback': 'guest_experience.view',
+  '/guest-experience-light': 'guest_experience.view',
+  '/guest-experience-light/explore': 'guest_experience.view',
+  '/guest-experience-light/feedback': 'guest_experience.view',
+}
+
+// Dynamic routes (`[id]` pages) and the permission they inherit from their parent page.
+const dynamicPagePermissions: Record<string, string> = {
+  '/partners/': 'partners.view',
+  '/doctor-consultation/prescription/preview/': 'doctor.consultation.view',
 }
 
 const isRestricted = (pathname: string) => {
@@ -183,8 +205,8 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
       return
     }
 
-    // Super admin and admin have unrestricted access to all other pages
-    if (isSuperAdmin || roleStr === 'admin' || user?.permissions?.includes('all')) return
+    // Only super admin has unrestricted access to all other pages; every other role (including admin) follows its database permissions
+    if (isSuperAdmin || user?.permissions?.includes('all')) return
 
     if (cleanPath === '/morning-lead-allocation') {
       if (!hasPermission('leads.morning_allocation')) router.replace('/access-denied')
@@ -294,12 +316,26 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
         hasPermission('voicecall_kserve_lead_lost.viewAll') ||
         hasPermission('voicecall_kserve_lead_lost.edit') ||
         hasPermission('voicecall_kserve_lead_lost') ||
-        hasPermission('kserve_lead_lost.view') ||
-        hasPermission('ai_voice_menu.view')
+        hasPermission('kserve_lead_lost.view')
       if (!hasAccess) {
         router.replace('/access-denied')
         return
       }
+      return
+    }
+
+    // Lead Lost Monitor: same rule as its sidebar entry
+    if (cleanPath === '/lead-lost-monitor' || cleanPath.startsWith('/lead-lost-monitor/')) {
+      if (!hasPermission('lead_lost_monitor.view') && !hasPermission('voicecall_kserve_lead_lost.view')) {
+        router.replace('/access-denied')
+      }
+      return
+    }
+
+    // Dynamic child pages never match an exact `pagePermissions` key, so they inherit their parent's permission.
+    const dynamicPrefix = Object.entries(dynamicPagePermissions).find(([prefix]) => cleanPath.startsWith(prefix))
+    if (dynamicPrefix && !hasPermission(dynamicPrefix[1])) {
+      router.replace('/access-denied')
       return
     }
 
