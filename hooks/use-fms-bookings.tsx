@@ -270,7 +270,7 @@ export function useBookings() {
 
         const SCRIPT_URL = "/api/ktahv-bookings";
         const MAX_RETRIES = 2;
-        const ATTEMPT_TIMEOUT_MS = 20000;
+        const ATTEMPT_TIMEOUT_MS = 60000;
         let json: any = null;
         let succeeded = false;
 
