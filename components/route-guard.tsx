@@ -246,8 +246,7 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
         hasPermission('lead_search.viewSelf') ||
         hasPermission('lead_search.viewAll') ||
         hasPermission('lead_search.edit') ||
-        hasPermission('lead_search') ||
-        hasPermission('leads.view')
+        hasPermission('lead_search')
       if (!hasAccess) {
         router.replace('/access-denied')
         return

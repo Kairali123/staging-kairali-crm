@@ -397,8 +397,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       hasPermission("lead_search.viewSelf") ||
       hasPermission("lead_search.viewAll") ||
       hasPermission("lead_search.edit") ||
-      hasPermission("lead_search") ||
-      hasPermission("leads.view")
+      hasPermission("lead_search")
     )
   }
 
@@ -430,8 +429,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (isSuperAdmin || user?.permissions?.includes("all") || user?.role === "admin") return true
     return (
       hasPermission("good_lead_leakage.view") ||
-      hasPermission("marketing.view") ||
-      hasPermission("leads.view") ||
       hasPermission("good_lead_leakage")
     )
   }
