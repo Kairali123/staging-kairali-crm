@@ -224,14 +224,16 @@ export async function authenticateUserFromDb(
     // 5. Fetch permissions from the parallel query or fallback
     let permissions: string[] = []
     const permRows = permResult[0]
-    if (Array.isArray(permRows) && permRows.length > 0) {
+    const hasOwnPermissionRow = Array.isArray(permRows) && permRows.length > 0
+    if (hasOwnPermissionRow) {
       permissions = parsePermissionsFromDbRow(permRows[0])
     } else {
       permissions = await getUserPermissionsFromDb(cleanEmail, userRole)
     }
 
-    // Merge any direct permissions from userlogin.permission column if present
-    if (userRow.permission && typeof userRow.permission === 'string') {
+    // `user_role_permissions` is the source of truth. The legacy userlogin.permission column can
+    // hold stale grants, so it is only used for users that have no row of their own.
+    if (!hasOwnPermissionRow && userRow.permission && typeof userRow.permission === 'string') {
       const directPerms = userRow.permission
         .split(',')
         .map((p: string) => p.trim())
