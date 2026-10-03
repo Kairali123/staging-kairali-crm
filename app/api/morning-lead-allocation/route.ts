@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSessionUser, hasAdminRole, hasPermission } from '@/lib/authz'
+import { getSessionUser, hasPermission } from '@/lib/authz'
 import {
   loadMorningAllocation,
   saveMorningAllocationAction,
@@ -13,12 +13,10 @@ export const maxDuration = 60
 const headers = { 'Cache-Control': 'private, no-store, max-age=0' }
 
 function canView(user: unknown) {
-  return hasAdminRole(user, 'trimmed-lower') ||
-    hasPermission(user, 'leads.view') ||
-    hasPermission(user, 'leads.assign')
+  return hasPermission(user, 'leads.morning_allocation')
 }
 function canEdit(user: unknown) {
-  return hasAdminRole(user, 'trimmed-lower') || hasPermission(user, 'leads.assign')
+  return hasPermission(user, 'leads.morning_allocation') && hasPermission(user, 'leads.assign')
 }
 function failure(error: unknown) {
   const message = error instanceof Error ? error.message : ''

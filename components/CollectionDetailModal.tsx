@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 
 // ─────────────────────────────────────────────────────────────────
 // TYPES
@@ -8,25 +9,30 @@ import React, { useState, useEffect, useCallback } from "react";
 export interface LeadRow {
   id?: string | number;
   srNo: number;
-  dateTime: string;        // payment_date
-  bookingId: string;       // booking_id  (Reference ID)
-  clientName: string;      // name
+  uploadedDate: string;
+  paymentReceivedDate: string;
+  bookingId: string;
+  clientName: string;
   mobile: string;          // mobile_no
-  company: string;         // company
-  payment_mode: string;            // payment_mode
-  amount: string;          // received_amount
-  invoice_amount: string;   // invoice_amount
+  email: string;
+  invoiceAmount: string;
+  amount: string;
+  receipt: string;
+  payment_mode: string;
   salesPerson: string;     // payment_collected_by (Collected By)
-  received_status: string;   // received_status
-  ivrUrl?: string;
-  priority?: string;
-  urgency?: string;
+  weekNumber: string;
+  monthName: string;
+  year: string;
+  bookingStatus: string;
+  clientType: string;
+  company: string;
 }
 
 export interface ModalMeta {
   /** Pipe-separated e.g. "Date: 2026-04-23 | Source: IVR | Type: NBD" */
   type: string;
   leads: LeadRow[];
+  reportKind?: "collection" | "actual" | "unverified" | "cancelled";
 }
 
 interface LeadDetailModalProps {
@@ -41,22 +47,40 @@ interface LeadDetailModalProps {
 const ROWS_OPTIONS = [5, 10, 25, 50, 100];
 
 const TABLE_COLUMNS: { key: keyof LeadRow; label: string; minW: number }[] = [
-  { key: "srNo",          label: "S.No",            minW: 60  },
-  { key: "dateTime",      label: "Date",             minW: 140 },
-  { key: "bookingId",     label: "Reference ID",     minW: 160 },
-  { key: "clientName",    label: "Customer Name",    minW: 180 },
-  { key: "mobile",        label: "Mobile",           minW: 140 },
-  { key: "company",       label: "Company",          minW: 130 },
-  { key: "payment_mode",          label: "Payment Mode",     minW: 140 },
-  { key: "amount",        label: "Amount",           minW: 140 },
-  { key: "invoice_amount", label: "Invoice Amount",   minW: 160 },
-  { key: "salesPerson",   label: "Collected By",     minW: 160 },
-  { key: "received_status", label: "Status",           minW: 130 },
+  { key: "srNo",                label: "S.No",                    minW: 60  },
+  { key: "uploadedDate",        label: "Uploaded Date",            minW: 145 },
+  { key: "paymentReceivedDate", label: "Payment Received Date",     minW: 170 },
+  { key: "bookingId",           label: "Booking ID",                minW: 150 },
+  { key: "clientName",          label: "Name",                      minW: 170 },
+  { key: "mobile",              label: "Mobile",                    minW: 130 },
+  { key: "email",               label: "Email",                     minW: 190 },
+  { key: "invoiceAmount",       label: "Invoice Amount",             minW: 145 },
+  { key: "amount",              label: "Received Amount",            minW: 150 },
+  { key: "receipt",             label: "Receipt",                   minW: 135 },
+  { key: "payment_mode",        label: "Payment Mode",               minW: 135 },
+  { key: "salesPerson",         label: "Collected By",               minW: 160 },
+];
+
+const CONVERSION_COLUMNS: { key: keyof LeadRow; label: string; minW: number }[] = [
+  { key: "srNo", label: "Sr. No.", minW: 65 },
+  { key: "paymentReceivedDate", label: "Date and Time", minW: 160 },
+  { key: "weekNumber", label: "Week Number", minW: 100 },
+  { key: "monthName", label: "Month Name", minW: 110 },
+  { key: "year", label: "Year", minW: 75 },
+  { key: "bookingId", label: "Oder/Booking ID", minW: 145 },
+  { key: "clientName", label: "Name of Client", minW: 175 },
+  { key: "mobile", label: "Mobile", minW: 130 },
+  { key: "email", label: "Email", minW: 190 },
+  { key: "invoiceAmount", label: "Verified Invoice Amount", minW: 175 },
+  { key: "salesPerson", label: "Sales Person Name", minW: 170 },
+  { key: "bookingStatus", label: "Booking Status", minW: 135 },
+  { key: "clientType", label: "NEW/Existing", minW: 110 },
+  { key: "company", label: "Company", minW: 110 },
 ];
 
 
 const LONG_COLS = new Set<string>([
-  "clientName", "bookingId", "salesPerson",
+  "clientName", "bookingId", "salesPerson", "email", "paymentReceivedDate",
 ]);
 // ─────────────────────────────────────────────────────────────────
 // STYLE HELPERS
@@ -251,6 +275,13 @@ export default function LeadDetailModal({ isOpen, onClose, meta }: LeadDetailMod
   if (!isOpen || !meta) return null;
 
   const { leads, type } = meta;
+  const columns = meta.reportKind && meta.reportKind !== "collection" ? CONVERSION_COLUMNS : TABLE_COLUMNS;
+  const modalTitle = {
+    actual: "Actual Sales Conversion History",
+    unverified: "Unverified Sales Conversion History",
+    cancelled: "Cancelled Sales Conversion History",
+    collection: "Collection History",
+  }[meta.reportKind || "collection"];
   const metaParts = parseType(type);
   const totalRows = leads.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / rpp));
@@ -273,7 +304,9 @@ export default function LeadDetailModal({ isOpen, onClose, meta }: LeadDetailMod
   const footerPad = isMobile ? "8px 10px" : "10px 20px";
   const headerSize = isMobile ? "15px" : "19px";
 
-  return (
+  // Render on <body>: inside the page's content wrapper the modal sits in a lower stacking
+  // context than the sidebar (z-50) and top bar (z-40), so both ended up drawn over it.
+  return createPortal(
     <>
       {/* ── GLOBAL RESPONSIVE STYLES ── */}
       <style>{`
@@ -341,7 +374,7 @@ export default function LeadDetailModal({ isOpen, onClose, meta }: LeadDetailMod
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Lead Detail Report"
+        aria-label={modalTitle}
         style={{
           position: "fixed",
           top: "50%", left: "50%",
@@ -378,7 +411,7 @@ export default function LeadDetailModal({ isOpen, onClose, meta }: LeadDetailMod
               fontSize: isMobile ? "9px" : "10px",
               fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.8px",
             }}>
-              Detailed Lead Report
+              {modalTitle}
             </p>
             <h2 style={{
               margin: "3px 0 0", color: "#fff",
@@ -432,7 +465,7 @@ export default function LeadDetailModal({ isOpen, onClose, meta }: LeadDetailMod
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
             <thead>
               <tr>
-                {TABLE_COLUMNS.map((col) => (
+                {columns.map((col) => (
                   <th key={col.key} style={{
                     background: "linear-gradient(135deg,#2d3748 0%,#1a202c 100%)",
                     color: "#fff", padding: "11px 8px",
@@ -451,7 +484,7 @@ export default function LeadDetailModal({ isOpen, onClose, meta }: LeadDetailMod
             <tbody>
               {sliced.length === 0 ? (
                 <tr>
-                  <td colSpan={TABLE_COLUMNS.length} style={{
+                  <td colSpan={columns.length} style={{
                     textAlign: "center", padding: "60px 20px",
                     color: "#94a3b8", fontSize: "14px",
                   }}>
@@ -464,7 +497,7 @@ export default function LeadDetailModal({ isOpen, onClose, meta }: LeadDetailMod
                     key={`${row.id ?? row.bookingId ?? row.srNo}-${idx}`}
                     style={{ background: idx % 2 === 0 ? "#fff" : "#f8fafc" }}
                   >
-                    {TABLE_COLUMNS.map((col) => {
+                    {columns.map((col) => {
                       const raw = row[col.key];
                       const val = raw !== undefined && raw !== null && String(raw).trim() !== ""
                         ? String(raw) : "—";
@@ -590,6 +623,7 @@ export default function LeadDetailModal({ isOpen, onClose, meta }: LeadDetailMod
         </div>
 
       </div>
-    </>
+    </>,
+    document.body
   );
 }

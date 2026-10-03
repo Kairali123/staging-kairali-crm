@@ -111,7 +111,8 @@ export async function GET(req: NextRequest) {
         if (dbPermRow) {
           userPermissions = parsePermissionsFromDbRow(dbPermRow)
         }
-        if (r.permission && typeof r.permission === 'string') {
+        // Mirror lib/db-auth.ts: the legacy userlogin.permission column only applies without a permission row.
+        if (!dbPermRow && r.permission && typeof r.permission === 'string') {
           const direct = r.permission.split(',').map((p: string) => p.trim()).filter(Boolean)
           userPermissions = Array.from(new Set([...userPermissions, ...direct]))
         }

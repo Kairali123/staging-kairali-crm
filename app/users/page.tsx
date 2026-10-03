@@ -1967,7 +1967,7 @@ export const PAGE_PERMISSIONS_MODULES: PagePermissionModule[] = [
     key: "leads",
     label: "Leads",
     category: "Core Workspace",
-    actions: ["view", "edit", "delete", "manage", "create", "assign"],
+    actions: ["view", "edit", "delete", "manage", "create", "assign", "morning_allocation"],
     description: "Lead pipelines, qualifications & agent allocations",
   },
   {
