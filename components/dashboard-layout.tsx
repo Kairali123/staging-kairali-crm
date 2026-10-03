@@ -242,7 +242,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   ]
   const leadManagementSubMenu = [
     { name: "Leads Assignment", href: "/leads/assign", icon: Shuffle, permission: "leads.assign" },
-    { name: "Morning Lead Allocation", href: "/morning-lead-allocation", icon: Clock3, permission: "leads.view" },
+    { name: "Morning Lead Allocation", href: "/morning-lead-allocation", icon: Clock3, permission: "leads.morning_allocation" },
     { name: "Lead Search Dashboard", href: "/lead-search", icon: Search, permission: "lead_search.view" },
     { name: "Good Lead Leakage", href: "/good-lead-leakage", icon: Search, permission: "good_lead_leakage.view" },
     { name: "K-Serve Lead Lost", href: "/voicecall/kserve-lead-lost", icon: PhoneCall, permission: "voicecall_kserve_lead_lost.view" },
@@ -390,6 +390,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     )
   }
 
+  const hasMorningAllocationPermission = () => {
+    if (isSuperAdmin || user?.permissions?.includes("all") || user?.role === "admin") return true
+    return hasPermission("leads.morning_allocation")
+  }
+
   const hasLeadSearchPermission = () => {
     if (isSuperAdmin || user?.permissions?.includes("all") || user?.role === "admin") return true
     return (
@@ -510,7 +515,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   if (hasPermission("guest_experience.view") || isSuperAdmin) guestExperienceSubMenu.forEach((item) => searchableItems.push({ name: item.name, href: item.href, description: item.name, icon: item.icon }))
   if (hasLeadManagementPermission()) {
     if (hasLeadsAssignPermission()) searchableItems.push({ name: "Leads Assignment", href: "/leads/assign", description: "Leads Assignment", icon: Shuffle })
-    if (hasLeadsAssignPermission()) searchableItems.push({ name: "Morning Lead Allocation", href: "/morning-lead-allocation", description: "Daily pending AppSheet allocation", icon: Clock3 })
+    if (hasMorningAllocationPermission()) searchableItems.push({ name: "Morning Lead Allocation", href: "/morning-lead-allocation", description: "Daily pending AppSheet allocation", icon: Clock3 })
     if (hasLeadSearchPermission()) searchableItems.push({ name: "Lead Search Dashboard", href: "/lead-search", description: "Lead Search Dashboard", icon: Search })
     if (hasGoodLeadLeakagePermission()) searchableItems.push({ name: "Good Lead Leakage", href: "/good-lead-leakage", description: "Good lead leakage report", icon: Search })
     if (hasKserveLeadLostPermission()) searchableItems.push({ name: "K-Serve Lead Lost", href: "/voicecall/kserve-lead-lost", description: "K-Serve lead lost tracker", icon: PhoneCall })
@@ -654,7 +659,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       const isKserveLeadLostRoute = pathname === "/voicecall/kserve-lead-lost"
       const isLeadLostMonitorRoute = pathname.startsWith("/lead-lost-monitor")
       const isActive = (hasLeadsAssignPermission() && isLeadsAssignRoute) ||
-                       (hasLeadsAssignPermission() && isMorningAllocationRoute) ||
+                       (hasMorningAllocationPermission() && isMorningAllocationRoute) ||
                        (hasLeadSearchPermission() && isLeadSearchRoute) ||
                        (hasGoodLeadLeakagePermission() && isGoodLeadLeakageRoute) ||
                        (hasKserveLeadLostPermission() && isKserveLeadLostRoute) ||
@@ -662,7 +667,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
       const visibleSubMenu = leadManagementSubMenu.filter((subItem) => {
         if (subItem.href === "/leads/assign") return hasLeadsAssignPermission()
-        if (subItem.href === "/morning-lead-allocation") return hasLeadsAssignPermission()
+        if (subItem.href === "/morning-lead-allocation") return hasMorningAllocationPermission()
         if (subItem.href === "/lead-search") return hasLeadSearchPermission()
         if (subItem.href === "/good-lead-leakage") return hasGoodLeadLeakagePermission()
         if (subItem.href === "/voicecall/kserve-lead-lost") return hasKserveLeadLostPermission()

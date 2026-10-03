@@ -187,7 +187,7 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
     if (isSuperAdmin || roleStr === 'admin' || user?.permissions?.includes('all')) return
 
     if (cleanPath === '/morning-lead-allocation') {
-      if (!hasPermission('leads.view') && !hasPermission('leads.assign')) router.replace('/access-denied')
+      if (!hasPermission('leads.morning_allocation')) router.replace('/access-denied')
       return
     }
 
