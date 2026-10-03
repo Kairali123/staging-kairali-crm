@@ -9,8 +9,8 @@ import { loadScheduledMarketing } from './load-marketing'
 import { loadScheduledCrr } from './load-crr-report'
 import { exportCrrReportHTML, buildCrrJourneyDonutSvg } from '@/lib/ktahv-crr-report'
 import { buildKserveLostAlertEmail } from './templates/kserve-lead-lost-alert'
-import { buildPIReviewAlertEmail } from './templates/booking-pi-review-alert'
-import { loadBookingPIReviewAlertData } from './load-booking-pi-review'
+import { loadScheduledBookingPiReview } from './load-booking-pi-review'
+import { exportBookingPiReviewHTML } from '@/lib/booking-pi-review-report'
 import { localDay, nextRun } from './schedule'
 import { transaction } from './store'
 import { resolveAppUrl } from './app-url'
@@ -130,11 +130,7 @@ export async function buildEmail(t:Trigger,at:number){
   else if(t.reportId==='booking-pi-review-alert'){
    reportTitle='Booking PI Review Alert'
    reportSlug='Booking-PI-Review-Alert'
-   const appUrl=process.env.NEXT_PUBLIC_APP_URL||'http://localhost:3000'
-   const alertData=await loadBookingPIReviewAlertData(date,appUrl)
-   // Always send — the email itself shows the summary (all done or pending)
-   hasData=alertData.totalPIs>0
-   html=buildPIReviewAlertEmail(alertData)
+   const report=await loadScheduledBookingPiReview(date);hasData=report.summary.total>0;html=exportBookingPiReviewHTML(report,resolveAppUrl())
   }
   else if(t.reportId==='morning-lead-allocation'){
    reportTitle='Morning Lead Allocation Alert'
