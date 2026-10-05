@@ -102,6 +102,10 @@ export default function EmailConfigBridge({ document: documentHtml }: { document
           if (!response.ok) throw new Error(data.error || 'Report unavailable')
           const { exportCrrReportHTML } = await import('@/lib/ktahv-crr-report')
           html = exportCrrReportHTML(data, scope)
+        } else if (id === 'trigger-health-digest') {
+          const response = await fetch('/api/trigger-monitor/preview', { signal: current.signal, cache: 'no-store' })
+          html = await response.text()
+          if (!response.ok) throw new Error('Trigger health preview unavailable')
         } else if (id === 'morning-lead-allocation') {
           const response = await fetch('/api/morning-allocation-preview', { signal: current.signal, cache: 'no-store' })
           html = await response.text()

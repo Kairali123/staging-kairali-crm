@@ -2,11 +2,16 @@
 
 ## LIVE TASK
 
-**DB-012**
+**TRG-001**
 
-Operate the CARMA-DB autonomous database delivery structure for Satyam.
+Implement the user-approved Google Sheets trigger management module in staging CRM.
+The previous DB-012 checkpoint is preserved below; no DB control work is advanced in this turn.
 
 ## NEXT ACTION
+
+Build and verify the dashboard, authorized discovery, project connector, execution ingestion and daily email template. Deploy only to the verified staging project. Google account consent and developer recipients remain external setup requirements.
+
+### Preserved DB-012 next action
 
 Advance the remaining 12 optional value-free consumer reconciliation packets without duplicates.
 Obtain Satyam's value-free dispositions for #19–#24 and accountable-owner PR review,
@@ -15,6 +20,13 @@ mutation is authorized. Tuesday is at 45/25 with 51/51 requests and 39/51 reconc
 packets ready; there is no workload cap.
 
 ## EXIT EVIDENCE
+
+- TRG-001 tests, scoped typecheck and lint pass.
+- CRM-style dashboard and email template deployed to verified staging project; anonymous APIs reject access.
+- Google consent, per-project connector inventory and actual digest delivery separately verified or explicitly pending.
+- Rollback deployment recorded; no production business-trigger or schema mutation.
+
+### Preserved DB-012 exit evidence
 
 - All 51 registered systems have evidence for all eight discovery categories and
   Satyam's completeness attestation.

@@ -1,5 +1,6 @@
 /** Only known report identifiers can select a renderer; URLs/HTML are never accepted as templates. */
 export const emailReportTemplates = {
+  'trigger-health-digest': { name: 'Daily Trigger Health & Failure Alert', path: '/settings/automation/trigger-management' },
   'daily-sales-report': { name: 'Daily Sales Report Alert', path: '/sales/reports/daily-alert' },
   'marketing-daily-report': { name: 'Marketing Daily Report', path: '/marketing-daily-report' },
   'sales-call-audit': { name: 'Daily Call Audit Pass/Fail Report Email Template', path: '/sales-call-audit/email-template' },
