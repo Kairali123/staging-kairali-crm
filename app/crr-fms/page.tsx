@@ -573,12 +573,16 @@ export default function CRRCallingProcessPage() {
     // pagination
     // View mode and tables tab
     const [viewMode, setViewMode] = useState<"table" | "chart">("table");
-    const [recordsViewTab, setRecordsViewTab] = useState<"all" | "pending" | "completed" | "cancelled" | "not_checkedin_yet">("all");
+    const [recordsViewTab, setRecordsViewTab] = useState<"all" | "pending" | "actionable" | "completed" | "cancelled" | "not_checkedin_yet">("all");
 
-    // Pending records pagination
+    // Pending records pagination. Pending is split in two tables: "Actionable now"
+    // (reuses the pending* state) and "Scheduled / Upcoming" (upcoming* state).
     const [pendingPage, setPendingPage] = useState(1);
     const [pendingItemsPerPage, setPendingItemsPerPage] = useState(20);
     const [pendingGotoPage, setPendingGotoPage] = useState("");
+    const [upcomingPage, setUpcomingPage] = useState(1);
+    const [upcomingItemsPerPage, setUpcomingItemsPerPage] = useState(20);
+    const [upcomingGotoPage, setUpcomingGotoPage] = useState("");
 
     // Completed records pagination
     const [completedPage, setCompletedPage] = useState(1);
@@ -877,6 +881,9 @@ export default function CRRCallingProcessPage() {
         });
     }, [guests, search, respFilter, dateRangeStart, dateRangeEnd, responsiblePersonList]);
 
+    // "Actionable now" is a view of Pending: same record set, only the tables differ.
+    const isPendingView = statusFilter === "pending" || statusFilter === "actionable";
+
     /* ---------- FILTERED (& SORTED) ROWS (Stage & Status Filtered) ---------- */
     const rows = useMemo(() => {
         const filtered = overallRecords.filter((g) => {
@@ -889,7 +896,7 @@ export default function CRRCallingProcessPage() {
 
                 if (statusFilter === "complete") {
                     if (!isComplete || isCancelled || isNotCheckedIn) return false;
-                } else if (statusFilter === "pending") {
+                } else if (isPendingView) {
                     if (!isPending || isNotCheckedIn) return false;
                 } else if (statusFilter === "cancelled") {
                     if (!isCancelled) return false;
@@ -900,7 +907,7 @@ export default function CRRCallingProcessPage() {
                     if (!isComplete && !isPending && !isCancelled && !isNotCheckedIn) return false;
                 }
             } else {
-                if (statusFilter === "pending" && (isRecordCompleted(g) || isBookingCancelled(g) || g.notCheckedInYet)) return false;
+                if (isPendingView && (isRecordCompleted(g) || isBookingCancelled(g) || g.notCheckedInYet)) return false;
                 if (statusFilter === "complete" && (!isRecordCompleted(g) || isBookingCancelled(g) || g.notCheckedInYet)) return false;
                 if (statusFilter === "cancelled" && !isBookingCancelled(g)) return false;
                 if (statusFilter === "not_checkedin_yet" && (!g.notCheckedInYet || isBookingCancelled(g))) return false;
@@ -923,10 +930,11 @@ export default function CRRCallingProcessPage() {
     // Reset to page 1 whenever the filtered result set changes shape
     useEffect(() => {
         setPendingPage(1);
+        setUpcomingPage(1);
         setCompletedPage(1);
         setCancelledPage(1);
         setNotCheckedInPage(1);
-    }, [search, stageFilter, respFilter, statusFilter, dateRangeFilter, customStartDate, customEndDate, pendingItemsPerPage, completedItemsPerPage, cancelledItemsPerPage, notCheckedInItemsPerPage]);
+    }, [search, stageFilter, respFilter, statusFilter, dateRangeFilter, customStartDate, customEndDate, pendingItemsPerPage, upcomingItemsPerPage, completedItemsPerPage, cancelledItemsPerPage, notCheckedInItemsPerPage]);
 
     // Safety net: Radix Dropdown -> Dialog transitions can occasionally leave
     // `pointer-events: none` stuck on <body>, freezing the whole page (clicks
@@ -1012,13 +1020,37 @@ export default function CRRCallingProcessPage() {
         return [...active, ...future];
     }, [rows, isRecordCompleted, statusFilter, sortColumn]);
 
+    // Pending is split in two tables. A record is "actionable now" when at least one stage
+    // is already unlocked (same rule as the "N actionable now" counter): the selected
+    // stage if a stage filter is set, otherwise any stage this user may work on.
+    const isActionableNow = (g: Guest) => {
+        if (stageFilter !== "all") return blockReasonOf(g, Number(stageFilter)) === null;
+        const stagesToCheck = isAdminRole ? STAGES.map((s) => s.no) : userAccessibleStages;
+        return stagesToCheck.some((n) => blockReasonOf(g, n) === null);
+    };
+    const actionableRows = useMemo(
+        () => pendingRows.filter(isActionableNow),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [pendingRows, stageFilter, isAdminRole, userAccessibleStages]
+    );
+    const upcomingRows = useMemo(() => {
+        if (statusFilter === "actionable") return [];
+        const actionableSet = new Set(actionableRows);
+        const list = pendingRows.filter((g) => !actionableSet.has(g));
+        if (!sortColumn) {
+            // Soonest check-in first so the next task to unlock is on top.
+            list.sort((a, b) => (parseDMY(a.checkin).getTime() || 0) - (parseDMY(b.checkin).getTime() || 0));
+        }
+        return list;
+    }, [pendingRows, actionableRows, statusFilter, sortColumn]);
+
     const completedRows = useMemo(() => {
-        if (statusFilter === "pending" || statusFilter === "cancelled" || statusFilter === "not_checkedin_yet") return [];
+        if (isPendingView || statusFilter === "cancelled" || statusFilter === "not_checkedin_yet") return [];
         return rows.filter((g) => isRecordCompleted(g) && !isBookingCancelled(g) && !g.notCheckedInYet);
     }, [rows, isRecordCompleted, statusFilter]);
 
     const cancelledRows = useMemo(() => {
-        if (statusFilter === "pending" || statusFilter === "complete" || statusFilter === "not_checkedin_yet") return [];
+        if (isPendingView || statusFilter === "complete" || statusFilter === "not_checkedin_yet") return [];
         return rows.filter((g) => isBookingCancelled(g));
     }, [rows, statusFilter]);
 
@@ -1026,15 +1058,29 @@ export default function CRRCallingProcessPage() {
     // These are excluded from Pending and Completed to prevent dual-display. Cancelled
     // bookings belong to the Cancelled table only, matching the counts loop's precedence.
     const notCheckedInYetRows = useMemo(() => {
-        if (statusFilter === "complete" || statusFilter === "cancelled" || statusFilter === "pending") return [];
+        if (statusFilter === "complete" || statusFilter === "cancelled" || isPendingView) return [];
         return rows.filter((g) => g.notCheckedInYet === true && !isBookingCancelled(g));
     }, [rows, statusFilter]);
 
     // Pending pagination derived
-    const pendingTotalPages = Math.max(1, Math.ceil(pendingRows.length / pendingItemsPerPage));
+    // "pending*" drives the Actionable table; "upcoming*" drives the Scheduled table.
+    const pendingTotalPages = Math.max(1, Math.ceil(actionableRows.length / pendingItemsPerPage));
     const pendingStartIndex = (pendingPage - 1) * pendingItemsPerPage;
-    const pendingEndIndex = Math.min(pendingStartIndex + pendingItemsPerPage, pendingRows.length);
-    const pagedPendingRows = pendingRows.slice(pendingStartIndex, pendingEndIndex);
+    const pendingEndIndex = Math.min(pendingStartIndex + pendingItemsPerPage, actionableRows.length);
+    const pagedPendingRows = actionableRows.slice(pendingStartIndex, pendingEndIndex);
+
+    const upcomingTotalPages = Math.max(1, Math.ceil(upcomingRows.length / upcomingItemsPerPage));
+    const upcomingStartIndex = (upcomingPage - 1) * upcomingItemsPerPage;
+    const upcomingEndIndex = Math.min(upcomingStartIndex + upcomingItemsPerPage, upcomingRows.length);
+    const pagedUpcomingRows = upcomingRows.slice(upcomingStartIndex, upcomingEndIndex);
+
+    function handleUpcomingGotoPage() {
+        const p = parseInt(upcomingGotoPage, 10);
+        if (!isNaN(p) && p >= 1 && p <= upcomingTotalPages) {
+            setUpcomingPage(p);
+        }
+        setUpcomingGotoPage("");
+    }
 
     function handlePendingGotoPage() {
         const p = parseInt(pendingGotoPage, 10);
@@ -1139,9 +1185,9 @@ export default function CRRCallingProcessPage() {
         }
 
         const pendCount = statusFilter === "complete" || statusFilter === "cancelled" || statusFilter === "not_checkedin_yet" ? 0 : activePend;
-        const compCount = statusFilter === "pending" || statusFilter === "cancelled" || statusFilter === "not_checkedin_yet" ? 0 : completedRows.length;
-        const cancCount = statusFilter === "pending" || statusFilter === "complete" || statusFilter === "not_checkedin_yet" ? 0 : cancelled;
-        const notCheckedCount = statusFilter === "pending" || statusFilter === "complete" || statusFilter === "cancelled" ? 0 : notCheckedIn;
+        const compCount = isPendingView || statusFilter === "cancelled" || statusFilter === "not_checkedin_yet" ? 0 : completedRows.length;
+        const cancCount = isPendingView || statusFilter === "complete" || statusFilter === "not_checkedin_yet" ? 0 : cancelled;
+        const notCheckedCount = isPendingView || statusFilter === "complete" || statusFilter === "cancelled" ? 0 : notCheckedIn;
 
         return {
             activePendingCount: activePend,
@@ -1429,6 +1475,7 @@ export default function CRRCallingProcessPage() {
         setStatusFilter("all");
         setRecordsViewTab("all");
         setPendingPage(1);
+        setUpcomingPage(1);
         setCompletedPage(1);
         setNotCheckedInPage(1);
         setCancelledPage(1);
@@ -2249,27 +2296,30 @@ export default function CRRCallingProcessPage() {
         : [];
 
     /* ---------- RENDER A RECORDS TABLE (Pending, Completed, Cancelled, or Not CheckedIn Yet) ---------- */
-    const renderRecordsTable = (tableType: "pending" | "completed" | "cancelled" | "not_checkedin_yet") => {
-        const isPendingTable      = tableType === "pending";
+    const renderRecordsTable = (tableType: "actionable" | "upcoming" | "completed" | "cancelled" | "not_checkedin_yet") => {
+        const isUpcomingTable     = tableType === "upcoming";
+        const isPendingTable      = tableType === "actionable" || isUpcomingTable;
         const isCompletedTable    = tableType === "completed";
         const isCancelledTable    = tableType === "cancelled";
         const isNotCheckedInTable = tableType === "not_checkedin_yet";
 
-        const tableRows  = isPendingTable ? pendingRows      : isCompletedTable ? completedRows      : isNotCheckedInTable ? notCheckedInYetRows   : cancelledRows;
-        const pagedList  = isPendingTable ? pagedPendingRows : isCompletedTable ? pagedCompletedRows : isNotCheckedInTable ? pagedNotCheckedInRows : pagedCancelledRows;
-        const curPage    = isPendingTable ? pendingPage      : isCompletedTable ? completedPage      : isNotCheckedInTable ? notCheckedInPage       : cancelledPage;
-        const setCurPage = isPendingTable ? setPendingPage   : isCompletedTable ? setCompletedPage   : isNotCheckedInTable ? setNotCheckedInPage    : setCancelledPage;
-        const itemsPage  = isPendingTable ? pendingItemsPerPage    : isCompletedTable ? completedItemsPerPage    : isNotCheckedInTable ? notCheckedInItemsPerPage    : cancelledItemsPerPage;
-        const setItemsPage = isPendingTable ? setPendingItemsPerPage : isCompletedTable ? setCompletedItemsPerPage : isNotCheckedInTable ? setNotCheckedInItemsPerPage : setCancelledItemsPerPage;
-        const totalP     = isPendingTable ? pendingTotalPages    : isCompletedTable ? completedTotalPages    : isNotCheckedInTable ? notCheckedInTotalPages    : cancelledTotalPages;
-        const startIdx   = isPendingTable ? pendingStartIndex    : isCompletedTable ? completedStartIndex    : isNotCheckedInTable ? notCheckedInStartIndex    : cancelledStartIndex;
-        const endIdx     = isPendingTable ? pendingEndIndex      : isCompletedTable ? completedEndIndex      : isNotCheckedInTable ? notCheckedInEndIndex      : cancelledEndIndex;
-        const gotoP      = isPendingTable ? pendingGotoPage      : isCompletedTable ? completedGotoPage      : isNotCheckedInTable ? notCheckedInGotoPage      : cancelledGotoPage;
-        const setGotoP   = isPendingTable ? setPendingGotoPage   : isCompletedTable ? setCompletedGotoPage   : isNotCheckedInTable ? setNotCheckedInGotoPage   : setCancelledGotoPage;
-        const onGoto     = isPendingTable ? handlePendingGotoPage : isCompletedTable ? handleCompletedGotoPage : isNotCheckedInTable ? handleNotCheckedInGotoPage : handleCancelledGotoPage;
+        const tableRows  = isUpcomingTable ? upcomingRows : isPendingTable ? actionableRows : isCompletedTable ? completedRows      : isNotCheckedInTable ? notCheckedInYetRows   : cancelledRows;
+        const pagedList  = isUpcomingTable ? pagedUpcomingRows : isPendingTable ? pagedPendingRows : isCompletedTable ? pagedCompletedRows : isNotCheckedInTable ? pagedNotCheckedInRows : pagedCancelledRows;
+        const curPage    = isUpcomingTable ? upcomingPage : isPendingTable ? pendingPage      : isCompletedTable ? completedPage      : isNotCheckedInTable ? notCheckedInPage       : cancelledPage;
+        const setCurPage = isUpcomingTable ? setUpcomingPage : isPendingTable ? setPendingPage   : isCompletedTable ? setCompletedPage   : isNotCheckedInTable ? setNotCheckedInPage    : setCancelledPage;
+        const itemsPage  = isUpcomingTable ? upcomingItemsPerPage : isPendingTable ? pendingItemsPerPage    : isCompletedTable ? completedItemsPerPage    : isNotCheckedInTable ? notCheckedInItemsPerPage    : cancelledItemsPerPage;
+        const setItemsPage = isUpcomingTable ? setUpcomingItemsPerPage : isPendingTable ? setPendingItemsPerPage : isCompletedTable ? setCompletedItemsPerPage : isNotCheckedInTable ? setNotCheckedInItemsPerPage : setCancelledItemsPerPage;
+        const totalP     = isUpcomingTable ? upcomingTotalPages : isPendingTable ? pendingTotalPages    : isCompletedTable ? completedTotalPages    : isNotCheckedInTable ? notCheckedInTotalPages    : cancelledTotalPages;
+        const startIdx   = isUpcomingTable ? upcomingStartIndex : isPendingTable ? pendingStartIndex    : isCompletedTable ? completedStartIndex    : isNotCheckedInTable ? notCheckedInStartIndex    : cancelledStartIndex;
+        const endIdx     = isUpcomingTable ? upcomingEndIndex : isPendingTable ? pendingEndIndex      : isCompletedTable ? completedEndIndex      : isNotCheckedInTable ? notCheckedInEndIndex      : cancelledEndIndex;
+        const gotoP      = isUpcomingTable ? upcomingGotoPage : isPendingTable ? pendingGotoPage      : isCompletedTable ? completedGotoPage      : isNotCheckedInTable ? notCheckedInGotoPage      : cancelledGotoPage;
+        const setGotoP   = isUpcomingTable ? setUpcomingGotoPage : isPendingTable ? setPendingGotoPage   : isCompletedTable ? setCompletedGotoPage   : isNotCheckedInTable ? setNotCheckedInGotoPage   : setCancelledGotoPage;
+        const onGoto     = isUpcomingTable ? handleUpcomingGotoPage : isPendingTable ? handlePendingGotoPage : isCompletedTable ? handleCompletedGotoPage : isNotCheckedInTable ? handleNotCheckedInGotoPage : handleCancelledGotoPage;
 
-        const title = isPendingTable ? "Pending Records" : isCompletedTable ? "Completed Records" : isNotCheckedInTable ? "Not CheckedIn Yet" : "Cancelled Records";
-        const subtitle = isPendingTable
+        const title = isUpcomingTable ? "Scheduled / Upcoming Tasks" : isPendingTable ? "Actionable Tasks (Active Now)" : isCompletedTable ? "Completed Records" : isNotCheckedInTable ? "Not CheckedIn Yet" : "Cancelled Records";
+        const subtitle = isUpcomingTable
+            ? "Pending records whose stages are scheduled for a later date. Not actionable yet; they unlock automatically."
+            : isPendingTable
             ? (isAdminRole
                 ? "Records where one or more required workflow stages are still pending"
                 : `Records where one or more of your accessible stages (${userAccessibleStages.map(n => `Stage ${n}`).join(", ")}) are pending`)
@@ -2436,7 +2486,7 @@ export default function CRRCallingProcessPage() {
                                     <tr className="border-b border-slate-200">
                                         <td colSpan={19} className="text-center py-10 text-slate-400 font-semibold text-sm">
                                             {isPendingTable
-                                                ? "No pending records match the current filters."
+                                                ? (isUpcomingTable ? "No scheduled / upcoming records match the current filters." : "No actionable records right now.")
                                                 : isCompletedTable
                                                 ? "No completed records match the current filters."
                                                 : isNotCheckedInTable
@@ -3214,6 +3264,7 @@ export default function CRRCallingProcessPage() {
                                         onValueChange={(val) => {
                                             setStatusFilter(val);
                                             if (val === "pending") setRecordsViewTab("pending");
+                                            else if (val === "actionable") setRecordsViewTab("actionable");
                                             else if (val === "complete") setRecordsViewTab("completed");
                                             else if (val === "cancelled") setRecordsViewTab("cancelled");
                                             else if (val === "not_checkedin_yet") setRecordsViewTab("not_checkedin_yet");
@@ -3226,7 +3277,8 @@ export default function CRRCallingProcessPage() {
                                         <SelectContent>
                                             <SelectItem value="all">All</SelectItem>
                                             <SelectItem value="complete">Complete</SelectItem>
-                                            <SelectItem value="pending">Pending</SelectItem>
+                                            <SelectItem value="actionable">Actionable Now</SelectItem>
+                                            <SelectItem value="pending">Pending (All)</SelectItem>
                                             <SelectItem value="not_checkedin_yet">Not CheckedIn Yet</SelectItem>
                                             <SelectItem value="cancelled">Cancelled</SelectItem>
                                         </SelectContent>
@@ -3307,7 +3359,7 @@ export default function CRRCallingProcessPage() {
                                         Follow-up Distribution
                                     </h4>
                                 </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                                     {/* Total Guests */}
                                     <div className="bg-blue-50/70 border-2 border-blue-300 rounded-lg p-3 shadow-sm hover:shadow-md transition">
                                         <p className="text-[10px] font-bold uppercase tracking-wide text-blue-700 leading-tight mb-2">
@@ -3331,6 +3383,32 @@ export default function CRRCallingProcessPage() {
                                         </p>
                                         <p className="text-[10px] text-amber-600 font-semibold mt-1">
                                             {actionablePendingCount} actionable now · {totalPendingStageTasks} total stage tasks
+                                        </p>
+                                    </div>
+
+                                    {/* Actionable Now */}
+                                    <div className="bg-orange-50/70 border-2 border-orange-300 rounded-lg p-3 shadow-sm hover:shadow-md transition">
+                                        <p className="text-[10px] font-bold uppercase tracking-wide text-orange-700 leading-tight mb-2">
+                                            Actionable Now
+                                        </p>
+                                        <p className="text-3xl font-extrabold text-slate-900 leading-none mb-2">
+                                            {actionableRows.length}
+                                        </p>
+                                        <p className="text-[10px] text-orange-600 font-semibold mt-1">
+                                            Pending with a stage open today
+                                        </p>
+                                    </div>
+
+                                    {/* Scheduled / Upcoming */}
+                                    <div className="bg-sky-50/70 border-2 border-sky-300 rounded-lg p-3 shadow-sm hover:shadow-md transition">
+                                        <p className="text-[10px] font-bold uppercase tracking-wide text-sky-700 leading-tight mb-2">
+                                            Scheduled / Upcoming
+                                        </p>
+                                        <p className="text-3xl font-extrabold text-slate-900 leading-none mb-2">
+                                            {pendingRows.length - actionableRows.length}
+                                        </p>
+                                        <p className="text-[10px] text-sky-600 font-semibold mt-1">
+                                            Pending, unlocks on a later date
                                         </p>
                                     </div>
 
@@ -3488,6 +3566,17 @@ export default function CRRCallingProcessPage() {
                                     </button>
                                     <button
                                         type="button"
+                                        onClick={() => setRecordsViewTab("actionable")}
+                                        className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${recordsViewTab === "actionable"
+                                                ? "bg-orange-600 text-white shadow-xs font-bold"
+                                                : "text-slate-600 hover:text-orange-700"
+                                            }`}
+                                    >
+                                        <Clock className="w-3.5 h-3.5" />
+                                        Actionable Now ({actionableRows.length})
+                                    </button>
+                                    <button
+                                        type="button"
                                         onClick={() => setRecordsViewTab("completed")}
                                         className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${recordsViewTab === "completed"
                                                 ? "bg-emerald-600 text-white shadow-xs font-bold"
@@ -3568,7 +3657,8 @@ export default function CRRCallingProcessPage() {
 
                         {viewMode === "table" ? (
                             <div className="space-y-6">
-                                {(recordsViewTab === "all" || recordsViewTab === "pending") && renderRecordsTable("pending")}
+                                {(recordsViewTab === "all" || recordsViewTab === "pending" || recordsViewTab === "actionable") && renderRecordsTable("actionable")}
+                                {(recordsViewTab === "all" || recordsViewTab === "pending") && renderRecordsTable("upcoming")}
                                 {(recordsViewTab === "all" || recordsViewTab === "completed") && renderRecordsTable("completed")}
                                 {(recordsViewTab === "all" || recordsViewTab === "not_checkedin_yet") && renderRecordsTable("not_checkedin_yet")}
                                 {(recordsViewTab === "all" || recordsViewTab === "cancelled") && renderRecordsTable("cancelled")}
