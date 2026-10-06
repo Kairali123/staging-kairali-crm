@@ -7,6 +7,7 @@ import { readState, transaction } from '@/lib/email-triggers/store'
 import { removeTrigger, auditSeedSuppressed, TriggerDeleteError } from '@/lib/email-triggers/delete'
 import { nextRun } from '@/lib/email-triggers/schedule'
 import { emailReportTemplates, canonicalTemplateName } from '@/lib/email-report-template'
+import { seedTriggerHealthDraft } from '@/lib/email-triggers/trigger-health-default'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -36,6 +37,9 @@ export async function GET(req: NextRequest) {
   if (!authorized(req)) return NextResponse.json({ error: 'Administrator access required' }, { status: 403, headers })
   try {
     let state = await readState()
+    if (!state.triggers.some(t => t.reportId === 'trigger-health-digest') && !state.seedSuppressed?.includes('trigger-health-digest') && state.triggers.length < 100) {
+      state = await transaction(s => { seedTriggerHealthDraft(s); return s })
+    }
     if (!state.triggers.some(t => t.reportId === 'sales-call-audit') && !auditSeedSuppressed(state)) {
       try {
         state = await transaction(s => {

@@ -52,3 +52,17 @@ test('Google setup reports missing prerequisites without exposing secrets',()=>{
   assert.equal(security.googleConnectionSetup().callbackUrl,null);
  } finally {for(const key of Object.keys(sandboxEnv))delete sandboxEnv[key];Object.assign(sandboxEnv,before)}
 });
+test('central email configuration seeds one inactive health draft and respects deletion',()=>{
+ const {seedTriggerHealthDraft}=load('lib/email-triggers/trigger-health-default.ts');
+ const {removeTrigger}=load('lib/email-triggers/delete.ts');
+ const {triggerSchema}=load('lib/email-triggers/schema.ts');
+ const state={version:1,triggers:[],runs:[]};
+ assert.equal(seedTriggerHealthDraft(state,new Date(now)),true);
+ const draft=state.triggers[0];
+ assert.equal(draft.status,'Draft');assert.equal(draft.to,'');assert.equal(draft.nextRun,null);
+ assert.equal(draft.time,'09:00');assert.equal(draft.department,'IT');assert.equal(triggerSchema.safeParse(draft).success,true);
+ draft.to='developer@example.com';draft.status='Active';
+ assert.equal(seedTriggerHealthDraft(state),false);assert.equal(state.triggers.length,1);assert.equal(draft.to,'developer@example.com');assert.equal(draft.status,'Active');
+ removeTrigger(state,draft.id,draft.revision);
+ assert.equal(seedTriggerHealthDraft(state),false);assert.equal(state.triggers.length,0);
+});
