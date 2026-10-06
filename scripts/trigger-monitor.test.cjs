@@ -35,3 +35,20 @@ function req(body,user,origin='https://crm.example.com'){return {testUser:user,n
 test('dashboard/API writes require super admin and same origin before storage',async()=>{apiWrites=0;assert.equal((await api.GET(req({},null))).status,403);assert.equal((await api.POST(req({action:'account',email},{role:'admin'}))).status,403);assert.equal((await api.POST(req({action:'account',email},{role:'super_admin'},'https://evil.example'))).status,403);assert.equal(apiWrites,0)});
 test('wrong project token cannot ingest; valid telemetry persists',async()=>{const {s,p}=setup();apiState=s;const token='a'.repeat(43);p.connectorHash=security.hash(token);const event=inventory(Date.now());const request={headers:new Headers({authorization:'Bearer '+'b'.repeat(43)}),text:async()=>JSON.stringify(event)};assert.equal((await ingest.POST(request)).status,400);request.headers.set('authorization','Bearer '+token);assert.equal((await ingest.POST(request)).status,200)});
 test('connector returns business result and rethrows business failure, without leaking error text',()=>{const gs=fs.readFileSync('docs/trigger-monitor/connector.gs','utf8');const context={console,Date,Utilities:{getUuid:()=> '00000000-0000-4000-8000-000000000001'}};vm.createContext(context);vm.runInContext(gs,context);const events=[];context.crmMonitorIdentity_=()=>({email,scriptId});context.crmMonitorInventory=()=>{};context.crmMonitorDeliver_=e=>events.push({...e});assert.equal(context.crmMonitorRun({triggerUid:'12345'},()=>42),42);assert.equal(events.at(-1).status,'Success');assert.throws(()=>context.crmMonitorRun({triggerUid:'12345'},()=>{throw Error('private-sheet-content')}),/private-sheet-content/);assert.equal(events.at(-1).status,'Failed');assert.ok(!JSON.stringify(events).includes('private-sheet-content'));assert.equal(context.crmMonitorRun(undefined,()=>7),7)});
+test('Google setup reports missing prerequisites without exposing secrets',()=>{
+ const before={...sandboxEnv};
+ try {
+  delete sandboxEnv.GOOGLE_CLIENT_ID; delete sandboxEnv.GOOGLE_CLIENT_SECRET;
+  const missing=security.googleConnectionSetup();
+  assert.equal(missing.ready,false);
+  assert.ok(missing.missing.includes('GOOGLE_CLIENT_ID'));
+  assert.equal(missing.callbackUrl,'https://crm.example.com/api/trigger-monitor/callback');
+  sandboxEnv.GOOGLE_CLIENT_ID='example-client'; sandboxEnv.GOOGLE_CLIENT_SECRET='private-client-secret';
+  assert.equal(security.googleConnectionSetup().ready,true);
+  assert.ok(!JSON.stringify(security.googleConnectionSetup()).includes('private-client-secret'));
+  sandboxEnv.NEXTAUTH_SECRET='short';
+  assert.equal(security.googleConnectionSetup().ready,false);
+  sandboxEnv.NEXT_PUBLIC_APP_URL='not-a-url';
+  assert.equal(security.googleConnectionSetup().callbackUrl,null);
+ } finally {for(const key of Object.keys(sandboxEnv))delete sandboxEnv[key];Object.assign(sandboxEnv,before)}
+});

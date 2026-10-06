@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { randomBytes } from 'node:crypto'
-import { administrator, sameOrigin, privateHeaders, hash } from '@/lib/trigger-monitor/security'
+import { administrator, sameOrigin, privateHeaders, hash, googleConnectionSetup } from '@/lib/trigger-monitor/security'
 import { dashboard, emailSchema, googleId, projectKey } from '@/lib/trigger-monitor/model'
 import { readMonitor, monitorTransaction } from '@/lib/trigger-monitor/store'
 import { scanAccount } from '@/lib/trigger-monitor/google'
@@ -18,7 +18,7 @@ const command=z.discriminatedUnion('action',[
 ])
 export async function GET(req: NextRequest) {
  if(!administrator(req))return NextResponse.json({error:'Super administrator access required'},{status:403,headers:privateHeaders})
- try{return NextResponse.json({...dashboard(await readMonitor()),oauthReady:Boolean(process.env.GOOGLE_CLIENT_ID&&process.env.GOOGLE_CLIENT_SECRET&&(process.env.NEXT_PUBLIC_APP_URL||process.env.VERCEL_PROJECT_PRODUCTION_URL)&&(process.env.TRIGGER_MONITOR_ENCRYPTION_KEY||process.env.NEXTAUTH_SECRET)),cronConfigured:Boolean(process.env.CRON_SECRET)},{headers:privateHeaders})}
+ try{const googleSetup=googleConnectionSetup();return NextResponse.json({...dashboard(await readMonitor()),oauthReady:googleSetup.ready,googleSetup,cronConfigured:Boolean(process.env.CRON_SECRET)},{headers:privateHeaders})}
  catch{return NextResponse.json({error:'Monitoring storage unavailable. Provision the existing email_trigger_state table and check database access.'},{status:503,headers:privateHeaders})}
 }
 export async function POST(req: NextRequest) {

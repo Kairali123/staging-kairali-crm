@@ -13,3 +13,14 @@ function key() { const s=process.env.TRIGGER_MONITOR_ENCRYPTION_KEY || process.e
 export function encrypt(value: string) { const iv=randomBytes(12), c=createCipheriv('aes-256-gcm',key(),iv); return Buffer.concat([iv,c.update(value,'utf8'),c.final(),c.getAuthTag()]).toString('base64url') }
 export function decrypt(value: string) { const b=Buffer.from(value,'base64url'),d=createDecipheriv('aes-256-gcm',key(),b.subarray(0,12));d.setAuthTag(b.subarray(-16));return Buffer.concat([d.update(b.subarray(12,-16)),d.final()]).toString('utf8') }
 export function appOrigin() { const value=process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? 'https://'+process.env.VERCEL_PROJECT_PRODUCTION_URL : undefined); if(!value) throw Error('NEXT_PUBLIC_APP_URL is required'); const u=new URL(value); if(u.protocol!=='https:' && !['localhost','127.0.0.1'].includes(u.hostname)) throw Error('HTTPS application URL required'); return u.origin }
+export function googleConnectionSetup() {
+  const missing: string[] = []
+  if (!process.env.GOOGLE_CLIENT_ID) missing.push('GOOGLE_CLIENT_ID')
+  if (!process.env.GOOGLE_CLIENT_SECRET) missing.push('GOOGLE_CLIENT_SECRET')
+  const encryptionKey = process.env.TRIGGER_MONITOR_ENCRYPTION_KEY || process.env.NEXTAUTH_SECRET
+  if (!encryptionKey || encryptionKey.length < 32) missing.push('TRIGGER_MONITOR_ENCRYPTION_KEY (at least 32 characters)')
+  let callbackUrl: string | null = null
+  try { callbackUrl = appOrigin() + '/api/trigger-monitor/callback' }
+  catch { missing.push('NEXT_PUBLIC_APP_URL (valid HTTPS application URL)') }
+  return { ready: missing.length === 0, missing, callbackUrl }
+}
