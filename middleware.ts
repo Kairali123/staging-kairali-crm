@@ -271,6 +271,8 @@ function withSecurityHeaders(response: NextResponse, pathname = ''): NextRespons
 // as /api/leads-search, /api/conversion-extra or /api/leads/search stay behind
 // the session boundary.
 const exemptApiPaths = new Set([
+  '/api/trigger-monitor/ingest', // Project-scoped connector token; no CRM session required.
+  '/api/cron/trigger-monitor', // CRON_SECRET verified in handler.
   // Sign-in / sign-out must be reachable without an existing session.
   '/api/auth/login',
   '/api/auth/logout',

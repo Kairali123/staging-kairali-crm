@@ -12,6 +12,12 @@ export interface AutomationModule {
 
 export const AUTOMATION_MODULES: AutomationModule[] = [
   {
+    id: 'trigger-management', title: 'Trigger Management',
+    description: 'Monitor Google Sheets trigger ownership, execution health, failures and daily developer alerts.',
+    href: '/settings/automation/trigger-management', iconName: 'Bell', status: 'active',
+    badgeText: 'Monitoring', category: 'Alerts', tags: ['Google Sheets', 'Failures', 'Daily Digest'],
+  },
+  {
     id: 'email-triggers',
     title: 'Email Triggers',
     description: 'Configure and automate report dispatches, recurring performance briefings, and custom email alerts.',

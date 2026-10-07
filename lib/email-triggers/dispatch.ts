@@ -70,6 +70,13 @@ export async function buildEmail(t:Trigger,at:number){
    hasData=alertData.totalPIs>0
    html=buildPIReviewAlertEmail(alertData)
   }
+  else if(t.reportId==='trigger-health-digest'){
+   const {readMonitor}=await import('@/lib/trigger-monitor/store')
+   const {renderTriggerDigest}=await import('@/lib/trigger-monitor/email')
+   const {appOrigin}=await import('@/lib/trigger-monitor/security')
+   const digest=renderTriggerDigest(await readMonitor(),appOrigin(),at)
+   html=digest.html;hasData=true;reportTitle='Daily Trigger Health';reportSlug='Trigger-Health'
+  }
   else if(t.reportId==='morning-lead-allocation'){
    reportTitle='Morning Lead Allocation Alert'
    reportSlug='Morning-Lead-Allocation-Alert'
@@ -86,7 +93,7 @@ export async function buildEmail(t:Trigger,at:number){
   // Reports with in-layout markers keep the note inside their centered column; others get it around <body>.
   html=html.includes('<!--email-intro-->')?html.replace('<!--email-intro-->',()=>p(t.intro)).replace('<!--email-closing-->',()=>p(t.closing)):html.replace(/(<body[^>]*>)/,'$1'+p(t.intro)).replace('</body>',p(t.closing)+'</body>')
   // booking-pi-review-alert and kserve-lead-lost-alert and sales-call-audit skip JPEG rendering — they use inline HTML tables
-  if(t.reportId!=='sales-call-audit'&&t.reportId!=='kserve-lead-lost-alert'&&t.reportId!=='booking-pi-review-alert'){
+  if(t.reportId!=='trigger-health-digest'&&t.reportId!=='sales-call-audit'&&t.reportId!=='kserve-lead-lost-alert'&&t.reportId!=='booking-pi-review-alert'){
    try{
     const {renderJPEG}=await import('@/lib/whatsapp-triggers/render')
     if(typeof renderJPEG==='function'){

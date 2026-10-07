@@ -206,6 +206,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const navigation = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, permission: "dashboard.view" },
+    { name: "Trigger Management", href: "/settings/automation/trigger-management", icon: Activity, superAdminOnly: true },
     { name: "Settings", icon: Settings, superAdminOnly: true },
     { name: "User Management", href: "/users", icon: UserCog, superAdminOnly: true },
     { name: "Marketing Reports", icon: TrendingUp, permission: "marketing.view" },
@@ -1040,6 +1041,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     >
                       <Mail className="mr-2 h-3.5 w-3.5 text-indigo-600" />
                       Email Triggers
+                    </Link>
+                    <Link href="/settings/automation/trigger-management" className={`group flex items-center px-2.5 py-1.5 text-xs font-medium rounded-md ${pathname === '/settings/automation/trigger-management' ? 'bg-indigo-100 text-indigo-800' : 'text-gray-600 hover:bg-gray-100'}`} onClick={() => isMobile && setSidebarOpen(false)}>
+                      <Activity className="mr-2 h-3.5 w-3.5 text-indigo-600" />Trigger Management
                     </Link>
                     <Link href="/settings/automation/whatsapp" className={`group flex items-center px-2.5 py-1.5 text-xs font-medium rounded-md ${pathname === '/settings/automation/whatsapp' ? 'bg-emerald-100 text-emerald-800' : 'text-gray-600 hover:bg-gray-100'}`} onClick={() => isMobile && setSidebarOpen(false)}>
                       <Mail className="mr-2 h-3.5 w-3.5 text-emerald-700" />WhatsApp Triggers

@@ -5,7 +5,7 @@ const time=z.string().transform(s=>s.length===4&&s[1]===':'?'0'+s:s).refine(s=>/
 const addresses=z.string().max(3000).refine(s=>!/[\r\n]/.test(s)&&s.split(',').filter(x=>x.trim()).every(x=>z.string().email().safeParse(x.trim()).success),'Use comma-separated email addresses')
 export const triggerSchema=z.object({
  id:z.string().uuid().optional(),revision:z.number().int().nonnegative().optional(),name:z.string().trim().min(1).max(120),
- reportId:z.enum(['daily-sales-report','marketing-daily-report','sales-call-audit','ktahv-crr-process-report-alert','kserve-lead-lost-alert','booking-pi-review-alert','morning-lead-allocation']),source:z.preprocess(v=>typeof v==='string'?canonicalTemplateName(v):v,z.enum([emailReportTemplates['daily-sales-report'].name,emailReportTemplates['marketing-daily-report'].name,emailReportTemplates['sales-call-audit'].name,emailReportTemplates['ktahv-crr-process-report-alert'].name,emailReportTemplates['kserve-lead-lost-alert'].name,emailReportTemplates['booking-pi-review-alert'].name,emailReportTemplates['morning-lead-allocation'].name])),template:z.string().max(120).transform(canonicalTemplateName),department:z.string().max(60),
+ reportId:z.enum(['trigger-health-digest','daily-sales-report','marketing-daily-report','sales-call-audit','ktahv-crr-process-report-alert','kserve-lead-lost-alert','booking-pi-review-alert','morning-lead-allocation']),source:z.preprocess(v=>typeof v==='string'?canonicalTemplateName(v):v,z.enum([emailReportTemplates['trigger-health-digest'].name,emailReportTemplates['daily-sales-report'].name,emailReportTemplates['marketing-daily-report'].name,emailReportTemplates['sales-call-audit'].name,emailReportTemplates['ktahv-crr-process-report-alert'].name,emailReportTemplates['kserve-lead-lost-alert'].name,emailReportTemplates['booking-pi-review-alert'].name,emailReportTemplates['morning-lead-allocation'].name])),template:z.string().max(120).transform(canonicalTemplateName),department:z.string().max(60),
  company:z.enum(['All companies','KTAHV','VILARAAG','KAPPL']),to:addresses,cc:addresses,bcc:addresses,
  subject:z.string().trim().min(1).max(250).refine(s=>!/[\r\n]/.test(s)),body:z.string().max(20000).default(''),bodyType:z.enum(['Full report in email body','Static','Dynamic','Mixed']),
  intro:z.string().max(3000).default(''),closing:z.string().max(3000).default(''),period:z.enum(['Today','Yesterday','Selected date']),previewDate:z.union([day,z.literal('')]).optional().transform(v=>v||undefined),
@@ -19,6 +19,7 @@ export const triggerSchema=z.object({
  if(c.end&&c.end<c.start)issue('End date must be after start date')
  if(c.frequency==='Custom'&&(!c.custom.trim()||c.custom.split(',').some(t=>!time.safeParse(t.trim()).success)))issue('Enter valid custom times')
  if(c.period==='Selected date'&&!c.previewDate)issue('Choose the report date')
+ if(c.reportId==='trigger-health-digest'&&c.period!=='Today')issue('Trigger health reports use the rolling last 24 hours; choose Today')
  if(c.reportId==='marketing-daily-report'&&c.period==='Today')issue('Marketing reports require a completed reporting day')
  const expectedSources:Record<string,string[]>=Object.fromEntries(Object.entries(emailReportTemplates).map(([id,t])=>[id,[t.name]]))
  if(!(expectedSources[c.reportId]||[]).includes(c.source))issue('Report template mismatch')
