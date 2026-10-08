@@ -63,6 +63,7 @@ import {
   PlusCircle,
   Moon,
   Sun,
+  Clock,
   Clock3,
   MessageSquare,
   Map,
@@ -268,6 +269,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "Kiosk Setup (Config)", href: "/guest-experience/config", icon: Settings, permission: "guest_experience.view" },
     { name: "Guest Feedback", href: "/guest-experience/feedback", icon: MessageSquare, permission: "guest_experience.view" },
     { name: "Guest Explore", href: "/guest-experience/explore", icon: Map, permission: "guest_experience.view" },
+    { name: "Arrival Companion (Wireframe)", href: "/arrival-wireframe.html", icon: ExternalLink, permission: "guest_experience.view" },
   ]
 
   const marketingSubMenu = [
@@ -288,6 +290,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "KTAHV Booking FMS", href: "/fms/bookings/team", icon: Users, permission: "team.view", description: "KTAHV booking management" },
     { name: "Villa Raag Booking FMS", href: "/fms/bookings/villa-raag", icon: Home, permission: "villa_raag.view", description: "Villa Raag FMS" },
     { name: "Booking PI Review Tracker", href: "/fms/booking-pi-review-tracker", icon: Receipt, permission: "ktahv_pi_audit_tracker.view", description: "Daily PI review & accounts audit" },
+    { name: "Pending Aging Tracker", href: "/fms/bookings/pending-aging", icon: Clock, permission: "team.view", description: "KTAHV pending stage aging by employee" },
   ]
 
   const employeeSubMenu = [
