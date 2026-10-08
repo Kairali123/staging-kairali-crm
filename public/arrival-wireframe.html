@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kairali Arrival Companion - Wireframe</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        page: '#F7F5EF',
+                        surface: '#FFFFFF',
+                        primary: '#174C3C',
+                        primaryPressed: '#10392D',
+                        mainText: '#20332B',
+                        secondaryText: '#526258',
+                        softGreen: '#EAF1EB',
+                        border: '#D4DDD5'
+                    },
+                    fontFamily: {
+                        sans: ['system-ui', '-apple-system', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-size: 20px; line-height: 1.55; color: #20332B; background-color: #F7F5EF; }
+        .text-secondary { font-size: 18px; line-height: 1.5; color: #526258; }
+        .nav-text { font-size: 16px; line-height: 1.3; }
+        .title-phone { font-size: 32px; line-height: 1.2; font-weight: bold; }
+        .title-tablet { font-size: 40px; line-height: 1.2; font-weight: bold; }
+        .section-title { font-size: 26px; line-height: 1.3; font-weight: bold; }
+        .btn-primary { background-color: #174C3C; color: #FFFFFF; font-size: 18px; font-weight: 600; border-radius: 12px; min-height: 56px; padding: 0 24px; display: inline-flex; align-items: center; justify-content: center; width: 100%; transition: background 0.15s; cursor: pointer; }
+        .btn-primary:active { background-color: #10392D; }
+        .btn-outline { background-color: transparent; border: 2px solid #65766B; color: #20332B; font-size: 18px; font-weight: 600; border-radius: 12px; min-height: 56px; padding: 0 24px; display: inline-flex; align-items: center; justify-content: center; width: 100%; transition: background 0.15s; cursor: pointer; }
+        .btn-text { background-color: transparent; color: #174C3C; font-size: 18px; font-weight: 600; min-height: 56px; padding: 0 24px; display: inline-flex; align-items: center; justify-content: center; width: 100%; text-decoration: underline; cursor: pointer; }
+        .card { background-color: #FFFFFF; padding: 24px; border-radius: 16px; border: 1px solid #D4DDD5; margin-bottom: 24px; }
+        .device-container { max-width: 430px; margin: 0 auto; min-height: 100vh; background-color: #F7F5EF; position: relative; padding-bottom: 90px; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
+        @media (min-width: 768px) {
+            .device-container { max-width: 1024px; padding-bottom: 0; padding-top: 80px; }
+            body { font-size: 20px; }
+        }
+        .hidden-screen { display: none; }
+    </style>
+</head>
+<body class="bg-gray-200 antialiased p-0 md:p-5 h-screen">
+
+<!-- Device Simulator Wrapper -->
+<div class="device-container rounded-none md:rounded-3xl border border-gray-300 overflow-hidden relative">
+
+    <!-- Header -->
+    <header class="p-5 md:p-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-border bg-page md:absolute md:top-0 md:w-full z-10">
+        <div class="font-bold text-2xl text-primary">KAIRALI</div>
+        <div class="flex gap-4 w-full sm:w-auto">
+            <button class="bg-white border border-border px-4 py-2 rounded-lg nav-text font-semibold flex-1 sm:flex-none">English</button>
+            <button onclick="toggleHelp()" class="bg-softGreen text-primary px-4 py-2 rounded-lg nav-text font-semibold flex-1 sm:flex-none">Help / Riya</button>
+        </div>
+    </header>
+
+    <!-- Top Navigation (Tablet) -->
+    <nav class="hidden md:flex gap-8 px-8 py-4 border-b border-border bg-white mt-[80px]">
+        <button onclick="switchScreen('today')" id="nav-today-tab" class="nav-text font-bold text-primary border-b-2 border-primary pb-1">Today</button>
+        <button onclick="switchScreen('discover')" id="nav-discover-tab" class="nav-text font-semibold text-secondaryText pb-1">Discover</button>
+        <button onclick="switchScreen('services')" id="nav-services-tab" class="nav-text font-semibold text-secondaryText pb-1">Services</button>
+        <button onclick="switchScreen('mystay')" id="nav-mystay-tab" class="nav-text font-semibold text-secondaryText pb-1">My Stay</button>
+    </nav>
+
+    <!-- MAIN CONTENT AREA -->
+    <main class="p-5 md:p-8 md:pt-8 overflow-y-auto" style="max-height: calc(100vh - 160px);" id="main-content">
+        
+        <!-- WELCOME SCREEN -->
+        <section id="screen-welcome">
+            <h1 class="title-phone md:title-tablet mb-2">Welcome, Rajiv</h1>
+            <p class="text-secondary mb-6">Ask Riya or contact our team if you need anything.</p>
+            
+            <div class="w-full h-48 md:h-80 bg-gray-300 rounded-2xl mb-8 flex items-center justify-center relative overflow-hidden">
+                <span class="text-secondary text-center px-4">Property Video Poster (Placeholder)</span>
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <div class="w-16 h-16 bg-primary text-white rounded-full flex items-center justify-center font-bold shadow-lg shadow-black/20 cursor-pointer hover:bg-primaryPressed transition">▶</div>
+                </div>
+            </div>
+
+            <div class="flex flex-col gap-4 max-w-sm mx-auto md:mx-0">
+                <button onclick="switchScreen('today')" class="btn-primary">Watch your welcome</button>
+                <button onclick="switchScreen('discover')" class="btn-outline">Explore Kairali</button>
+                <button onclick="switchScreen('today')" class="btn-text">I'll rest now</button>
+            </div>
+        </section>
+
+        <!-- TODAY SCREEN -->
+        <section id="screen-today" class="hidden-screen">
+            <!-- Journey Card (Before Arrival) -->
+            <div class="card bg-softGreen border-none">
+                <h2 class="section-title mb-4">Your pickup is confirmed</h2>
+                <div class="flex gap-4 items-center mb-6">
+                    <div class="w-16 h-16 bg-white flex items-center justify-center rounded-full text-secondaryText text-sm text-center font-bold shadow">Driver<br>Photo</div>
+                    <div>
+                        <p class="font-bold text-mainText">Driver: Manoj Kumar</p>
+                        <p class="text-secondary text-sm">Toyota Innova - KL 01 AB 1234</p>
+                    </div>
+                </div>
+                <div class="mb-6">
+                    <p><strong>Pickup:</strong> Cochin International Airport</p>
+                    <p><strong>Time:</strong> 2:30 PM</p>
+                    <p class="text-secondary text-sm mt-2">Typical journey: approx 2.5 hours; traffic may change this.</p>
+                </div>
+                <button class="btn-outline bg-white">Contact front office</button>
+            </div>
+
+            <h3 class="section-title mt-8 mb-4">What happens when you arrive</h3>
+            <ul class="list-disc pl-5 mb-8 text-secondary space-y-2">
+                <li>Traditional welcome and smooth check-in.</li>
+                <li>Settle into your assigned Villa.</li>
+                <li>Meet the care team for your initial consultation.</li>
+            </ul>
+
+            <h2 class="title-phone mt-10 mb-6">Today at Kairali</h2>
+            <div class="card">
+                <h3 class="font-bold mb-2">No confirmed plans yet.</h3>
+                <p class="text-secondary">Explore today's activities or ask our team.</p>
+            </div>
+
+            <h3 class="section-title mt-8 mb-4">Activities you can join</h3>
+            <div class="card">
+                <h3 class="font-bold text-xl mb-1">Evening Yoga Practice</h3>
+                <p class="text-secondary text-sm mb-4">5:00 PM - 6:00 PM • Yoga Pavilion • English</p>
+                <span class="inline-block bg-softGreen text-primary px-3 py-1 rounded-md text-sm font-bold mb-6">Included in your stay</span>
+                <button class="btn-outline">View details</button>
+            </div>
+        </section>
+
+        <!-- DISCOVER SCREEN -->
+        <section id="screen-discover" class="hidden-screen">
+            <h1 class="title-phone mb-6">Discover</h1>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="card cursor-pointer hover:bg-softGreen transition">
+                    <h3 class="font-bold mb-2">Your first day</h3>
+                    <p class="text-secondary text-sm">What to expect as you begin your healing journey.</p>
+                </div>
+                <div class="card cursor-pointer hover:bg-softGreen transition">
+                    <h3 class="font-bold mb-2">Explore the property</h3>
+                    <p class="text-secondary text-sm">View the map and our facilities.</p>
+                </div>
+                <div class="card cursor-pointer hover:bg-softGreen transition">
+                    <h3 class="font-bold mb-2">Food & daily life</h3>
+                    <p class="text-secondary text-sm">Learn about Ayurvedic dining and schedules.</p>
+                </div>
+                <div class="card cursor-pointer hover:bg-softGreen transition">
+                    <h3 class="font-bold mb-2">Kerala essentials</h3>
+                    <p class="text-secondary text-sm">Weather, culture, and useful local tips.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SERVICES SCREEN -->
+        <section id="screen-services" class="hidden-screen">
+            <h1 class="title-phone mb-6">Services</h1>
+            <div class="flex gap-4 overflow-x-auto pb-4 mb-6" style="scrollbar-width: none;">
+                <button class="bg-primary text-white px-5 py-2 rounded-full whitespace-nowrap font-semibold">Wellness & care</button>
+                <button class="bg-white border border-border px-5 py-2 rounded-full whitespace-nowrap font-semibold">Classes & experiences</button>
+                <button class="bg-white border border-border px-5 py-2 rounded-full whitespace-nowrap font-semibold">Stay assistance</button>
+            </div>
+            
+            <div class="card">
+                <h3 class="font-bold text-xl mb-2">Ayurvedic Consultation</h3>
+                <p class="text-secondary text-sm mb-4">Speak with our doctors about your health progress and adjustments to your treatment.</p>
+                <p class="font-bold mb-6 text-sm">Duration: 30 mins</p>
+                <button class="btn-primary">Request this service</button>
+            </div>
+        </section>
+
+        <!-- MY STAY SCREEN -->
+        <section id="screen-mystay" class="hidden-screen">
+            <h1 class="title-phone mb-6">My Stay</h1>
+            <div class="card">
+                <h3 class="font-bold mb-2">Booking Details</h3>
+                <p class="text-secondary text-sm">Check-in: 12 Oct 2026</p>
+                <p class="text-secondary text-sm">Check-out: 19 Oct 2026</p>
+                <p class="text-secondary text-sm mt-2">Villa 04</p>
+            </div>
+            
+            <div class="card bg-softGreen border-primary">
+                <h3 class="font-bold mb-2 text-primary">Use on my phone</h3>
+                <p class="text-secondary text-sm mb-4">Scan this QR code to access your plans and Riya assistant on your personal device.</p>
+                <div class="w-32 h-32 bg-white border border-border flex flex-col items-center justify-center mb-4 text-center rounded-lg shadow-sm">
+                    <span class="text-3xl font-bold">QR</span>
+                </div>
+            </div>
+        </section>
+        
+        <div class="h-20 md:h-0"></div>
+    </main>
+
+    <!-- Bottom Navigation (Phone) -->
+    <nav class="fixed bottom-0 left-0 right-0 w-full bg-white border-t border-border flex justify-around p-2 pb-6 md:hidden z-20 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+        <button onclick="switchScreen('today')" id="nav-today" class="flex flex-col items-center gap-1 text-primary w-1/4">
+            <span class="nav-text font-bold">Today</span>
+        </button>
+        <button onclick="switchScreen('discover')" id="nav-discover" class="flex flex-col items-center gap-1 text-secondaryText w-1/4">
+            <span class="nav-text font-semibold">Discover</span>
+        </button>
+        <button onclick="switchScreen('services')" id="nav-services" class="flex flex-col items-center gap-1 text-secondaryText w-1/4">
+            <span class="nav-text font-semibold">Services</span>
+        </button>
+        <button onclick="switchScreen('mystay')" id="nav-mystay" class="flex flex-col items-center gap-1 text-secondaryText w-1/4">
+            <span class="nav-text font-semibold">My Stay</span>
+        </button>
+    </nav>
+
+    <!-- HELP / RIYA MODAL -->
+    <div id="modal-help" class="absolute inset-0 bg-black/50 z-50 hidden flex-col justify-end md:justify-center md:items-center backdrop-blur-sm">
+        <div class="bg-page w-full md:w-[500px] rounded-t-3xl md:rounded-3xl p-6 pb-12 shadow-2xl relative animate-slide-up border-t md:border border-border">
+            <button onclick="toggleHelp()" class="absolute top-6 right-6 font-bold text-3xl text-secondaryText hover:text-mainText transition">&times;</button>
+            <h2 class="section-title mb-6 mt-2">How can we help?</h2>
+            
+            <div class="flex flex-col gap-3">
+                <button onclick="toggleHelp()" class="card border-primary text-left hover:bg-softGreen transition !mb-0 !py-4 shadow-sm">
+                    <span class="font-bold text-lg block text-primary">Ask a question</span>
+                </button>
+                <button onclick="toggleHelp()" class="card border-primary text-left hover:bg-softGreen transition !mb-0 !py-4 shadow-sm">
+                    <span class="font-bold text-lg block text-primary">Request something</span>
+                </button>
+                <button onclick="toggleHelp()" class="card border-primary text-left hover:bg-softGreen transition !mb-0 !py-4 shadow-sm">
+                    <span class="font-bold text-lg block text-primary">Report a problem</span>
+                </button>
+                <button onclick="toggleHelp()" class="card border-primary text-left hover:bg-softGreen transition !mb-0 !py-4 shadow-sm">
+                    <span class="font-bold text-lg block text-primary">Share feedback</span>
+                </button>
+            </div>
+            
+            <div class="mt-8 text-center">
+                <button onclick="toggleHelp()" class="btn-text !min-h-0 !h-auto hover:text-primaryPressed">Contact front office directly</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<style>
+    @keyframes slide-up {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
+    }
+    .animate-slide-up {
+        animation: slide-up 0.3s ease-out forwards;
+    }
+</style>
+
+<script>
+    function switchScreen(screenId) {
+        ['welcome', 'today', 'discover', 'services', 'mystay'].forEach(id => {
+            document.getElementById('screen-' + id).classList.add('hidden-screen');
+        });
+        document.getElementById('screen-' + screenId).classList.remove('hidden-screen');
+        const mainContent = document.getElementById('main-content');
+        if(mainContent) mainContent.scrollTop = 0;
+
+        ['today', 'discover', 'services', 'mystay'].forEach(id => {
+            const mobNav = document.getElementById('nav-' + id);
+            const tabNav = document.getElementById('nav-' + id + '-tab');
+            if(mobNav && tabNav) {
+                if(id === screenId) {
+                    mobNav.classList.replace('text-secondaryText', 'text-primary');
+                    mobNav.querySelector('span').classList.replace('font-semibold', 'font-bold');
+                    
+                    tabNav.classList.replace('text-secondaryText', 'text-primary');
+                    tabNav.classList.replace('font-semibold', 'font-bold');
+                    tabNav.classList.add('border-b-2', 'border-primary');
+                } else {
+                    mobNav.classList.replace('text-primary', 'text-secondaryText');
+                    mobNav.querySelector('span').classList.replace('font-bold', 'font-semibold');
+                    
+                    tabNav.classList.replace('text-primary', 'text-secondaryText');
+                    tabNav.classList.replace('font-bold', 'font-semibold');
+                    tabNav.classList.remove('border-b-2', 'border-primary');
+                }
+            }
+        });
+    }
+
+    function toggleHelp() {
+        const modal = document.getElementById('modal-help');
+        if (modal.classList.contains('hidden')) {
+            modal.classList.remove('hidden');
+            modal.style.display = 'flex';
+        } else {
+            modal.classList.add('hidden');
+            modal.style.display = 'none';
+        }
+    }
+</script>
+
+</body>
+</html>
