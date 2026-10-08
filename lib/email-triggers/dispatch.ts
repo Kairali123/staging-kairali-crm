@@ -86,6 +86,15 @@ export async function buildEmail(t:Trigger,at:number){
    hasData = summary.totalLeads > 0
    html = renderAllocationSnapshotEmail(summary).html
   }
+  else if(t.reportId==='ktahv-pending-aging-alert'){
+   reportTitle='KTAHV Pending Stage Aging Alert'
+   reportSlug='KTAHV-Pending-Stage-Aging-Alert'
+   const appUrl=process.env.NEXT_PUBLIC_APP_URL||'http://localhost:3000'
+   const {loadPendingAgingEmailData,buildPendingAgingAlertEmail}=await import('./templates/pending-aging-alert')
+   const agingData=await loadPendingAgingEmailData(appUrl)
+   hasData=agingData.summary.total>0
+   html=buildPendingAgingAlertEmail(agingData)
+  }
   else{
    throw new Error(`Unhandled email trigger report template: "${t.reportId}"`)
   }
