@@ -58,7 +58,7 @@ const COMPANY_CONFIG: CompanyConfig[] = [
       { source: "Priyasharma AI-instagram", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "chat_created_date_time", mobileCol: "phone", leadIdCol: "lead_id", sourceFilter: "src = 'Instagram'" },
       { source: "Priyasharma AI-Whatsapp", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "chat_created_date_time", mobileCol: "phone", leadIdCol: "lead_id", sourceFilter: "src = 'WhatsApp'" },
       { source: "Priyasharma AI-facebook", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "chat_created_date_time", mobileCol: "phone", leadIdCol: "lead_id", sourceFilter: "src = 'Facebook'" },
-      { source: "Priyasharma AI Chat", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "chat_created_date_time", mobileCol: "phone", leadIdCol: "lead_id" }
+      { source: "Priyasharma AI Chat", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "chat_created_date_time", mobileCol: "phone", leadIdCol: "lead_id", sourceFilter: "src IS NULL OR src NOT IN ('Widget or Iframe', 'API', 'Instagram', 'WhatsApp', 'Facebook')" }
     ],
   },
   {
@@ -208,9 +208,9 @@ async function queryKServe(
     `SELECT DATE(date_time) AS dt, mobile
      FROM ai_voice_leads_received
      WHERE date_time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-       AND UPPER(company) = ?
+       AND UPPER(company) LIKE ?
        AND (sent_status = 'Sent' OR assign_to_app_sheet_or_dialer IS NOT NULL)`,
-    [days, companyKey.toUpperCase()]
+    [days, `%${companyKey.toUpperCase()}%`]
   );
 
   const byDate: Record<string, Set<string>> = {};
@@ -290,10 +290,10 @@ function buildLostRecords(
           currentStatus: "Lost", transferStatus: "Not transferred",
           bufferStatus: "Not in buffer", crmStatus: "N/A",
           assignee: "", tatMin: 0, tat: "—",
-          isDuplicate: false, inMedium: false, toBuffer: false,
+          isDuplicate: false, inMedium: true, toBuffer: false,
           inBuffer: false, inCrm: false, assigned: false,
-          stage: "direct", status: "Lost",
-          reason: "Lead received in Direct API but not found in Buffer (Gap 1: Direct→Medium)",
+          stage: "buffer", status: "Lost",
+          reason: "Lead received in Direct API but not found in Buffer (Gap 2: Medium→Buffer)",
         });
       } else if (!inCrm) {
         records.push({

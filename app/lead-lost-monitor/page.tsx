@@ -224,8 +224,8 @@ const stageRecords = (records: LeadRecord[], key: StageKey) => ({
 const gapRecords = (records: LeadRecord[], key: GapKey) => key === "gap1"
   ? records.filter(x => !x.inMedium)
   : key === "gap2"
-    ? records.filter(x => x.expectedDuplicateGap || x.mediumBufferLost)
-    : records.filter(x => x.lateTransfer || x.masterCrmLost);
+    ? records.filter(x => x.inMedium && !x.inBuffer)
+    : records.filter(x => x.inBuffer && !x.inCrm);
 const auditClass = (lead: LeadRecord) => lead.lateTransfer || lead.masterCrmState === "Late Transfer"
   ? "transient"
   : lead.expectedDuplicateGap || lead.validDuplicate || Boolean(lead.original) || hasDeleteProof(lead)
@@ -596,9 +596,9 @@ export default function Home() {
                         <td style={{padding:"12px 10px",textAlign:"center",fontWeight:800,fontSize:13,color:"#2563eb"}}>{fmt(group.total.buffer)}</td>
                         <td style={{padding:"12px 10px",textAlign:"center",fontWeight:800,fontSize:13,color:group.total.masterCrmLost>0?"#ef4444":"#64748b"}}>{fmt(group.total.masterCrmLost)}</td>
                         <td style={{padding:"12px 10px",textAlign:"center",fontWeight:800,fontSize:13,color:"#16a34a"}}>{fmt(group.total.crm)}</td>
-                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:700,fontSize:13,color:"#334e68"}}>{fmt(group.total.assigned||0)}</td>
+                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:700,fontSize:13,color:"#334e68"}}>{fmt(group.total.sales||0)}</td>
                         <td style={{padding:"12px 10px",textAlign:"center",fontWeight:700,fontSize:13,color:"#334e68"}}>{fmt(group.total.kserve||0)}</td>
-                        <td style={{padding:"12px 10px",textAlign:"center",color:"#94a3b8",fontSize:13}}>—</td>
+                        <td style={{padding:"12px 10px",textAlign:"center",color:"#94a3b8",fontSize:13}}>{group.total.tatWeight > 0 ? Math.round(group.total.tatSum/group.total.tatWeight) + 'm' : '—'}</td>
                         <td style={{padding:"12px 10px",textAlign:"center",color:"#94a3b8",fontSize:13}}>—</td>
                         <td style={{padding:"12px 10px",textAlign:"center"}}>
                           <span style={{
@@ -673,7 +673,7 @@ export default function Home() {
                                   <span style={{fontSize:13,fontWeight:700,color:"#334e68"}}>{fmt(row.kserve)}</span>
                                 </td>
                                 <td style={{padding:"9px 10px",textAlign:"center"}}>
-                                  <span style={{fontSize:12,color:"#64748b"}}>—</span>
+                                  <span style={{fontSize:12,color:"#64748b"}}>{row.avgTatMin > 0 ? `${row.avgTatMin}m` : "—"}</span>
                                 </td>
                                 <td style={{padding:"9px 10px",textAlign:"center"}}>
                                   <span style={{display:"inline-flex",alignItems:"center",gap:3,padding:"3px 8px",borderRadius:20,fontSize:9,fontWeight:700,background:rowClear?"#f0fdf4":rowLost>0?"#fff0f0":"#fff9f0",color:rowClear?"#166534":rowLost>0?"#991b1b":"#92400e"}}>{rowClear?"Clear":rowLost>0?"Lost":"Pending"}</span>
@@ -694,9 +694,9 @@ export default function Home() {
                             <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:"#334e68"}}>{fmt(cg.total.buffer)}</td>
                             <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:cg.total.masterCrmLost>0?"#ef4444":"#22c55e"}}>{fmt(cg.total.masterCrmLost)}</td>
                             <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:"#166534"}}>{fmt(cg.total.crm)}</td>
-                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:"#334e68"}}>{fmt(cg.total.assigned||0)}</td>
+                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:"#334e68"}}>{fmt(cg.total.sales||0)}</td>
                             <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:"#334e68"}}>{fmt(cg.total.kserve||0)}</td>
-                            <td style={{padding:"8px 10px",textAlign:"center",color:"#94a3b8",fontSize:12}}>—</td>
+                            <td style={{padding:"8px 10px",textAlign:"center",color:"#94a3b8",fontSize:12}}>{cg.total.tatWeight > 0 ? Math.round(cg.total.tatSum/cg.total.tatWeight) + 'm' : '—'}</td>
                             <td style={{padding:"8px 10px",textAlign:"center",color:"#94a3b8",fontSize:12}}>—</td>
                             <td style={{padding:"8px 10px",textAlign:"center"}}>
                               <span style={{fontSize:11,fontWeight:800,color:(cg.total.masterCrmLost+cg.total.mediumBufferLost+cg.total.directMediumGap)>0?"#991b1b":"#166534"}}>
@@ -728,9 +728,9 @@ export default function Home() {
                       <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#334e68"}}>{fmt(summary.buffer)}</td>
                       <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:summary.masterLost>0?"#ef4444":"#64748b"}}>{fmt(summary.masterLost)}</td>
                       <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#166534"}}>{fmt(summary.crm)}</td>
-                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#334e68"}}>{fmt(summary.assigned)}</td>
-                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#334e68"}}>0</td>
-                      <td style={{padding:"14px 10px",textAlign:"center",color:"#94a3b8",fontSize:14}}>—</td>
+                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#334e68"}}>{fmt(summary.sales)}</td>
+                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#334e68"}}>{fmt(summary.kserve)}</td>
+                      <td style={{padding:"14px 10px",textAlign:"center",color:"#94a3b8",fontSize:14}}>{summary.tatWeight > 0 ? Math.round(summary.tatSum/summary.tatWeight) + 'm' : '—'}</td>
                       <td style={{padding:"14px 10px",textAlign:"center",color:"#94a3b8",fontSize:14}}>—</td>
                       <td style={{padding:"14px 10px",textAlign:"center"}}>
                         <span style={{padding:"5px 12px",borderRadius:20,fontSize:12,fontWeight:900,background:grandLossRate>20?"#fee2e2":"#fef3c7",color:grandLossRate>20?"#991b1b":"#92400e"}}>{grandLossRate}%</span>
