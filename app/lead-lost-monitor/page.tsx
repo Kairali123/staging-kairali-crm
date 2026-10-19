@@ -161,7 +161,7 @@ const gapMeta: Record<GapKey, { label: string; flow: string; description: string
   gap2: { label: "Gap 2", flow: "Medium → Buffer", description: "Expected duplicate gaps plus genuinely missing Buffer leads." },
   gap3: { label: "Gap 3", flow: "Buffer → CRM", description: "Late CRM transfers plus leads with no CRM proof." },
 };
-const gapCount = (row: TrackerRow | ReturnType<typeof totalRows>, key: GapKey) => key === "gap1" ? row.directMediumGap : key === "gap2" ? row.expectedDuplicateGap + row.mediumBufferLost : row.lateTransfer + row.masterCrmLost;
+const gapCount = (row: TrackerRow | ReturnType<typeof totalRows>, key: GapKey) => key === "gap1" ? row.directMediumGap : key === "gap2" ? row.mediumBufferLost : row.lateTransfer + row.masterCrmLost;
 const gapLostCount = (row: TrackerRow | ReturnType<typeof totalRows>, key: GapKey) => key === "gap1" ? row.directMediumGap : key === "gap2" ? row.mediumBufferLost : row.masterCrmLost;
 const fmt = (n: number) => Number(n || 0).toLocaleString("en-IN");
 const formatHHMMSS = (sec?: number | null) => {
@@ -180,9 +180,9 @@ const normalizeRow = (row: TrackerRow): TrackerRow => ({
   medium: row.medium ?? row.direct,
   directMediumGap: row.directMediumGap ?? Math.max(0, row.direct - (row.medium ?? row.direct)),
   expectedDuplicateGap: row.expectedDuplicateGap ?? row.duplicate ?? 0,
-  mediumBufferLost: row.mediumBufferLost ?? row.mediumBufferGap ?? Math.max(0, (row.medium ?? row.direct) - row.buffer - (row.expectedDuplicateGap ?? row.duplicate ?? 0)),
-  mediumBufferGap: row.mediumBufferLost ?? row.mediumBufferGap ?? 0,
-  unexplainedMediumGap: row.mediumBufferLost ?? row.unexplainedMediumGap ?? row.mediumBufferGap ?? 0,
+  mediumBufferLost: row.mediumBufferLost ?? row.mediumBufferGap ?? Math.max(0, (row.medium ?? row.direct) - row.buffer),
+  mediumBufferGap: row.mediumBufferLost ?? row.mediumBufferGap ?? Math.max(0, (row.medium ?? row.direct) - row.buffer),
+  unexplainedMediumGap: row.unexplainedMediumGap ?? Math.max(0, (row.mediumBufferLost ?? Math.max(0, (row.medium ?? row.direct) - row.buffer)) - (row.expectedDuplicateGap ?? row.duplicate ?? 0)),
   sameDayCrm: row.sameDayCrm ?? Math.max(0, row.crm - (row.lateTransfer ?? 0)),
   lateTransfer: row.lateTransfer ?? 0,
   masterCrmLost: row.masterCrmLost ?? row.bufferToCrmGap ?? 0,
@@ -215,9 +215,9 @@ const stageRecords = (records: LeadRecord[], key: StageKey) => ({
   duplicate: records.filter(x => x.validDuplicate ?? Boolean(x.original)),
   expectedDuplicateGap: records.filter(x => x.expectedDuplicateGap),
   bufferTransfer: records.filter(x => x.toBuffer),
-  mediumBufferGap: records.filter(x => x.mediumBufferLost),
-  mediumBufferLost: records.filter(x => x.mediumBufferLost),
-  gap: records.filter(x => x.mediumBufferLost),
+  mediumBufferGap: records.filter(x => x.mediumBufferLost || (x.inMedium && !x.inBuffer)),
+  mediumBufferLost: records.filter(x => x.mediumBufferLost || (x.inMedium && !x.inBuffer)),
+  gap: records.filter(x => x.mediumBufferLost || (x.inMedium && !x.inBuffer)),
   buffer: records.filter(x => x.mediumBufferState === "Reconciled" || (!x.mediumBufferState && x.inBuffer)),
   crm: records.filter(x => x.masterCrmState === "Reconciled" || x.masterCrmState === "Late Transfer" || (!x.masterCrmState && x.inCrm)),
   sameDayCrm: records.filter(x => x.sameDayCrm),
@@ -785,11 +785,39 @@ export default function Home() {
                         <td style={{padding:"12px 10px",textAlign:"center"}}>
                           {renderCountLink(group.total.medium, () => openTotal(group.date, "medium"), "blue", "Click to view & verify Master Medium leads for this date")}
                         </td>
-                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:800,fontSize:13,color:group.total.mediumBufferLost>0?"#f59e0b":"#64748b"}}>{fmt(group.total.mediumBufferLost)}</td>
+                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:800,fontSize:13,color:group.total.mediumBufferLost>0?"#f59e0b":"#64748b"}}>
+                          {group.total.mediumBufferLost > 0 ? (
+                            <button
+                              type="button"
+                              className="count-link warn"
+                              onClick={(e) => { e.stopPropagation(); openGapDate(group.date, "gap2"); }}
+                              style={{fontSize:12,fontWeight:800,color:"#f59e0b",background:"#fffbeb",borderRadius:6,padding:"2px 8px",border:"1px solid #fde68a",cursor:"pointer"}}
+                              title="Click to view & verify Gap 2 leads for this date"
+                            >
+                              {fmt(group.total.mediumBufferLost)}
+                            </button>
+                          ) : (
+                            <span style={{color:"#64748b",fontSize:13}}>0</span>
+                          )}
+                        </td>
                         <td style={{padding:"12px 10px",textAlign:"center"}}>
                           {renderCountLink(group.total.buffer, () => openTotal(group.date, "buffer"), "slate", "Click to view & verify Actual Buffer leads for this date")}
                         </td>
-                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:800,fontSize:13,color:group.total.masterCrmLost>0?"#ef4444":"#64748b"}}>{fmt(group.total.masterCrmLost)}</td>
+                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:800,fontSize:13,color:group.total.masterCrmLost>0?"#ef4444":"#64748b"}}>
+                          {group.total.masterCrmLost > 0 ? (
+                            <button
+                              type="button"
+                              className="count-link bad"
+                              onClick={(e) => { e.stopPropagation(); openGapDate(group.date, "gap3"); }}
+                              style={{fontSize:12,fontWeight:800,color:"#991b1b",background:"#fee2e2",borderRadius:6,padding:"2px 8px",border:"1px solid #fca5a5",cursor:"pointer"}}
+                              title="Click to view & verify Gap 3 leads for this date"
+                            >
+                              {fmt(group.total.masterCrmLost)}
+                            </button>
+                          ) : (
+                            <span style={{color:"#22c55e",fontWeight:700,fontSize:13}}>0</span>
+                          )}
+                        </td>
                         <td style={{padding:"12px 10px",textAlign:"center"}}>
                           {renderCountLink(group.total.crm, () => openTotal(group.date, "crm"), "green", "Click to view & verify Actual CRM leads for this date")}
                         </td>
@@ -903,11 +931,39 @@ export default function Home() {
                             <td style={{padding:"8px 10px",textAlign:"center"}}>
                               {renderCountLink(cg.total.medium, () => openCompanyTotal(group.date, cg.company, "medium"), "blue", "Click to view & verify Master Medium leads for this company")}
                             </td>
-                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:cg.total.mediumBufferLost>0?"#f59e0b":"#64748b"}}>{fmt(cg.total.mediumBufferLost)}</td>
+                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:cg.total.mediumBufferLost>0?"#f59e0b":"#64748b"}}>
+                              {cg.total.mediumBufferLost > 0 ? (
+                                <button
+                                  type="button"
+                                  className="count-link warn"
+                                  onClick={(e) => { e.stopPropagation(); openGapCompany(group.date, cg.company, "gap2"); }}
+                                  style={{fontSize:12,fontWeight:800,color:"#f59e0b",background:"#fffbeb",borderRadius:6,padding:"2px 8px",border:"1px solid #fde68a",cursor:"pointer"}}
+                                  title="Click to view & verify Gap 2 leads for this company"
+                                >
+                                  {fmt(cg.total.mediumBufferLost)}
+                                </button>
+                              ) : (
+                                <span style={{color:"#64748b",fontSize:12}}>0</span>
+                              )}
+                            </td>
                             <td style={{padding:"8px 10px",textAlign:"center"}}>
                               {renderCountLink(cg.total.buffer, () => openCompanyTotal(group.date, cg.company, "buffer"), "slate", "Click to view & verify Actual Buffer leads for this company")}
                             </td>
-                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:cg.total.masterCrmLost>0?"#ef4444":"#22c55e"}}>{fmt(cg.total.masterCrmLost)}</td>
+                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:cg.total.masterCrmLost>0?"#ef4444":"#22c55e"}}>
+                              {cg.total.masterCrmLost > 0 ? (
+                                <button
+                                  type="button"
+                                  className="count-link bad"
+                                  onClick={(e) => { e.stopPropagation(); openGapCompany(group.date, cg.company, "gap3"); }}
+                                  style={{fontSize:12,fontWeight:800,color:"#991b1b",background:"#fee2e2",borderRadius:6,padding:"2px 8px",border:"1px solid #fca5a5",cursor:"pointer"}}
+                                  title="Click to view & verify Gap 3 leads for this company"
+                                >
+                                  {fmt(cg.total.masterCrmLost)}
+                                </button>
+                              ) : (
+                                <span style={{color:"#22c55e",fontWeight:700,fontSize:12}}>0</span>
+                              )}
+                            </td>
                             <td style={{padding:"8px 10px",textAlign:"center"}}>
                               {renderCountLink(cg.total.crm, () => openCompanyTotal(group.date, cg.company, "crm"), "green", "Click to view & verify Actual CRM leads for this company")}
                             </td>
@@ -957,11 +1013,39 @@ export default function Home() {
                       <td style={{padding:"14px 10px",textAlign:"center"}}>
                         {renderCountLink(summary.medium, () => openDetailedStage("All Master Medium Leads", "medium"), "blue", "Click to view & verify all Master Medium leads across all dates")}
                       </td>
-                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:summary.mediumLost>0?"#f59e0b":"#64748b"}}>{fmt(summary.mediumLost)}</td>
+                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:summary.mediumLost>0?"#f59e0b":"#64748b"}}>
+                        {summary.mediumLost > 0 ? (
+                          <button
+                            type="button"
+                            className="count-link warn"
+                            onClick={() => openDetailedStage("All Medium → Buffer Gap Leads", "mediumBufferGap")}
+                            style={{fontSize:13,fontWeight:900,color:"#f59e0b",background:"#fffbeb",borderRadius:6,padding:"2px 8px",border:"1px solid #fde68a",cursor:"pointer"}}
+                            title="Click to view & verify Gap 2 leads across all dates"
+                          >
+                            {fmt(summary.mediumLost)}
+                          </button>
+                        ) : (
+                          <span style={{color:"#64748b",fontSize:14}}>0</span>
+                        )}
+                      </td>
                       <td style={{padding:"14px 10px",textAlign:"center"}}>
                         {renderCountLink(summary.buffer, () => openDetailedStage("All Buffer Staged Leads", "buffer"), "slate", "Click to view & verify all Buffer Staged leads across all dates")}
                       </td>
-                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:summary.masterLost>0?"#ef4444":"#64748b"}}>{fmt(summary.masterLost)}</td>
+                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:summary.masterLost>0?"#ef4444":"#64748b"}}>
+                        {summary.masterLost > 0 ? (
+                          <button
+                            type="button"
+                            className="count-link bad"
+                            onClick={() => openDetailedStage("All Master → CRM Gap Leads", "masterCrmLost")}
+                            style={{fontSize:13,fontWeight:900,color:"#991b1b",background:"#fee2e2",borderRadius:6,padding:"2px 8px",border:"1px solid #fca5a5",cursor:"pointer"}}
+                            title="Click to view & verify Gap 3 leads across all dates"
+                          >
+                            {fmt(summary.masterLost)}
+                          </button>
+                        ) : (
+                          <span style={{color:"#22c55e",fontWeight:700,fontSize:14}}>0</span>
+                        )}
+                      </td>
                       <td style={{padding:"14px 10px",textAlign:"center"}}>
                         {renderCountLink(summary.crm, () => openDetailedStage("All CRM Reconciled Leads", "crm"), "green", "Click to view & verify all CRM Reconciled leads across all dates")}
                       </td>

@@ -387,7 +387,10 @@ function buildLostRecords(
     if (norm && !seen24h.has(norm)) seen24h.set(norm, leadId);
 
     const bufs = norm ? (globalBufferMap.get(norm) || []) : [];
-    const prior24Match = (!inBuf && norm) ? bufs.find(b => b.time <= t && b.time >= t - 24 * 3600 * 1000) : null;
+    const prior24Match = (!inBuf && norm) ? bufs.find(b => {
+      const diffHours = (t - b.time) / (3600 * 1000);
+      return diffHours >= -1 && diffHours <= 36;
+    }) : null;
 
     if (inBuf) {
       if (isDirectDupe) {
@@ -399,6 +402,7 @@ function buildLostRecords(
           assignee: "", tatMin: 0, tat: "—",
           isDuplicate: true, validDuplicate: true, expectedDuplicateGap: true,
           inMedium: true, toBuffer: false, inBuffer: false, inCrm: false, assigned: false,
+          mediumBufferLost: true,
           stage: "direct", status: "Duplicate",
           reason: "Duplicate mobile in Direct API on same day",
         });
@@ -413,6 +417,7 @@ function buildLostRecords(
             assignee: "", tatMin: 0, tat: "—",
             isDuplicate: false, inMedium: true, toBuffer: true,
             inBuffer: true, inCrm: false, assigned: false,
+            masterCrmLost: true,
             stage: "buffer", status: "Lost",
             reason: "Lead found in Buffer but missing from CRM (Gap 3: Buffer→CRM)",
           });
@@ -427,6 +432,7 @@ function buildLostRecords(
         assignee: "", tatMin: 0, tat: "—",
         isDuplicate: true, validDuplicate: true, expectedDuplicateGap: true,
         inMedium: true, toBuffer: false, inBuffer: false, inCrm: false, assigned: false,
+        mediumBufferLost: true,
         stage: "direct", status: "Duplicate",
         reason: `Filtered intentionally: repeated mobile within 24 hours (already received in Buffer ${prior24Match.leadId} on ${prior24Match.dateStr})`,
       });
@@ -439,6 +445,7 @@ function buildLostRecords(
         assignee: "", tatMin: 0, tat: "—",
         isDuplicate: true, validDuplicate: true, expectedDuplicateGap: true,
         inMedium: true, toBuffer: false, inBuffer: false, inCrm: false, assigned: false,
+        mediumBufferLost: true,
         stage: "direct", status: "Duplicate",
         reason: "Duplicate mobile in Direct API on same day",
       });
@@ -451,6 +458,7 @@ function buildLostRecords(
         assignee: "", tatMin: 0, tat: "—",
         isDuplicate: false, inMedium: true, toBuffer: false,
         inBuffer: false, inCrm: false, assigned: false,
+        mediumBufferLost: true,
         stage: "buffer", status: "Lost",
         reason: "Lead received in Direct API but not found in Buffer or previous 24h (Gap 2: Medium→Buffer)",
       });
@@ -604,17 +612,20 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       if (norm) seenMobiles.add(norm);
 
       const bufMatch = norm ? sameDayMap.get(norm) : sameDayMap.get(leadId);
-      const rawTime = r.date_time ? new Date(r.date_time) : null;
+      const rawTime = parseDateRobust(r.date_time) || (r.date_time ? new Date(r.date_time) : null);
       const formattedTime = rawTime ? rawTime.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
       const generatedAt = rawTime ? rawTime.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : date;
-      const leadTime = rawTime ? rawTime.getTime() : 0;
+      const leadTime = rawTime && !isNaN(rawTime.getTime()) ? rawTime.getTime() : new Date(`${date}T23:59:59`).getTime();
 
       // 24-hour back-date lookback in master_buffer
       const prior24Match = (!bufMatch && norm) ? bufferList.find((b: any) => {
         const bnm = normMobile(b.Mobile);
         if (bnm !== norm) return false;
-        const bTime = new Date(b.Date_Time).getTime();
-        return bTime <= leadTime && bTime >= (leadTime - 24 * 3600 * 1000);
+        const bObj = parseDateRobust(b.Date_Time) || (b.Date_Time ? new Date(b.Date_Time) : null);
+        const bTime = bObj ? bObj.getTime() : 0;
+        if (!bTime) return false;
+        const diffHours = (leadTime - bTime) / (3600 * 1000);
+        return diffHours >= -1 && diffHours <= 36;
       }) : null;
 
       let status: "Resolved" | "Duplicate" | "Lost" | "Delayed" = "Lost";
@@ -629,29 +640,38 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       let assigned = false;
 
       if (bufMatch) {
-        inBuffer = true;
-        inCrm = true;
-        bufferStatus = "In Buffer";
-        crmStatus = "In CRM";
-        transferStatus = "Transferred";
-        const ass = (bufMatch.Assign_To_MR_Main || "").trim();
-
-        if (ass.toLowerCase().includes("kserve")) {
-          assigned = true;
-          assignee = "KServe";
-          currentStatus = "Assigned: KServe";
-          status = "Resolved";
-          reason = "Verified: Lead arrived in buffer & successfully assigned to KServe";
-        } else if (ass) {
-          assigned = true;
-          assignee = ass;
-          currentStatus = `Assigned: Sales (${ass})`;
-          status = "Resolved";
-          reason = `Verified: Lead arrived in buffer & transferred to Sales Team (${ass})`;
+        if (isDup) {
+          status = "Duplicate";
+          currentStatus = "Filtered (Same-day Duplicate)";
+          bufferStatus = "Filtered";
+          crmStatus = "Filtered";
+          transferStatus = "Filtered";
+          reason = "Filtered intentionally: repeated mobile number in Direct API on same day";
         } else {
-          currentStatus = "In CRM (Unassigned)";
-          status = "Delayed";
-          reason = "Lead arrived in Buffer/CRM, awaiting salesperson or dialer allocation";
+          inBuffer = true;
+          inCrm = true;
+          bufferStatus = "In Buffer";
+          crmStatus = "In CRM";
+          transferStatus = "Transferred";
+          const ass = (bufMatch.Assign_To_MR_Main || "").trim();
+
+          if (ass.toLowerCase().includes("kserve")) {
+            assigned = true;
+            assignee = "KServe";
+            currentStatus = "Assigned: KServe";
+            status = "Resolved";
+            reason = "Verified: Lead arrived in buffer & successfully assigned to KServe";
+          } else if (ass) {
+            assigned = true;
+            assignee = ass;
+            currentStatus = `Assigned: Sales (${ass})`;
+            status = "Resolved";
+            reason = `Verified: Lead arrived in buffer & transferred to Sales Team (${ass})`;
+          } else {
+            currentStatus = "In CRM (Unassigned)";
+            status = "Delayed";
+            reason = "Lead arrived in Buffer/CRM, awaiting salesperson or dialer allocation";
+          }
         }
       } else if (prior24Match) {
         status = "Duplicate";
@@ -697,6 +717,8 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
         inBuffer,
         inCrm,
         assigned,
+        mediumBufferLost: !inBuffer,
+        masterCrmLost: inBuffer && !inCrm,
         stage: inCrm ? "crm" : inBuffer ? "buffer" : status === "Duplicate" ? "direct" : "buffer",
         status,
         reason,
@@ -810,7 +832,10 @@ export async function GET(request: Request) {
 
             // Only match 24h prior buffer entries from the SAME company (avoid cross-company false positives)
             const bufs = companyBufMap.get(m) || [];
-            const priorMatch = !inBuf ? bufs.find(b => b.time <= t && b.time >= t - 24 * 3600 * 1000) : null;
+            const priorMatch = !inBuf ? bufs.find(b => {
+              const diffHours = (t - b.time) / (3600 * 1000);
+              return diffHours >= -1 && diffHours <= 36;
+            }) : null;
 
             if (inBuf) {
               if (isDirectDupe) {
@@ -833,7 +858,8 @@ export async function GET(request: Request) {
           const expectedDuplicateGap = duplicate;
           const directMediumGap = 0;
           const bufferTransfer = buffer;
-          const mediumBufferLost = Math.max(0, direct - duplicate - buffer);
+          const mediumBufferLost = Math.max(0, direct - buffer);
+          const unexplainedMediumGap = Math.max(0, direct - duplicate - buffer);
           const mediumBufferGap = mediumBufferLost;
           const sameDayCrm = crm;
           const lateTransfer = 0;
@@ -855,6 +881,9 @@ export async function GET(request: Request) {
             existing.buffer += buffer;
             existing.bufferTransfer += bufferTransfer;
             existing.mediumBufferLost += mediumBufferLost;
+            existing.mediumBufferGap += mediumBufferGap;
+            existing.unexplainedMediumGap = (existing.unexplainedMediumGap || 0) + unexplainedMediumGap;
+            existing.gap += mediumBufferLost;
             existing.crm += crm;
             existing.kserve += kserve;
             existing.sales += sales;
@@ -870,7 +899,7 @@ export async function GET(request: Request) {
               id: key, date, company: co.company, source: srcCfg.source,
               direct, medium, directMediumGap, duplicate, expectedDuplicateGap,
               bufferTransfer, mediumBufferGap, mediumBufferLost,
-              unexplainedMediumGap: mediumBufferLost, gap: mediumBufferLost,
+              unexplainedMediumGap, gap: mediumBufferLost,
               buffer, crm, sameDayCrm, lateTransfer, masterCrmLost,
               bufferCrmGap, bufferToCrmGap, assigned, sales, kserve,
               avgTatSec, avgTatMin, slaBreaches: 0, mismatch: false, validationErrors: [],
