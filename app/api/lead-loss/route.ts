@@ -111,6 +111,7 @@ interface DirectEntry {
   date: string;
   leadIds: string[];
   mobiles: string[];
+  timestamps: number[];
 }
 
 async function queryDirectTable(
@@ -121,6 +122,7 @@ async function queryDirectTable(
   const where = cfg.sourceFilter ? `AND (${cfg.sourceFilter})` : "";
   const sql = `
     SELECT DATE(\`${cfg.dateCol}\`) AS dt,
+           \`${cfg.dateCol}\`     AS arrival_time,
            \`${cfg.leadIdCol}\`     AS lead_id,
            \`${cfg.mobileCol}\`     AS mobile
     FROM \`${cfg.table}\`
@@ -130,45 +132,61 @@ async function queryDirectTable(
   `;
   const [rows]: any[] = await pool.query(sql, [days]);
 
-  const byDate: Record<string, { leadIds: string[]; mobiles: string[] }> = {};
+  const byDate: Record<string, { leadIds: string[]; mobiles: string[]; timestamps: number[] }> = {};
   for (const r of rows as any[]) {
     const dt = rowDate(r.dt);
-    if (!byDate[dt]) byDate[dt] = { leadIds: [], mobiles: [] };
+    if (!byDate[dt]) byDate[dt] = { leadIds: [], mobiles: [], timestamps: [] };
     byDate[dt].leadIds.push(String(r.lead_id ?? ""));
     byDate[dt].mobiles.push(normMobile(r.mobile));
+    const t = r.arrival_time ? new Date(r.arrival_time).getTime() : new Date(dt).getTime();
+    byDate[dt].timestamps.push(t);
   }
   return Object.entries(byDate).map(([date, v]) => ({ date, ...v }));
 }
 
 // ─── Buffer mobile sets by date ───────────────────────────────────────────────
 
+interface BufferQueryResult {
+  byDate: Record<string, Set<string>>;
+  allBufferList: Array<{ mobile: string; time: number; dateStr: string; leadId: string }>;
+}
+
 async function queryBuffer(
   pool: any,
   companyMatch: string[],
   days: number
-): Promise<Record<string, Set<string>>> {
+): Promise<BufferQueryResult> {
   const likeClause = companyMatch
     .map(() => "LOWER(sbn.Lead_Relates_to_which_company) LIKE ?")
     .join(" OR ");
-  const params: any[] = [days, ...companyMatch.map((c) => `%${c}%`)];
+  const params: any[] = [days + 2, ...companyMatch.map((c) => `%${c.toLowerCase()}%`)];
 
   const [rows]: any[] = await pool.query(
-    `SELECT DATE(mb.Date_Time) AS dt, mb.Mobile
+    `SELECT DATE(mb.Date_Time) AS dt,
+            mb.Date_Time AS arrival_time,
+            mb.Mobile,
+            mb.lead_id
      FROM master_buffer mb
-     INNER JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id
+     LEFT JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id
      WHERE mb.Date_Time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
        AND (${likeClause})`,
     params
   );
 
   const byDate: Record<string, Set<string>> = {};
+  const allBufferList: Array<{ mobile: string; time: number; dateStr: string; leadId: string }> = [];
+
   for (const r of rows as any[]) {
     const dt = rowDate(r.dt);
     if (!byDate[dt]) byDate[dt] = new Set<string>();
     const m = normMobile(r.Mobile);
-    if (m) byDate[dt].add(m);
+    if (m) {
+      byDate[dt].add(m);
+      const time = r.arrival_time ? new Date(r.arrival_time).getTime() : new Date(dt).getTime();
+      allBufferList.push({ mobile: m, time, dateStr: dt, leadId: String(r.lead_id ?? "") });
+    }
   }
-  return byDate;
+  return { byDate, allBufferList };
 }
 
 // ─── CRM mobile sets by date ──────────────────────────────────────────────────
@@ -348,8 +366,10 @@ async function queryTAT(
 function buildLostRecords(
   directMobiles: string[],
   directLeadIds: string[],
+  directTimestamps: number[],
   bufSet: Set<string>,
   crmSet: Set<string>,
+  globalBufferMap: Map<string, Array<{ leadId: string; time: number; dateStr: string }>>,
   source: string,
   date: string,
   company: string
@@ -360,49 +380,80 @@ function buildLostRecords(
   directMobiles.forEach((mobile, i) => {
     const leadId = directLeadIds[i] ?? `${source}_${i}`;
     const norm = normMobile(mobile);
+    const t = directTimestamps?.[i] ?? new Date(date).getTime();
 
-    if (norm && seen24h.has(norm)) {
+    const inBuf = norm ? bufSet.has(norm) : false;
+    const isDirectDupe = Boolean(norm && seen24h.has(norm));
+    if (norm && !seen24h.has(norm)) seen24h.set(norm, leadId);
+
+    const bufs = norm ? (globalBufferMap.get(norm) || []) : [];
+    const prior24Match = (!inBuf && norm) ? bufs.find(b => b.time <= t && b.time >= t - 24 * 3600 * 1000) : null;
+
+    if (inBuf) {
+      if (isDirectDupe) {
+        records.push({
+          id: leadId, name: "", phone: mobile, date, company, source,
+          generatedAt: date, timestamp: date, transferTimestamp: "", bufferTimestamp: "",
+          currentStatus: "Filtered (Same-day Duplicate)", transferStatus: "Filtered",
+          bufferStatus: "Filtered", crmStatus: "Filtered",
+          assignee: "", tatMin: 0, tat: "—",
+          isDuplicate: true, validDuplicate: true, expectedDuplicateGap: true,
+          inMedium: true, toBuffer: false, inBuffer: false, inCrm: false, assigned: false,
+          stage: "direct", status: "Duplicate",
+          reason: "Duplicate mobile in Direct API on same day",
+        });
+      } else {
+        const inCrm = crmSet.has(norm);
+        if (!inCrm) {
+          records.push({
+            id: leadId, name: "", phone: mobile, date, company, source,
+            generatedAt: date, timestamp: date, transferTimestamp: date, bufferTimestamp: date,
+            currentStatus: "Lost", transferStatus: "Transferred",
+            bufferStatus: "In Buffer", crmStatus: "Not in CRM",
+            assignee: "", tatMin: 0, tat: "—",
+            isDuplicate: false, inMedium: true, toBuffer: true,
+            inBuffer: true, inCrm: false, assigned: false,
+            stage: "buffer", status: "Lost",
+            reason: "Lead found in Buffer but missing from CRM (Gap 3: Buffer→CRM)",
+          });
+        }
+      }
+    } else if (prior24Match) {
+      records.push({
+        id: leadId, name: "", phone: mobile, date, company, source,
+        generatedAt: date, timestamp: date, transferTimestamp: "", bufferTimestamp: "",
+        currentStatus: "Filtered (24h Duplicate)", transferStatus: "Filtered",
+        bufferStatus: "Filtered (24h Buffer)", crmStatus: "Filtered",
+        assignee: "", tatMin: 0, tat: "—",
+        isDuplicate: true, validDuplicate: true, expectedDuplicateGap: true,
+        inMedium: true, toBuffer: false, inBuffer: false, inCrm: false, assigned: false,
+        stage: "direct", status: "Duplicate",
+        reason: `Filtered intentionally: repeated mobile within 24 hours (already received in Buffer ${prior24Match.leadId} on ${prior24Match.dateStr})`,
+      });
+    } else if (isDirectDupe) {
+      records.push({
+        id: leadId, name: "", phone: mobile, date, company, source,
+        generatedAt: date, timestamp: date, transferTimestamp: "", bufferTimestamp: "",
+        currentStatus: "Filtered (Same-day Duplicate)", transferStatus: "Filtered",
+        bufferStatus: "Filtered", crmStatus: "Filtered",
+        assignee: "", tatMin: 0, tat: "—",
+        isDuplicate: true, validDuplicate: true, expectedDuplicateGap: true,
+        inMedium: true, toBuffer: false, inBuffer: false, inCrm: false, assigned: false,
+        stage: "direct", status: "Duplicate",
+        reason: "Duplicate mobile in Direct API on same day",
+      });
+    } else {
       records.push({
         id: leadId, name: "", phone: mobile, date, company, source,
         generatedAt: date, timestamp: date, transferTimestamp: "", bufferTimestamp: "",
         currentStatus: "Lost", transferStatus: "Not transferred",
         bufferStatus: "Not in buffer", crmStatus: "N/A",
         assignee: "", tatMin: 0, tat: "—",
-        isDuplicate: true, validDuplicate: true, expectedDuplicateGap: true,
-        inMedium: false, toBuffer: false, inBuffer: false, inCrm: false, assigned: false,
-        stage: "direct", status: "Duplicate",
-        reason: "Duplicate mobile in same source within 24hrs",
+        isDuplicate: false, inMedium: true, toBuffer: false,
+        inBuffer: false, inCrm: false, assigned: false,
+        stage: "buffer", status: "Lost",
+        reason: "Lead received in Direct API but not found in Buffer or previous 24h (Gap 2: Medium→Buffer)",
       });
-    } else {
-      if (norm) seen24h.set(norm, leadId);
-      const inBuf = norm ? bufSet.has(norm) : false;
-      const inCrm = norm ? crmSet.has(norm) : false;
-
-      if (!inBuf) {
-        records.push({
-          id: leadId, name: "", phone: mobile, date, company, source,
-          generatedAt: date, timestamp: date, transferTimestamp: "", bufferTimestamp: "",
-          currentStatus: "Lost", transferStatus: "Not transferred",
-          bufferStatus: "Not in buffer", crmStatus: "N/A",
-          assignee: "", tatMin: 0, tat: "—",
-          isDuplicate: false, inMedium: true, toBuffer: false,
-          inBuffer: false, inCrm: false, assigned: false,
-          stage: "buffer", status: "Lost",
-          reason: "Lead received in Direct API but not found in Buffer (Gap 2: Medium→Buffer)",
-        });
-      } else if (!inCrm) {
-        records.push({
-          id: leadId, name: "", phone: mobile, date, company, source,
-          generatedAt: date, timestamp: date, transferTimestamp: date, bufferTimestamp: date,
-          currentStatus: "Lost", transferStatus: "Transferred",
-          bufferStatus: "In Buffer", crmStatus: "Not in CRM",
-          assignee: "", tatMin: 0, tat: "—",
-          isDuplicate: false, inMedium: true, toBuffer: true,
-          inBuffer: true, inCrm: false, assigned: false,
-          stage: "buffer", status: "Lost",
-          reason: "Lead found in Buffer but missing from CRM (Gap 2: Medium→CRM)",
-        });
-      }
     }
   });
   return records;
@@ -415,42 +466,45 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
   const requestedIds = idsParam ? idsParam.split(",").map(s => s.trim()).filter(Boolean) : [];
   const dateParam = requestUrl.searchParams.get("date") ?? "";
 
-  const bufferCache: Record<string, Promise<Map<string, any>>> = {};
+  const bufferCache: Record<string, Promise<{ sameDayMap: Map<string, any>; bufferList: any[] }>> = {};
 
-  function getBufferMap(dtStr: string): Promise<Map<string, any>> {
+  function getBufferMap(dtStr: string): Promise<{ sameDayMap: Map<string, any>; bufferList: any[] }> {
     if (bufferCache[dtStr]) return bufferCache[dtStr];
     bufferCache[dtStr] = (async () => {
       let bufRows: any[] = [];
       try {
         const [r]: any[] = await pool.query(
-          `SELECT mb.lead_id, mb.Mobile, sbn.Assign_To_MR_Main, sbn.Sent_status
+          `SELECT mb.lead_id, mb.Mobile, mb.Date_Time, sbn.Assign_To_MR_Main, sbn.Sent_status
            FROM master_buffer mb
            LEFT JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id
-           WHERE mb.Date_Time >= ? AND mb.Date_Time < DATE_ADD(?, INTERVAL 1 DAY)`,
+           WHERE mb.Date_Time >= DATE_SUB(?, INTERVAL 2 DAY) AND mb.Date_Time < DATE_ADD(?, INTERVAL 1 DAY)`,
           [dtStr, dtStr]
         );
         bufRows = r;
       } catch {
         try {
           const [r]: any[] = await pool.query(
-            `SELECT mb.lead_id, mb.Mobile, sbn.Assign_To_MR_Main, sbn.Sent_status
+            `SELECT mb.lead_id, mb.Mobile, mb.Date_Time, sbn.Assign_To_MR_Main, sbn.Sent_status
              FROM master_buffer mb
              LEFT JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id
-             WHERE DATE(mb.Date_Time) = ?`,
-            [dtStr]
+             WHERE DATE(mb.Date_Time) >= DATE_SUB(?, INTERVAL 2 DAY) AND DATE(mb.Date_Time) <= ?`,
+            [dtStr, dtStr]
           );
           bufRows = r;
         } catch (err) {
           console.error(`[lead-loss-details] buffer query failed for ${dtStr}:`, err);
         }
       }
-      const map = new Map<string, any>();
+      const sameDayMap = new Map<string, any>();
       for (const b of bufRows) {
-        const m = normMobile(b.Mobile);
-        if (m) map.set(m, b);
-        if (b.lead_id) map.set(String(b.lead_id), b);
+        const bDate = rowDate(b.Date_Time);
+        if (bDate === dtStr) {
+          const m = normMobile(b.Mobile);
+          if (m) sameDayMap.set(m, b);
+          if (b.lead_id) sameDayMap.set(String(b.lead_id), b);
+        }
       }
-      return map;
+      return { sameDayMap, bufferList: bufRows };
     })();
     return bufferCache[dtStr];
   }
@@ -489,7 +543,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
 
   const rows = (await Promise.all(targets.map(async t => {
     const { rowId, company, source, date, srcCfg } = t;
-    const bufMap = await getBufferMap(date);
+    const { sameDayMap, bufferList } = await getBufferMap(date);
 
     const nameCol = srcCfg.nameCol ? `\`${srcCfg.nameCol}\`` : "NULL";
     const emailCol = srcCfg.emailCol ? `\`${srcCfg.emailCol}\`` : "NULL";
@@ -541,10 +595,19 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       const isDup = Boolean(norm && seenMobiles.has(norm));
       if (norm) seenMobiles.add(norm);
 
-      const bufMatch = norm ? bufMap.get(norm) : bufMap.get(leadId);
+      const bufMatch = norm ? sameDayMap.get(norm) : sameDayMap.get(leadId);
       const rawTime = r.date_time ? new Date(r.date_time) : null;
       const formattedTime = rawTime ? rawTime.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
       const generatedAt = rawTime ? rawTime.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : date;
+      const leadTime = rawTime ? rawTime.getTime() : 0;
+
+      // 24-hour back-date lookback in master_buffer
+      const prior24Match = (!bufMatch && norm) ? bufferList.find((b: any) => {
+        const bnm = normMobile(b.Mobile);
+        if (bnm !== norm) return false;
+        const bTime = new Date(b.Date_Time).getTime();
+        return bTime <= leadTime && bTime >= (leadTime - 24 * 3600 * 1000);
+      }) : null;
 
       let status: "Resolved" | "Duplicate" | "Lost" | "Delayed" = "Lost";
       let currentStatus = "Actual Lost (Technical Issue)";
@@ -552,7 +615,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       let crmStatus = "Not in CRM";
       let transferStatus = "Failed Transfer";
       let assignee = "Unassigned";
-      let reason = "Direct API received but not found in Buffer";
+      let reason = "Direct API received but not found in Buffer or previous 24h";
       let inBuffer = false;
       let inCrm = false;
       let assigned = false;
@@ -582,13 +645,21 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
           status = "Delayed";
           reason = "Lead arrived in Buffer/CRM, awaiting salesperson or dialer allocation";
         }
-      } else if (isDup) {
+      } else if (prior24Match) {
         status = "Duplicate";
         currentStatus = "Filtered (24h Duplicate)";
+        bufferStatus = "Filtered (24h Buffer)";
+        crmStatus = "Filtered";
+        transferStatus = "Filtered";
+        const priorFormatted = prior24Match.Date_Time ? new Date(new Date(prior24Match.Date_Time).getTime() + 5.5 * 3600 * 1000).toLocaleString("en-IN") : "";
+        reason = `Filtered intentionally: repeated mobile within 24 hours (already received in Buffer ${prior24Match.lead_id} on ${priorFormatted})`;
+      } else if (isDup) {
+        status = "Duplicate";
+        currentStatus = "Filtered (Same-day Duplicate)";
         bufferStatus = "Filtered";
         crmStatus = "Filtered";
         transferStatus = "Filtered";
-        reason = "Filtered intentionally: repeated mobile number within 24 hours";
+        reason = "Filtered intentionally: repeated mobile number in Direct API on same day";
       }
 
       records.push({
@@ -610,15 +681,15 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
         assignee,
         tatMin: 0,
         tat: "—",
-        isDuplicate: isDup,
-        validDuplicate: isDup,
-        expectedDuplicateGap: isDup,
+        isDuplicate: status === "Duplicate",
+        validDuplicate: status === "Duplicate",
+        expectedDuplicateGap: status === "Duplicate",
         inMedium: true,
         toBuffer: inBuffer,
         inBuffer,
         inCrm,
         assigned,
-        stage: "direct",
+        stage: inCrm ? "crm" : inBuffer ? "buffer" : status === "Duplicate" ? "direct" : "buffer",
         status,
         reason,
       });
@@ -660,16 +731,33 @@ export async function GET(request: Request) {
     const allDates = new Set<string>();
     const rowMap: Record<string, any> = {};
 
-    for (const co of COMPANY_CONFIG) {
-      if (companyFilter && !co.company.toLowerCase().includes(companyFilter)) continue;
+    const companyData = await Promise.all(
+      COMPANY_CONFIG.map(async (co) => {
+        if (companyFilter && !co.company.toLowerCase().includes(companyFilter)) return null;
+        const [bufferRes, crmData, kserveData, salesData, tatData] = await Promise.all([
+          queryBuffer(pool, co.bufferMatch, days),
+          queryCRM(pool, co.bufferMatch, days),
+          queryKServe(pool, co.bufferMatch, days),
+          querySales(pool, co.bufferMatch, days),
+          queryTAT(pool, co.bufferMatch, days),
+        ]);
+        return { co, bufferRes, crmData, kserveData, salesData, tatData };
+      })
+    );
 
-      const [bufferData, crmData, kserveData, salesData, tatData] = await Promise.all([
-        queryBuffer(pool, co.bufferMatch, days),
-        queryCRM(pool, co.bufferMatch, days),
-        queryKServe(pool, co.bufferMatch, days),
-        querySales(pool, co.bufferMatch, days),
-        queryTAT(pool, co.bufferMatch, days),
-      ]);
+    // Build unified global buffer map for 24h prior buffer matching across all companies
+    const globalBufferMap = new Map<string, Array<{ leadId: string; time: number; dateStr: string }>>();
+    for (const cd of companyData) {
+      if (!cd) continue;
+      for (const b of cd.bufferRes.allBufferList) {
+        if (!globalBufferMap.has(b.mobile)) globalBufferMap.set(b.mobile, []);
+        globalBufferMap.get(b.mobile)!.push({ leadId: b.leadId, time: b.time, dateStr: b.dateStr });
+      }
+    }
+
+    for (const cd of companyData) {
+      if (!cd) continue;
+      const { co, bufferRes, crmData, kserveData, salesData, tatData } = cd;
 
       for (const srcCfg of co.sources) {
         let directByDate: DirectEntry[];
@@ -680,11 +768,11 @@ export async function GET(request: Request) {
           continue;
         }
 
-        for (const { date, leadIds, mobiles } of directByDate) {
+        for (const { date, leadIds, mobiles, timestamps } of directByDate) {
           allDates.add(date);
           const key = `${co.company}__${srcCfg.source}__${date}`;
 
-          const bufSet: Set<string> = bufferData[date] ?? new Set<string>();
+          const bufSet: Set<string> = bufferRes.byDate[date] ?? new Set<string>();
           const crmSet: Set<string> = crmData[date] ?? new Set<string>();
           const kvSet: Set<string> = kserveData[date] ?? new Set<string>();
           const sSet: Set<string> = salesData[date] ?? new Set<string>();
@@ -692,21 +780,41 @@ export async function GET(request: Request) {
           const avgTatMin = Math.round(avgTatSec / 60);
 
           const direct = leadIds.length;
-          const duplicate = detectDuplicates(mobiles);
-
-          // Intersection: count how many unique direct mobiles are in each stage
           let buffer = 0, crm = 0, kserve = 0, sales = 0;
-          const seen = new Set<string>();
-          for (const raw of mobiles) {
+          let sameDayDuplicates = 0;
+          let prior24hDuplicates = 0;
+          const seenDirectMobiles = new Set<string>();
+
+          for (let i = 0; i < mobiles.length; i++) {
+            const raw = mobiles[i];
             const m = normMobile(raw);
-            if (!m || seen.has(m)) continue;
-            seen.add(m);
-            if (bufSet.has(m)) buffer++;
-            if (crmSet.has(m)) crm++;
-            if (kvSet.has(m)) kserve++;
-            if (sSet.has(m)) sales++;
+            const t = timestamps?.[i] ?? new Date(date).getTime();
+            if (!m) continue;
+
+            const inBuf = bufSet.has(m);
+            const isDirectDupe = seenDirectMobiles.has(m);
+            seenDirectMobiles.add(m);
+
+            const bufs = globalBufferMap.get(m) || [];
+            const priorMatch = !inBuf ? bufs.find(b => b.time <= t && b.time >= t - 24 * 3600 * 1000) : null;
+
+            if (inBuf) {
+              if (isDirectDupe) {
+                sameDayDuplicates++;
+              } else {
+                buffer++;
+                if (crmSet.has(m)) crm++;
+                if (kvSet.has(m)) kserve++;
+                if (sSet.has(m)) sales++;
+              }
+            } else if (priorMatch) {
+              prior24hDuplicates++;
+            } else if (isDirectDupe) {
+              sameDayDuplicates++;
+            }
           }
 
+          const duplicate = sameDayDuplicates + prior24hDuplicates;
           const medium = direct;
           const expectedDuplicateGap = duplicate;
           const directMediumGap = 0;
@@ -721,7 +829,7 @@ export async function GET(request: Request) {
           const assigned = kserve + sales;
 
           const lostRecords = buildLostRecords(
-            mobiles, leadIds, bufSet, crmSet, srcCfg.source, date, co.company
+            mobiles, leadIds, timestamps, bufSet, crmSet, globalBufferMap, srcCfg.source, date, co.company
           );
 
           const existing = rowMap[key];
