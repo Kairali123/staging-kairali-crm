@@ -33,7 +33,7 @@ const COMPANY_CONFIG: CompanyConfig[] = [
       { source: "Google", table: "api_villaraag_new_website_online_enquiry", dateCol: "create_date_time", mobileCol: "phone_number", leadIdCol: "enq_id", nameCol: "name", emailCol: "email_id", sourceFilter: "utm_medium != 'organic' OR utm_medium IS NULL" },
       { source: "website", table: "api_villaraag_new_website_online_enquiry", dateCol: "create_date_time", mobileCol: "phone_number", leadIdCol: "enq_id", nameCol: "name", emailCol: "email_id", sourceFilter: "utm_medium = 'organic'" },
       { source: "Anjali AI Web", table: "villaraag_chatbase_leads_api_anjali_menon", dateCol: "chat_created_date_time", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email" },
-      { source: "IVR", table: "ivr_lead_api_knowrality", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "lead_id", nameCol: "name_of_client", emailCol: "email_id", sourceFilter: "lead_relates_to_which_company LIKE '%villa%' OR lead_relates_to_which_company LIKE '%raag%' OR company_by_extension LIKE '%villa%' OR company_by_extension LIKE '%raag%'" },
+      { source: "IVR", table: "ivr_lead_api_knowrality", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "lead_id", nameCol: "name_of_client", emailCol: "email_id", sourceFilter: "((lead_relates_to_which_company LIKE '%villa%' AND lead_relates_to_which_company NOT LIKE '%village%') OR lead_relates_to_which_company LIKE '%raag%' OR (company_by_extension LIKE '%villa%' AND company_by_extension NOT LIKE '%village%') OR company_by_extension LIKE '%raag%')" },
       { source: "others", table: "bulk_whatsapp_reply_enquiry_generation", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "id", nameCol: "client_name", emailCol: "email_id", sourceFilter: "website_name LIKE '%villa%' OR website_name LIKE '%raag%'" }
     ],
   },
@@ -56,7 +56,7 @@ const COMPANY_CONFIG: CompanyConfig[] = [
     companyKey: "KAPL",
     bufferMatch: ["kairali ayurvedic product", "kairali ayurvedic products", "kapl"],
     sources: [
-      { source: "IVR", table: "ivr_lead_api_knowrality", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "lead_id", nameCol: "name_of_client", emailCol: "email_id", sourceFilter: "lead_relates_to_which_company LIKE '%product%' OR company_by_extension LIKE '%product%'" },
+      { source: "IVR", table: "ivr_lead_api_knowrality", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "lead_id", nameCol: "name_of_client", emailCol: "email_id", sourceFilter: "lead_relates_to_which_company LIKE '%product%' OR company_by_extension LIKE '%product%' OR company_by_extension LIKE '%kappl%'" },
       { source: "Others", table: "bulk_whatsapp_reply_enquiry_generation", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "id", nameCol: "client_name", emailCol: "email_id", sourceFilter: "website_name LIKE '%product%' OR new_category LIKE '%kappl%' OR (website_name IS NULL AND (new_category IS NULL OR new_category = 'Data Backup - Deleted'))" },
       { source: "Priyasharma AI-web", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "chat_created_date_time", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "src = 'Widget or Iframe' OR src = 'API'" },
       { source: "Priyasharma AI-instagram", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "chat_created_date_time", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "src = 'Instagram'" },
@@ -70,7 +70,7 @@ const COMPANY_CONFIG: CompanyConfig[] = [
     companyKey: "KATC",
     bufferMatch: ["kairali ayurvedic treatment", "kac", "centres", "centers"],
     sources: [
-      { source: "IVR", table: "ivr_lead_api_knowrality", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "lead_id", nameCol: "name_of_client", emailCol: "email_id", sourceFilter: "lead_relates_to_which_company LIKE '%center%' OR lead_relates_to_which_company LIKE '%centre%' OR company_by_extension LIKE '%center%' OR company_by_extension LIKE '%centre%'" },
+      { source: "IVR", table: "ivr_lead_api_knowrality", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "lead_id", nameCol: "name_of_client", emailCol: "email_id", sourceFilter: "lead_relates_to_which_company LIKE '%center%' OR lead_relates_to_which_company LIKE '%centre%' OR company_by_extension LIKE '%center%' OR company_by_extension LIKE '%centre%' OR company_by_extension LIKE '%kac%'" },
       { source: "Others", table: "bulk_whatsapp_reply_enquiry_generation", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "id", nameCol: "client_name", emailCol: "email_id", sourceFilter: "website_name LIKE '%center%' OR website_name LIKE '%centre%'" }
     ]
   }
