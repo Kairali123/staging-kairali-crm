@@ -126,7 +126,7 @@ const LEADGUARD_CSS = `@import url('https://fonts.googleapis.com/css2?family=Arc
 }
 .sidebar-card.warning{border-color:#7b4d2d;background:#2b211d}.sidebar-card.warning small{color:#e0a776}.pulse-dot{animation:lgPulse 1.8s ease-out infinite}.refresh{background:linear-gradient(135deg,var(--teal-dark),#0fa48d);box-shadow:0 7px 18px #0d8a7330;transition:.2s ease}.refresh:hover{transform:translateY(-1px);box-shadow:0 10px 22px #0d8a7340}.alert-strip.tracker-stale{background:linear-gradient(100deg,#fff1e2,#fffaf3 58%,#fff);border-color:#edc18e;border-left-color:#ed8d2d}.tracker-stale .alert-icon{background:#ffe1bf;color:#c5660e;animation:lgPulse 1.8s ease-out infinite}.alert-strip>a{color:#ad580e;background:#fff2df;padding:9px 11px;border-radius:7px;text-decoration:none;font-size:11px;font-weight:800}.kpi,.stage{transition:.2s ease}.kpi:is(button):hover,.stage:hover{transform:translateY(-3px);box-shadow:0 10px 24px #17304712}.connector{position:relative;width:30px;text-align:center}.connector b{font-weight:400}.connector span{position:absolute;left:2px;top:50%;width:5px;height:5px;background:var(--teal);border-radius:50%;box-shadow:0 0 8px #0eae91;animation:lgFlow 2s linear infinite}
 .loss-command{background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 4px 14px #1a314507;padding:20px;margin-bottom:16px;overflow:hidden;position:relative}.loss-command:before{content:"";position:absolute;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle,#e85c4c12,transparent 68%);right:-90px;top:-110px;pointer-events:none}.health-chip{border-radius:18px;padding:7px 10px!important;font-weight:800}.health-chip.current{background:#e8f7f1;color:#16825e}.health-chip.stale{background:#fff0dd;color:#b76112}.loss-grid{display:grid;grid-template-columns:minmax(420px,.95fr) minmax(460px,1.25fr);gap:15px;margin-top:16px}.live-master-card{border-radius:14px;background:linear-gradient(145deg,#0b1f2e,#102f3e);color:#fff;padding:21px;display:grid;grid-template-columns:160px 1fr;gap:20px;align-items:center;min-height:240px;box-shadow:0 16px 34px #08233528}.radar-visual{width:150px;height:150px;border-radius:50%;position:relative;display:grid;place-items:center;background:radial-gradient(circle,#123e4b 0 24%,transparent 25%),repeating-radial-gradient(circle,#37dab51c 0 1px,transparent 2px 24px);border:1px solid #45d0b534}.radar-visual:before{content:"";position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 0deg,transparent 0 75%,#38deb447);animation:lgRadar 3.2s linear infinite}.radar-visual>i{position:absolute;width:7px;height:7px;background:#ff6b61;border-radius:50%;box-shadow:0 0 0 5px #ff6b6120,0 0 12px #ff6b61}.radar-visual>i:nth-child(1){left:27px;top:54px}.radar-visual>i:nth-child(2){right:23px;bottom:47px}.radar-visual>i:nth-child(3){right:42px;top:30px}.radar-visual>span{z-index:2;text-align:center}.radar-visual small,.radar-visual em{display:block;font-style:normal;font-size:7px;letter-spacing:1px;color:#89b7ba}.radar-visual strong{display:block;font:800 30px 'Manrope';color:#ff7a70}.master-copy>p,.break-map header p{font-size:8px;letter-spacing:1.2px;color:#78a2aa;font-weight:800;margin:0}.master-copy h3,.break-map h3{font:800 16px 'Manrope';margin:5px 0 14px}.master-metrics{display:grid;grid-template-columns:1fr 1fr;gap:7px}.master-metrics span{background:#ffffff0d;border:1px solid #ffffff12;border-radius:8px;padding:9px}.master-metrics small{display:block;font-size:8px;color:#88aab2}.master-metrics strong{display:block;font:800 17px 'Manrope';margin-top:2px}.master-metrics .danger strong{color:#ff766d}.master-copy button{border:0;background:#31caa8;color:#05261f;border-radius:8px;padding:9px 11px;font-weight:800;font-size:10px;margin-top:11px;cursor:pointer}.break-map{border:1px solid var(--line);border-radius:14px;padding:17px;background:#fbfcfd}.break-map header{display:flex;justify-content:space-between;align-items:flex-start}.break-map header>span{font-size:8px;color:#83929d}.break-list{display:grid;gap:7px}.break-list>button{display:grid;grid-template-columns:28px 1fr auto;align-items:center;gap:10px;width:100%;border:1px solid #e7ecef;background:#fff;border-radius:9px;padding:10px;text-align:left;cursor:pointer;transition:.18s ease}.break-list>button:hover{border-color:#dd9790;transform:translateX(3px);box-shadow:0 5px 14px #9b322b0c}.break-rank{font:800 10px 'Manrope';color:#a6b1ba}.break-copy strong{display:block;font-size:10px}.break-copy small{display:block;color:#83909a;font-size:8px;margin-top:2px}.break-copy i{display:block;height:3px;background:#edf1f3;border-radius:5px;margin-top:7px;overflow:hidden}.break-copy i b{display:block;height:100%;background:linear-gradient(90deg,#f49b58,#e45252);border-radius:5px;animation:lgBar .8s ease both}.break-list em{font-style:normal;font:800 17px 'Manrope';text-align:right}.break-list em small{display:block;font:700 7px 'DM Sans';text-transform:uppercase}.break-list em.hot{color:#d84b45}.break-list em.clear{color:#1c9e72}.coverage-warning{display:flex;align-items:center;gap:12px;border:1px solid #f0c493;background:linear-gradient(90deg,#fff6e8,#fff);border-radius:10px;padding:12px 14px;margin-top:13px}.coverage-warning>span{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#ffe3bf;color:#bf6817;font-weight:800}.coverage-warning div{flex:1}.coverage-warning strong{font-size:11px}.coverage-warning p{font-size:9px;color:#7b6b5b;margin:3px 0 0}.coverage-warning a{font-size:9px;color:#a5530d;text-decoration:none;font-weight:800}
-@keyframes lgFlow{0%{transform:translateX(0);opacity:0}15%{opacity:1}85%{opacity:1}100%{transform:translateX(22px);opacity:0}}@keyframes lgRadar{to{transform:rotate(360deg)}}@keyframes lgPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}@keyframes lgBar{from{width:0}}@media(max-width:1180px){.loss-grid{grid-template-columns:1fr}}@media(max-width:760px){.alert-strip>a{display:none}.loss-command{padding:15px}.live-master-card{grid-template-columns:1fr;text-align:center}.radar-visual{margin:auto}.master-metrics{text-align:left}.break-list>button{grid-template-columns:22px 1fr auto}.coverage-warning a{display:none}}@media(prefers-reduced-motion:reduce){.pulse-dot,.tracker-stale .alert-icon,.radar-visual:before,.connector span,.break-copy i b{animation:none!important}}`;
+@keyframes lgFlow{0%{transform:translateX(0);opacity:0}15%{opacity:1}85%{opacity:1}100%{transform:translateX(22px);opacity:0}}@keyframes lgRadar{to{transform:rotate(360deg)}}@keyframes lgPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}@keyframes lgBar{from{width:0}}@keyframes spin{to{transform:rotate(360deg)}}@media(max-width:1180px){.loss-grid{grid-template-columns:1fr}}@media(max-width:760px){.alert-strip>a{display:none}.loss-command{padding:15px}.live-master-card{grid-template-columns:1fr;text-align:center}.radar-visual{margin:auto}.master-metrics{text-align:left}.break-list>button{grid-template-columns:22px 1fr auto}.coverage-warning a{display:none}}@media(prefers-reduced-motion:reduce){.pulse-dot,.tracker-stale .alert-icon,.radar-visual:before,.connector span,.break-copy i b{animation:none!important}}`;
 function LeadGuardStyle() {
   return <style dangerouslySetInnerHTML={{ __html: LEADGUARD_CSS }} />;
 }
@@ -148,7 +148,7 @@ type TrackerRow = {
   id: string; date: string; company: string; source: string; directUrl?: string; finalUrl?: string; stageUrls?: Partial<Record<StageKey, string>>;
   gapRecordsIncluded?: boolean;
   direct: number; medium: number; directMediumGap: number; duplicate: number; expectedDuplicateGap: number; lateTransfer: number; masterCrmTotal?: number; bufferTransfer: number; mediumBufferGap: number; mediumBufferLost: number; unexplainedMediumGap?: number; gap: number; buffer: number; crm: number; sameDayCrm: number; masterCrmLost: number; bufferCrmGap: number; bufferToCrmGap: number; assigned: number; sales: number; kserve: number;
-  avgTatMin: number; slaBreaches: number; mismatch: boolean; validationErrors: string[]; records: LeadRecord[]; issues: LeadRecord[];
+  avgTatSec?: number; avgTatMin: number; slaBreaches: number; mismatch: boolean; validationErrors: string[]; records: LeadRecord[]; issues: LeadRecord[];
 };
 type PipelineHealth = { checklistLastDate: string; masterLatestDate: string; trackingLagDays: number; stageTrackingCurrent: boolean; message: string };
 type CurrentSummary = { date: string; crm: number; assigned: number; kserve: number; sales: number; unassigned: number; slaBreaches: number };
@@ -164,6 +164,14 @@ const gapMeta: Record<GapKey, { label: string; flow: string; description: string
 const gapCount = (row: TrackerRow | ReturnType<typeof totalRows>, key: GapKey) => key === "gap1" ? row.directMediumGap : key === "gap2" ? row.expectedDuplicateGap + row.mediumBufferLost : row.lateTransfer + row.masterCrmLost;
 const gapLostCount = (row: TrackerRow | ReturnType<typeof totalRows>, key: GapKey) => key === "gap1" ? row.directMediumGap : key === "gap2" ? row.mediumBufferLost : row.masterCrmLost;
 const fmt = (n: number) => Number(n || 0).toLocaleString("en-IN");
+const formatHHMMSS = (sec?: number | null) => {
+  if (sec === undefined || sec === null || isNaN(Number(sec)) || Number(sec) <= 0) return "—";
+  const total = Math.round(Number(sec));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = Math.floor(total % 60);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+};
 const dateLabel = (value: string) => { const date = new Date(`${value}T00:00:00`); return Number.isNaN(date.valueOf()) ? value : date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }); };
 const normalizeRow = (row: TrackerRow): TrackerRow => ({
   ...row,
@@ -260,8 +268,8 @@ const totalRows = (items: TrackerRow[]) => items.reduce((a, r) => ({
   kserve: a.kserve + r.kserve,
   slaBreaches: a.slaBreaches + r.slaBreaches,
   mismatches: a.mismatches + Number(r.mismatch),
-  tatSum: a.tatSum + r.avgTatMin * r.buffer,
-  tatWeight: a.tatWeight + r.buffer,
+  tatSum: a.tatSum + (r.avgTatSec || (r.avgTatMin ? r.avgTatMin * 60 : 0)) * (r.buffer || 1),
+  tatWeight: a.tatWeight + ((r.avgTatSec || r.avgTatMin) ? (r.buffer || 1) : 0),
 }), { direct: 0, medium: 0, directMediumGap: 0, duplicate: 0, expectedDuplicateGap: 0, lateTransfer: 0, bufferTransfer: 0, mediumBufferGap: 0, mediumBufferLost: 0, unexplainedMediumGap: 0, gap: 0, buffer: 0, crm: 0, sameDayCrm: 0, masterCrmLost: 0, bufferCrmGap: 0, bufferToCrmGap: 0, assigned: 0, sales: 0, kserve: 0, slaBreaches: 0, mismatches: 0, tatSum: 0, tatWeight: 0 });
 
 export default function Home() {
@@ -291,7 +299,7 @@ export default function Home() {
     setForceRefreshing(force);
     setDetailRows(null);
     try {
-      const response = await fetch(force ? "/api/lead-loss?refresh=1" : "/api/lead-loss", { cache: "no-store" });
+      const response = await fetch(force ? "/api/lead-loss?refresh=1&days=90" : "/api/lead-loss?days=90", { cache: "no-store" });
       const data = await response.json() as DashboardPayload;
       setPayload(data);
       if (!response.ok || !data.live) throw new Error(data.diagnostic || "Live reconciliation source unavailable");
@@ -303,7 +311,26 @@ export default function Home() {
       setForceRefreshing(false);
     }
   };
-  useEffect(() => { let active = true; fetch("/api/lead-loss", { cache: "no-store" }).then(response => response.json()).then(data => { if (active) { setPayload(data); setDetailRows(null); setLoading(false); } }).catch(() => { if (active) { setToast("Dashboard refresh nahi ho saka."); setLoading(false); } }); return () => { active = false; }; }, []);
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const urlDate = params.get("date");
+      if (urlDate) {
+        if (/^\d{2}-\d{2}-\d{4}$/.test(urlDate)) {
+          const [d, m, y] = urlDate.split("-");
+          setDate(`${y}-${m}-${d}`);
+        } else if (/^\d{4}-\d{2}-\d{2}$/.test(urlDate)) {
+          setDate(urlDate);
+        }
+      }
+    }
+    let active = true;
+    fetch("/api/lead-loss?days=90", { cache: "no-store" })
+      .then(response => response.json())
+      .then(data => { if (active) { setPayload(data); setDetailRows(null); setLoading(false); } })
+      .catch(() => { if (active) { setToast("Dashboard refresh nahi ho saka."); setLoading(false); } });
+    return () => { active = false; };
+  }, []);
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(""), 3200); return () => clearTimeout(timer); }, [toast]);
   useEffect(() => { if (!selected) return; const close = (event: KeyboardEvent) => { if (event.key === "Escape") setSelected(null); }; document.addEventListener("keydown", close); const previous = document.body.style.overflow; document.body.style.overflow = "hidden"; return () => { document.removeEventListener("keydown", close); document.body.style.overflow = previous; }; }, [selected]);
 
@@ -328,7 +355,7 @@ export default function Home() {
   }, [visible]);
   const activeExpandedDate = expandedDate; // Minimise by default
   const allRecords = visible.flatMap(r => r.records ?? r.issues ?? []);
-  const summary = visible.reduce((a, r) => ({ direct: a.direct + r.direct, medium: a.medium + r.medium, duplicate: a.duplicate + r.duplicate, expectedDuplicateGap: a.expectedDuplicateGap + r.expectedDuplicateGap, toBuffer: a.toBuffer + r.bufferTransfer, buffer: a.buffer + r.buffer, mediumLost: a.mediumLost + r.mediumBufferLost, crm: a.crm + r.crm, sameDayCrm: a.sameDayCrm + r.sameDayCrm, lateTransfer: a.lateTransfer + r.lateTransfer, masterLost: a.masterLost + r.masterCrmLost, assigned: a.assigned + r.assigned, breaches: a.breaches + r.slaBreaches, tatSum: a.tatSum + r.avgTatMin * r.buffer, tatWeight: a.tatWeight + r.buffer, mismatches: a.mismatches + Number(r.mismatch) }), { direct: 0, medium: 0, duplicate: 0, expectedDuplicateGap: 0, toBuffer: 0, buffer: 0, mediumLost: 0, crm: 0, sameDayCrm: 0, lateTransfer: 0, masterLost: 0, assigned: 0, breaches: 0, tatSum: 0, tatWeight: 0, mismatches: 0 });
+  const summary = visible.reduce((a, r) => ({ direct: a.direct + r.direct, medium: a.medium + r.medium, duplicate: a.duplicate + r.duplicate, expectedDuplicateGap: a.expectedDuplicateGap + r.expectedDuplicateGap, toBuffer: a.toBuffer + r.bufferTransfer, buffer: a.buffer + r.buffer, mediumLost: a.mediumLost + r.mediumBufferLost, crm: a.crm + r.crm, sameDayCrm: a.sameDayCrm + r.sameDayCrm, lateTransfer: a.lateTransfer + r.lateTransfer, masterLost: a.masterLost + r.masterCrmLost, assigned: a.assigned + r.assigned, sales: a.sales + (r.sales || 0), kserve: a.kserve + (r.kserve || 0), breaches: a.breaches + r.slaBreaches, tatSum: a.tatSum + (r.avgTatSec || (r.avgTatMin ? r.avgTatMin * 60 : 0)) * (r.buffer || 1), tatWeight: a.tatWeight + ((r.avgTatSec || r.avgTatMin) ? (r.buffer || 1) : 0), mismatches: a.mismatches + Number(r.mismatch) }), { direct: 0, medium: 0, duplicate: 0, expectedDuplicateGap: 0, toBuffer: 0, buffer: 0, mediumLost: 0, crm: 0, sameDayCrm: 0, lateTransfer: 0, masterLost: 0, assigned: 0, sales: 0, kserve: 0, breaches: 0, tatSum: 0, tatWeight: 0, mismatches: 0 });
   const openLoss = visible.reduce((total, row) => total + row.directMediumGap + row.mediumBufferLost + row.masterCrmLost + Math.max(0, row.crm - row.assigned), 0);
   const tatBreachCount = visible.reduce((total, row) => total + (!row.mismatch && !row.directMediumGap && !row.mediumBufferLost && !row.masterCrmLost ? row.slaBreaches : 0), 0);
   const reconciledCount = Math.max(0, summary.direct - openLoss);
@@ -353,7 +380,7 @@ export default function Home() {
     setDetailsLoading(true);
     setToast("Exact Lead IDs load ho rahe hain…");
     try {
-      const batches = Array.from({ length: Math.ceil(missingIds.length / 20) }, (_, index) => missingIds.slice(index * 20, index * 20 + 20));
+      const batches = Array.from({ length: Math.ceil(missingIds.length / 50) }, (_, index) => missingIds.slice(index * 50, index * 50 + 50));
       const loaded = (await Promise.all(batches.map(async ids => {
         const response = await fetch(`/api/lead-loss?details=1&ids=${encodeURIComponent(ids.join(","))}`, { cache: "no-store" });
         const data = await response.json() as DashboardPayload;
@@ -365,10 +392,47 @@ export default function Home() {
       setToast("");
       return uniqueIds.map(id => cached.get(id)).filter(Boolean) as TrackerRow[];
     } catch {
-      setDetailError("Lead details source timed out. Please close karke count par dobara click karein.");
+      setDetailError("Lead details source timed out. Please retry.");
       setToast("Lead details load nahi ho sake. Please retry.");
       return null;
     } finally { setDetailsLoading(false); }
+  };
+
+  const renderCountLink = (
+    count: number,
+    onClick: () => void,
+    theme: "blue" | "slate" | "green" | "purple" = "blue",
+    title?: string
+  ) => {
+    if (count <= 0) return <span style={{ color: "#94a3b8", fontSize: 12 }}>0</span>;
+    const styles = {
+      blue: { color: "#2563eb", bg: "#eff6ff", border: "#bfdbfe" },
+      slate: { color: "#334155", bg: "#f1f5f9", border: "#cbd5e1" },
+      green: { color: "#166534", bg: "#f0fdf4", border: "#bbf7d0" },
+      purple: { color: "#6d28d9", bg: "#f5f3ff", border: "#ddd6fe" },
+    }[theme];
+
+    return (
+      <button
+        type="button"
+        onClick={e => { e.stopPropagation(); onClick(); }}
+        style={{
+          fontSize: 13,
+          fontWeight: 800,
+          color: styles.color,
+          background: styles.bg,
+          padding: "2px 8px",
+          borderRadius: 6,
+          border: `1px solid ${styles.border}`,
+          cursor: "pointer",
+          textDecoration: "underline",
+          display: "inline-block"
+        }}
+        title={title}
+      >
+        {fmt(count)}
+      </button>
+    );
   };
   const getGapDetailedRows = async (requestedIds: string[]) => {
     const wanted = new Set(requestedIds);
@@ -378,12 +442,67 @@ export default function Home() {
   };
   const openGapShell = (title: string, sheetUrl: string | undefined, gap?: GapKey) => open(title, [], sheetUrl, "lost-map", gap);
   const fillOpenGap = (title: string, leads: LeadRecord[], sheetUrl?: string) => setSelected(current => current?.variant === "lost-map" && current.title === title ? { ...current, leads, sheetUrl: sheetUrl ?? current.sheetUrl } : current);
-  const openDetailed = async (title: string, predicate: (lead: LeadRecord) => boolean, variant: "drawer" | "lost-map" = "drawer") => { const ids = visible.map(row => row.id); if (variant === "lost-map") { openGapShell(title, undefined); const detailed = await getGapDetailedRows(ids); if (!detailed) return; fillOpenGap(title, detailed.flatMap(row => row.records ?? []).filter(predicate)); return; } const detailed = await getDetailedRows(ids); if (!detailed) return; open(title, detailed.flatMap(row => row.records ?? []).filter(predicate), undefined, variant); };
-  const openDetailedStage = async (title: string, key: StageKey) => { const ids = visible.map(row => row.id); const detailed = await getDetailedRows(ids); if (!detailed) return; open(title, detailed.flatMap(row => stageRecords(row.records ?? [], key)), undefined, gapKeys.includes(key) ? "lost-map" : "drawer"); };
-  const openRowDetailed = async (row: TrackerRow, title: string, predicate: (lead: LeadRecord) => boolean) => { const detailed = await getDetailedRows([row.id]); if (!detailed) return; const exactRow = detailed.find(item => item.id === row.id); open(title, (exactRow?.records ?? []).filter(predicate), row.finalUrl); };
-  const openStage = async (row: TrackerRow, key: StageKey) => { const detailed = await getDetailedRows([row.id]); if (!detailed) return; const exactRow = detailed.find(item => item.id === row.id); open(`${row.company} · ${row.source} · ${labels[key]}`, stageRecords(exactRow?.records ?? [], key), row.stageUrls?.[key] ?? row.finalUrl, gapKeys.includes(key) ? "lost-map" : "drawer"); };
-  const openTotal = async (groupDate: string, key: StageKey) => { const ids = visible.filter(row => row.date === groupDate).map(row => row.id); const detailed = await getDetailedRows(ids); if (!detailed) return; open(`${dateLabel(groupDate)} total · ${labels[key]}`, detailed.flatMap(row => stageRecords(row.records ?? [], key)), detailed[0]?.stageUrls?.[key], gapKeys.includes(key) ? "lost-map" : "drawer"); };
-  const openCompanyTotal = async (groupDate: string, groupCompany: string, key: StageKey) => { const ids = visible.filter(row => row.date === groupDate && row.company === groupCompany).map(row => row.id); const detailed = await getDetailedRows(ids); if (!detailed) return; open(`${dateLabel(groupDate)} · ${groupCompany} total · ${labels[key]}`, detailed.flatMap(row => stageRecords(row.records ?? [], key)), detailed[0]?.stageUrls?.[key], gapKeys.includes(key) ? "lost-map" : "drawer"); };
+  const openDetailed = async (title: string, predicate: (lead: LeadRecord) => boolean, variant: "drawer" | "lost-map" = "drawer") => {
+    open(title, [], undefined, variant);
+    const ids = visible.map(row => row.id);
+    if (variant === "lost-map") {
+      const detailed = await getGapDetailedRows(ids);
+      if (!detailed) return;
+      fillOpenGap(title, detailed.flatMap(row => row.records ?? []).filter(predicate));
+      return;
+    }
+    const detailed = await getDetailedRows(ids);
+    if (!detailed) return;
+    const leads = detailed.flatMap(row => row.records ?? []).filter(predicate);
+    setSelected(current => current && current.title === title ? { ...current, leads } : current);
+  };
+  const openDetailedStage = async (title: string, key: StageKey) => {
+    const isGap = gapKeys.includes(key);
+    open(title, [], undefined, isGap ? "lost-map" : "drawer");
+    const ids = visible.map(row => row.id);
+    const detailed = await getDetailedRows(ids);
+    if (!detailed) return;
+    const leads = detailed.flatMap(row => stageRecords(row.records ?? [], key));
+    setSelected(current => current && current.title === title ? { ...current, leads } : current);
+  };
+  const openRowDetailed = async (row: TrackerRow, title: string, predicate: (lead: LeadRecord) => boolean) => {
+    open(title, [], row.finalUrl, "drawer");
+    const detailed = await getDetailedRows([row.id]);
+    if (!detailed) return;
+    const exactRow = detailed.find(item => item.id === row.id);
+    const leads = (exactRow?.records ?? []).filter(predicate);
+    setSelected(current => current && current.title === title ? { ...current, leads } : current);
+  };
+  const openStage = async (row: TrackerRow, key: StageKey) => {
+    const isGap = gapKeys.includes(key);
+    const title = `${row.company} · ${row.source} · ${labels[key]}`;
+    open(title, [], row.stageUrls?.[key] ?? row.finalUrl, isGap ? "lost-map" : "drawer");
+    const detailed = await getDetailedRows([row.id]);
+    if (!detailed) return;
+    const exactRow = detailed.find(item => item.id === row.id);
+    const leads = stageRecords(exactRow?.records ?? [], key);
+    setSelected(current => current && current.title === title ? { ...current, leads } : current);
+  };
+  const openTotal = async (groupDate: string, key: StageKey) => {
+    const isGap = gapKeys.includes(key);
+    const title = `${dateLabel(groupDate)} total · ${labels[key]}`;
+    open(title, [], undefined, isGap ? "lost-map" : "drawer");
+    const ids = visible.filter(row => row.date === groupDate).map(row => row.id);
+    const detailed = await getDetailedRows(ids);
+    if (!detailed) return;
+    const leads = detailed.flatMap(row => stageRecords(row.records ?? [], key));
+    setSelected(current => current && current.title === title ? { ...current, leads, sheetUrl: detailed[0]?.stageUrls?.[key] } : current);
+  };
+  const openCompanyTotal = async (groupDate: string, groupCompany: string, key: StageKey) => {
+    const isGap = gapKeys.includes(key);
+    const title = `${dateLabel(groupDate)} · ${groupCompany} total · ${labels[key]}`;
+    open(title, [], undefined, isGap ? "lost-map" : "drawer");
+    const ids = visible.filter(row => row.date === groupDate && row.company === groupCompany).map(row => row.id);
+    const detailed = await getDetailedRows(ids);
+    if (!detailed) return;
+    const leads = detailed.flatMap(row => stageRecords(row.records ?? [], key));
+    setSelected(current => current && current.title === title ? { ...current, leads, sheetUrl: detailed[0]?.stageUrls?.[key] } : current);
+  };
   const openGapRow = async (row: TrackerRow, key: GapKey) => { const title = `${row.company} · ${row.source} · ${dateLabel(row.date)}`; const sheetUrl = row.stageUrls?.[key === "gap1" ? "directMediumGap" : key === "gap2" ? "mediumBufferLost" : "masterCrmLost"] ?? row.finalUrl; openGapShell(title, sheetUrl, key); const detailed = await getGapDetailedRows([row.id]); if (!detailed) return; const exact = detailed.find(item => item.id === row.id); fillOpenGap(title, gapRecords(exact?.records ?? [], key), sheetUrl); };
   const openGapCompany = async (groupDate: string, groupCompany: string, key: GapKey) => { const ids = visible.filter(row => row.date === groupDate && row.company === groupCompany).map(row => row.id); const meta = gapMeta[key]; const title = `${dateLabel(groupDate)} · ${groupCompany} · ${meta.flow}`; openGapShell(title, undefined, key); const detailed = await getGapDetailedRows(ids); if (!detailed) return; fillOpenGap(title, detailed.flatMap(row => gapRecords(row.records ?? [], key)), detailed[0]?.stageUrls?.[key === "gap1" ? "directMediumGap" : key === "gap2" ? "mediumBufferLost" : "masterCrmLost"]); };
   const openGapDate = async (groupDate: string, key: GapKey) => { const ids = visible.filter(row => row.date === groupDate).map(row => row.id); const meta = gapMeta[key]; const title = `${dateLabel(groupDate)} · All companies · ${meta.flow}`; openGapShell(title, undefined, key); const detailed = await getGapDetailedRows(ids); if (!detailed) return; fillOpenGap(title, detailed.flatMap(row => gapRecords(row.records ?? [], key)), detailed[0]?.stageUrls?.[key === "gap1" ? "directMediumGap" : key === "gap2" ? "mediumBufferLost" : "masterCrmLost"]); };
@@ -436,7 +555,7 @@ export default function Home() {
       <section className={`alert-strip ${!payload?.live || summary.mismatches ? "tracker-stale" : ""}`}><div className="alert-icon">!</div><div><strong>{loading && !payload ? "Connecting to live Google Sheets…" : payload && !payload.live ? "Live reconciliation source unavailable" : summary.mismatches ? `${summary.mismatches} Data Mismatch row${summary.mismatches > 1 ? "s" : ""} found` : openLoss ? `${openLoss} lead reconciliation exception${openLoss > 1 ? "s" : ""}` : "All Lead IDs are reconciled"}</strong><p>{loading && !payload ? "Latest Date + Company + Source reconciliation is loading. Counts will appear automatically." : payload && !payload.live ? `${payload.diagnostic ?? "Secure Google Sheets bridge did not return live rows."} No demo counts are shown.` : summary.mismatches ? "Row formulas failed—highlighted rows par click karke exact Lead IDs audit karein." : openLoss ? "Lost radar exact pipeline stage aur records identify karta hai." : "Direct, duplicate, buffer and CRM formulas match."}</p></div><button onClick={() => payload?.live ? openDetailed("Reconciliation exceptions", x => x.status !== "Resolved") : load()} disabled={loading || detailsLoading}>{payload?.live ? detailsLoading ? "Loading Lead IDs…" : "Review leads →" : loading ? "Connecting…" : "Retry live sync →"}</button></section>
       <section className="filters"><label className="search"><span>⌕</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search company, source or date…"/></label><select value={company} onChange={e => setCompany(e.target.value)}><option>All companies</option>{companies.map(x => <option key={x}>{x}</option>)}</select><select value={source} onChange={e => setSource(e.target.value)}><option>All sources</option>{sources.map(x => <option key={x}>{x}</option>)}</select><select value={date} onChange={e => setDate(e.target.value)}><option>All dates</option>{dates.map(x => <option key={x} value={x}>{dateLabel(x)}</option>)}</select><select value={health} onChange={e => setHealth(e.target.value)}><option>All status</option><option>Data Mismatch</option><option>Lost</option><option>TAT breach</option><option>Reconciled</option></select><button className="clear" onClick={reset}>Clear</button></section>
       <section className="kpis">
-        <button className="kpi" onClick={() => openDetailed("All direct API leads", () => true)}>
+        <button className="kpi" onClick={() => openDetailedStage("All Direct API Source Leads", "direct")}>
           <span className="kpi-icon teal">↓</span>
           <div><small>DIRECT API SOURCE</small><strong>{fmt(summary.direct)}</strong></div>
         </button>
@@ -444,7 +563,7 @@ export default function Home() {
           <span className="kpi-icon red">!</span>
           <div><small>GAP 1 DIRECT → MEDIUM</small><strong>{fmt(summary.direct - summary.medium)}</strong></div>
         </button>
-        <button className="kpi" onClick={() => openDetailed("Master Medium", () => true)}>
+        <button className="kpi" onClick={() => openDetailedStage("All Master Medium Leads", "medium")}>
           <span className="kpi-icon violet">◷</span>
           <div><small>MASTER MEDIUM MERGED</small><strong>{fmt(summary.medium)}</strong></div>
         </button>
@@ -452,7 +571,7 @@ export default function Home() {
           <span className="kpi-icon red">!</span>
           <div><small>GAP 2 MEDIUM → BUFFER</small><strong>{fmt(summary.mediumLost)}</strong></div>
         </button>
-        <button className="kpi" onClick={() => openDetailed("Buffer Staged", () => true)}>
+        <button className="kpi" onClick={() => openDetailedStage("All Buffer Staged Leads", "buffer")}>
           <span className="kpi-icon amber">⌘</span>
           <div><small>ACTUAL BUFFER STAGED</small><strong>{fmt(summary.buffer)}</strong></div>
         </button>
@@ -462,22 +581,92 @@ export default function Home() {
           <span className="kpi-icon red">!</span>
           <div><small>GAP 3 BUFFER → CRM</small><strong>{fmt(summary.masterLost)}</strong></div>
         </button>
-        <button className="kpi" onClick={() => openDetailed("CRM Reconciled", () => true)}>
+        <button className="kpi" onClick={() => openDetailedStage("All CRM Reconciled Leads", "crm")}>
           <span className="kpi-icon green">✓</span>
           <div><small>ACTUAL CRM RECONCILED</small><strong>{fmt(summary.crm)}</strong></div>
         </button>
-        <button className="kpi" onClick={() => openDetailed("Transfer to Sales", () => true)}>
+        <button className="kpi" onClick={() => openDetailedStage("All Transferred to Sales Leads", "sales")}>
           <span className="kpi-icon teal">↓</span>
-          <div><small>TRANSFER TO SALES</small><strong>{fmt(summary.assigned)}</strong></div>
+          <div><small>TRANSFER TO SALES</small><strong>{fmt(summary.sales)}</strong></div>
         </button>
-        <button className="kpi" onClick={() => openDetailed("Transfer to KServe", () => true)}>
+        <button className="kpi" onClick={() => openDetailedStage("All Transferred to KServe Leads", "kserve")}>
           <span className="kpi-icon violet">◷</span>
-          <div><small>TRANSFER TO KSERVE</small><strong>0</strong></div>
+          <div><small>TRANSFER TO KSERVE</small><strong>{fmt(summary.kserve)}</strong></div>
         </button>
         <button className={openLoss > 0 ? "kpi danger" : "kpi"} onClick={() => openDetailed("Loss %", () => true)}>
           <span className={openLoss > 0 ? "kpi-icon red" : "kpi-icon green"}>%</span>
           <div><small>LOSS %</small><strong>{summary.direct?Math.round(openLoss/summary.direct*100):0}%</strong></div>
         </button>
+      </section>
+
+      {/* ═══ LEAD AUDIT CLASSIFICATION: ACTUAL LOST VS 24H DUPLICATE FILTERED ═══════════ */}
+      <section style={{
+        background: "#ffffff",
+        border: "1px solid #e2e8f0",
+        borderRadius: "14px",
+        padding: "16px 20px",
+        marginBottom: "20px",
+        boxShadow: "0 2px 12px rgba(15, 23, 42, 0.04)"
+      }}>
+        <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px"}}>
+          <div>
+            <p style={{margin: 0, fontSize: "10px", fontWeight: 800, letterSpacing: "1.2px", color: "#64748b", textTransform: "uppercase"}}>
+              LEAD CLASSIFICATION AUDIT · ONE-VIEW INTEGRITY STATUS
+            </p>
+            <h3 style={{margin: "2px 0 0", fontSize: "15px", fontWeight: 700, color: "#0f172a"}}>
+              Actual Lost (Technical Failure) vs Intentional Filter (24h Mobile Duplicate)
+            </h3>
+          </div>
+          <span style={{fontSize: "11px", color: "#64748b", background: "#f8fafc", padding: "4px 10px", borderRadius: "6px", border: "1px solid #e2e8f0"}}>
+            Reconciliation Health: <strong style={{color: (summary.mediumLost + summary.masterLost) > 0 ? "#dc2626" : "#16a34a"}}>{(summary.mediumLost + summary.masterLost) > 0 ? `${fmt(summary.mediumLost + summary.masterLost)} Lost` : "100% Reconciled"}</strong>
+          </span>
+        </div>
+
+        <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px"}}>
+          {/* 1. Total Received */}
+          <div
+            onClick={() => openDetailedStage("All Direct API Source Leads", "direct")}
+            style={{background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px", cursor: "pointer", transition: "all .15s ease"}}
+            title="Click to view & verify all Direct API leads"
+          >
+            <div style={{display: "flex", justifyContent: "space-between", alignItems: "center"}}>
+              <span style={{fontSize: "10px", fontWeight: 800, color: "#2563eb", letterSpacing: "0.5px"}}>1. TOTAL RECEIVED</span>
+              <span style={{background: "#eff6ff", color: "#1d4ed8", borderRadius: "12px", padding: "2px 8px", fontSize: "10px", fontWeight: 700, textDecoration: "underline"}}>Click to verify ↗</span>
+            </div>
+            <div style={{fontSize: "22px", fontWeight: 800, color: "#0f172a", margin: "6px 0 2px"}}>{fmt(summary.direct)}</div>
+            <p style={{margin: 0, fontSize: "11px", color: "#64748b"}}>Total raw leads received via API Direct Sheets</p>
+          </div>
+
+          {/* 2. 24h Duplicate Filtered */}
+          <div style={{background: "#fffbeb", border: "1px solid #fef3c7", borderRadius: "10px", padding: "12px 14px"}}>
+            <div style={{display: "flex", justifyContent: "space-between", alignItems: "center"}}>
+              <span style={{fontSize: "10px", fontWeight: 800, color: "#b45309", letterSpacing: "0.5px"}}>2. DUPLICATE FILTERED (NOT LOST)</span>
+              <span style={{background: "#fef3c7", color: "#92400e", borderRadius: "12px", padding: "2px 8px", fontSize: "10px", fontWeight: 700}}>Chhannt Gaya</span>
+            </div>
+            <div style={{fontSize: "22px", fontWeight: 800, color: "#d97706", margin: "6px 0 2px"}}>{fmt(summary.duplicate)}</div>
+            <p style={{margin: 0, fontSize: "11px", color: "#b45309"}}>24-hr same mobile repetition, filtered intentionally</p>
+          </div>
+
+          {/* 3. Actual Lost (Technical Failure) */}
+          <div style={{background: "#fef2f2", border: "1px solid #fee2e2", borderRadius: "10px", padding: "12px 14px"}}>
+            <div style={{display: "flex", justifyContent: "space-between", alignItems: "center"}}>
+              <span style={{fontSize: "10px", fontWeight: 800, color: "#b91c1c", letterSpacing: "0.5px"}}>3. ACTUAL LOST (TECHNICAL ISSUE)</span>
+              <span style={{background: "#fee2e2", color: "#991b1b", borderRadius: "12px", padding: "2px 8px", fontSize: "10px", fontWeight: 700}}>Failed Sync</span>
+            </div>
+            <div style={{fontSize: "22px", fontWeight: 800, color: "#dc2626", margin: "6px 0 2px"}}>{fmt(summary.mediumLost + summary.masterLost)}</div>
+            <p style={{margin: 0, fontSize: "11px", color: "#b91c1c"}}>Trigger failure / sheet transfer gap (Gap 2: {fmt(summary.mediumLost)} + Gap 3: {fmt(summary.masterLost)})</p>
+          </div>
+
+          {/* 4. Delivered to Sales & KServe */}
+          <div style={{background: "#f0fdf4", border: "1px solid #dcfce7", borderRadius: "10px", padding: "12px 14px"}}>
+            <div style={{display: "flex", justifyContent: "space-between", alignItems: "center"}}>
+              <span style={{fontSize: "10px", fontWeight: 800, color: "#15803d", letterSpacing: "0.5px"}}>4. FORWARDED UNIQUE (ASSIGNED)</span>
+              <span style={{background: "#dcfce7", color: "#166534", borderRadius: "12px", padding: "2px 8px", fontSize: "10px", fontWeight: 700}}>Delivered</span>
+            </div>
+            <div style={{fontSize: "22px", fontWeight: 800, color: "#16a34a", margin: "6px 0 2px"}}>{fmt(summary.sales + summary.kserve)}</div>
+            <p style={{margin: 0, fontSize: "11px", color: "#15803d"}}>Sales Person: {fmt(summary.sales)} | KServe: {fmt(summary.kserve)}</p>
+          </div>
+        </div>
       </section>
       <section className="pipeline-card"><div className="section-title"><div><p>LIVE ID FUNNEL</p><h2>Lead ID proof through every stage</h2></div><span>{payload?.crmMode ?? "CRM source unavailable"}</span></div><div className="pipeline">{pipelineKeys.map((key, index) => { const count = visible.reduce((n, row) => n + row[key], 0); return <div className="pipeline-wrap" key={key}><button className={`stage ${key === "assigned" ? "success" : ""}`} onClick={() => openDetailedStage(labels[key], key)}><span>{index + 1}</span><small>{labels[key]}</small><strong>{fmt(count)}</strong><em>{summary.direct ? Math.round(count / summary.direct * 100) : 0}%</em></button>{index < pipelineKeys.length - 1 && <i className="connector"><b>→</b></i>}</div>; })}</div><div className="funnel-note"><span className="green-dot"/> Duplicate/Delete is explained—not lost. Every count is deduplicated by Lead ID and grouped by Date + Company + Verified Source.</div></section>
       <section className="loss-command" id="lost-radar"><div className="section-title"><div><p>LOST LEAD RADAR</p><h2>Exactly where reconciliation is breaking</h2></div><span className={`health-chip ${summary.mismatches ? "stale" : "current"}`}>{summary.mismatches ? `⚠ ${summary.mismatches} formula mismatch` : "● Formula validation passed"}</span></div><div className="loss-grid"><article className="live-master-card"><div className="radar-visual"><i/><i/><i/><span><small>OPEN</small><strong>{fmt(openLoss)}</strong><em>exceptions</em></span></div><div className="master-copy"><p>LATEST RECONCILIATION · {payload?.currentSummary?.date ? dateLabel(payload.currentSummary.date) : "—"}</p><h3>Medium → Buffer and Master → CRM</h3><div className="master-metrics"><span><small>Buffer</small><strong>{fmt(summary.buffer)}</strong></span><span><small>Same-day CRM</small><strong>{fmt(summary.sameDayCrm)}</strong></span><span><small>Late transfer</small><strong>{fmt(summary.lateTransfer)}</strong></span><span className="danger"><small>Actual lost</small><strong>{fmt(summary.mediumLost + summary.masterLost)}</strong></span></div><button onClick={() => openDetailed("All open reconciliation exceptions", x => lossStages.some(stage => stage.select(x)), "lost-map")}>Open exact lost leads →</button></div></article><article className="break-map"><header><div><p>LIVE STAGE MAP</p><h3>Date + Company + Source</h3></div><span>Click a stage to audit</span></header><div className="break-list">{lossStages.map((stage, index) => <button key={stage.label} onClick={() => openDetailed(`${stage.label} lost leads`, stage.select, "lost-map")}><span className="break-rank">0{index + 1}</span><span className="break-copy"><strong>{stage.label}</strong><small>{stage.hint}</small><i><b style={{ width: `${Math.max(3, stage.count / largestLoss * 100)}%` }}/></i></span><em className={stage.count ? "hot" : "clear"}>{fmt(stage.count)}<small>{stage.count ? " lost" : " clear"}</small></em></button>)}</div></article></div></section>
@@ -589,17 +778,37 @@ export default function Home() {
                             </div>
                           </div>
                         </td>
-                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:800,fontSize:13,color:"#2563eb"}}>{fmt(group.total.direct)}</td>
+                        <td style={{padding:"12px 10px",textAlign:"center"}}>
+                          {renderCountLink(group.total.direct, () => openTotal(group.date, "direct"), "blue", "Click to view & verify Direct API leads for this date")}
+                        </td>
                         <td style={{padding:"12px 10px",textAlign:"center",fontWeight:700,fontSize:13,color:"#64748b"}}>{fmt(group.total.directMediumGap||0)}</td>
-                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:800,fontSize:13,color:"#2563eb"}}>{fmt(group.total.medium)}</td>
+                        <td style={{padding:"12px 10px",textAlign:"center"}}>
+                          {renderCountLink(group.total.medium, () => openTotal(group.date, "medium"), "blue", "Click to view & verify Master Medium leads for this date")}
+                        </td>
                         <td style={{padding:"12px 10px",textAlign:"center",fontWeight:800,fontSize:13,color:group.total.mediumBufferLost>0?"#f59e0b":"#64748b"}}>{fmt(group.total.mediumBufferLost)}</td>
-                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:800,fontSize:13,color:"#2563eb"}}>{fmt(group.total.buffer)}</td>
+                        <td style={{padding:"12px 10px",textAlign:"center"}}>
+                          {renderCountLink(group.total.buffer, () => openTotal(group.date, "buffer"), "slate", "Click to view & verify Actual Buffer leads for this date")}
+                        </td>
                         <td style={{padding:"12px 10px",textAlign:"center",fontWeight:800,fontSize:13,color:group.total.masterCrmLost>0?"#ef4444":"#64748b"}}>{fmt(group.total.masterCrmLost)}</td>
-                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:800,fontSize:13,color:"#16a34a"}}>{fmt(group.total.crm)}</td>
-                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:700,fontSize:13,color:"#334e68"}}>{fmt(group.total.sales||0)}</td>
-                        <td style={{padding:"12px 10px",textAlign:"center",fontWeight:700,fontSize:13,color:"#334e68"}}>{fmt(group.total.kserve||0)}</td>
-                        <td style={{padding:"12px 10px",textAlign:"center",color:"#94a3b8",fontSize:13}}>{group.total.tatWeight > 0 ? Math.round(group.total.tatSum/group.total.tatWeight) + 'm' : '—'}</td>
-                        <td style={{padding:"12px 10px",textAlign:"center",color:"#94a3b8",fontSize:13}}>—</td>
+                        <td style={{padding:"12px 10px",textAlign:"center"}}>
+                          {renderCountLink(group.total.crm, () => openTotal(group.date, "crm"), "green", "Click to view & verify Actual CRM leads for this date")}
+                        </td>
+                        <td style={{padding:"12px 10px",textAlign:"center"}}>
+                          {renderCountLink(group.total.sales, () => openTotal(group.date, "sales"), "blue", "Click to view & verify leads transferred to Sales for this date")}
+                        </td>
+                        <td style={{padding:"12px 10px",textAlign:"center"}}>
+                          {renderCountLink(group.total.kserve, () => openTotal(group.date, "kserve"), "purple", "Click to view & verify leads transferred to KServe for this date")}
+                        </td>
+                        <td style={{padding:"12px 10px",textAlign:"center",color:"#334e68",fontSize:12,fontFamily:"monospace",fontWeight:700}}>{group.total.tatWeight > 0 ? formatHHMMSS(Math.round(group.total.tatSum/group.total.tatWeight)) : '—'}</td>
+                        <td style={{padding:"12px 10px",textAlign:"center"}}>
+                          <span style={{
+                            display:"inline-flex",alignItems:"center",gap:3,padding:"3px 8px",borderRadius:20,fontSize:9,fontWeight:700,
+                            background:allClear?"#f0fdf4":totalLost>0?"#fff0f0":"#fff9f0",
+                            color:allClear?"#166534":totalLost>0?"#991b1b":"#92400e"
+                          }}>
+                            {allClear?"Clear":totalLost>0?"Lost":"Pending"}
+                          </span>
+                        </td>
                         <td style={{padding:"12px 10px",textAlign:"center"}}>
                           <span style={{
                             padding:"4px 10px",borderRadius:20,fontSize:11,fontWeight:800,
@@ -640,7 +849,7 @@ export default function Home() {
                                   </div>
                                 </td>
                                 <td style={{padding:"9px 10px",textAlign:"center"}}>
-                                  <span style={{fontSize:13,fontWeight:800,color:"#2563eb",background:"#eff6ff",padding:"2px 8px",borderRadius:6}}>{fmt(row.direct)}</span>
+                                  {renderCountLink(row.direct, () => openStage(row, "direct"), "blue", "Click to view & verify Direct API leads for this source")}
                                 </td>
                                 <td style={{padding:"9px 10px",textAlign:"center"}}>
                                   {row.directMediumGap>0
@@ -648,7 +857,7 @@ export default function Home() {
                                     :<span style={{color:"#94a3b8",fontSize:12}}>0</span>}
                                 </td>
                                 <td style={{padding:"9px 10px",textAlign:"center"}}>
-                                  <span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.medium)}</span>
+                                  {renderCountLink(row.medium, () => openStage(row, "medium"), "blue", "Click to view & verify Master Medium leads for this source")}
                                 </td>
                                 <td style={{padding:"9px 10px",textAlign:"center"}}>
                                   {row.mediumBufferLost>0
@@ -656,7 +865,7 @@ export default function Home() {
                                     :<span style={{color:"#94a3b8",fontSize:12}}>0</span>}
                                 </td>
                                 <td style={{padding:"9px 10px",textAlign:"center"}}>
-                                  <span style={{fontSize:13,fontWeight:800,color:"#334e68"}}>{fmt(row.buffer)}</span>
+                                  {renderCountLink(row.buffer, () => openStage(row, "buffer"), "slate", "Click to view & verify Actual Buffer leads for this source")}
                                 </td>
                                 <td style={{padding:"9px 10px",textAlign:"center"}}>
                                   {row.masterCrmLost>0
@@ -664,16 +873,16 @@ export default function Home() {
                                     :<span style={{color:"#22c55e",fontWeight:700,fontSize:12}}>0</span>}
                                 </td>
                                 <td style={{padding:"9px 10px",textAlign:"center"}}>
-                                  <span style={{fontSize:13,fontWeight:800,color:"#166534",background:"#f0fdf4",borderRadius:6,padding:"2px 8px"}}>{fmt(row.crm)}</span>
+                                  {renderCountLink(row.crm, () => openStage(row, "crm"), "green", "Click to view & verify Actual CRM leads for this source")}
                                 </td>
                                 <td style={{padding:"9px 10px",textAlign:"center"}}>
-                                  <span style={{fontSize:13,fontWeight:700,color:"#334e68"}}>{fmt(row.sales)}</span>
+                                  {renderCountLink(row.sales, () => openStage(row, "sales"), "blue", "Click to view & verify leads transferred to Sales for this source")}
                                 </td>
                                 <td style={{padding:"9px 10px",textAlign:"center"}}>
-                                  <span style={{fontSize:13,fontWeight:700,color:"#334e68"}}>{fmt(row.kserve)}</span>
+                                  {renderCountLink(row.kserve, () => openStage(row, "kserve"), "purple", "Click to view & verify leads transferred to KServe for this source")}
                                 </td>
                                 <td style={{padding:"9px 10px",textAlign:"center"}}>
-                                  <span style={{fontSize:12,color:"#64748b"}}>{row.avgTatMin > 0 ? `${row.avgTatMin}m` : "—"}</span>
+                                  <span style={{fontSize:11,fontFamily:"monospace",fontWeight:700,color:"#334e68"}}>{formatHHMMSS(row.avgTatSec || (row.avgTatMin ? row.avgTatMin * 60 : 0))}</span>
                                 </td>
                                 <td style={{padding:"9px 10px",textAlign:"center"}}>
                                   <span style={{display:"inline-flex",alignItems:"center",gap:3,padding:"3px 8px",borderRadius:20,fontSize:9,fontWeight:700,background:rowClear?"#f0fdf4":rowLost>0?"#fff0f0":"#fff9f0",color:rowClear?"#166534":rowLost>0?"#991b1b":"#92400e"}}>{rowClear?"Clear":rowLost>0?"Lost":"Pending"}</span>
@@ -687,17 +896,37 @@ export default function Home() {
                           {/* Company subtotal */}
                           <tr style={{background:"#f8fafc",borderTop:"1px solid #e2e8f0",borderBottom:"2px solid #dbeafe"}}>
                             <td style={{padding:"8px 18px",fontWeight:800,fontSize:12,color:"#334e68"}}>↳ {cg.company} Total</td>
-                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:"#2563eb"}}>{fmt(cg.total.direct)}</td>
+                            <td style={{padding:"8px 10px",textAlign:"center"}}>
+                              {renderCountLink(cg.total.direct, () => openCompanyTotal(group.date, cg.company, "direct"), "blue", "Click to view & verify Direct API leads for this company")}
+                            </td>
                             <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:cg.total.directMediumGap>0?"#92400e":"#64748b"}}>{fmt(cg.total.directMediumGap)}</td>
-                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:"#334e68"}}>{fmt(cg.total.medium)}</td>
+                            <td style={{padding:"8px 10px",textAlign:"center"}}>
+                              {renderCountLink(cg.total.medium, () => openCompanyTotal(group.date, cg.company, "medium"), "blue", "Click to view & verify Master Medium leads for this company")}
+                            </td>
                             <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:cg.total.mediumBufferLost>0?"#f59e0b":"#64748b"}}>{fmt(cg.total.mediumBufferLost)}</td>
-                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:"#334e68"}}>{fmt(cg.total.buffer)}</td>
+                            <td style={{padding:"8px 10px",textAlign:"center"}}>
+                              {renderCountLink(cg.total.buffer, () => openCompanyTotal(group.date, cg.company, "buffer"), "slate", "Click to view & verify Actual Buffer leads for this company")}
+                            </td>
                             <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:cg.total.masterCrmLost>0?"#ef4444":"#22c55e"}}>{fmt(cg.total.masterCrmLost)}</td>
-                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:"#166534"}}>{fmt(cg.total.crm)}</td>
-                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:"#334e68"}}>{fmt(cg.total.sales||0)}</td>
-                            <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,fontSize:12,color:"#334e68"}}>{fmt(cg.total.kserve||0)}</td>
-                            <td style={{padding:"8px 10px",textAlign:"center",color:"#94a3b8",fontSize:12}}>{cg.total.tatWeight > 0 ? Math.round(cg.total.tatSum/cg.total.tatWeight) + 'm' : '—'}</td>
-                            <td style={{padding:"8px 10px",textAlign:"center",color:"#94a3b8",fontSize:12}}>—</td>
+                            <td style={{padding:"8px 10px",textAlign:"center"}}>
+                              {renderCountLink(cg.total.crm, () => openCompanyTotal(group.date, cg.company, "crm"), "green", "Click to view & verify Actual CRM leads for this company")}
+                            </td>
+                            <td style={{padding:"8px 10px",textAlign:"center"}}>
+                              {renderCountLink(cg.total.sales, () => openCompanyTotal(group.date, cg.company, "sales"), "blue", "Click to view & verify leads transferred to Sales for this company")}
+                            </td>
+                            <td style={{padding:"8px 10px",textAlign:"center"}}>
+                              {renderCountLink(cg.total.kserve, () => openCompanyTotal(group.date, cg.company, "kserve"), "purple", "Click to view & verify leads transferred to KServe for this company")}
+                            </td>
+                            <td style={{padding:"8px 10px",textAlign:"center",color:"#334e68",fontSize:12,fontFamily:"monospace",fontWeight:700}}>{cg.total.tatWeight > 0 ? formatHHMMSS(Math.round(cg.total.tatSum/cg.total.tatWeight)) : '—'}</td>
+                            <td style={{padding:"8px 10px",textAlign:"center"}}>
+                              <span style={{
+                                display:"inline-flex",alignItems:"center",gap:3,padding:"2px 7px",borderRadius:20,fontSize:9,fontWeight:700,
+                                background:(cg.total.masterCrmLost+cg.total.mediumBufferLost)===0?"#f0fdf4":(cg.total.masterCrmLost+cg.total.mediumBufferLost)>0?"#fff0f0":"#fff9f0",
+                                color:(cg.total.masterCrmLost+cg.total.mediumBufferLost)===0?"#166534":(cg.total.masterCrmLost+cg.total.mediumBufferLost)>0?"#991b1b":"#92400e"
+                              }}>
+                                {(cg.total.masterCrmLost+cg.total.mediumBufferLost)===0?"Clear":(cg.total.masterCrmLost+cg.total.mediumBufferLost)>0?"Lost":"Pending"}
+                              </span>
+                            </td>
                             <td style={{padding:"8px 10px",textAlign:"center"}}>
                               <span style={{fontSize:11,fontWeight:800,color:(cg.total.masterCrmLost+cg.total.mediumBufferLost+cg.total.directMediumGap)>0?"#991b1b":"#166534"}}>
                                 {cg.total.direct>0?Math.round((cg.total.masterCrmLost+cg.total.mediumBufferLost+cg.total.directMediumGap)/cg.total.direct*100):0}%
@@ -721,17 +950,31 @@ export default function Home() {
                         <strong style={{fontSize:13,fontWeight:900,color:"#0f172a",display:"block"}}>Grand Total</strong>
                         <small style={{fontSize:10,color:"#64748b"}}>All Dates · {totalCompanies} companies · {totalSources} sources</small>
                       </td>
-                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#2563eb"}}>{fmt(summary.direct)}</td>
+                      <td style={{padding:"14px 10px",textAlign:"center"}}>
+                        {renderCountLink(summary.direct, () => openDetailedStage("All Direct API Source Leads", "direct"), "blue", "Click to view & verify all Direct API leads across all dates")}
+                      </td>
                       <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#64748b"}}>{fmt(summary.direct - summary.medium)}</td>
-                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#334e68"}}>{fmt(summary.medium)}</td>
+                      <td style={{padding:"14px 10px",textAlign:"center"}}>
+                        {renderCountLink(summary.medium, () => openDetailedStage("All Master Medium Leads", "medium"), "blue", "Click to view & verify all Master Medium leads across all dates")}
+                      </td>
                       <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:summary.mediumLost>0?"#f59e0b":"#64748b"}}>{fmt(summary.mediumLost)}</td>
-                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#334e68"}}>{fmt(summary.buffer)}</td>
+                      <td style={{padding:"14px 10px",textAlign:"center"}}>
+                        {renderCountLink(summary.buffer, () => openDetailedStage("All Buffer Staged Leads", "buffer"), "slate", "Click to view & verify all Buffer Staged leads across all dates")}
+                      </td>
                       <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:summary.masterLost>0?"#ef4444":"#64748b"}}>{fmt(summary.masterLost)}</td>
-                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#166534"}}>{fmt(summary.crm)}</td>
-                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#334e68"}}>{fmt(summary.sales)}</td>
-                      <td style={{padding:"14px 10px",textAlign:"center",fontWeight:900,fontSize:14,color:"#334e68"}}>{fmt(summary.kserve)}</td>
-                      <td style={{padding:"14px 10px",textAlign:"center",color:"#94a3b8",fontSize:14}}>{summary.tatWeight > 0 ? Math.round(summary.tatSum/summary.tatWeight) + 'm' : '—'}</td>
-                      <td style={{padding:"14px 10px",textAlign:"center",color:"#94a3b8",fontSize:14}}>—</td>
+                      <td style={{padding:"14px 10px",textAlign:"center"}}>
+                        {renderCountLink(summary.crm, () => openDetailedStage("All CRM Reconciled Leads", "crm"), "green", "Click to view & verify all CRM Reconciled leads across all dates")}
+                      </td>
+                      <td style={{padding:"14px 10px",textAlign:"center"}}>
+                        {renderCountLink(summary.sales, () => openDetailedStage("All Transferred to Sales Leads", "sales"), "blue", "Click to view & verify all Transferred to Sales leads across all dates")}
+                      </td>
+                      <td style={{padding:"14px 10px",textAlign:"center"}}>
+                        {renderCountLink(summary.kserve, () => openDetailedStage("All Transferred to KServe Leads", "kserve"), "purple", "Click to view & verify all Transferred to KServe leads across all dates")}
+                      </td>
+                      <td style={{padding:"14px 10px",textAlign:"center",color:"#0f172a",fontSize:13,fontFamily:"monospace",fontWeight:800}}>{summary.tatWeight > 0 ? formatHHMMSS(Math.round(summary.tatSum/summary.tatWeight)) : '—'}</td>
+                      <td style={{padding:"14px 10px",textAlign:"center"}}>
+                        <span style={{display:"inline-flex",alignItems:"center",gap:3,padding:"4px 10px",borderRadius:20,fontSize:10,fontWeight:800,background:openLoss===0?"#f0fdf4":"#fff0f0",color:openLoss===0?"#166534":"#991b1b"}}>{openLoss===0?"Clear":`${fmt(openLoss)} Lost`}</span>
+                      </td>
                       <td style={{padding:"14px 10px",textAlign:"center"}}>
                         <span style={{padding:"5px 12px",borderRadius:20,fontSize:12,fontWeight:900,background:grandLossRate>20?"#fee2e2":"#fef3c7",color:grandLossRate>20?"#991b1b":"#92400e"}}>{grandLossRate}%</span>
                       </td>
@@ -774,7 +1017,181 @@ export default function Home() {
         </section>; }) : <div className="gap-console-empty"><strong>No matching leads</strong><span>Search clear karke dobara dekhein.</span></div>}</div>
         <footer className="gap-console-foot"><span>{detailsLoading ? "Loading exact records…" : `${filteredDrawer.length} rows · Page ${page} of ${pageCount}`}</span><button disabled={detailsLoading} onClick={() => setOpenAuditSections(openAuditSections.size === 3 ? new Set() : new Set(["unexplained", "transient", "deleted"]))}>{openAuditSections.size === 3 ? "Hide all sections" : "Show all sections"}</button><div>{filteredDrawer.length > pageSize && <><button disabled={page === 1} onClick={() => setPage(p => p - 1)}>Previous</button><button disabled={page === pageCount} onClick={() => setPage(p => p + 1)}>Next</button></>}<button onClick={() => setSelected(null)}>Close</button></div></footer>
       </section>
-    </div> : selected && <div className="drawer-backdrop" onMouseDown={() => setSelected(null)}><aside className="drawer" onMouseDown={e => e.stopPropagation()}><header><div><p>LEAD DRILL-DOWN</p><h2>{selected.title}</h2><span>{filteredDrawer.length} matching Lead IDs</span>{selected.sheetUrl && <a className="drawer-sheet-link" href={selected.sheetUrl} target="_blank" rel="noreferrer">Open correct data sheet ↗</a>}</div><button onClick={() => setSelected(null)}>×</button></header><div className="drawer-toolbar"><input value={drawerQuery} onChange={e => { setDrawerQuery(e.target.value); setPage(1); }} placeholder="Search Lead ID, company, source, status…"/><button onClick={exportCsv} disabled={!filteredDrawer.length}>Export CSV</button></div><div className="drawer-list">{pagedDrawer.length ? pagedDrawer.map(lead => <article key={`${lead.id}-${lead.stage}`} className={`lead-item ${lead.status.toLowerCase()}`}><div className="lead-head"><span className={`status ${lead.status === "Lost" ? "lost" : lead.status === "Delayed" ? "delayed" : "ok"}`}>● {lead.status}</span><small>{lead.timestamp}</small></div><h3>{lead.name || "Unnamed lead"}</h3><p className="lead-id">Lead ID: {lead.id} · {lead.phone}</p><div className="lead-grid"><span>Date<strong>{dateLabel(lead.date)}</strong></span><span>Company<strong>{lead.company}</strong></span><span>Source<strong>{lead.source}</strong></span><span>Current Status<strong>{lead.currentStatus}</strong></span><span>Buffer Status<strong>{lead.bufferStatus}</strong></span><span>CRM Status<strong>{lead.crmStatus}</strong></span><span>Transfer Status<strong>{lead.transferStatus}</strong></span><span>TAT<strong>{lead.tat}</strong></span></div><div className="reason"><strong>Audit finding</strong><p>{lead.reason}</p></div>{lead.original && <div className="duplicate-proof"><div><small>CURRENT LEAD</small><strong>{lead.source}</strong><span>{lead.generatedAt}</span></div><i>matched within 24h →</i><div><small>ORIGINAL LEAD SENT</small><strong>{lead.original.source}</strong><span>{lead.original.generatedAt} · {lead.original.assignee}</span></div></div>}<div className="lead-actions">{lead.directUrl && <a href={lead.directUrl} target="_blank" rel="noreferrer">Open exact Direct row ↗</a>}{lead.destinationUrl && <a href={lead.destinationUrl} target="_blank" rel="noreferrer">Open exact Buffer row ↗</a>}{lead.crmUrl && <a href={lead.crmUrl} target="_blank" rel="noreferrer">Open CRM ↗</a>}</div></article>) : <div className="empty-drawer"><span>✓</span><h3>No matching leads</h3><p>Search clear karke dobara dekhein.</p></div>}</div>{filteredDrawer.length > pageSize && <footer className="drawer-pagination"><button disabled={page === 1} onClick={() => setPage(p => p - 1)}>← Previous</button><span>Page {page} of {pageCount}</span><button disabled={page === pageCount} onClick={() => setPage(p => p + 1)}>Next →</button></footer>}</aside></div>}
+    </div> : selected && (
+      <div className="drawer-backdrop" onMouseDown={() => setSelected(null)}>
+        <aside className="drawer" onMouseDown={e => e.stopPropagation()} style={{maxWidth: 720, width: "100%"}}>
+          <header>
+            <div>
+              <p style={{margin: 0, fontSize: 10, fontWeight: 800, letterSpacing: "1.2px", color: "#2563eb", textTransform: "uppercase"}}>
+                LEAD AUDIT · {selected.title.toLowerCase().includes("kserve") ? "KSERVE VERIFICATION" : selected.title.toLowerCase().includes("sales") ? "SALES TEAM VERIFICATION" : selected.title.toLowerCase().includes("buffer") ? "BUFFER STAGING VERIFICATION" : selected.title.toLowerCase().includes("crm") ? "CRM RECONCILIATION VERIFICATION" : selected.title.toLowerCase().includes("medium") ? "MASTER MEDIUM VERIFICATION" : "DIRECT API VERIFICATION"}
+              </p>
+              <h2 style={{margin: "4px 0", fontSize: 18, fontWeight: 800, color: "#0f172a"}}>{selected.title}</h2>
+              <div style={{display: "flex", gap: 8, alignItems: "center", marginTop: 4, flexWrap: "wrap"}}>
+                <span style={{fontSize: 12, fontWeight: 700, color: "#475569", background: "#f1f5f9", padding: "2px 8px", borderRadius: 12}}>
+                  {detailsLoading ? "Loading…" : `${filteredDrawer.length} Leads Total`}
+                </span>
+                <span style={{fontSize: 11, color: "#166534", background: "#f0fdf4", padding: "2px 8px", borderRadius: 12, fontWeight: 700}}>
+                  ● {detailsLoading ? "…" : selected.leads.filter(x => x.inBuffer).length} Staged in CRM
+                </span>
+                {!detailsLoading && selected.leads.filter(x => x.isDuplicate).length > 0 && (
+                  <span style={{fontSize: 11, color: "#92400e", background: "#fffbeb", padding: "2px 8px", borderRadius: 12, fontWeight: 700}}>
+                    ⊘ {selected.leads.filter(x => x.isDuplicate).length} 24h Duplicate
+                  </span>
+                )}
+                {!detailsLoading && selected.leads.filter(x => x.status === "Lost").length > 0 && (
+                  <span style={{fontSize: 11, color: "#991b1b", background: "#fef2f2", padding: "2px 8px", borderRadius: 12, fontWeight: 700}}>
+                    ✕ {selected.leads.filter(x => x.status === "Lost").length} Actual Lost
+                  </span>
+                )}
+              </div>
+              {selected.sheetUrl && <a className="drawer-sheet-link" href={selected.sheetUrl} target="_blank" rel="noreferrer">Open correct data sheet ↗</a>}
+            </div>
+            <button aria-label="Close" onClick={() => setSelected(null)}>×</button>
+          </header>
+
+          {/* Quick Filter tabs & search */}
+          <div className="drawer-toolbar" style={{display: "flex", flexDirection: "column", gap: 8, padding: "12px 18px", background: "#f8fafc", borderBottom: "1px solid #e2e8f0"}}>
+            <div style={{display: "flex", gap: 8, width: "100%", alignItems: "center"}}>
+              <input
+                value={drawerQuery}
+                onChange={e => { setDrawerQuery(e.target.value); setPage(1); }}
+                placeholder="Search by Name, Mobile, Lead ID, Assignee, Status…"
+                style={{flex: 1, padding: "8px 12px", border: "1px solid #cbd5e1", borderRadius: 8, fontSize: 12, background: "#fff"}}
+              />
+              <button
+                onClick={exportCsv}
+                disabled={detailsLoading || !filteredDrawer.length}
+                style={{padding: "8px 14px", fontSize: 11, fontWeight: 700, borderRadius: 8, border: "1px solid #cbd5e1", background: "#fff", color: detailsLoading || !filteredDrawer.length ? "#94a3b8" : "#334e68", cursor: detailsLoading || !filteredDrawer.length ? "not-allowed" : "pointer", whiteSpace: "nowrap"}}
+              >
+                ⤓ Export CSV
+              </button>
+            </div>
+            <div style={{display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center"}}>
+              {[
+                { label: `All (${selected.leads.length})`, val: "" },
+                { label: `KServe (${selected.leads.filter(l => (l.assignee || "").toLowerCase().includes("kserve")).length})`, val: "kserve" },
+                { label: `Sales (${selected.leads.filter(l => l.assignee && !(l.assignee || "").toLowerCase().includes("kserve") && l.assignee !== "Unassigned").length})`, val: "sales" },
+                { label: `Duplicate (${selected.leads.filter(l => l.isDuplicate).length})`, val: "duplicate" },
+                { label: `Lost (${selected.leads.filter(l => l.status === "Lost").length})`, val: "lost" },
+              ].map(f => (
+                <button
+                  key={f.label}
+                  type="button"
+                  onClick={() => { setDrawerQuery(f.val); setPage(1); }}
+                  style={{
+                    padding: "3px 10px",
+                    borderRadius: 14,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    border: drawerQuery === f.val ? "1px solid #2563eb" : "1px solid #e2e8f0",
+                    background: drawerQuery === f.val ? "#eff6ff" : "#fff",
+                    color: drawerQuery === f.val ? "#1d4ed8" : "#64748b",
+                    cursor: "pointer"
+                  }}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Lead list */}
+          <div className="drawer-list" style={{padding: "16px 18px", overflowY: "auto", flex: 1}}>
+            {detailsLoading ? (
+              <div style={{textAlign: "center", padding: "60px 20px", color: "#64748b"}}>
+                <div style={{margin: "0 auto 14px", width: 34, height: 34, border: "3px solid #e2e8f0", borderTopColor: "#2563eb", borderRadius: "50%", animation: "spin 0.8s linear infinite"}} />
+                <strong style={{display: "block", fontSize: 15, color: "#0f172a", marginBottom: 4}}>Direct API lead records load ho rahe hain…</strong>
+                <p style={{margin: 0, fontSize: 12, color: "#64748b"}}>Live database se exact leads aur buffer/CRM allocation verify ho rahi hai.</p>
+              </div>
+            ) : detailError ? (
+              <div style={{textAlign: "center", padding: "30px 20px", color: "#991b1b", background: "#fef2f2", borderRadius: 8, margin: "20px 0"}}>
+                <strong style={{display: "block", fontSize: 14, marginBottom: 4}}>Details load nahi ho sake</strong>
+                <span style={{fontSize: 12}}>{detailError}</span>
+              </div>
+            ) : pagedDrawer.length ? pagedDrawer.map(lead => (
+              <article
+                key={`${lead.id}-${lead.stage}`}
+                className={`lead-item ${lead.status.toLowerCase()}`}
+                style={{
+                  background: "#fff",
+                  border: lead.status === "Lost" ? "1px solid #fca5a5" : lead.status === "Duplicate" ? "1px solid #fde68a" : "1px solid #e2e8f0",
+                  borderLeft: lead.status === "Lost" ? "4px solid #ef4444" : lead.status === "Duplicate" ? "4px solid #f59e0b" : "4px solid #22c55e",
+                  borderRadius: 10,
+                  padding: "14px",
+                  marginBottom: 12,
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.03)"
+                }}
+              >
+                <div className="lead-head" style={{display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6}}>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      padding: "3px 9px",
+                      borderRadius: 12,
+                      fontSize: 10,
+                      fontWeight: 800,
+                      background: lead.status === "Lost" ? "#fef2f2" : lead.status === "Duplicate" ? "#fffbeb" : "#f0fdf4",
+                      color: lead.status === "Lost" ? "#991b1b" : lead.status === "Duplicate" ? "#92400e" : "#166534"
+                    }}
+                  >
+                    ● {lead.currentStatus || lead.status}
+                  </span>
+                  <small style={{fontSize: 11, color: "#64748b", fontWeight: 600}}>
+                    {lead.timestamp || lead.generatedAt}
+                  </small>
+                </div>
+
+                <h3 style={{margin: "4px 0", fontSize: 14, fontWeight: 800, color: "#0f172a"}}>
+                  {lead.name || "Direct Lead"}
+                </h3>
+
+                <p className="lead-id" style={{margin: "2px 0 10px", fontSize: 12, color: "#334155"}}>
+                  <strong>Lead ID:</strong> <code style={{background: "#f1f5f9", padding: "1px 6px", borderRadius: 4, fontFamily: "monospace"}}>{lead.id}</code> · 
+                  <strong style={{marginLeft: 6}}>Mobile:</strong> <a href={`tel:${lead.phone}`} style={{color: "#2563eb", textDecoration: "none", fontWeight: 700}}>{lead.phone}</a>
+                  {lead.email && <span style={{marginLeft: 6, color: "#64748b"}}>· ✉ {lead.email}</span>}
+                </p>
+
+                <div className="lead-grid" style={{display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8, background: "#f8fafc", padding: "10px 12px", borderRadius: 8}}>
+                  <span>Date<strong style={{display: "block", color: "#0f172a", marginTop: 2}}>{dateLabel(lead.date)}</strong></span>
+                  <span>Company<strong style={{display: "block", color: "#0f172a", marginTop: 2}}>{lead.company}</strong></span>
+                  <span>Source<strong style={{display: "block", color: "#0f172a", marginTop: 2}}>{lead.source}</strong></span>
+                  <span>Assignee<strong style={{display: "block", color: (lead.assignee || "").toLowerCase().includes("kserve") ? "#7c3aed" : lead.assignee ? "#0284c7" : "#64748b", marginTop: 2}}>{lead.assignee || "—"}</strong></span>
+                  <span>Buffer Status<strong style={{display: "block", color: lead.inBuffer ? "#16a34a" : "#dc2626", marginTop: 2}}>{lead.bufferStatus || "—"}</strong></span>
+                  <span>CRM Status<strong style={{display: "block", color: lead.inCrm ? "#16a34a" : "#dc2626", marginTop: 2}}>{lead.crmStatus || "—"}</strong></span>
+                </div>
+
+                <div className="reason" style={{marginTop: 10, background: lead.status === "Lost" ? "#fff5f5" : "#fbfcfe", padding: "8px 10px", borderRadius: 6, border: "1px solid #f1f5f9"}}>
+                  <strong style={{fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px"}}>Audit Verification finding:</strong>
+                  <p style={{margin: "2px 0 0", fontSize: 12, color: lead.status === "Lost" ? "#b91c1c" : "#334e68", fontWeight: 600}}>{lead.reason}</p>
+                </div>
+              </article>
+            )) : (
+              <div className="empty-drawer" style={{textAlign: "center", padding: "40px 20px", color: "#64748b"}}>
+                <span style={{fontSize: 28, display: "block", marginBottom: 8}}>🔍</span>
+                <h3 style={{margin: "4px 0", fontSize: 14, color: "#0f172a"}}>No matching leads found</h3>
+                <p style={{margin: 0, fontSize: 12}}>Search clear karke ya different filter select karke dekhein.</p>
+              </div>
+            )}
+          </div>
+
+          {filteredDrawer.length > pageSize && (
+            <footer className="drawer-pagination" style={{display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 18px", background: "#f8fafc", borderTop: "1px solid #e2e8f0"}}>
+              <button disabled={page === 1} onClick={() => setPage(p => p - 1)} style={{padding: "6px 12px", fontSize: 11, fontWeight: 700, borderRadius: 6, border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer"}}>
+                ← Previous
+              </button>
+              <span style={{fontSize: 11, fontWeight: 700, color: "#64748b"}}>
+                Page {page} of {pageCount} ({filteredDrawer.length} leads)
+              </span>
+              <button disabled={page === pageCount} onClick={() => setPage(p => p + 1)} style={{padding: "6px 12px", fontSize: 11, fontWeight: 700, borderRadius: 6, border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer"}}>
+                Next →
+              </button>
+            </footer>
+          )}
+        </aside>
+      </div>
+    )}
     {toast && <div className="toast">{toast}</div>}
   </div>;
 }
