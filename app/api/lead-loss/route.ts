@@ -481,10 +481,11 @@ function buildLostRecords(
           currentStatus: "Late Transfer (Next-day Buffer)", transferStatus: "Delayed",
           bufferStatus: `In Buffer (${lateMatch.dateStr})`, crmStatus: "Filtered",
           assignee: "", tatMin: 0, tat: "—",
-          isDuplicate: true, validDuplicate: true, expectedDuplicateGap: true,
+          isDuplicate: false, validDuplicate: false, expectedDuplicateGap: false,
+          lateTransfer: true,
           inMedium: true, toBuffer: false, inBuffer: false, inCrm: false, assigned: false,
           mediumBufferLost: true,
-          stage: "direct", status: "Duplicate",
+          stage: "direct", status: "Delayed",
           reason: `Late Transfer: Lead received in Direct API on ${date} but buffer entry arrived on ${lateMatch.dateStr} (transferred next day)`,
         });
       } else {
@@ -760,7 +761,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
         const priorFormatted = prior24Match.Date_Time ? new Date(new Date(prior24Match.Date_Time).getTime() + 5.5 * 3600 * 1000).toLocaleString("en-IN") : "";
         reason = `Filtered intentionally: repeated mobile within 24 hours (already received in Buffer ${prior24Match.lead_id} on ${priorFormatted})`;
       } else if (lateTransferMatch) {
-        status = "Duplicate";
+        status = "Delayed";
         currentStatus = "Late Transfer (Next-day Buffer)";
         bufferStatus = `In Buffer (${rowDate(lateTransferMatch.Date_Time)})`;
         crmStatus = "Filtered";
@@ -798,6 +799,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
         isDuplicate: status === "Duplicate",
         validDuplicate: status === "Duplicate",
         expectedDuplicateGap: status === "Duplicate",
+        lateTransfer: currentStatus === "Late Transfer (Next-day Buffer)",
         inMedium: true,
         toBuffer: inBuffer,
         inBuffer,
@@ -805,7 +807,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
         assigned,
         mediumBufferLost: !inBuffer,
         masterCrmLost: inBuffer && !inCrm,
-        stage: inCrm ? "crm" : inBuffer ? "buffer" : status === "Duplicate" ? "direct" : "buffer",
+        stage: inCrm ? "crm" : inBuffer ? "buffer" : status === "Duplicate" ? "direct" : status === "Delayed" ? "direct" : "buffer",
         status,
         reason,
       });
