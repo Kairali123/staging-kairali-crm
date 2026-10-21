@@ -27,7 +27,7 @@ const COMPANY_CONFIG: CompanyConfig[] = [
   {
     company: "VillaRaag",
     companyKey: "VILLARAAG",
-    bufferMatch: ["villaraag", "villa raag"],
+    bufferMatch: ["villaraag", "villa raag", "villa", "raag"],
     sources: [
       { source: "Facebook", table: "villa_raag_facebook_ppc_api", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "lead_id", nameCol: "name_of_client", emailCol: "email_id" },
       { source: "Google", table: "api_villaraag_new_website_online_enquiry", dateCol: "create_date_time", mobileCol: "phone_number", leadIdCol: "enq_id", nameCol: "name", emailCol: "email_id", sourceFilter: "utm_medium != 'organic' OR utm_medium IS NULL" },
@@ -40,7 +40,7 @@ const COMPANY_CONFIG: CompanyConfig[] = [
   {
     company: "Kairali The Ayurvedic Healing Village",
     companyKey: "KTAHV",
-    bufferMatch: ["kairali the ayurvedic healing village", "ktahv"],
+    bufferMatch: ["kairali the ayurvedic healing village", "ktahv", "healing village", "palakkad"],
     sources: [
       { source: "Facebook", table: "ktahv_facebook_lead_api", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "lead_id", nameCol: "client_name", emailCol: "email_id" },
       { source: "Google", table: "ktahv_new_website_online_enquiry_api", dateCol: "create_date_time", mobileCol: "phone_number", leadIdCol: "enq_id", nameCol: "name", emailCol: "email_id" },
@@ -54,7 +54,7 @@ const COMPANY_CONFIG: CompanyConfig[] = [
   {
     company: "Kairali Ayurvedic Product",
     companyKey: "KAPL",
-    bufferMatch: ["kairali ayurvedic product", "kairali ayurvedic products", "kapl"],
+    bufferMatch: ["kairali ayurvedic product", "kairali ayurvedic products", "kapl", "kappl", "product", "products", "kairali product", "priya", "priyasharma"],
     sources: [
       { source: "IVR", table: "ivr_lead_api_knowrality", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "lead_id", nameCol: "name_of_client", emailCol: "email_id", sourceFilter: "lead_relates_to_which_company LIKE '%product%' OR company_by_extension LIKE '%product%' OR company_by_extension LIKE '%kappl%'" },
       { source: "Others", table: "bulk_whatsapp_reply_enquiry_generation", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "id", nameCol: "client_name", emailCol: "email_id", sourceFilter: "website_name LIKE '%product%' OR new_category LIKE '%kappl%' OR (website_name IS NULL AND (new_category IS NULL OR new_category = 'Data Backup - Deleted'))" },
@@ -68,7 +68,7 @@ const COMPANY_CONFIG: CompanyConfig[] = [
   {
     company: "Kairali Ayurvedic Treatment Cenres",
     companyKey: "KATC",
-    bufferMatch: ["kairali ayurvedic treatment", "kac", "centres", "centers"],
+    bufferMatch: ["kairali ayurvedic treatment", "kac", "centres", "centers", "katc", "treatment", "center", "centre"],
     sources: [
       { source: "IVR", table: "ivr_lead_api_knowrality", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "lead_id", nameCol: "name_of_client", emailCol: "email_id", sourceFilter: "lead_relates_to_which_company LIKE '%center%' OR lead_relates_to_which_company LIKE '%centre%' OR company_by_extension LIKE '%center%' OR company_by_extension LIKE '%centre%' OR company_by_extension LIKE '%kac%'" },
       { source: "Others", table: "bulk_whatsapp_reply_enquiry_generation", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "id", nameCol: "client_name", emailCol: "email_id", sourceFilter: "website_name LIKE '%center%' OR website_name LIKE '%centre%'" }
@@ -156,9 +156,12 @@ async function queryBuffer(
   companyMatch: string[],
   days: number
 ): Promise<BufferQueryResult> {
-  const likeClause = companyMatch
-    .map(() => "LOWER(sbn.Lead_Relates_to_which_company) LIKE ?")
-    .join(" OR ");
+  const likeExprs = companyMatch.map(() => "LOWER(sbn.Lead_Relates_to_which_company) LIKE ?");
+  // Include rows where staging_buffer_new has no match (NULL) or no company set —
+  // otherwise NULL LIKE is NULL (falsy) and valid buffer rows are silently dropped.
+  const companyWhere = likeExprs.length > 0
+    ? `AND (sbn.Lead_id IS NULL OR sbn.Lead_Relates_to_which_company IS NULL OR sbn.Lead_Relates_to_which_company = '' OR ${likeExprs.join(" OR ")})`
+    : "";
   const params: any[] = [days + 2, ...companyMatch.map((c) => `%${c.toLowerCase()}%`)];
 
   const [rows]: any[] = await pool.query(
@@ -169,7 +172,7 @@ async function queryBuffer(
      FROM master_buffer mb
      LEFT JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id
      WHERE mb.Date_Time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-       AND (${likeClause})`,
+     ${companyWhere}`,
     params
   );
 
@@ -290,13 +293,29 @@ function parseDateRobust(val: any): Date | null {
   try {
     const str = String(val).trim();
     if (!str || str.startsWith("0000-00-00") || str.toLowerCase() === "null") return null;
-    const mYMD = str.match(/^(\d{4})[-/](\d{2})[-/](\d{2})[T ](\d{2}):(\d{2}):(\d{2})/);
+    // YYYY-MM-DD with optional HH:mm:ss or HH:mm
+    const mYMD = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T ](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
     if (mYMD) {
-      return new Date(Number(mYMD[1]), Number(mYMD[2]) - 1, Number(mYMD[3]), Number(mYMD[4]), Number(mYMD[5]), Number(mYMD[6]));
+      return new Date(
+        Number(mYMD[1]),
+        Number(mYMD[2]) - 1,
+        Number(mYMD[3]),
+        Number(mYMD[4] ?? 0),
+        Number(mYMD[5] ?? 0),
+        Number(mYMD[6] ?? 0)
+      );
     }
-    const mDMY = str.match(/^(\d{2})[-/](\d{2})[-/](\d{4})[T ](\d{2}):(\d{2}):(\d{2})/);
+    // DD-MM-YYYY with optional HH:mm:ss or HH:mm
+    const mDMY = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:[T ](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
     if (mDMY) {
-      return new Date(Number(mDMY[3]), Number(mDMY[2]) - 1, Number(mDMY[1]), Number(mDMY[4]), Number(mDMY[5]), Number(mDMY[6]));
+      return new Date(
+        Number(mDMY[3]),
+        Number(mDMY[2]) - 1,
+        Number(mDMY[1]),
+        Number(mDMY[4] ?? 0),
+        Number(mDMY[5] ?? 0),
+        Number(mDMY[6] ?? 0)
+      );
     }
     const parsed = new Date(str);
     return isNaN(parsed.getTime()) ? null : parsed;
@@ -389,7 +408,7 @@ function buildLostRecords(
     const bufs = norm ? (globalBufferMap.get(norm) || []) : [];
     const prior24Match = (!inBuf && norm) ? bufs.find(b => {
       const diffHours = (t - b.time) / (3600 * 1000);
-      return diffHours >= -1 && diffHours <= 36;
+      return (diffHours >= -6 && diffHours <= 48) || (b.dateStr && b.dateStr <= date);
     }) : null;
 
     if (inBuf) {
@@ -474,37 +493,41 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
   const requestedIds = idsParam ? idsParam.split(",").map(s => s.trim()).filter(Boolean) : [];
   const dateParam = requestUrl.searchParams.get("date") ?? "";
 
-  const bufferCache: Record<string, Promise<{ sameDayMap: Map<string, any>; bufferList: any[] }>> = {};
+  const bufferCache: Record<string, Promise<{ sameDayMap: Map<string, any>; sameDayGlobalMap: Map<string, any>; bufferList: any[] }>> = {};
 
-  function getBufferMap(dtStr: string, companyMatch: string[] = []): Promise<{ sameDayMap: Map<string, any>; bufferList: any[] }> {
+  function getBufferMap(dtStr: string, companyMatch: string[] = []): Promise<{ sameDayMap: Map<string, any>; sameDayGlobalMap: Map<string, any>; bufferList: any[] }> {
     const cacheKey = `${dtStr}__${companyMatch.join(",")}`;
     if (bufferCache[cacheKey]) return bufferCache[cacheKey];
     bufferCache[cacheKey] = (async () => {
       let bufRows: any[] = [];
-      const likeClause = companyMatch.length > 0
-        ? `AND (${companyMatch.map(() => "LOWER(sbn.Lead_Relates_to_which_company) LIKE ?").join(" OR ")})`
-        : "";
-      const likeParams = companyMatch.map(c => `%${c.toLowerCase()}%`);
-
       try {
         const [r]: any[] = await pool.query(
-          `SELECT mb.lead_id, mb.Mobile, mb.Date_Time, sbn.Assign_To_MR_Main, sbn.Sent_status, sbn.Lead_Relates_to_which_company
+          `SELECT mb.lead_id,
+                  COALESCE(NULLIF(TRIM(mb.Mobile), ''), NULLIF(TRIM(sbn.Phone_Number_of_User), '')) AS Mobile,
+                  COALESCE(mb.Date_Time, mb.actual_time, mb.Timestamp) AS Date_Time,
+                  sbn.Assign_To_MR_Main,
+                  sbn.Sent_status,
+                  COALESCE(sbn.Lead_Relates_to_which_company, sbn.KAPPL_KTAHV, mb.WebSite_Name, '') AS Lead_Relates_to_which_company
            FROM master_buffer mb
            LEFT JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id
-           WHERE mb.Date_Time >= DATE_SUB(?, INTERVAL 2 DAY) AND mb.Date_Time < DATE_ADD(?, INTERVAL 1 DAY)
-           ${likeClause}`,
-          [dtStr, dtStr, ...likeParams]
+           WHERE (mb.Date_Time >= DATE_SUB(?, INTERVAL 2 DAY) AND mb.Date_Time < DATE_ADD(?, INTERVAL 1 DAY))
+              OR (mb.Timestamp >= DATE_SUB(?, INTERVAL 2 DAY) AND mb.Timestamp < DATE_ADD(?, INTERVAL 1 DAY))`,
+          [dtStr, dtStr, dtStr, dtStr]
         );
         bufRows = r;
       } catch {
         try {
           const [r]: any[] = await pool.query(
-            `SELECT mb.lead_id, mb.Mobile, mb.Date_Time, sbn.Assign_To_MR_Main, sbn.Sent_status, sbn.Lead_Relates_to_which_company
+            `SELECT mb.lead_id,
+                    COALESCE(NULLIF(TRIM(mb.Mobile), ''), NULLIF(TRIM(sbn.Phone_Number_of_User), '')) AS Mobile,
+                    COALESCE(mb.Date_Time, mb.actual_time, mb.Timestamp) AS Date_Time,
+                    sbn.Assign_To_MR_Main,
+                    sbn.Sent_status,
+                    COALESCE(sbn.Lead_Relates_to_which_company, sbn.KAPPL_KTAHV, mb.WebSite_Name, '') AS Lead_Relates_to_which_company
              FROM master_buffer mb
              LEFT JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id
-             WHERE DATE(mb.Date_Time) >= DATE_SUB(?, INTERVAL 2 DAY) AND DATE(mb.Date_Time) <= ?
-             ${likeClause}`,
-            [dtStr, dtStr, ...likeParams]
+             WHERE DATE(mb.Date_Time) >= DATE_SUB(?, INTERVAL 2 DAY) AND DATE(mb.Date_Time) <= ?`,
+            [dtStr, dtStr]
           );
           bufRows = r;
         } catch (err) {
@@ -512,15 +535,22 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
         }
       }
       const sameDayMap = new Map<string, any>();
+      const sameDayGlobalMap = new Map<string, any>();
       for (const b of bufRows) {
         const bDate = rowDate(b.Date_Time);
+        const m = normMobile(b.Mobile);
         if (bDate === dtStr) {
-          const m = normMobile(b.Mobile);
-          if (m) sameDayMap.set(m, b);
-          if (b.lead_id) sameDayMap.set(String(b.lead_id), b);
+          if (m) sameDayGlobalMap.set(m, b);
+          if (b.lead_id) sameDayGlobalMap.set(String(b.lead_id), b);
+          const coName = String(b.Lead_Relates_to_which_company || "").toLowerCase();
+          const matchesCo = companyMatch.length === 0 || !coName || companyMatch.some(c => coName.includes(c.toLowerCase()));
+          if (matchesCo) {
+            if (m) sameDayMap.set(m, b);
+            if (b.lead_id) sameDayMap.set(String(b.lead_id), b);
+          }
         }
       }
-      return { sameDayMap, bufferList: bufRows };
+      return { sameDayMap, sameDayGlobalMap, bufferList: bufRows };
     })();
     return bufferCache[cacheKey];
   }
@@ -559,7 +589,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
 
   const rows = (await Promise.all(targets.map(async t => {
     const { rowId, company, source, date, co, srcCfg } = t;
-    const { sameDayMap, bufferList } = await getBufferMap(date, co.bufferMatch);
+    const { sameDayMap, sameDayGlobalMap, bufferList } = await getBufferMap(date, co.bufferMatch);
 
     const nameCol = srcCfg.nameCol ? `\`${srcCfg.nameCol}\`` : "NULL";
     const emailCol = srcCfg.emailCol ? `\`${srcCfg.emailCol}\`` : "NULL";
@@ -601,6 +631,12 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       }
     }
 
+    const directMobileCounts = new Map<string, number>();
+    for (const r of directRows) {
+      const nm = normMobile(r.mobile);
+      if (nm) directMobileCounts.set(nm, (directMobileCounts.get(nm) ?? 0) + 1);
+    }
+
     const seenMobiles = new Set<string>();
     const records: any[] = [];
 
@@ -612,20 +648,24 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       if (norm) seenMobiles.add(norm);
 
       const bufMatch = norm ? sameDayMap.get(norm) : sameDayMap.get(leadId);
+      const sameDayGlobalMatch = (!bufMatch && norm) ? sameDayGlobalMap.get(norm) : null;
       const rawTime = parseDateRobust(r.date_time) || (r.date_time ? new Date(r.date_time) : null);
       const formattedTime = rawTime ? rawTime.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
       const generatedAt = rawTime ? rawTime.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : date;
       const leadTime = rawTime && !isNaN(rawTime.getTime()) ? rawTime.getTime() : new Date(`${date}T23:59:59`).getTime();
 
-      // 24-hour back-date lookback in master_buffer
-      const prior24Match = (!bufMatch && norm) ? bufferList.find((b: any) => {
+      // 24-hour lookback in master_buffer (across all buffer entries in 48-hour window)
+      const prior24Match = (!bufMatch && !sameDayGlobalMatch && norm) ? bufferList.find((b: any) => {
         const bnm = normMobile(b.Mobile);
         if (bnm !== norm) return false;
         const bObj = parseDateRobust(b.Date_Time) || (b.Date_Time ? new Date(b.Date_Time) : null);
         const bTime = bObj ? bObj.getTime() : 0;
-        if (!bTime) return false;
+        if (!bTime) {
+          const bDate = rowDate(b.Date_Time);
+          return bDate && bDate <= date;
+        }
         const diffHours = (leadTime - bTime) / (3600 * 1000);
-        return diffHours >= -1 && diffHours <= 36;
+        return diffHours >= -6 && diffHours <= 48;
       }) : null;
 
       let status: "Resolved" | "Duplicate" | "Lost" | "Delayed" = "Lost";
@@ -673,6 +713,13 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
             reason = "Lead arrived in Buffer/CRM, awaiting salesperson or dialer allocation";
           }
         }
+      } else if (sameDayGlobalMatch) {
+        status = "Duplicate";
+        currentStatus = "Filtered (Same-day Duplicate)";
+        bufferStatus = "Filtered (Buffer Match)";
+        crmStatus = "Filtered";
+        transferStatus = "Filtered";
+        reason = `Filtered intentionally: repeated mobile already received in Buffer on same day (${sameDayGlobalMatch.lead_id || "Buffer"})`;
       } else if (prior24Match) {
         status = "Duplicate";
         currentStatus = "Filtered (24h Duplicate)";
@@ -681,7 +728,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
         transferStatus = "Filtered";
         const priorFormatted = prior24Match.Date_Time ? new Date(new Date(prior24Match.Date_Time).getTime() + 5.5 * 3600 * 1000).toLocaleString("en-IN") : "";
         reason = `Filtered intentionally: repeated mobile within 24 hours (already received in Buffer ${prior24Match.lead_id} on ${priorFormatted})`;
-      } else if (isDup) {
+      } else if (isDup || (norm && (directMobileCounts.get(norm) ?? 0) > 1 && !bufMatch)) {
         status = "Duplicate";
         currentStatus = "Filtered (Same-day Duplicate)";
         bufferStatus = "Filtered";
@@ -775,14 +822,19 @@ export async function GET(request: Request) {
       })
     );
 
-    // Build per-company buffer map for 24h prior buffer matching (company-scoped to avoid cross-company false positives)
+    // Build per-company and global buffer maps for 24h prior buffer matching
     const companyBufferMaps = new Map<string, Map<string, Array<{ leadId: string; time: number; dateStr: string }>>>();
+    const globalBufferMap = new Map<string, Array<{ leadId: string; time: number; dateStr: string }>>();
+
     for (const cd of companyData) {
       if (!cd) continue;
       const coMap = new Map<string, Array<{ leadId: string; time: number; dateStr: string }>>();
       for (const b of cd.bufferRes.allBufferList) {
         if (!coMap.has(b.mobile)) coMap.set(b.mobile, []);
         coMap.get(b.mobile)!.push({ leadId: b.leadId, time: b.time, dateStr: b.dateStr });
+
+        if (!globalBufferMap.has(b.mobile)) globalBufferMap.set(b.mobile, []);
+        globalBufferMap.get(b.mobile)!.push({ leadId: b.leadId, time: b.time, dateStr: b.dateStr });
       }
       companyBufferMaps.set(cd.co.companyKey, coMap);
     }
@@ -791,7 +843,7 @@ export async function GET(request: Request) {
       if (!cd) continue;
       const { co, bufferRes, crmData, kserveData, salesData, tatData } = cd;
 
-      // Use company-scoped buffer map for 24h prior duplicate detection
+      // Use company-scoped buffer map for 24h prior duplicate detection, with fallback to global buffer map
       const companyBufMap = companyBufferMaps.get(co.companyKey) ?? new Map<string, Array<{ leadId: string; time: number; dateStr: string }>>();
 
       for (const srcCfg of co.sources) {
@@ -830,11 +882,11 @@ export async function GET(request: Request) {
             const isDirectDupe = seenDirectMobiles.has(m);
             seenDirectMobiles.add(m);
 
-            // Only match 24h prior buffer entries from the SAME company (avoid cross-company false positives)
-            const bufs = companyBufMap.get(m) || [];
+            // Check company-scoped buffer first, then fall back to global buffer across all companies
+            const bufs = companyBufMap.get(m) || globalBufferMap.get(m) || [];
             const priorMatch = !inBuf ? bufs.find(b => {
               const diffHours = (t - b.time) / (3600 * 1000);
-              return diffHours >= -1 && diffHours <= 36;
+              return (diffHours >= -6 && diffHours <= 48) || (b.dateStr && b.dateStr <= date);
             }) : null;
 
             if (inBuf) {
@@ -869,7 +921,7 @@ export async function GET(request: Request) {
           const assigned = kserve + sales;
 
           const lostRecords = buildLostRecords(
-            mobiles, leadIds, timestamps, bufSet, crmSet, companyBufMap, srcCfg.source, date, co.company
+            mobiles, leadIds, timestamps, bufSet, crmSet, globalBufferMap, srcCfg.source, date, co.company
           );
 
           const existing = rowMap[key];
