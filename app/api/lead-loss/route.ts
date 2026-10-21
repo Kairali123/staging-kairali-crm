@@ -469,18 +469,38 @@ function buildLostRecords(
         reason: "Duplicate mobile in Direct API on same day",
       });
     } else {
-      records.push({
-        id: leadId, name: "", phone: mobile, date, company, source,
-        generatedAt: date, timestamp: date, transferTimestamp: "", bufferTimestamp: "",
-        currentStatus: "Lost", transferStatus: "Not transferred",
-        bufferStatus: "Not in buffer", crmStatus: "N/A",
-        assignee: "", tatMin: 0, tat: "—",
-        isDuplicate: false, inMedium: true, toBuffer: false,
-        inBuffer: false, inCrm: false, assigned: false,
-        mediumBufferLost: true,
-        stage: "buffer", status: "Lost",
-        reason: "Lead received in Direct API but not found in Buffer or previous 24h (Gap 2: Medium→Buffer)",
+      // Check if mobile arrived in buffer AFTER this lead (late transfer: next day or within 48h forward)
+      const lateMatch = bufs.find(b => {
+        const diffHours = (b.time - t) / (3600 * 1000); // positive = buffer came after lead
+        return diffHours > 0 && diffHours <= 72;
       });
+      if (lateMatch) {
+        records.push({
+          id: leadId, name: "", phone: mobile, date, company, source,
+          generatedAt: date, timestamp: date, transferTimestamp: "", bufferTimestamp: "",
+          currentStatus: "Late Transfer (Next-day Buffer)", transferStatus: "Delayed",
+          bufferStatus: `In Buffer (${lateMatch.dateStr})`, crmStatus: "Filtered",
+          assignee: "", tatMin: 0, tat: "—",
+          isDuplicate: true, validDuplicate: true, expectedDuplicateGap: true,
+          inMedium: true, toBuffer: false, inBuffer: false, inCrm: false, assigned: false,
+          mediumBufferLost: true,
+          stage: "direct", status: "Duplicate",
+          reason: `Late Transfer: Lead received in Direct API on ${date} but buffer entry arrived on ${lateMatch.dateStr} (transferred next day)`,
+        });
+      } else {
+        records.push({
+          id: leadId, name: "", phone: mobile, date, company, source,
+          generatedAt: date, timestamp: date, transferTimestamp: "", bufferTimestamp: "",
+          currentStatus: "Lost", transferStatus: "Not transferred",
+          bufferStatus: "Not in buffer", crmStatus: "N/A",
+          assignee: "", tatMin: 0, tat: "—",
+          isDuplicate: false, inMedium: true, toBuffer: false,
+          inBuffer: false, inCrm: false, assigned: false,
+          mediumBufferLost: true,
+          stage: "buffer", status: "Lost",
+          reason: "Lead received in Direct API but not found in Buffer or previous 24h (Gap 2: Medium→Buffer)",
+        });
+      }
     }
   });
   return records;
@@ -510,8 +530,8 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
                   COALESCE(sbn.Lead_Relates_to_which_company, sbn.KAPPL_KTAHV, mb.WebSite_Name, '') AS Lead_Relates_to_which_company
            FROM master_buffer mb
            LEFT JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id
-           WHERE (mb.Date_Time >= DATE_SUB(?, INTERVAL 2 DAY) AND mb.Date_Time < DATE_ADD(?, INTERVAL 1 DAY))
-              OR (mb.Timestamp >= DATE_SUB(?, INTERVAL 2 DAY) AND mb.Timestamp < DATE_ADD(?, INTERVAL 1 DAY))`,
+           WHERE (mb.Date_Time >= DATE_SUB(?, INTERVAL 2 DAY) AND mb.Date_Time < DATE_ADD(?, INTERVAL 3 DAY))
+              OR (mb.Timestamp >= DATE_SUB(?, INTERVAL 2 DAY) AND mb.Timestamp < DATE_ADD(?, INTERVAL 3 DAY))`,
           [dtStr, dtStr, dtStr, dtStr]
         );
         bufRows = r;
@@ -526,7 +546,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
                     COALESCE(sbn.Lead_Relates_to_which_company, sbn.KAPPL_KTAHV, mb.WebSite_Name, '') AS Lead_Relates_to_which_company
              FROM master_buffer mb
              LEFT JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id
-             WHERE DATE(mb.Date_Time) >= DATE_SUB(?, INTERVAL 2 DAY) AND DATE(mb.Date_Time) <= ?`,
+             WHERE DATE(mb.Date_Time) >= DATE_SUB(?, INTERVAL 2 DAY) AND DATE(mb.Date_Time) <= DATE_ADD(?, INTERVAL 3 DAY)`,
             [dtStr, dtStr]
           );
           bufRows = r;
@@ -668,6 +688,17 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
         return diffHours >= -6 && diffHours <= 48;
       }) : null;
 
+      // Late-transfer check: buffer entry arrived AFTER this Direct API lead (next-day or within 72h forward)
+      const lateTransferMatch = (!bufMatch && !sameDayGlobalMatch && !prior24Match && norm) ? bufferList.find((b: any) => {
+        const bnm = normMobile(b.Mobile);
+        if (bnm !== norm) return false;
+        const bObj = parseDateRobust(b.Date_Time) || (b.Date_Time ? new Date(b.Date_Time) : null);
+        const bTime = bObj ? bObj.getTime() : 0;
+        if (!bTime) return false;
+        const diffHours = (bTime - leadTime) / (3600 * 1000); // positive = buffer came AFTER lead
+        return diffHours > 0 && diffHours <= 72;
+      }) : null;
+
       let status: "Resolved" | "Duplicate" | "Lost" | "Delayed" = "Lost";
       let currentStatus = "Actual Lost (Technical Issue)";
       let bufferStatus = "Not in buffer";
@@ -728,6 +759,14 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
         transferStatus = "Filtered";
         const priorFormatted = prior24Match.Date_Time ? new Date(new Date(prior24Match.Date_Time).getTime() + 5.5 * 3600 * 1000).toLocaleString("en-IN") : "";
         reason = `Filtered intentionally: repeated mobile within 24 hours (already received in Buffer ${prior24Match.lead_id} on ${priorFormatted})`;
+      } else if (lateTransferMatch) {
+        status = "Duplicate";
+        currentStatus = "Late Transfer (Next-day Buffer)";
+        bufferStatus = `In Buffer (${rowDate(lateTransferMatch.Date_Time)})`;
+        crmStatus = "Filtered";
+        transferStatus = "Delayed";
+        const lateFormatted = lateTransferMatch.Date_Time ? new Date(new Date(lateTransferMatch.Date_Time).getTime() + 5.5 * 3600 * 1000).toLocaleString("en-IN") : "";
+        reason = `Late Transfer: Lead received in Direct API on ${date} but buffer entry arrived on ${lateFormatted} (transferred next day — not lost)`;
       } else if (isDup || (norm && (directMobileCounts.get(norm) ?? 0) > 1 && !bufMatch)) {
         status = "Duplicate";
         currentStatus = "Filtered (Same-day Duplicate)";
@@ -870,6 +909,7 @@ export async function GET(request: Request) {
           let buffer = 0, crm = 0, kserve = 0, sales = 0;
           let sameDayDuplicates = 0;
           let prior24hDuplicates = 0;
+          let lateTransfers = 0;
           const seenDirectMobiles = new Set<string>();
 
           for (let i = 0; i < mobiles.length; i++) {
@@ -889,6 +929,12 @@ export async function GET(request: Request) {
               return (diffHours >= -6 && diffHours <= 48) || (b.dateStr && b.dateStr <= date);
             }) : null;
 
+            // Late transfer: buffer arrived AFTER direct API lead (next-day or within 72h forward)
+            const lateMatch = (!inBuf && !priorMatch && !isDirectDupe) ? bufs.find(b => {
+              const diffHours = (b.time - t) / (3600 * 1000); // positive = buffer came after lead
+              return diffHours > 0 && diffHours <= 72;
+            }) : null;
+
             if (inBuf) {
               if (isDirectDupe) {
                 sameDayDuplicates++;
@@ -900,12 +946,14 @@ export async function GET(request: Request) {
               }
             } else if (priorMatch) {
               prior24hDuplicates++;
+            } else if (lateMatch) {
+              lateTransfers++;
             } else if (isDirectDupe) {
               sameDayDuplicates++;
             }
           }
 
-          const duplicate = sameDayDuplicates + prior24hDuplicates;
+          const duplicate = sameDayDuplicates + prior24hDuplicates + lateTransfers;
           const medium = direct;
           const expectedDuplicateGap = duplicate;
           const directMediumGap = 0;
@@ -914,7 +962,7 @@ export async function GET(request: Request) {
           const unexplainedMediumGap = Math.max(0, direct - duplicate - buffer);
           const mediumBufferGap = mediumBufferLost;
           const sameDayCrm = crm;
-          const lateTransfer = 0;
+          const lateTransfer = lateTransfers;
           const masterCrmLost = Math.max(0, buffer - crm);
           const bufferCrmGap = masterCrmLost;
           const bufferToCrmGap = masterCrmLost;
