@@ -95,6 +95,20 @@ export async function buildEmail(t:Trigger,at:number){
    hasData=agingData.summary.total>0
    html=buildPendingAgingAlertEmail(agingData)
   }
+  else if(t.reportId==='ktahv-daily-sales-report'){
+   reportTitle='KTAHV Daily Sales Report'
+   reportSlug='KTAHV-Daily-Sales-Report'
+   const appUrl=process.env.NEXT_PUBLIC_APP_URL||'http://localhost:3000'
+   try{
+     const res=await fetch(`${appUrl}/api/ktahv-daily-sales-report?date=${date}`, { headers: { 'x-internal-report': '1' } })
+     const data=res.ok?await res.json():null
+     const {exportKtahvDailySalesHTML}=await import('@/lib/ktahv-daily-sales-report')
+     if(data){html=exportKtahvDailySalesHTML(data);hasData=true}
+     else{const report=await loadScheduledSales(date);html=exportSalesHTML(report,'KTAHV');hasData=true}
+   }catch{
+     const report=await loadScheduledSales(date);html=exportSalesHTML(report,'KTAHV');hasData=true
+   }
+  }
   else{
    throw new Error(`Unhandled email trigger report template: "${t.reportId}"`)
   }
@@ -102,7 +116,7 @@ export async function buildEmail(t:Trigger,at:number){
   // Reports with in-layout markers keep the note inside their centered column; others get it around <body>.
   html=html.includes('<!--email-intro-->')?html.replace('<!--email-intro-->',()=>p(t.intro)).replace('<!--email-closing-->',()=>p(t.closing)):html.replace(/(<body[^>]*>)/,'$1'+p(t.intro)).replace('</body>',p(t.closing)+'</body>')
   // booking-pi-review-alert and kserve-lead-lost-alert and sales-call-audit skip JPEG rendering — they use inline HTML tables
-  if(t.reportId!=='trigger-health-digest'&&t.reportId!=='sales-call-audit'&&t.reportId!=='kserve-lead-lost-alert'&&t.reportId!=='booking-pi-review-alert'){
+  if(t.reportId!=='trigger-health-digest'&&t.reportId!=='sales-call-audit'&&t.reportId!=='kserve-lead-lost-alert'&&t.reportId!=='booking-pi-review-alert'&&t.reportId!=='ktahv-daily-sales-report'){
    try{
     const {renderJPEG}=await import('@/lib/whatsapp-triggers/render')
     if(typeof renderJPEG==='function'){

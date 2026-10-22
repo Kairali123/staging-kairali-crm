@@ -229,18 +229,18 @@ export async function GET(req: NextRequest) {
       }
     }
     // Auto-seed: KTAHV Daily Sales Report (daily 10:45 IST) if not yet present
-    if (!state.triggers.some(t => t.reportId === 'daily-sales-report' && t.company === 'KTAHV') && !state.seedSuppressed?.includes('daily-sales-report:KTAHV')) {
+    if (!state.triggers.some(t => t.reportId === 'ktahv-daily-sales-report') && !state.seedSuppressed?.includes('ktahv-daily-sales-report')) {
       try {
         state = await transaction(s => {
-          if (!s.triggers.some(t => t.reportId === 'daily-sales-report' && t.company === 'KTAHV')) {
+          if (!s.triggers.some(t => t.reportId === 'ktahv-daily-sales-report')) {
             const now4 = Date.now()
             s.triggers.push({
               id: randomUUID(),
               revision: 1,
-              name: 'KTAHV Daily Sales Report Alert',
-              reportId: 'daily-sales-report',
-              source: emailReportTemplates['daily-sales-report'].name,
-              template: emailReportTemplates['daily-sales-report'].name,
+              name: 'KTAHV Daily Sales Report',
+              reportId: 'ktahv-daily-sales-report',
+              source: emailReportTemplates['ktahv-daily-sales-report'].name,
+              template: emailReportTemplates['ktahv-daily-sales-report'].name,
               department: 'Sales',
               company: 'KTAHV',
               to: 'sales.ho@kairali.com, srsales@kairali.com, info@kairali.com, webmaster@kairali.com, ose@kairali.com, outreach@kairali.com, fom@kairali.com, fo@kairali.com, gm.hv@kairali.com, director@kairali.com, marketing@kairali.com, ho.mkt@kairali.com, mkt@kairali.com, seo@kairali.com, ho.accounts@kairali.com, kvr@kairali.com, digital@kairali.com',
@@ -288,7 +288,7 @@ export async function GET(req: NextRequest) {
           return s
         })
       } catch (err) {
-        console.warn('[email-trigger-config] Auto-seed KTAHV daily-sales-report skipped:', err)
+        console.warn('[email-trigger-config] Auto-seed KTAHV ktahv-daily-sales-report skipped:', err)
       }
     }
     if (!process.env.VERCEL) {

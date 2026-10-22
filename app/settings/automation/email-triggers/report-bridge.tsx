@@ -82,6 +82,12 @@ export default function EmailConfigBridge({ document: documentHtml }: { document
           const data = await response.json()
           if (!response.ok) throw new Error(data.error || 'Report unavailable')
           html = exportSalesHTML(data as DailySalesReport, scope)
+        } else if (id === 'ktahv-daily-sales-report') {
+          const response = await fetch('/api/ktahv-daily-sales-report?' + new URLSearchParams({ date: message.date }), { signal: current.signal, cache: 'no-store' })
+          const data = await response.json()
+          if (!response.ok) throw new Error(data.error || 'Report unavailable')
+          const { exportKtahvDailySalesHTML } = await import('@/lib/ktahv-daily-sales-report')
+          html = exportKtahvDailySalesHTML(data)
         } else if (id === 'sales-call-audit') {
           const response = await fetch('/api/sales-call-audit/email-data?' + new URLSearchParams({ date: message.date }), { signal: current.signal, cache: 'no-store' })
           const data = await response.json()

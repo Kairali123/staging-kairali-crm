@@ -2,6 +2,7 @@
 export const emailReportTemplates = {
   'trigger-health-digest': { name: 'Daily Trigger Health & Failure Alert', path: '/settings/automation/trigger-management' },
   'daily-sales-report': { name: 'Daily Sales Report Alert', path: '/sales/reports/daily-alert' },
+  'ktahv-daily-sales-report': { name: 'KTAHV Daily Sales Report', path: '/sales/reports/ktahv-daily-sales' },
   'marketing-daily-report': { name: 'Marketing Daily Report', path: '/marketing-daily-report' },
   'sales-call-audit': { name: 'Daily Call Audit Pass/Fail Report Email Template', path: '/sales-call-audit/email-template' },
   'ktahv-crr-process-report-alert': { name: 'KTAHV CRR Process Report Alert', path: '/ktahv-crr-process-report-alert' },
