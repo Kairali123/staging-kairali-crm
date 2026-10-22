@@ -21,6 +21,9 @@ export function removeTrigger(s: State, id: string, revision?: number) {
   if ([AUDIT_REPORT_ID, 'trigger-health-digest'].includes(trigger.reportId) && !s.triggers.some(t => t.reportId === trigger.reportId)) {
     s.seedSuppressed = [...new Set([...(s.seedSuppressed || []), trigger.reportId])]
   }
+  if (trigger.reportId === 'daily-sales-report' && trigger.company === 'KTAHV' && !s.triggers.some(t => t.reportId === 'daily-sales-report' && t.company === 'KTAHV')) {
+    s.seedSuppressed = [...new Set([...(s.seedSuppressed || []), 'daily-sales-report:KTAHV'])]
+  }
   return trigger
 }
 

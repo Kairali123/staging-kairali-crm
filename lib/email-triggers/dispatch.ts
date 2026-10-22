@@ -23,8 +23,8 @@ export async function buildEmail(t:Trigger,at:number){
   let reportTitle='Daily Report'
   let reportSlug='Daily-Report'
   if(t.reportId==='daily-sales-report'){
-   reportTitle='Daily Sales Report'
-   reportSlug='Daily-Sales-Report'
+   reportTitle=t.company==='KTAHV'?'KTAHV Daily Sales Report':'Daily Sales Report'
+   reportSlug=t.company==='KTAHV'?'KTAHV-Daily-Sales-Report':'Daily-Sales-Report'
    const report=await loadScheduledSales(date);const scope=t.company==='All companies'?'ALL':t.company==='VILARAAG'?'VILLARAAG':t.company;hasData=report.rows.some(r=>scope==='ALL'||r.company===scope)||scopedEmployees(report.calling,scope).length>0;html=exportSalesHTML(report,scope);donutSvg=buildSalesDonutSvg(report,scope)||null
   }
   else if(t.reportId==='sales-call-audit'){

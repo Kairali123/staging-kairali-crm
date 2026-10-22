@@ -228,6 +228,69 @@ export async function GET(req: NextRequest) {
         console.warn('[email-trigger-config] Auto-seed morning-lead-allocation skipped:', err)
       }
     }
+    // Auto-seed: KTAHV Daily Sales Report (daily 10:45 IST) if not yet present
+    if (!state.triggers.some(t => t.reportId === 'daily-sales-report' && t.company === 'KTAHV') && !state.seedSuppressed?.includes('daily-sales-report:KTAHV')) {
+      try {
+        state = await transaction(s => {
+          if (!s.triggers.some(t => t.reportId === 'daily-sales-report' && t.company === 'KTAHV')) {
+            const now4 = Date.now()
+            s.triggers.push({
+              id: randomUUID(),
+              revision: 1,
+              name: 'KTAHV Daily Sales Report Alert',
+              reportId: 'daily-sales-report',
+              source: emailReportTemplates['daily-sales-report'].name,
+              template: emailReportTemplates['daily-sales-report'].name,
+              department: 'Sales',
+              company: 'KTAHV',
+              to: 'sales.ho@kairali.com, srsales@kairali.com, info@kairali.com, webmaster@kairali.com, ose@kairali.com, outreach@kairali.com, fom@kairali.com, fo@kairali.com, gm.hv@kairali.com, director@kairali.com, marketing@kairali.com, ho.mkt@kairali.com, mkt@kairali.com, seo@kairali.com, ho.accounts@kairali.com, kvr@kairali.com, digital@kairali.com',
+              cc: '',
+              bcc: '',
+              subject: 'KTAHV Daily Sales Report | {{report_date}} | {{company_name}}',
+              body: '',
+              bodyType: 'Full report in email body',
+              intro: 'Dear Team,\n\nPlease find the KTAHV Daily Sales Report below.',
+              closing: 'Regards,\nKairali Group',
+              period: 'Yesterday',
+              reportDetail: 'Full report',
+              status: 'Active',
+              frequency: 'Daily',
+              time: '10:45',
+              custom: '10:45',
+              interval: '6',
+              weekday: 'Monday',
+              monthday: '1',
+              timezone: 'Asia/Kolkata',
+              start: new Date(now4).toISOString().slice(0, 10),
+              end: '',
+              attachment: 'None',
+              mode: 'Same email to all recipients',
+              condition: 'Only when data is available',
+              retry: 'No retries',
+              missed: 'Skip missed run',
+              replyTo: 'sysadmin@kairali.com',
+              owner: 'system',
+              updatedAt: new Date(now4).toISOString(),
+              nextRun: nextRun({
+                frequency: 'Daily',
+                time: '10:45',
+                custom: '10:45',
+                interval: '6',
+                weekday: 'Monday',
+                monthday: '1',
+                timezone: 'Asia/Kolkata',
+                start: new Date(now4).toISOString().slice(0, 10),
+                end: '',
+              } as any, now4),
+              lastResult: '—',
+            })
+          }
+          return s
+        })
+      } catch (err) {
+        console.warn('[email-trigger-config] Auto-seed KTAHV daily-sales-report skipped:', err)
+      }
+    }
     if (!process.env.VERCEL) {
       try {
         const { ensureEmailSchedulerRunning } = await import('@/lib/email-triggers/scheduler-service')
