@@ -34,7 +34,7 @@ export default function KtahvDailySalesReportPage() {
   const [data, setData] = useState<KtahvDailySalesReportData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [activeTab, setActiveTab] = useState<'overview' | 'leaderboard' | 'cancellations' | 'discounts' | 'marketing'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'leaderboard' | 'cancellations' | 'complimentary' | 'discounts' | 'marketing'>('overview')
   const [searchQuery, setSearchQuery] = useState('')
   const [reportDate, setReportDate] = useState('2026-10-20')
 
@@ -203,7 +203,8 @@ export default function KtahvDailySalesReportPage() {
             { id: 'leaderboard', label: '2. Sales Leaderboard (MTD)' },
             { id: 'discounts', label: '3. Discount Governance' },
             { id: 'cancellations', label: '4. Cancellations with Reason' },
-            { id: 'marketing', label: '5. Marketing Leads Trend' },
+            { id: 'complimentary', label: '5. Complimentary Bookings' },
+            { id: 'marketing', label: '6. Marketing Leads Trend' },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -501,6 +502,12 @@ export default function KtahvDailySalesReportPage() {
                       <tr>
                         <th className="py-3 px-3">Reservation ID</th>
                         <th className="py-3 px-3">Client Name</th>
+                        <th className="py-3 px-3">Booking Date/Time</th>
+                        <th className="py-3 px-3 whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1 text-rose-700">
+                            🕐 Cancelled At
+                          </span>
+                        </th>
                         <th className="py-3 px-3">Stay Dates</th>
                         <th className="py-3 px-3">Package / Room</th>
                         <th className="py-3 px-3 text-right">Invoice Amount</th>
@@ -514,6 +521,28 @@ export default function KtahvDailySalesReportPage() {
                         <tr key={c.reservationId} className="hover:bg-slate-50/70 transition">
                           <td className="py-3 px-3 font-bold text-indigo-700">{c.reservationId}</td>
                           <td className="py-3 px-3 font-semibold text-slate-800">{c.clientName}</td>
+                          <td className="py-3 px-3 text-slate-500 whitespace-nowrap">
+                            {c.bookingDateTime
+                              ? new Date(c.bookingDateTime).toLocaleString('en-IN', {
+                                  day: '2-digit', month: 'short', year: 'numeric',
+                                  hour: '2-digit', minute: '2-digit', hour12: true,
+                                })
+                              : '—'}
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {c.cancelledDate ? (
+                              <span className="inline-flex flex-col">
+                                <span className="font-bold text-rose-700">
+                                  {c.cancelledDate.split(' ')[0]}
+                                </span>
+                                <span className="text-[10px] text-rose-500 font-semibold">
+                                  {c.cancelledDate.split(' ')[1] || ''}
+                                </span>
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">—</span>
+                            )}
+                          </td>
                           <td className="py-3 px-3 text-slate-500">{c.arrivalDate} &rarr; {c.departureDate} ({c.daysOfStay}d)</td>
                           <td className="py-3 px-3 text-slate-600">
                             <div>{c.packageName || 'Treatment Package'}</div>
@@ -537,7 +566,88 @@ export default function KtahvDailySalesReportPage() {
               </div>
             )}
 
-            {/* TAB 5: MARKETING LEADS */}
+            {/* TAB 5: COMPLIMENTARY BOOKINGS */}
+            {activeTab === 'complimentary' && (
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h2 className="text-base font-bold text-slate-800">Complimentary Bookings (MTD)</h2>
+                    <p className="text-xs text-slate-500">Approved complimentary stays — GM/Director authorised, zero revenue impact</p>
+                  </div>
+                  <span className="px-3 py-1 rounded-full bg-violet-100 text-violet-800 text-xs font-bold">
+                    {data.complimentaryBookings?.length ?? 0} Records
+                  </span>
+                </div>
+
+                {(data.complimentaryBookings?.length ?? 0) === 0 ? (
+                  <div className="text-center py-10 text-slate-400 text-sm">
+                    No complimentary bookings recorded for this period.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 text-slate-600 font-semibold uppercase border-b border-slate-200">
+                        <tr>
+                          <th className="py-3 px-3">Reservation ID</th>
+                          <th className="py-3 px-3">Client Name</th>
+                          <th className="py-3 px-3 whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1 text-violet-700">
+                              🕐 Booking Date/Time
+                            </span>
+                          </th>
+                          <th className="py-3 px-3">Stay Dates</th>
+                          <th className="py-3 px-3">Package / Room</th>
+                          <th className="py-3 px-3">Agent</th>
+                          <th className="py-3 px-3">PMS Status</th>
+                          <th className="py-3 px-3">Remarks</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {data.complimentaryBookings.map((c) => (
+                          <tr key={c.reservationId} className="hover:bg-slate-50/70 transition">
+                            <td className="py-3 px-3 font-bold text-violet-700">{c.reservationId}</td>
+                            <td className="py-3 px-3 font-semibold text-slate-800">{c.clientName}</td>
+                            <td className="py-3 px-3 whitespace-nowrap">
+                              {c.bookingDateTime ? (
+                                <span className="inline-flex flex-col">
+                                  <span className="font-bold text-violet-700">
+                                    {c.bookingDateTime.split(' ')[0]}
+                                  </span>
+                                  <span className="text-[10px] text-violet-500 font-semibold">
+                                    {c.bookingDateTime.split(' ')[1] || ''}
+                                  </span>
+                                </span>
+                              ) : (
+                                <span className="text-slate-400">—</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-3 text-slate-500 whitespace-nowrap">
+                              {c.arrivalDate} &rarr; {c.departureDate}
+                              <span className="ml-1 text-[10px] text-slate-400">({c.daysOfStay}d)</span>
+                            </td>
+                            <td className="py-3 px-3 text-slate-600">
+                              <div>{c.packageName}</div>
+                              <div className="text-[10px] text-slate-400">{c.roomCategory}</div>
+                            </td>
+                            <td className="py-3 px-3 text-slate-700 font-medium">{c.bookingTakenBy}</td>
+                            <td className="py-3 px-3">
+                              <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                                {c.pmsStatus || 'Confirmed'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-slate-500 max-w-xs truncate" title={c.remarks || ''}>
+                              {c.remarks || '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 6: MARKETING LEADS */}
             {activeTab === 'marketing' && (
               <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
                 <div>

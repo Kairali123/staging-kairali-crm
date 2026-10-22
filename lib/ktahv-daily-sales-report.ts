@@ -107,6 +107,21 @@ export interface CancelledBooking {
   cancelledDate: string
 }
 
+export interface ComplimentaryBooking {
+  bookingDateTime: string       // Date & time booking was made
+  reservationId: string
+  clientName: string
+  mobile?: string
+  arrivalDate: string
+  departureDate: string
+  daysOfStay: number
+  packageName: string
+  roomCategory: string
+  bookingTakenBy: string
+  remarks?: string
+  pmsStatus?: string
+}
+
 export interface DiscountItem {
   rank: number
   salesPerson: string
@@ -151,6 +166,9 @@ export interface KtahvDailySalesReportData {
 
   // Cancellations
   cancelledBookings: CancelledBooking[]
+
+  // Complimentary Bookings
+  complimentaryBookings: ComplimentaryBooking[]
 
   // Discount Governance
   discountReport: DiscountItem[]
@@ -433,6 +451,8 @@ export function exportKtahvDailySalesHTML(data: KtahvDailySalesReportData): stri
           <tr>
             <th>Reservation ID</th>
             <th>Client Name</th>
+            <th>Booking Date/Time</th>
+            <th style="color:#dc2626;">🕐 Cancelled At</th>
             <th>Package / Program</th>
             <th class="text-right">Amount</th>
             <th>Booking By</th>
@@ -444,6 +464,11 @@ export function exportKtahvDailySalesHTML(data: KtahvDailySalesReportData): stri
             <tr>
               <td><strong>${esc(c.reservationId)}</strong></td>
               <td>${esc(c.clientName)}</td>
+              <td style="font-size:11px;color:#64748b;">${esc(c.bookingDateTime || '—')}</td>
+              <td>
+                <span style="font-weight:bold;color:#dc2626;">${esc(c.cancelledDate ? c.cancelledDate.split(' ')[0] : '—')}</span>
+                ${c.cancelledDate && c.cancelledDate.split(' ')[1] ? `<br/><span style="font-size:10px;color:#ef4444;">${esc(c.cancelledDate.split(' ')[1])}</span>` : ''}
+              </td>
               <td>${esc(c.packageName || 'Standard Package')}</td>
               <td class="text-right"><strong>${formatINR(c.invoiceAmount)}</strong></td>
               <td>${esc(c.bookingTakenBy)}</td>
@@ -453,6 +478,44 @@ export function exportKtahvDailySalesHTML(data: KtahvDailySalesReportData): stri
         </tbody>
       </table>
     </div>
+
+    <!-- Section 6: Complimentary Bookings -->
+    ${data.complimentaryBookings && data.complimentaryBookings.length > 0 ? `
+    <div class="card">
+      <h2 class="card-title">6. Complimentary Bookings (MTD)</h2>
+      <p class="card-subtitle">GM/Director authorised complimentary stays — ${data.complimentaryBookings.length} record(s) this period</p>
+      
+      <table class="rt">
+        <thead>
+          <tr>
+            <th>Reservation ID</th>
+            <th>Client Name</th>
+            <th style="color:#7c3aed;">🕐 Booking Date/Time</th>
+            <th>Package / Room</th>
+            <th>Stay Dates</th>
+            <th>Agent</th>
+            <th>Remarks</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.complimentaryBookings.map(c => `
+            <tr>
+              <td><strong style="color:#7c3aed;">${esc(c.reservationId)}</strong></td>
+              <td>${esc(c.clientName)}</td>
+              <td>
+                <span style="font-weight:bold;color:#7c3aed;">${esc(c.bookingDateTime ? c.bookingDateTime.split(' ')[0] : '—')}</span>
+                ${c.bookingDateTime && c.bookingDateTime.split(' ')[1] ? `<br/><span style="font-size:10px;color:#8b5cf6;">${esc(c.bookingDateTime.split(' ')[1])}</span>` : ''}
+              </td>
+              <td>${esc(c.packageName)}<br/><span style="font-size:10px;color:#94a3b8;">${esc(c.roomCategory)}</span></td>
+              <td style="font-size:11px;color:#64748b;">${esc(c.arrivalDate)} → ${esc(c.departureDate)} (${c.daysOfStay}d)</td>
+              <td>${esc(c.bookingTakenBy)}</td>
+              <td style="color:#64748b;">${esc(c.remarks || '—')}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+    ` : ''}
 
     <!-- Interactive CRM Access CTA -->
     <div style="text-align:center; padding:32px 16px;">
