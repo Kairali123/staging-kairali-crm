@@ -311,6 +311,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const salesReportsSubMenu = [
     { name: "Sales Report", href: "/sales/reports", icon: IndianRupee, permission: "sales_report.view", description: "Sales performance reports" },
     { name: "Daily Sales Report Alert", href: "/sales/reports/daily-alert", icon: CalendarDays, permission: "daily_sales_alert.view", description: "Daily sales report alert" },
+    { name: "KTAHV Daily Sales Report", href: "/sales/reports/ktahv-daily-sales", icon: BarChart3, permission: "sales_report.view", description: "KTAHV Daily Sales Report (Lead, Channel, Agent & Cancellations)" },
     { name: "Sales Calling Master", href: "/sales-calling", icon: PhoneCall, permission: "sales_calling.view", description: "Sales calling master" },
   ]
 

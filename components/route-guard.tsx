@@ -51,6 +51,7 @@ const pagePermissions: Record<string, string> = {
   '/calls/reports': 'calls_report.view',
   '/sales/reports': 'sales_report.view',
   '/sales/reports/daily-alert': 'daily_sales_alert.view',
+  '/sales/reports/ktahv-daily-sales': 'sales_report.view',
   '/sales/reports/email-trigger-config': 'sales_report.view',
   '/settings': 'sales_report.view',
   '/settings/automation': 'sales_report.view',
@@ -135,7 +136,8 @@ const isRestricted = (pathname: string) => {
     '/pi-tracker',
     '/good-lead-leakage',
     '/marketing-daily-report',
-    '/sales/reports/daily-alert'
+    '/sales/reports/daily-alert',
+    '/sales/reports/ktahv-daily-sales'
   ]
 
   return exactRestricted.includes(path)
