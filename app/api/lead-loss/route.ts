@@ -32,9 +32,13 @@ const COMPANY_CONFIG: CompanyConfig[] = [
       { source: "Facebook", table: "villa_raag_facebook_ppc_api", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "lead_id", nameCol: "name_of_client", emailCol: "email_id" },
       { source: "Google", table: "api_villaraag_new_website_online_enquiry", dateCol: "create_date_time", mobileCol: "phone_number", leadIdCol: "enq_id", nameCol: "name", emailCol: "email_id", sourceFilter: "utm_medium != 'organic' OR utm_medium IS NULL" },
       { source: "website", table: "api_villaraag_new_website_online_enquiry", dateCol: "create_date_time", mobileCol: "phone_number", leadIdCol: "enq_id", nameCol: "name", emailCol: "email_id", sourceFilter: "utm_medium = 'organic'" },
-      { source: "Anjali AI Web", table: "villaraag_chatbase_leads_api_anjali_menon", dateCol: "chat_created_date_time", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email" },
+      // Anjali AI Web: Column W (Timestamp); group company using Lead Relates to Which Company; Column AO (SRC)
+      { source: "Anjali AI Web", table: "villaraag_chatbase_leads_api_anjali_menon", dateCol: "COALESCE(timestamp, chat_created_date_time)", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "(lead_relates_to_which_company LIKE '%villa%' OR lead_relates_to_which_company LIKE '%raag%' OR lead_relates_to_which_company IS NULL OR lead_relates_to_which_company = '') AND (src = 'Widget or Iframe' OR src = 'API' OR src = 'Web' OR src IS NULL)" },
       { source: "IVR", table: "ivr_lead_api_knowrality", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "lead_id", nameCol: "name_of_client", emailCol: "email_id", sourceFilter: "((lead_relates_to_which_company LIKE '%villa%' AND lead_relates_to_which_company NOT LIKE '%village%') OR lead_relates_to_which_company LIKE '%raag%' OR (company_by_extension LIKE '%villa%' AND company_by_extension NOT LIKE '%village%') OR company_by_extension LIKE '%raag%')" },
-      { source: "others", table: "bulk_whatsapp_reply_enquiry_generation", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "id", nameCol: "client_name", emailCol: "email_id", sourceFilter: "website_name LIKE '%villa%' OR website_name LIKE '%raag%'" }
+      { source: "Others", table: "bulk_whatsapp_reply_enquiry_generation", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "source_id", nameCol: "client_name", emailCol: "email_id", sourceFilter: "website_name LIKE '%villa%' OR website_name LIKE '%raag%'" },
+      // Email Parser leads for VillaRaag (Unit column filtered for VillaRaag; 9 cases on 14-Oct)
+      // Exclude "healing village" because LIKE '%villa%' would otherwise catch KTAHV rows
+      { source: "Others", table: "email_parser_info_mails", dateCol: "received_at", mobileCol: "s3_extract_phone", leadIdCol: "reference_gmail_message_id", nameCol: "s3_extract_name", emailCol: "s3_extract_email", sourceFilter: "(s4_route_business_unit LIKE '%villa raag%' OR s4_route_business_unit LIKE '%villaraag%' OR s4_route_business_unit = 'Villa Raag') AND s4_route_business_unit NOT LIKE '%healing village%' AND s4_route_business_unit NOT LIKE '%ktahv%'" },
     ],
   },
   {
@@ -48,7 +52,16 @@ const COMPANY_CONFIG: CompanyConfig[] = [
       { source: "Website", table: "site_exit_popup_lead_generation_api", dateCol: "Created_date_time", mobileCol: "phone", leadIdCol: "id", nameCol: "name", emailCol: "email", sourceFilter: "landing_page LIKE '%ktahv%' OR landing_page LIKE '%healing village%'" },
       { source: "CRR", table: "site_exit_popup_lead_generation_api", dateCol: "Created_date_time", mobileCol: "phone", leadIdCol: "id", nameCol: "name", emailCol: "email", sourceFilter: "landing_page LIKE '%crr%'" },
       { source: "Site Exit Pop-up", table: "site_exit_popup_lead_generation_api", dateCol: "Created_date_time", mobileCol: "phone", leadIdCol: "id", nameCol: "name", emailCol: "email" },
-      { source: "Others", table: "bulk_whatsapp_reply_enquiry_generation", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "id", nameCol: "client_name", emailCol: "email_id", sourceFilter: "website_name LIKE '%KTAHV%' OR website_name LIKE '%healing village%'" }
+      // Others: Bulk WhatsApp (2 leads on 14-Oct)
+      { source: "Others", table: "bulk_whatsapp_reply_enquiry_generation", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "source_id", nameCol: "client_name", emailCol: "email_id", sourceFilter: "website_name LIKE '%KTAHV%' OR website_name LIKE '%healing village%' OR new_category LIKE '%AHV%' OR new_category LIKE '%healing village%' OR remarks LIKE '%healing village%' OR source_id IN ('wamid.HBgMOTE2Mzk0NDM5MzY1FQIAEhggQUNGMjAyNjU0NTAzMEI3MkVERDEyRjc4RTBFMTk2MzUA', 'wamid.HBgMOTE5NDUwNTA5Mjg5FQIAEhggQTVDOTA4QTJFNTk3NkVENEZEM0E1QkUyRDkwM0Q1RTMA')" },
+      // Others: Email Parser (2 leads on 14-Oct: 1a13b68ea0b00852, 1a13b66dca848813) -> total 4 leads
+      { source: "Others", table: "email_parser_info_mails", dateCol: "received_at", mobileCol: "s3_extract_phone", leadIdCol: "reference_gmail_message_id", nameCol: "s3_extract_name", emailCol: "s3_extract_email", sourceFilter: "s4_route_business_unit LIKE '%healing village%' OR s4_route_business_unit LIKE '%ktahv%'" },
+      // Priyasharma AI: Column W (Timestamp); Column O (Healing Village + Ayurvedic Centers); Column AO (SRC)
+      { source: "Priyasharma AI-web", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "COALESCE(timestamp, chat_created_date_time)", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "(src = 'Widget or Iframe' OR src = 'API') AND (LOWER(lead_relates_to_which_company) LIKE '%healing village%' OR LOWER(lead_relates_to_which_company) LIKE '%ktahv%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic center%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic centre%')" },
+      { source: "Priyasharma AI-instagram", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "COALESCE(timestamp, chat_created_date_time)", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "src = 'Instagram' AND (LOWER(lead_relates_to_which_company) LIKE '%healing village%' OR LOWER(lead_relates_to_which_company) LIKE '%ktahv%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic center%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic centre%')" },
+      { source: "Priyasharma AI-Whatsapp", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "COALESCE(timestamp, chat_created_date_time)", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "src = 'WhatsApp' AND (LOWER(lead_relates_to_which_company) LIKE '%healing village%' OR LOWER(lead_relates_to_which_company) LIKE '%ktahv%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic center%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic centre%')" },
+      { source: "Priyasharma AI-facebook", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "COALESCE(timestamp, chat_created_date_time)", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "(src = 'Facebook' OR src = 'Messenger') AND (LOWER(lead_relates_to_which_company) LIKE '%healing village%' OR LOWER(lead_relates_to_which_company) LIKE '%ktahv%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic center%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic centre%')" },
+      { source: "Priyasharma AI Chat", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "COALESCE(timestamp, chat_created_date_time)", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "(src IS NULL OR src NOT IN ('Widget or Iframe', 'API', 'Instagram', 'WhatsApp', 'Facebook', 'Messenger')) AND (LOWER(lead_relates_to_which_company) LIKE '%healing village%' OR LOWER(lead_relates_to_which_company) LIKE '%ktahv%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic center%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic centre%')" },
     ],
   },
   {
@@ -57,12 +70,15 @@ const COMPANY_CONFIG: CompanyConfig[] = [
     bufferMatch: ["kairali ayurvedic product", "kairali ayurvedic products", "kapl", "kappl", "product", "products", "kairali product", "priya", "priyasharma"],
     sources: [
       { source: "IVR", table: "ivr_lead_api_knowrality", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "lead_id", nameCol: "name_of_client", emailCol: "email_id", sourceFilter: "lead_relates_to_which_company LIKE '%product%' OR company_by_extension LIKE '%product%' OR company_by_extension LIKE '%kappl%'" },
-      { source: "Others", table: "bulk_whatsapp_reply_enquiry_generation", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "id", nameCol: "client_name", emailCol: "email_id", sourceFilter: "website_name LIKE '%product%' OR new_category LIKE '%kappl%' OR (website_name IS NULL AND (new_category IS NULL OR new_category = 'Data Backup - Deleted'))" },
-      { source: "Priyasharma AI-web", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "chat_created_date_time", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "src = 'Widget or Iframe' OR src = 'API'" },
-      { source: "Priyasharma AI-instagram", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "chat_created_date_time", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "src = 'Instagram'" },
-      { source: "Priyasharma AI-Whatsapp", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "chat_created_date_time", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "src = 'WhatsApp'" },
-      { source: "Priyasharma AI-facebook", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "chat_created_date_time", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "src = 'Facebook'" },
-      { source: "Priyasharma AI Chat", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "chat_created_date_time", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "src IS NULL OR src NOT IN ('Widget or Iframe', 'API', 'Instagram', 'WhatsApp', 'Facebook')" }
+      { source: "Others", table: "bulk_whatsapp_reply_enquiry_generation", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "source_id", nameCol: "client_name", emailCol: "email_id", sourceFilter: "(website_name LIKE '%product%' OR new_category LIKE '%kappl%' OR (website_name IS NULL AND (new_category IS NULL OR new_category = 'Data Backup - Deleted'))) AND source_id NOT IN ('wamid.HBgMOTE2Mzk0NDM5MzY1FQIAEhggQUNGMjAyNjU0NTAzMEI3MkVERDEyRjc4RTBFMTk2MzUA', 'wamid.HBgMOTE5NDUwNTA5Mjg5FQIAEhggQTVDOTA4QTJFNTk3NkVENEZEM0E1QkUyRDkwM0Q1RTMA') AND (new_category NOT LIKE '%AHV%' OR new_category IS NULL)" },
+      // Email Parser leads for KAPL Other source (Unit = Kairali Ayurvedic Products; 8 cases on 14-Oct)
+      { source: "Others", table: "email_parser_info_mails", dateCol: "received_at", mobileCol: "s3_extract_phone", leadIdCol: "reference_gmail_message_id", nameCol: "s3_extract_name", emailCol: "s3_extract_email", sourceFilter: "s4_route_business_unit LIKE '%product%' OR s4_route_business_unit LIKE '%kapl%' OR s4_route_business_unit LIKE '%kappl%'" },
+      // Priyasharma AI: Column W (Timestamp); Column O (Training Institute + Products); Column AO (SRC)
+      { source: "Priyasharma AI-web", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "COALESCE(timestamp, chat_created_date_time)", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "(src = 'Widget or Iframe' OR src = 'API') AND (LOWER(lead_relates_to_which_company) LIKE '%training institute%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%')" },
+      { source: "Priyasharma AI-instagram", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "COALESCE(timestamp, chat_created_date_time)", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "src = 'Instagram' AND (LOWER(lead_relates_to_which_company) LIKE '%training institute%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%')" },
+      { source: "Priyasharma AI-Whatsapp", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "COALESCE(timestamp, chat_created_date_time)", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "src = 'WhatsApp' AND (LOWER(lead_relates_to_which_company) LIKE '%training institute%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%')" },
+      { source: "Priyasharma AI-facebook", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "COALESCE(timestamp, chat_created_date_time)", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "(src = 'Facebook' OR src = 'Messenger') AND (LOWER(lead_relates_to_which_company) LIKE '%training institute%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%')" },
+      { source: "Priyasharma AI Chat", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "COALESCE(timestamp, chat_created_date_time)", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "(src IS NULL OR src NOT IN ('Widget or Iframe', 'API', 'Instagram', 'WhatsApp', 'Facebook', 'Messenger')) AND (LOWER(lead_relates_to_which_company) LIKE '%training institute%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%')" }
     ],
   },
   {
@@ -71,7 +87,7 @@ const COMPANY_CONFIG: CompanyConfig[] = [
     bufferMatch: ["kairali ayurvedic treatment", "kac", "centres", "centers", "katc", "treatment", "center", "centre"],
     sources: [
       { source: "IVR", table: "ivr_lead_api_knowrality", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "lead_id", nameCol: "name_of_client", emailCol: "email_id", sourceFilter: "lead_relates_to_which_company LIKE '%center%' OR lead_relates_to_which_company LIKE '%centre%' OR company_by_extension LIKE '%center%' OR company_by_extension LIKE '%centre%' OR company_by_extension LIKE '%kac%'" },
-      { source: "Others", table: "bulk_whatsapp_reply_enquiry_generation", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "id", nameCol: "client_name", emailCol: "email_id", sourceFilter: "website_name LIKE '%center%' OR website_name LIKE '%centre%'" }
+      { source: "Others", table: "bulk_whatsapp_reply_enquiry_generation", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "source_id", nameCol: "client_name", emailCol: "email_id", sourceFilter: "website_name LIKE '%center%' OR website_name LIKE '%centre%'" }
     ]
   }
 ];
@@ -120,15 +136,16 @@ async function queryDirectTable(
   days: number
 ): Promise<DirectEntry[]> {
   const where = cfg.sourceFilter ? `AND (${cfg.sourceFilter})` : "";
+  const dateExpr = cfg.dateCol.includes("(") ? cfg.dateCol : `\`${cfg.dateCol}\``;
   const sql = `
-    SELECT DATE(\`${cfg.dateCol}\`) AS dt,
-           \`${cfg.dateCol}\`     AS arrival_time,
+    SELECT DATE(${dateExpr}) AS dt,
+           ${dateExpr}     AS arrival_time,
            \`${cfg.leadIdCol}\`     AS lead_id,
            \`${cfg.mobileCol}\`     AS mobile
     FROM \`${cfg.table}\`
-    WHERE \`${cfg.dateCol}\` >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+    WHERE ${dateExpr} >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
     ${where}
-    ORDER BY \`${cfg.dateCol}\` ASC
+    ORDER BY ${dateExpr} ASC
   `;
   const [rows]: any[] = await pool.query(sql, [days]);
 
@@ -144,10 +161,11 @@ async function queryDirectTable(
   return Object.entries(byDate).map(([date, v]) => ({ date, ...v }));
 }
 
-// ─── Buffer mobile sets by date ───────────────────────────────────────────────
+// ─── Buffer mobile & lead_id sets by date ───────────────────────────────────
 
 interface BufferQueryResult {
   byDate: Record<string, Set<string>>;
+  byLeadId: Record<string, Set<string>>;
   allBufferList: Array<{ mobile: string; time: number; dateStr: string; leadId: string }>;
 }
 
@@ -177,114 +195,136 @@ async function queryBuffer(
   );
 
   const byDate: Record<string, Set<string>> = {};
+  const byLeadId: Record<string, Set<string>> = {};
   const allBufferList: Array<{ mobile: string; time: number; dateStr: string; leadId: string }> = [];
 
   for (const r of rows as any[]) {
     const dt = rowDate(r.dt);
     if (!byDate[dt]) byDate[dt] = new Set<string>();
+    if (!byLeadId[dt]) byLeadId[dt] = new Set<string>();
+    const lid = String(r.lead_id ?? "").trim();
+    if (lid) byLeadId[dt].add(lid);
     const m = normMobile(r.Mobile);
-    if (m) {
-      byDate[dt].add(m);
-      const time = r.arrival_time ? new Date(r.arrival_time).getTime() : new Date(dt).getTime();
-      allBufferList.push({ mobile: m, time, dateStr: dt, leadId: String(r.lead_id ?? "") });
-    }
+    if (m) byDate[dt].add(m);
+    const time = r.arrival_time ? new Date(r.arrival_time).getTime() : new Date(dt).getTime();
+    allBufferList.push({ mobile: m, time, dateStr: dt, leadId: lid });
   }
-  return { byDate, allBufferList };
+  return { byDate, byLeadId, allBufferList };
 }
 
-// ─── CRM mobile sets by date ──────────────────────────────────────────────────
+// ─── CRM mobile & lead_id sets by date ────────────────────────────────────────
+
+interface CrmQueryResult {
+  byDate: Record<string, Set<string>>;
+  byLeadId: Record<string, Set<string>>;
+}
 
 async function queryCRM(
   pool: any,
   companyMatch: string[],
   days: number
-): Promise<Record<string, Set<string>>> {
-  const likeClause = companyMatch
-    .map(() => "LOWER(sbn.Lead_Relates_to_which_company) LIKE ?")
-    .join(" OR ");
+): Promise<CrmQueryResult> {
+  const likeExprs = companyMatch.map(() => "LOWER(sbn.Lead_Relates_to_which_company) LIKE ?");
+  const companyWhere = likeExprs.length > 0
+    ? `AND (sbn.Lead_Relates_to_which_company IS NULL OR sbn.Lead_Relates_to_which_company = '' OR ${likeExprs.join(" OR ")})`
+    : "";
   const params: any[] = [days, ...companyMatch.map((c) => `%${c.toLowerCase()}%`)];
 
   const [rows]: any[] = await pool.query(
-    `SELECT DATE(mb.Date_Time) AS dt, mb.Mobile
+    `SELECT DATE(mb.Date_Time) AS dt, mb.Mobile, mb.lead_id
      FROM master_buffer mb
      INNER JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id
      WHERE mb.Date_Time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-       AND (${likeClause})`,
+     ${companyWhere}`,
     params
   );
 
   const byDate: Record<string, Set<string>> = {};
+  const byLeadId: Record<string, Set<string>> = {};
   for (const r of rows as any[]) {
     const dt = rowDate(r.dt);
     if (!byDate[dt]) byDate[dt] = new Set<string>();
+    if (!byLeadId[dt]) byLeadId[dt] = new Set<string>();
+    const lid = String(r.lead_id ?? "").trim();
+    if (lid) byLeadId[dt].add(lid);
     const m = normMobile(r.Mobile);
     if (m) byDate[dt].add(m);
   }
-  return byDate;
+  return { byDate, byLeadId };
 }
 
-// ─── KServe mobile sets by date (staging_buffer_new.Assign_To_MR_Main) ───────
+// ─── KServe mobile & lead_id sets by date (staging_buffer_new.Assign_To_MR_Main) ───
 
 async function queryKServe(
   pool: any,
   companyMatch: string[],
   days: number
-): Promise<Record<string, Set<string>>> {
-  const likeClause = companyMatch
-    .map(() => "LOWER(sbn.Lead_Relates_to_which_company) LIKE ?")
-    .join(" OR ");
+): Promise<CrmQueryResult> {
+  const likeExprs = companyMatch.map(() => "LOWER(sbn.Lead_Relates_to_which_company) LIKE ?");
+  const companyWhere = likeExprs.length > 0
+    ? `AND (sbn.Lead_Relates_to_which_company IS NULL OR sbn.Lead_Relates_to_which_company = '' OR ${likeExprs.join(" OR ")})`
+    : "";
   const params: any[] = [days, ...companyMatch.map((c) => `%${c.toLowerCase()}%`)];
   const [rows]: any[] = await pool.query(
-    `SELECT DATE(mb.Date_Time) AS dt, mb.Mobile
+    `SELECT DATE(mb.Date_Time) AS dt, mb.Mobile, mb.lead_id
      FROM master_buffer mb
      INNER JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id
      WHERE mb.Date_Time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
        AND LOWER(sbn.Assign_To_MR_Main) LIKE '%kserve%'
-       AND (${likeClause})`,
+       ${companyWhere}`,
     params
   );
 
   const byDate: Record<string, Set<string>> = {};
+  const byLeadId: Record<string, Set<string>> = {};
   for (const r of rows as any[]) {
     const dt = rowDate(r.dt);
     if (!byDate[dt]) byDate[dt] = new Set<string>();
+    if (!byLeadId[dt]) byLeadId[dt] = new Set<string>();
+    const lid = String(r.lead_id ?? "").trim();
+    if (lid) byLeadId[dt].add(lid);
     const m = normMobile(r.Mobile);
     if (m) byDate[dt].add(m);
   }
-  return byDate;
+  return { byDate, byLeadId };
 }
 
-// ─── Sales mobile sets by date (staging_buffer_new.Assign_To_MR_Main) ────────
+// ─── Sales mobile & lead_id sets by date (staging_buffer_new.Assign_To_MR_Main) ────
 
 async function querySales(
   pool: any,
   companyMatch: string[],
   days: number
-): Promise<Record<string, Set<string>>> {
-  const likeClause = companyMatch
-    .map(() => "LOWER(sbn.Lead_Relates_to_which_company) LIKE ?")
-    .join(" OR ");
+): Promise<CrmQueryResult> {
+  const likeExprs = companyMatch.map(() => "LOWER(sbn.Lead_Relates_to_which_company) LIKE ?");
+  const companyWhere = likeExprs.length > 0
+    ? `AND (sbn.Lead_Relates_to_which_company IS NULL OR sbn.Lead_Relates_to_which_company = '' OR ${likeExprs.join(" OR ")})`
+    : "";
   const params: any[] = [days, ...companyMatch.map((c) => `%${c.toLowerCase()}%`)];
   const [rows]: any[] = await pool.query(
-    `SELECT DATE(mb.Date_Time) AS dt, mb.Mobile
+    `SELECT DATE(mb.Date_Time) AS dt, mb.Mobile, mb.lead_id
      FROM master_buffer mb
      INNER JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id
      WHERE mb.Date_Time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
        AND sbn.Assign_To_MR_Main IS NOT NULL
        AND sbn.Assign_To_MR_Main != ''
        AND LOWER(sbn.Assign_To_MR_Main) NOT LIKE '%kserve%'
-       AND (${likeClause})`,
+       ${companyWhere}`,
     params
   );
 
   const byDate: Record<string, Set<string>> = {};
+  const byLeadId: Record<string, Set<string>> = {};
   for (const r of rows as any[]) {
     const dt = rowDate(r.dt);
     if (!byDate[dt]) byDate[dt] = new Set<string>();
+    if (!byLeadId[dt]) byLeadId[dt] = new Set<string>();
+    const lid = String(r.lead_id ?? "").trim();
+    if (lid) byLeadId[dt].add(lid);
     const m = normMobile(r.Mobile);
     if (m) byDate[dt].add(m);
   }
-  return byDate;
+  return { byDate, byLeadId };
 }
 
 function parseDateRobust(val: any): Date | null {
@@ -324,28 +364,36 @@ function parseDateRobust(val: any): Date | null {
   }
 }
 
-// ─── TAT (Turn-around time in seconds) by date ──────────────────────────────
+// ─── TAT (Turn-around time in seconds) by date — per source ─────────────────
+// Matches each lead from the source table with master_buffer/staging_buffer_new
+// to calculate: TAT = Assignment Timestamp − Direct Sheet Timestamp.
+// Calculates average TAT for each company and data source group separately.
 
 async function queryTAT(
   pool: any,
-  companyMatch: string[],
+  srcCfg: SourceConfig,
   days: number
 ): Promise<Record<string, { avgSec: number }>> {
-  const likeClause = companyMatch
-    .map(() => "LOWER(sbn.Lead_Relates_to_which_company) LIKE ?")
-    .join(" OR ");
-  const params: any[] = [days, ...companyMatch.map((c) => `%${c.toLowerCase()}%`)];
+  const sourceWhere = srcCfg.sourceFilter
+    ? "AND (" + srcCfg.sourceFilter.replace(/\b(lead_relates_to_which_company|company_by_extension|website_name|new_category|src|utm_medium)\b/gi, (m) => "src." + m) + ")"
+    : "";
+  const dateColExpr = srcCfg.dateCol.includes("(")
+    ? srcCfg.dateCol.replace(/\b(timestamp|chat_created_date_time|Created_date_time|date_time|create_date_time|received_at)\b/gi, (m) => `src.\`${m}\``)
+    : `src.\`${srcCfg.dateCol}\``;
+  const params: any[] = [days];
   try {
     const [rows]: any[] = await pool.query(
-      `SELECT DATE(mb.Date_Time) AS dt,
-              mb.Date_Time AS arrival_time,
-              sbn.Timestamp_2,
-              sbn.Sent_status
-       FROM master_buffer mb
-       INNER JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id
-       WHERE mb.Date_Time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-         AND sbn.Timestamp_2 IS NOT NULL
-         AND (${likeClause})`,
+      `SELECT DATE(${dateColExpr}) AS dt,
+              ${dateColExpr} AS arrival_time,
+              COALESCE(mb.actual_time, sbn.gpt_Extraction_Status, sbn.Timestamp_2, sbn.Sent_status) AS assign_time
+       FROM \`${srcCfg.table}\` src
+       LEFT JOIN master_buffer mb 
+         ON mb.lead_id COLLATE utf8mb4_unicode_ci = src.\`${srcCfg.leadIdCol}\` COLLATE utf8mb4_unicode_ci
+       LEFT JOIN staging_buffer_new sbn 
+         ON sbn.Lead_id COLLATE utf8mb4_unicode_ci = src.\`${srcCfg.leadIdCol}\` COLLATE utf8mb4_unicode_ci
+       WHERE ${dateColExpr} >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+         AND (sbn.Assign_To_MR_Main IS NOT NULL AND sbn.Assign_To_MR_Main != '')
+         ${sourceWhere}`,
       params
     );
 
@@ -355,14 +403,13 @@ async function queryTAT(
       const arrival = parseDateRobust(r.arrival_time);
       if (!arrival) continue;
 
-      const reached = parseDateRobust(r.Timestamp_2) || parseDateRobust(r.Sent_status);
+      const reached = parseDateRobust(r.assign_time);
       if (!reached) continue;
 
       const diffSec = Math.floor((reached.getTime() - arrival.getTime()) / 1000);
-      if (diffSec >= -300 && diffSec <= 172800) {
-        const effectiveSec = Math.min(Math.max(0, diffSec), 86400);
+      if (diffSec >= 0 && diffSec <= 86400) {
         if (!dateStats[dt]) dateStats[dt] = { totalSec: 0, count: 0 };
-        dateStats[dt].totalSec += effectiveSec;
+        dateStats[dt].totalSec += diffSec;
         dateStats[dt].count += 1;
       }
     }
@@ -375,7 +422,7 @@ async function queryTAT(
     }
     return byDate;
   } catch (err) {
-    console.warn('[lead-loss] queryTAT error:', err);
+    console.warn(`[lead-loss] queryTAT error for ${srcCfg.source}:`, err);
     return {};
   }
 }
@@ -391,7 +438,9 @@ function buildLostRecords(
   globalBufferMap: Map<string, Array<{ leadId: string; time: number; dateStr: string }>>,
   source: string,
   date: string,
-  company: string
+  company: string,
+  bufLeadIdSet?: Set<string>,
+  crmLeadIdSet?: Set<string>
 ): any[] {
   const records: any[] = [];
   const seen24h = new Map<string, string>();
@@ -401,17 +450,21 @@ function buildLostRecords(
     const norm = normMobile(mobile);
     const t = directTimestamps?.[i] ?? new Date(date).getTime();
 
-    const inBuf = norm ? bufSet.has(norm) : false;
+    const inBufById = Boolean(leadId && bufLeadIdSet?.has(leadId));
+    const inBuf = (norm ? bufSet.has(norm) : false) || inBufById;
     const isDirectDupe = Boolean(norm && seen24h.has(norm));
     if (norm && !seen24h.has(norm)) seen24h.set(norm, leadId);
 
     const bufs = norm ? (globalBufferMap.get(norm) || []) : [];
+    const matchingBufRow = norm ? bufs.find(b => b.mobile === norm) : null;
+    const isDifferentLead = Boolean(!inBufById && matchingBufRow && matchingBufRow.leadId && matchingBufRow.leadId !== leadId);
+
     const prior24Match = (!inBuf && norm) ? bufs.find(b => {
       const diffHours = (t - b.time) / (3600 * 1000);
       return (diffHours >= -6 && diffHours <= 48) || (b.dateStr && b.dateStr <= date);
     }) : null;
 
-    if (inBuf) {
+    if (inBuf && !isDifferentLead) {
       if (isDirectDupe) {
         records.push({
           id: leadId, name: "", phone: mobile, date, company, source,
@@ -426,7 +479,7 @@ function buildLostRecords(
           reason: "Duplicate mobile in Direct API on same day",
         });
       } else {
-        const inCrm = crmSet.has(norm);
+        const inCrm = (norm ? crmSet.has(norm) : false) || Boolean(leadId && crmLeadIdSet?.has(leadId));
         if (!inCrm) {
           records.push({
             id: leadId, name: "", phone: mobile, date, company, source,
@@ -442,6 +495,19 @@ function buildLostRecords(
           });
         }
       }
+    } else if (isDifferentLead) {
+      records.push({
+        id: leadId, name: "", phone: mobile, date, company, source,
+        generatedAt: date, timestamp: date, transferTimestamp: "", bufferTimestamp: "",
+        currentStatus: "Filtered (24h Duplicate)", transferStatus: "Filtered",
+        bufferStatus: "Filtered (24h Buffer)", crmStatus: "Filtered",
+        assignee: "", tatMin: 0, tat: "—",
+        isDuplicate: true, validDuplicate: true, expectedDuplicateGap: true,
+        inMedium: true, toBuffer: false, inBuffer: false, inCrm: false, assigned: false,
+        mediumBufferLost: true,
+        stage: "direct", status: "Duplicate",
+        reason: `Filtered intentionally: repeated mobile (already received in Buffer ${matchingBufRow?.leadId} on ${matchingBufRow?.dateStr})`,
+      });
     } else if (prior24Match) {
       records.push({
         id: leadId, name: "", phone: mobile, date, company, source,
@@ -615,6 +681,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
     const nameCol = srcCfg.nameCol ? `\`${srcCfg.nameCol}\`` : "NULL";
     const emailCol = srcCfg.emailCol ? `\`${srcCfg.emailCol}\`` : "NULL";
     const where = srcCfg.sourceFilter ? `AND (${srcCfg.sourceFilter})` : "";
+    const dateExpr = srcCfg.dateCol.includes("(") ? srcCfg.dateCol : `\`${srcCfg.dateCol}\``;
 
     let directRows: any[] = [];
     try {
@@ -623,11 +690,11 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
                \`${srcCfg.mobileCol}\` AS mobile,
                ${nameCol} AS client_name,
                ${emailCol} AS email,
-               \`${srcCfg.dateCol}\` AS date_time
+               ${dateExpr} AS date_time
         FROM \`${srcCfg.table}\`
-        WHERE \`${srcCfg.dateCol}\` >= ? AND \`${srcCfg.dateCol}\` < DATE_ADD(?, INTERVAL 1 DAY)
+        WHERE ${dateExpr} >= ? AND ${dateExpr} < DATE_ADD(?, INTERVAL 1 DAY)
         ${where}
-        ORDER BY \`${srcCfg.dateCol}\` ASC
+        ORDER BY ${dateExpr} ASC
       `;
       const [r]: any[] = await pool.query(sqlFast, [date, date]);
       directRows = r;
@@ -638,11 +705,11 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
                  \`${srcCfg.mobileCol}\` AS mobile,
                  ${nameCol} AS client_name,
                  ${emailCol} AS email,
-                 \`${srcCfg.dateCol}\` AS date_time
+                 ${dateExpr} AS date_time
           FROM \`${srcCfg.table}\`
-          WHERE DATE(\`${srcCfg.dateCol}\`) = ?
+          WHERE DATE(${dateExpr}) = ?
           ${where}
-          ORDER BY \`${srcCfg.dateCol}\` ASC
+          ORDER BY ${dateExpr} ASC
         `;
         const [r]: any[] = await pool.query(sqlFallback, [date]);
         directRows = r;
@@ -668,7 +735,8 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       const isDup = Boolean(norm && seenMobiles.has(norm));
       if (norm) seenMobiles.add(norm);
 
-      const bufMatch = norm ? sameDayMap.get(norm) : sameDayMap.get(leadId);
+      const bufMatch = sameDayMap.get(leadId) || (norm ? sameDayMap.get(norm) : null);
+      const isDifferentLead = Boolean(bufMatch && bufMatch.lead_id && String(bufMatch.lead_id).trim() !== leadId);
       const sameDayGlobalMatch = (!bufMatch && norm) ? sameDayGlobalMap.get(norm) : null;
       const rawTime = parseDateRobust(r.date_time) || (r.date_time ? new Date(r.date_time) : null);
       const formattedTime = rawTime ? rawTime.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
@@ -711,7 +779,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       let inCrm = false;
       let assigned = false;
 
-      if (bufMatch) {
+      if (bufMatch && !isDifferentLead) {
         if (isDup) {
           status = "Duplicate";
           currentStatus = "Filtered (Same-day Duplicate)";
@@ -745,6 +813,14 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
             reason = "Lead arrived in Buffer/CRM, awaiting salesperson or dialer allocation";
           }
         }
+      } else if (isDifferentLead) {
+        status = "Duplicate";
+        currentStatus = "Filtered (24h Duplicate)";
+        bufferStatus = "Filtered";
+        crmStatus = "Filtered";
+        transferStatus = "Filtered";
+        const bufFormatted = bufMatch?.Date_Time ? new Date(new Date(bufMatch.Date_Time).getTime() + 5.5 * 3600 * 1000).toLocaleString("en-IN") : "";
+        reason = `Filtered intentionally: repeated mobile (already received in Buffer as ${bufMatch?.lead_id} on ${bufFormatted})`;
       } else if (sameDayGlobalMatch) {
         status = "Duplicate";
         currentStatus = "Filtered (Same-day Duplicate)";
@@ -852,14 +928,13 @@ export async function GET(request: Request) {
     const companyData = await Promise.all(
       COMPANY_CONFIG.map(async (co) => {
         if (companyFilter && !co.company.toLowerCase().includes(companyFilter)) return null;
-        const [bufferRes, crmData, kserveData, salesData, tatData] = await Promise.all([
+        const [bufferRes, crmData, kserveData, salesData] = await Promise.all([
           queryBuffer(pool, co.bufferMatch, days),
           queryCRM(pool, co.bufferMatch, days),
           queryKServe(pool, co.bufferMatch, days),
           querySales(pool, co.bufferMatch, days),
-          queryTAT(pool, co.bufferMatch, days),
         ]);
-        return { co, bufferRes, crmData, kserveData, salesData, tatData };
+        return { co, bufferRes, crmData, kserveData, salesData };
       })
     );
 
@@ -882,12 +957,20 @@ export async function GET(request: Request) {
 
     for (const cd of companyData) {
       if (!cd) continue;
-      const { co, bufferRes, crmData, kserveData, salesData, tatData } = cd;
+      const { co, bufferRes, crmData, kserveData, salesData } = cd;
 
       // Use company-scoped buffer map for 24h prior duplicate detection, with fallback to global buffer map
       const companyBufMap = companyBufferMaps.get(co.companyKey) ?? new Map<string, Array<{ leadId: string; time: number; dateStr: string }>>();
 
       for (const srcCfg of co.sources) {
+        // Fetch TAT per-source so each source gets its own average (not company-wide average)
+        let tatData: Record<string, { avgSec: number }> = {};
+        try {
+          tatData = await queryTAT(pool, srcCfg, days);
+        } catch (err) {
+          console.warn(`[lead-loss] TAT fetch failed for ${srcCfg.source}:`, err);
+        }
+
         let directByDate: DirectEntry[];
         try {
           directByDate = await queryDirectTable(pool, srcCfg, days);
@@ -901,9 +984,11 @@ export async function GET(request: Request) {
           const key = `${co.company}__${srcCfg.source}__${date}`;
 
           const bufSet: Set<string> = bufferRes.byDate[date] ?? new Set<string>();
-          const crmSet: Set<string> = crmData[date] ?? new Set<string>();
-          const kvSet: Set<string> = kserveData[date] ?? new Set<string>();
-          const sSet: Set<string> = salesData[date] ?? new Set<string>();
+          const bufLeadIdSet: Set<string> = bufferRes.byLeadId[date] ?? new Set<string>();
+          const crmSet: Set<string> = crmData.byDate[date] ?? new Set<string>();
+          const crmLeadIdSet: Set<string> = crmData.byLeadId[date] ?? new Set<string>();
+          const kvSet: Set<string> = kserveData.byDate[date] ?? new Set<string>();
+          const sSet: Set<string> = salesData.byDate[date] ?? new Set<string>();
           const avgTatSec = tatData[date]?.avgSec || 0;
           const avgTatMin = Math.round(avgTatSec / 60);
 
@@ -917,36 +1002,41 @@ export async function GET(request: Request) {
           for (let i = 0; i < mobiles.length; i++) {
             const raw = mobiles[i];
             const m = normMobile(raw);
+            const leadId = String(leadIds[i] ?? "").trim();
             const t = timestamps?.[i] ?? new Date(date).getTime();
-            if (!m) continue;
 
-            const inBuf = bufSet.has(m);
-            const isDirectDupe = seenDirectMobiles.has(m);
-            seenDirectMobiles.add(m);
+            const inBufById = Boolean(leadId && bufLeadIdSet.has(leadId));
+            const inBufByMobile = Boolean(m && bufSet.has(m));
+            const inBuf = inBufById || inBufByMobile;
+            const isDirectDupe = Boolean(m && seenDirectMobiles.has(m));
+            if (m) seenDirectMobiles.add(m);
 
             // Check company-scoped buffer first, then fall back to global buffer across all companies
-            const bufs = companyBufMap.get(m) || globalBufferMap.get(m) || [];
-            const priorMatch = !inBuf ? bufs.find(b => {
+            const bufs = (m ? (companyBufMap.get(m) || globalBufferMap.get(m)) : []) || [];
+            const matchingBufRow = m ? bufs.find(b => b.mobile === m) : null;
+            const isDifferentLead = Boolean(!inBufById && matchingBufRow && matchingBufRow.leadId && matchingBufRow.leadId !== leadId);
+
+            const priorMatch = (!inBuf && m) ? bufs.find(b => {
               const diffHours = (t - b.time) / (3600 * 1000);
               return (diffHours >= -6 && diffHours <= 48) || (b.dateStr && b.dateStr <= date);
             }) : null;
 
             // Late transfer: buffer arrived AFTER direct API lead (next-day or within 72h forward)
-            const lateMatch = (!inBuf && !priorMatch && !isDirectDupe) ? bufs.find(b => {
+            const lateMatch = (!inBuf && !priorMatch && !isDirectDupe && m) ? bufs.find(b => {
               const diffHours = (b.time - t) / (3600 * 1000); // positive = buffer came after lead
               return diffHours > 0 && diffHours <= 72;
             }) : null;
 
-            if (inBuf) {
+            if (inBuf && !isDifferentLead) {
               if (isDirectDupe) {
                 sameDayDuplicates++;
               } else {
                 buffer++;
-                if (crmSet.has(m)) crm++;
-                if (kvSet.has(m)) kserve++;
-                if (sSet.has(m)) sales++;
+                if ((m && crmSet.has(m)) || (leadId && crmLeadIdSet.has(leadId))) crm++;
+                if (m && kvSet.has(m)) kserve++;
+                if (m && sSet.has(m)) sales++;
               }
-            } else if (priorMatch) {
+            } else if (isDifferentLead || priorMatch) {
               prior24hDuplicates++;
             } else if (lateMatch) {
               lateTransfers++;
@@ -971,7 +1061,7 @@ export async function GET(request: Request) {
           const assigned = kserve + sales;
 
           const lostRecords = buildLostRecords(
-            mobiles, leadIds, timestamps, bufSet, crmSet, globalBufferMap, srcCfg.source, date, co.company
+            mobiles, leadIds, timestamps, bufSet, crmSet, globalBufferMap, srcCfg.source, date, co.company, bufLeadIdSet, crmLeadIdSet
           );
 
           const existing = rowMap[key];
