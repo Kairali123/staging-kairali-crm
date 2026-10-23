@@ -14,3 +14,5 @@
 | 2026-09-21 | The company name abbreviation is KAPPL (Kairali Ayurvedic Products Pvt. Ltd.), never KPPL. Calling KPI cards and reports must display KAPPL. | Official company brand abbreviation is KAPPL | User instruction | KPPL label in daily alert and sales report cards |
 
 | 2026-10-05 | User approved the CRM-style trigger dashboard design and requested final functional code on staging; TRG-001 is the active work for this turn, with DB-012 checkpoint preserved | Explicit chat instruction | User | Design-only scope |
+
+| 2026-10-23 | User requested replacement of Client Assigned to Doctor Reports in staging Email Triggers and explicitly requested deployment to staging-kairali-crm.vercel.app. Legacy Apps Script will be disabled by user later; prepare the new daily setting paused for cutover. | Direct chat instruction | User | Staging deployment authorised; legacy disable and live send not performed |

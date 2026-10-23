@@ -7,6 +7,7 @@ import { readState, transaction } from '@/lib/email-triggers/store'
 import { removeTrigger, auditSeedSuppressed, TriggerDeleteError } from '@/lib/email-triggers/delete'
 import { nextRun } from '@/lib/email-triggers/schedule'
 import { emailReportTemplates, canonicalTemplateName } from '@/lib/email-report-template'
+import { seedDoctorAssignmentDraft } from '@/lib/email-triggers/doctor-assignment-default'
 import { seedTriggerHealthDraft } from '@/lib/email-triggers/trigger-health-default'
 
 export const runtime = 'nodejs'
@@ -304,6 +305,9 @@ export async function GET(req: NextRequest) {
         console.warn('[email-trigger-config] Auto-seed KTAHV ktahv-daily-sales-report skipped:', err)
       }
     }
+    if (!state.triggers.some(t => t.reportId === 'client-assigned-doctor-report') && !state.seedSuppressed?.includes('client-assigned-doctor-report') && state.triggers.length < 100) {
+      state = await transaction(s => { seedDoctorAssignmentDraft(s); return s })
+    }
     if (!process.env.VERCEL) {
       try {
         const { ensureEmailSchedulerRunning } = await import('@/lib/email-triggers/scheduler-service')
@@ -346,6 +350,7 @@ export async function POST(req: NextRequest) {
       if (input.status === 'Active' && (!marketingMailConfig().configured || !isWorkerReady(s.heartbeat))) {
         throw Error('SMTP and background worker must be ready before activating')
       }
+      if (input.reportId === 'client-assigned-doctor-report' && input.status === 'Active' && s.triggers.some(t => t.id !== input.id && t.reportId === input.reportId && t.status === 'Active')) throw Error('A doctor assignment trigger is already active')
       if (s.triggers.length >= 100 && !previous) throw Error('Maximum 100 triggers')
       const item = {
         ...input,

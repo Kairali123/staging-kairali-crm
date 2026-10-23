@@ -18,7 +18,7 @@ export function removeTrigger(s: State, id: string, revision?: number) {
   }
   s.triggers = s.triggers.filter(t => t.id !== id)
   // The default audit trigger is re-created whenever none exists; remember the delete so it stays gone.
-  if ([AUDIT_REPORT_ID, 'trigger-health-digest', 'ktahv-daily-sales-report'].includes(trigger.reportId) && !s.triggers.some(t => t.reportId === trigger.reportId)) {
+  if (['client-assigned-doctor-report', AUDIT_REPORT_ID, 'trigger-health-digest', 'ktahv-daily-sales-report'].includes(trigger.reportId) && !s.triggers.some(t => t.reportId === trigger.reportId)) {
     s.seedSuppressed = [...new Set([...(s.seedSuppressed || []), trigger.reportId])]
   }
   return trigger

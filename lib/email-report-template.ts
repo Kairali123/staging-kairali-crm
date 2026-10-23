@@ -1,5 +1,6 @@
 /** Only known report identifiers can select a renderer; URLs/HTML are never accepted as templates. */
 export const emailReportTemplates = {
+  'client-assigned-doctor-report': { name: 'Client Assigned to Doctor Reports', path: '/api/doctor-assignment-preview' },
   'trigger-health-digest': { name: 'Daily Trigger Health & Failure Alert', path: '/settings/automation/trigger-management' },
   'daily-sales-report': { name: 'Daily Sales Report Alert', path: '/sales/reports/daily-alert' },
   'ktahv-daily-sales-report': { name: 'KTAHV Monthly Sales Report – Daily Progress', path: '/sales/reports/ktahv-daily-sales' },

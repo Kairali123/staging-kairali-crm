@@ -9,7 +9,7 @@ The previous DB-012 checkpoint is preserved below; no DB control work is advance
 
 ## NEXT ACTION
 
-Build and verify the dashboard, authorized discovery, project connector, execution ingestion and daily email template. Deploy only to the verified staging project. Google account consent and developer recipients remain external setup requirements.
+Deploy and verify the doctor-assignment email template on staging-kairali-crm.vercel.app/settings/automation/email-triggers under TRG-001. Source map, 20/20 regression tests, ESLint and service-account read check complete. Preserve paused cutover configuration; legacy sender remains user-controlled. Record staging runtime readback and deployment ID.
 
 ### Preserved DB-012 next action
 

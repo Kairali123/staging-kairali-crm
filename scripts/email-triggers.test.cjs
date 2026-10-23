@@ -85,3 +85,30 @@ test('deleting a trigger removes only it, keeps run history and enforces safety 
   s=mk();removeTrigger(s,'b');assert.equal(auditSeedSuppressed(s),false);
   removeTrigger(s,'c');assert.equal(auditSeedSuppressed(s),true);assert.equal(JSON.stringify(s.seedSuppressed),'["sales-call-audit"]');
 });
+
+test('doctor report maps every source field, preserves zeroes, and selects all pending rows',()=>{
+ const {selectDoctorAssignments,renderDoctorAssignments,DOCTOR_HEADERS,validateDoctorHeaders}=env.load('lib/email-triggers/doctor-assignment.ts');
+ const base=Array.from({length:25},(_,i)=>Array.from({length:27},(_,j)=>j===2?'TEST-'+i:j===19?0:'Field '+j));
+ const workflow=base.map(()=>{const w=Array(18).fill('');w[0]='23/10/2026';w[6]='Example Doctor';w[12]='Noted';return w});
+ const rows=selectDoctorAssignments(base,workflow);assert.equal(rows.length,25);assert.equal(rows[0].row,11);assert.equal(rows[24].row,35);assert.equal(rows[0].values.length,28);assert.equal(rows[0].values[19],'0');
+ const h=Array(18).fill('');h[0]='Actual';h[6]='Change The Doctor-\n(If Required)';h[12]='Status';h[17]='Email Send To Doctor for Client Assign';
+ validateDoctorHeaders(DOCTOR_HEADERS.slice(0,27),h);assert.throws(()=>validateDoctorHeaders(['Changed',...DOCTOR_HEADERS.slice(1,27)],h),/mapping changed/);
+ const html=renderDoctorAssignments(rows.slice(0,1),'2026-10-23');DOCTOR_HEADERS.forEach(label=>assert.ok(html.includes(label)));assert.ok(html.includes('Booking Status'));assert.ok(!html.includes('Preferred Call time'));
+ workflow[0][17]='Sent-23-10-2026';workflow[1][12]='Pending';workflow[2][6]='';workflow[3][0]='';assert.equal(selectDoctorAssignments(base,workflow).length,21);
+});
+test('doctor email escapes data and blocks executable booking URLs',()=>{
+ const {selectDoctorAssignments,renderDoctorAssignments}=env.load('lib/email-triggers/doctor-assignment.ts');const row=Array(27).fill('');row[2]='TEST';row[3]='<img src=x onerror=alert(1)>';row[26]='javascript:alert(1)';const w=Array(18).fill('');w[0]='date';w[6]='Doctor';w[12]='Noted';
+ const html=renderDoctorAssignments(selectDoctorAssignments([row],[w]),'2026-10-23');assert.ok(html.includes('&lt;img'));assert.ok(!html.includes('<img'));assert.ok(!html.includes('href="javascript:'));
+});
+test('doctor cutover configuration is paused, idempotent and deletion stays suppressed',()=>{
+ const {seedDoctorAssignmentDraft}=env.load('lib/email-triggers/doctor-assignment-default.ts');const schema=env.load('lib/email-triggers/schema.ts').triggerSchema;const {removeTrigger}=env.load('lib/email-triggers/delete.ts');const s={version:1,triggers:[],runs:[]};assert.equal(seedDoctorAssignmentDraft(s,new Date('2026-10-23T04:00Z')),true);const t=s.triggers[0];assert.equal(t.status,'Paused');assert.equal(t.nextRun,null);assert.equal(t.time,'09:30');assert.equal(t.to,'doctor@ktahv.com');assert.equal(schema.safeParse(t).success,true);assert.equal(schema.safeParse({...t,period:'Yesterday'}).success,false);assert.equal(seedDoctorAssignmentDraft(s),false);removeTrigger(s,t.id,t.revision);assert.equal(seedDoctorAssignmentDraft(s),false);
+});
+test('source acknowledgement happens after provider acceptance and is excluded from SMTP payload',()=>withRunner(async({store,runner,now})=>{
+ const events=[];await runner.dispatchDue(now,{build:async()=>({subject:'s',html:'h',hasData:true,afterAccepted:async()=>events.push('mark')}),send:async(_,m)=>{assert.equal(m.afterAccepted,undefined);events.push('send');return {accepted:1,rejected:0}}});assert.deepEqual(events,['send','mark']);assert.equal((await store.readState()).runs[0].status,'Accepted');
+}));
+test('partial delivery does not mark source and pauses trigger',()=>withRunner(async({store,runner,now})=>{
+ let marks=0;await runner.dispatchDue(now,{build:async()=>({subject:'s',html:'h',hasData:true,afterAccepted:async()=>marks++}),send:async()=>({accepted:1,rejected:1})});assert.equal(marks,0);assert.equal((await store.readState()).triggers[0].status,'Paused');
+}));
+test('source write failure after acceptance pauses without sending again',()=>withRunner(async({store,runner,now})=>{
+ let sends=0;const io={build:async()=>({subject:'s',html:'h',hasData:true,afterAccepted:async()=>{throw Error('Source unavailable')}}),send:async()=>{sends++;return {accepted:1,rejected:0}}};await runner.dispatchDue(now,io);await runner.dispatchDue(now+86400000,io);assert.equal(sends,1);assert.equal((await store.readState()).triggers[0].status,'Paused');assert.equal((await store.readState()).runs[0].status,'Unknown');
+}));

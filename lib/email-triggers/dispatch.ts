@@ -18,11 +18,20 @@ const esc=(s:string)=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;
 export async function buildEmail(t:Trigger,at:number){
  let date=localDay(at,'Asia/Kolkata');if(t.period==='Yesterday')date=new Date(Date.parse(date+'T00:00:00Z')-86400000).toISOString().slice(0,10);if(t.period==='Selected date')date=t.previewDate!
  const replace=(s:string)=>s.replaceAll('{{report_date}}',date).replaceAll('{{company_name}}',t.company).replaceAll('{{recipient_name}}','Team')
+ let afterAccepted:(()=>Promise<void>)|undefined
  let html='',hasData=true,attachments:any[]|undefined,donutSvg:string|null=null
  if(t.bodyType==='Full report in email body'){
   let reportTitle='Daily Report'
   let reportSlug='Daily-Report'
-  if(t.reportId==='daily-sales-report'){
+  if(t.reportId==='client-assigned-doctor-report'){
+   const {loadDoctorAssignments,acknowledgeDoctorAssignments}=await import('./load-doctor-assignments')
+   const {renderDoctorAssignments}=await import('./doctor-assignment')
+   const rows=await loadDoctorAssignments()
+   html=renderDoctorAssignments(rows,date);hasData=rows.length>0
+   reportTitle='Client Assigned to Doctor Reports';reportSlug='Doctor-Assignments'
+   afterAccepted=()=>acknowledgeDoctorAssignments(rows,date)
+  }
+  else if(t.reportId==='daily-sales-report'){
    reportTitle=t.company==='KTAHV'?'KTAHV Daily Sales Report':'Daily Sales Report'
    reportSlug=t.company==='KTAHV'?'KTAHV-Daily-Sales-Report':'Daily-Sales-Report'
    const report=await loadScheduledSales(date);const scope=t.company==='All companies'?'ALL':t.company==='VILARAAG'?'VILLARAAG':t.company;hasData=report.rows.some(r=>scope==='ALL'||r.company===scope)||scopedEmployees(report.calling,scope).length>0;html=exportSalesHTML(report,scope);donutSvg=buildSalesDonutSvg(report,scope)||null
@@ -116,7 +125,7 @@ export async function buildEmail(t:Trigger,at:number){
   // Reports with in-layout markers keep the note inside their centered column; others get it around <body>.
   html=html.includes('<!--email-intro-->')?html.replace('<!--email-intro-->',()=>p(t.intro)).replace('<!--email-closing-->',()=>p(t.closing)):html.replace(/(<body[^>]*>)/,'$1'+p(t.intro)).replace('</body>',p(t.closing)+'</body>')
   // booking-pi-review-alert and kserve-lead-lost-alert and sales-call-audit skip JPEG rendering — they use inline HTML tables
-  if(t.reportId!=='trigger-health-digest'&&t.reportId!=='sales-call-audit'&&t.reportId!=='kserve-lead-lost-alert'&&t.reportId!=='booking-pi-review-alert'&&t.reportId!=='ktahv-daily-sales-report'){
+  if(t.reportId!=='client-assigned-doctor-report'&&t.reportId!=='trigger-health-digest'&&t.reportId!=='sales-call-audit'&&t.reportId!=='kserve-lead-lost-alert'&&t.reportId!=='booking-pi-review-alert'&&t.reportId!=='ktahv-daily-sales-report'){
    try{
     const {renderJPEG}=await import('@/lib/whatsapp-triggers/render')
     if(typeof renderJPEG==='function'){
@@ -142,7 +151,7 @@ export async function buildEmail(t:Trigger,at:number){
    }
   }
  }else html='<div style="white-space:pre-wrap;font:14px/1.8 Arial">'+esc(t.bodyType==='Static'?t.body:replace(t.body))+'</div>'
- return {subject:replace(t.subject),html,hasData,...(attachments?{attachments}:{})}
+ return {subject:replace(t.subject),html,hasData,afterAccepted,...(attachments?{attachments}:{})}
 }
 export type DispatchDeps={build:typeof buildEmail;send:(t:Trigger,email:{subject:string;html:string;attachments?:any[]})=>Promise<{accepted:number;rejected:number}>}
 const deps:DispatchDeps={build:buildEmail,send:async(t,email)=>{
@@ -172,7 +181,7 @@ export async function dispatchDue(now=Date.now(),io=deps){
    else{
     const allowed=await transaction(s=>{const current=s.triggers.find(x=>x.id===t.id),r=s.runs.find(x=>x.id===run.id)!;if(!current||current.status!=='Active'||current.revision!==t.revision){r.status='Skipped';return false}r.status='Sending';r.detail='Handing message to provider';return true})
     if(!allowed){status='Skipped';detail='Configuration changed or paused before delivery'}
-    else{sending=true;const result=await io.send(t,email);status=result.rejected?'Partial':result.accepted?'Accepted':'Failed';detail=result.rejected?'Some recipients rejected; inspect mailbox before retrying':result.accepted?'Accepted by email provider (not delivery confirmation)':'Provider accepted no recipients'}
+    else{sending=true;const {afterAccepted,...message}=email;const result=await io.send(t,message);if(result.accepted>0&&!result.rejected)await afterAccepted?.();status=result.rejected?'Partial':result.accepted?'Accepted':'Failed';detail=result.rejected?'Some recipients rejected; inspect mailbox before retrying':result.accepted?'Accepted by email provider (not delivery confirmation)':'Provider accepted no recipients'}
    }
   }catch(err:any){if(sending){status='Unknown';detail='Delivery outcome uncertain. Verify mailbox before resuming.'}else{console.error('[email-trigger dispatch error]', err);detail=err?.message?`Report generation failed: ${err.message}. No email sent.`:'Report generation failed. No email sent.'}}
   await transaction(s=>{const r=s.runs.find(x=>x.id===run.id)!;Object.assign(r,{status,detail,finishedAt:new Date().toISOString()});const current=s.triggers.find(x=>x.id===t.id);if(current){current.lastResult=status;if(['Unknown','Partial'].includes(status)){current.status='Paused';current.nextRun=null}}})

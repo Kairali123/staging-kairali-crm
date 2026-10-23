@@ -77,7 +77,11 @@ export default function EmailConfigBridge({ document: documentHtml }: { document
       const scope = Object.hasOwn(companies, message.scope || '') ? message.scope : 'ALL'
       try {
         let html: string
-        if (id === 'daily-sales-report') {
+        if (id === 'client-assigned-doctor-report') {
+          const response = await fetch('/api/doctor-assignment-preview', { signal: current.signal, cache: 'no-store' })
+          html = await response.text()
+          if (!response.ok) throw new Error('Doctor assignment source unavailable. Check Google access and field mapping.')
+        } else if (id === 'daily-sales-report') {
           const response = await fetch('/api/daily-sales-report-alert?' + new URLSearchParams({ date: message.date }), { signal: current.signal, cache: 'no-store' })
           const data = await response.json()
           if (!response.ok) throw new Error(data.error || 'Report unavailable')
