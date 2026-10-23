@@ -219,7 +219,7 @@ export function exportKtahvDailySalesHTML(data: KtahvDailySalesReportData): stri
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>KTAHV Daily Sales Report · ${esc(data.reportDate)}</title>
+  <title>KTAHV Monthly Sales Report – Daily Progress · ${esc(data.reportDate)}</title>
   <style>
     body { margin:0; padding:0; background:#0b1329; color:#1e293b; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; }
     table { border-collapse:collapse; }
@@ -258,7 +258,7 @@ export function exportKtahvDailySalesHTML(data: KtahvDailySalesReportData): stri
     <!-- Hero Header -->
     <div class="hero">
       <div class="brand">KAIRALI GROUP · KTAHV SALES AUTOMATION</div>
-      <h1>KTAHV SALES DAILY REPORT</h1>
+      <h1>KTAHV MONTHLY SALES REPORT – DAILY PROGRESS</h1>
       <p class="hero-sub">From ${esc(data.dateRange.from)} to ${esc(data.dateRange.to)} · Report Generated at ${esc(data.generatedAt)}</p>
       
       <div class="stat-row">
@@ -287,14 +287,15 @@ export function exportKtahvDailySalesHTML(data: KtahvDailySalesReportData): stri
 
     <!-- Section 1: Planned vs Actual Overview -->
     <div class="card">
-      <h2 class="card-title">1. Planned vs Actual Metrics Overview</h2>
-      <p class="card-subtitle">Channel breakdown & operational efficiency for KTAHV</p>
+      <h2 class="card-title">1. Planned vs Actual — Channel Amount Metrics</h2>
+      <p class="card-subtitle">Verified sale revenue achieved vs monthly budget by channel/source</p>
       
       <table class="rt">
         <thead>
           <tr>
             <th>Channel / Source</th>
             <th class="text-right">Actual Verified</th>
+            <th class="text-right">Non-Verified</th>
             <th class="text-right">Target</th>
             <th class="text-right">Shortfall %</th>
           </tr>
@@ -304,10 +305,42 @@ export function exportKtahvDailySalesHTML(data: KtahvDailySalesReportData): stri
             <tr ${m.category === 'TOTAL' ? 'style="font-weight:700;background:#f8fafc;"' : ''}>
               <td><strong>${esc(m.category)}</strong></td>
               <td class="text-right">${formatINR(m.actualVerified)}</td>
+              <td class="text-right" style="color:#94a3b8;">${formatINR(m.actualNonVerified ?? 0)}</td>
               <td class="text-right">${formatINR(m.target)}</td>
               <td class="text-right">
                 <span class="badge ${m.shortfallPct >= 0 ? 'badge-green' : 'badge-red'}">
                   ${formatPct(m.shortfallPct)}
+                </span>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Section 1b: Booking Quantity Planned vs Actual -->
+    <div class="card">
+      <h2 class="card-title">1b. Bookings Quantity — Planned vs Actual</h2>
+      <p class="card-subtitle">Confirmed booking count across channels vs monthly target</p>
+      
+      <table class="rt">
+        <thead>
+          <tr>
+            <th>Channel / Source</th>
+            <th class="text-right">Actual Orders</th>
+            <th class="text-right">Target</th>
+            <th class="text-right">Shortfall %</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.quantityMetrics.map(q => `
+            <tr ${q.category === 'TOTAL' ? 'style="font-weight:700;background:#f8fafc;"' : ''}>
+              <td><strong>${esc(q.category)}</strong></td>
+              <td class="text-right"><strong>${q.actual}</strong> orders</td>
+              <td class="text-right">${q.target}</td>
+              <td class="text-right">
+                <span class="badge ${q.shortfallPct >= 0 ? 'badge-green' : 'badge-red'}">
+                  ${formatPct(q.shortfallPct)}
                 </span>
               </td>
             </tr>
@@ -328,17 +361,25 @@ export function exportKtahvDailySalesHTML(data: KtahvDailySalesReportData): stri
             <th class="text-right">Calls Uploaded</th>
             <th class="text-right">Converted Qty</th>
             <th class="text-right">Verified Sale Amount</th>
+            <th class="text-right">Run-rate Share</th>
           </tr>
         </thead>
         <tbody>
-          ${data.weeklyBreakdown.map(w => `
-            <tr>
-              <td><strong>${esc(w.week)}</strong></td>
-              <td class="text-right">${formatNum(w.calls)}</td>
-              <td class="text-right">${formatNum(w.convertedQty)}</td>
-              <td class="text-right"><strong>${formatINR(w.verifiedSaleAmt)}</strong></td>
-            </tr>
-          `).join('')}
+          ${(() => {
+            const totalWeeklySale = data.weeklyBreakdown.reduce((sum, item) => sum + item.verifiedSaleAmt, 0)
+            return data.weeklyBreakdown.map(w => {
+              const share = totalWeeklySale > 0 ? (w.verifiedSaleAmt / totalWeeklySale) * 100 : 0
+              return `
+                <tr>
+                  <td><strong>${esc(w.week)}</strong></td>
+                  <td class="text-right">${formatNum(w.calls)}</td>
+                  <td class="text-right">${formatNum(w.convertedQty)}</td>
+                  <td class="text-right"><strong>${formatINR(w.verifiedSaleAmt)}</strong></td>
+                  <td class="text-right"><span class="badge badge-blue">${share.toFixed(1)}%</span></td>
+                </tr>
+              `
+            }).join('')
+          })()}
         </tbody>
       </table>
     </div>
@@ -346,7 +387,7 @@ export function exportKtahvDailySalesHTML(data: KtahvDailySalesReportData): stri
     <!-- Section 3: Employee-wise Sales Performance Table -->
     <div class="card">
       <h2 class="card-title">3. KTAHV Sales of the Month — Performance Leaderboard</h2>
-      <p class="card-subtitle">Detailed employee orders, sales value, calling activity and collection performance</p>
+      <p class="card-subtitle">Full employee breakdown: Orders, NBD, CRR, Sales Value, Calls, Collections & Pending Balance</p>
       
       <div style="overflow-x:auto;">
         <table class="rt">
@@ -355,10 +396,14 @@ export function exportKtahvDailySalesHTML(data: KtahvDailySalesReportData): stri
               <th>Rank & Agent</th>
               <th class="text-right">Orders (Ver/Plan)</th>
               <th class="text-right">% Orders</th>
-              <th class="text-right">Sales Verified</th>
+              <th class="text-right">NBD Orders</th>
+              <th class="text-right">CRR Orders</th>
+              <th class="text-right">Verified Sale Amt</th>
               <th class="text-right">Planned Value</th>
               <th class="text-right">% Target</th>
-              <th class="text-right">Calls (Done)</th>
+              <th class="text-right">NBD Sale Amt</th>
+              <th class="text-right">CRR Sale Amt</th>
+              <th class="text-right">Calls Done</th>
               <th class="text-right">Collections</th>
               <th class="text-right">Pending Balance</th>
             </tr>
@@ -373,13 +418,17 @@ export function exportKtahvDailySalesHTML(data: KtahvDailySalesReportData): stri
                     ${formatPct(p.orderTargetAchievedPct)}
                   </span>
                 </td>
+                <td class="text-right">${p.actualVerifiedNBDOrders} / ${p.plannedNBDOrders}</td>
+                <td class="text-right">${p.actualVerifiedCRROrders} / ${p.plannedCRROrders}</td>
                 <td class="text-right"><strong>${formatINR(p.verifiedActualSaleAmount)}</strong></td>
-                <td class="text-right">${formatINR(p.plannedTotalSaleValue)}</td>
+                <td class="text-right" style="color:#64748b;">${formatINR(p.plannedTotalSaleValue)}</td>
                 <td class="text-right">
                   <span class="badge ${p.saleValueAchievedPct >= 0 ? 'badge-green' : 'badge-red'}">
                     ${formatPct(p.saleValueAchievedPct)}
                   </span>
                 </td>
+                <td class="text-right">${formatINR(p.actualNBDSaleAmount)}</td>
+                <td class="text-right">${formatINR(p.actualCRRSaleAmount)}</td>
                 <td class="text-right">${formatNum(p.totalCallsUploaded)}</td>
                 <td class="text-right" style="color:#059669;font-weight:700;">${formatINR(p.collectionAmount)}</td>
                 <td class="text-right" style="color:#dc2626;">${formatINR(p.pendingPayments)}</td>
@@ -391,12 +440,16 @@ export function exportKtahvDailySalesHTML(data: KtahvDailySalesReportData): stri
               <td>Grand Total</td>
               <td class="text-right">${data.salespeopleTotal.actualVerifiedOrders} / ${data.salespeopleTotal.plannedTotalOrders}</td>
               <td class="text-right">${formatPct(data.salespeopleTotal.orderTargetAchievedPct)}</td>
+              <td class="text-right">${data.salespeopleTotal.actualVerifiedNBDOrders} / ${data.salespeopleTotal.plannedNBDOrders}</td>
+              <td class="text-right">${data.salespeopleTotal.actualVerifiedCRROrders} / ${data.salespeopleTotal.plannedCRROrders}</td>
               <td class="text-right">${formatINR(data.salespeopleTotal.verifiedActualSaleAmount)}</td>
               <td class="text-right">${formatINR(data.salespeopleTotal.plannedTotalSaleValue)}</td>
               <td class="text-right">${formatPct(data.salespeopleTotal.saleValueAchievedPct)}</td>
+              <td class="text-right">${formatINR(data.salespeopleTotal.actualNBDSaleAmount)}</td>
+              <td class="text-right">${formatINR(data.salespeopleTotal.actualCRRSaleAmount)}</td>
               <td class="text-right">${formatNum(data.salespeopleTotal.totalCallsUploaded)}</td>
-              <td class="text-right">${formatINR(data.salespeopleTotal.collectionAmount)}</td>
-              <td class="text-right">${formatINR(data.salespeopleTotal.pendingPayments)}</td>
+              <td class="text-right" style="color:#059669;">${formatINR(data.salespeopleTotal.collectionAmount)}</td>
+              <td class="text-right" style="color:#dc2626;">${formatINR(data.salespeopleTotal.pendingPayments)}</td>
             </tr>
           </tfoot>
         </table>
@@ -411,7 +464,7 @@ export function exportKtahvDailySalesHTML(data: KtahvDailySalesReportData): stri
       <table class="rt">
         <thead>
           <tr>
-            <th>Salesperson</th>
+            <th>Rank & Salesperson</th>
             <th class="text-right">Pre-Discount Amount</th>
             <th class="text-right">Avg Discount %</th>
             <th class="text-right">Discount Given</th>
@@ -419,9 +472,9 @@ export function exportKtahvDailySalesHTML(data: KtahvDailySalesReportData): stri
           </tr>
         </thead>
         <tbody>
-          ${data.discountReport.slice(0, 6).map(d => `
+          ${data.discountReport.map(d => `
             <tr>
-              <td><strong>${esc(d.salesPerson)}</strong></td>
+              <td><strong>${d.rank}. ${esc(d.salesPerson)}</strong></td>
               <td class="text-right">${formatINR(d.totalBookingAmountBeforeDiscount)}</td>
               <td class="text-right"><span class="badge badge-amber">${d.avgDiscountPct.toFixed(1)}%</span></td>
               <td class="text-right" style="color:#dc2626;">${formatINR(d.totalDiscountAmount)}</td>
@@ -443,7 +496,7 @@ export function exportKtahvDailySalesHTML(data: KtahvDailySalesReportData): stri
 
     <!-- Section 5: Cancellations Summary -->
     <div class="card">
-      <h2 class="card-title">5. Recent Cancellations (MTD)</h2>
+      <h2 class="card-title">5. Cancellations with Verified Reasons (MTD)</h2>
       <p class="card-subtitle">Total cancelled amount: ${formatINR(data.financialBadges.bookingCancelledAmount)} (${data.cancelledBookings.length} records)</p>
       
       <table class="rt">
@@ -453,26 +506,33 @@ export function exportKtahvDailySalesHTML(data: KtahvDailySalesReportData): stri
             <th>Client Name</th>
             <th>Booking Date/Time</th>
             <th style="color:#dc2626;">🕐 Cancelled At</th>
-            <th>Package / Program</th>
+            <th>Stay Dates</th>
+            <th>Package / Room</th>
             <th class="text-right">Amount</th>
             <th>Booking By</th>
-            <th>Remarks / Status</th>
+            <th>Status</th>
+            <th>Remarks / Reason</th>
           </tr>
         </thead>
         <tbody>
-          ${data.cancelledBookings.slice(0, 5).map(c => `
+          ${data.cancelledBookings.map(c => `
             <tr>
               <td><strong>${esc(c.reservationId)}</strong></td>
               <td>${esc(c.clientName)}</td>
-              <td style="font-size:11px;color:#64748b;">${esc(c.bookingDateTime || '—')}</td>
-              <td>
+              <td style="font-size:11px;color:#64748b;white-space:nowrap;">${esc(c.bookingDateTime || '—')}</td>
+              <td style="white-space:nowrap;">
                 <span style="font-weight:bold;color:#dc2626;">${esc(c.cancelledDate ? c.cancelledDate.split(' ')[0] : '—')}</span>
                 ${c.cancelledDate && c.cancelledDate.split(' ')[1] ? `<br/><span style="font-size:10px;color:#ef4444;">${esc(c.cancelledDate.split(' ')[1])}</span>` : ''}
               </td>
-              <td>${esc(c.packageName || 'Standard Package')}</td>
+              <td style="font-size:11px;color:#64748b;white-space:nowrap;">${esc(c.arrivalDate)} → ${esc(c.departureDate)} (${c.daysOfStay}d)</td>
+              <td>
+                <div>${esc(c.packageName || 'Standard Package')}</div>
+                <div style="font-size:10px;color:#94a3b8;">${esc(c.roomCategory)}</div>
+              </td>
               <td class="text-right"><strong>${formatINR(c.invoiceAmount)}</strong></td>
               <td>${esc(c.bookingTakenBy)}</td>
               <td><span class="badge badge-red">${esc(c.accountsStatus || c.actionStatus || 'Cancelled')}</span></td>
+              <td style="color:#64748b;font-size:11px;">${esc(c.doerRemarks || c.accountsRemarks || 'Auto-released by policy')}</td>
             </tr>
           `).join('')}
         </tbody>
@@ -517,18 +577,53 @@ export function exportKtahvDailySalesHTML(data: KtahvDailySalesReportData): stri
     </div>
     ` : ''}
 
+    <!-- Section 7: Marketing Lead Target Report -->
+    <div class="card">
+      <h2 class="card-title">7. Marketing Lead Target Report (Daily)</h2>
+      <p class="card-subtitle">Daily target vs Fresh vs CRR leads and percentage achieved</p>
+      
+      <table class="rt">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th class="text-right">Target Leads</th>
+            <th class="text-right">Fresh Leads</th>
+            <th class="text-right">CRR Leads</th>
+            <th class="text-right">Actual Leads</th>
+            <th class="text-right">Achievement %</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.marketingLeads.map(m => `
+            <tr>
+              <td><strong>${esc(m.date)}</strong></td>
+              <td class="text-right">${m.targetLead}</td>
+              <td class="text-right">${m.freshLead}</td>
+              <td class="text-right">${m.crrLead}</td>
+              <td class="text-right"><strong>${m.actualLead}</strong></td>
+              <td class="text-right">
+                <span class="badge ${m.targetAchievedPct >= 0 ? 'badge-green' : 'badge-red'}">
+                  ${formatPct(m.targetAchievedPct)}
+                </span>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+
     <!-- Interactive CRM Access CTA -->
     <div style="text-align:center; padding:32px 16px;">
       <a href="https://crm.kairali.com/sales/reports/ktahv-daily-sales" class="cta-btn">
         Open Full Interactive Dashboard in CRM &rarr;
       </a>
       <p style="margin-top:10px; font-size:12px; color:#64748b;">
-        Includes full drilldown, checkout/checkin forecasts, search, and instant PDF download.
+        Includes full drilldown, checkout/checkin forecasts, agent search, and instant PDF download.
       </p>
     </div>
 
     <div class="footer">
-      Kairali Ayurvedic Health Village · Automated Daily Sales Report · Prepared for Management &amp; Sales HO
+      Kairali Ayurvedic Health Village · KTAHV Monthly Sales Report – Daily Progress · Prepared for Management &amp; Sales HO
     </div>
   </div>
 </body>

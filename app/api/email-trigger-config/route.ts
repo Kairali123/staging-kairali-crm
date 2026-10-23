@@ -228,16 +228,29 @@ export async function GET(req: NextRequest) {
         console.warn('[email-trigger-config] Auto-seed morning-lead-allocation skipped:', err)
       }
     }
-    // Auto-seed: KTAHV Daily Sales Report (daily 10:45 IST) if not yet present
-    if (!state.triggers.some(t => t.reportId === 'ktahv-daily-sales-report') && !state.seedSuppressed?.includes('ktahv-daily-sales-report')) {
+    // Auto-seed or update: KTAHV Monthly Sales Report – Daily Progress (daily 10:45 IST)
+    if (!state.seedSuppressed?.includes('ktahv-daily-sales-report')) {
       try {
         state = await transaction(s => {
-          if (!s.triggers.some(t => t.reportId === 'ktahv-daily-sales-report')) {
+          const existing = s.triggers.find(t => t.reportId === 'ktahv-daily-sales-report')
+          if (existing) {
+            if (existing.name === 'KTAHV Daily Sales Report') {
+              existing.name = emailReportTemplates['ktahv-daily-sales-report'].name
+              existing.source = emailReportTemplates['ktahv-daily-sales-report'].name
+              existing.template = emailReportTemplates['ktahv-daily-sales-report'].name
+              if (existing.subject.includes('KTAHV Daily Sales Report')) {
+                existing.subject = existing.subject.replace('KTAHV Daily Sales Report', 'KTAHV Monthly Sales Report – Daily Progress')
+              }
+              if (existing.intro && existing.intro.includes('KTAHV Daily Sales Report')) {
+                existing.intro = existing.intro.replace('KTAHV Daily Sales Report', 'KTAHV Monthly Sales Report – Daily Progress')
+              }
+            }
+          } else {
             const now4 = Date.now()
             s.triggers.push({
               id: randomUUID(),
               revision: 1,
-              name: 'KTAHV Daily Sales Report',
+              name: 'KTAHV Monthly Sales Report – Daily Progress',
               reportId: 'ktahv-daily-sales-report',
               source: emailReportTemplates['ktahv-daily-sales-report'].name,
               template: emailReportTemplates['ktahv-daily-sales-report'].name,
@@ -246,10 +259,10 @@ export async function GET(req: NextRequest) {
               to: 'sales.ho@kairali.com, srsales@kairali.com, info@kairali.com, webmaster@kairali.com, ose@kairali.com, outreach@kairali.com, fom@kairali.com, fo@kairali.com, gm.hv@kairali.com, director@kairali.com, marketing@kairali.com, ho.mkt@kairali.com, mkt@kairali.com, seo@kairali.com, ho.accounts@kairali.com, kvr@kairali.com, digital@kairali.com',
               cc: '',
               bcc: '',
-              subject: 'KTAHV Daily Sales Report | {{report_date}} | {{company_name}}',
+              subject: 'KTAHV Monthly Sales Report – Daily Progress | {{report_date}} | {{company_name}}',
               body: '',
               bodyType: 'Full report in email body',
-              intro: 'Dear Team,\n\nPlease find the KTAHV Daily Sales Report below.',
+              intro: 'Dear Team,\n\nPlease find the KTAHV Monthly Sales Report – Daily Progress below.',
               closing: 'Regards,\nKairali Group',
               period: 'Yesterday',
               reportDetail: 'Full report',

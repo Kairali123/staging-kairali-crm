@@ -2,7 +2,7 @@
 export const emailReportTemplates = {
   'trigger-health-digest': { name: 'Daily Trigger Health & Failure Alert', path: '/settings/automation/trigger-management' },
   'daily-sales-report': { name: 'Daily Sales Report Alert', path: '/sales/reports/daily-alert' },
-  'ktahv-daily-sales-report': { name: 'KTAHV Daily Sales Report', path: '/sales/reports/ktahv-daily-sales' },
+  'ktahv-daily-sales-report': { name: 'KTAHV Monthly Sales Report – Daily Progress', path: '/sales/reports/ktahv-daily-sales' },
   'marketing-daily-report': { name: 'Marketing Daily Report', path: '/marketing-daily-report' },
   'sales-call-audit': { name: 'Daily Call Audit Pass/Fail Report Email Template', path: '/sales-call-audit/email-template' },
   'ktahv-crr-process-report-alert': { name: 'KTAHV CRR Process Report Alert', path: '/ktahv-crr-process-report-alert' },
@@ -13,7 +13,11 @@ export const emailReportTemplates = {
 } as const
 export type EmailReportId = keyof typeof emailReportTemplates
 /** Names this report was saved under before it was renamed; still accepted and shown under the current name. */
-export const legacyTemplateNames: Record<string, EmailReportId> = { 'Daily HR Email Template': 'sales-call-audit', 'Sales Call Audit Report': 'sales-call-audit' }
+export const legacyTemplateNames: Record<string, EmailReportId> = {
+  'Daily HR Email Template': 'sales-call-audit',
+  'Sales Call Audit Report': 'sales-call-audit',
+  'KTAHV Daily Sales Report': 'ktahv-daily-sales-report',
+}
 export function canonicalTemplateName(name: string) {
   const id = Object.hasOwn(legacyTemplateNames, name) ? legacyTemplateNames[name] : undefined
   return id ? emailReportTemplates[id].name : name

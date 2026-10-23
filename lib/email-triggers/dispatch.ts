@@ -96,8 +96,8 @@ export async function buildEmail(t:Trigger,at:number){
    html=buildPendingAgingAlertEmail(agingData)
   }
   else if(t.reportId==='ktahv-daily-sales-report'){
-   reportTitle='KTAHV Daily Sales Report'
-   reportSlug='KTAHV-Daily-Sales-Report'
+   reportTitle='KTAHV Monthly Sales Report – Daily Progress'
+   reportSlug='KTAHV-Monthly-Sales-Report-Daily-Progress'
    const appUrl=process.env.NEXT_PUBLIC_APP_URL||'http://localhost:3000'
    try{
      const res=await fetch(`${appUrl}/api/ktahv-daily-sales-report?date=${date}`, { headers: { 'x-internal-report': '1' } })

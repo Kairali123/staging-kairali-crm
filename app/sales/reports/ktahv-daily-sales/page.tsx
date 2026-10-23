@@ -68,7 +68,7 @@ export default function KtahvDailySalesReportPage() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `KTAHV-Daily-Sales-Report-${data.reportDate}.html`
+    a.download = `KTAHV-Monthly-Sales-Report-Daily-Progress-${data.reportDate}.html`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -88,7 +88,7 @@ export default function KtahvDailySalesReportPage() {
               <ArrowLeft size={14} /> Sales Reports
             </Link>
             <span>/</span>
-            <span className="text-slate-800 font-semibold">KTAHV Daily Sales Report</span>
+            <span className="text-slate-800 font-semibold">KTAHV Monthly Sales Report – Daily Progress</span>
           </nav>
 
           <div className="flex items-center gap-2">
@@ -124,12 +124,11 @@ export default function KtahvDailySalesReportPage() {
           <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div>
               <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-teal-500/20 text-teal-300 text-xs font-bold tracking-wider uppercase mb-2 border border-teal-500/30">
-                KTAHV Executive Briefing · Planned vs Actual
+                KTAHV Executive Briefing · Monthly Progress
               </div>
               <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
-                KTAHV Daily Sales Report
-              </h1>
-              <p className="text-slate-300 text-sm mt-1 flex items-center gap-2">
+                KTAHV Monthly Sales Report – Daily Progress
+              </h1>              <p className="text-slate-300 text-sm mt-1 flex items-center gap-2">
                 <Calendar size={14} className="text-teal-400" />
                 <span>Period: {data ? `${data.dateRange.from} to ${data.dateRange.to}` : reportDate}</span>
                 <span className="opacity-40">|</span>
@@ -224,7 +223,7 @@ export default function KtahvDailySalesReportPage() {
         {loading && (
           <div className="bg-white rounded-2xl p-12 text-center border border-slate-200">
             <RefreshCw className="animate-spin text-teal-600 mx-auto mb-3" size={24} />
-            <p className="text-sm font-semibold text-slate-600">Loading KTAHV Daily Sales Report...</p>
+            <p className="text-sm font-semibold text-slate-600">Loading KTAHV Monthly Sales Report – Daily Progress...</p>
           </div>
         )}
 
