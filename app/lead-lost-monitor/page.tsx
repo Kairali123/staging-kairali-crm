@@ -299,7 +299,7 @@ export default function Home() {
     setForceRefreshing(force);
     setDetailRows(null);
     try {
-      const response = await fetch(force ? "/api/lead-loss?refresh=1&days=90" : "/api/lead-loss?days=90", { cache: "no-store" });
+      const response = await fetch(force ? "/api/lead-loss?refresh=1&days=30" : "/api/lead-loss?days=30", { cache: "no-store" });
       const data = await response.json() as DashboardPayload;
       setPayload(data);
       if (!response.ok || !data.live) throw new Error(data.diagnostic || "Live reconciliation source unavailable");
@@ -325,7 +325,7 @@ export default function Home() {
       }
     }
     let active = true;
-    fetch("/api/lead-loss?days=90", { cache: "no-store" })
+    fetch("/api/lead-loss?days=30", { cache: "no-store" })
       .then(response => response.json())
       .then(data => { if (active) { setPayload(data); setDetailRows(null); setLoading(false); } })
       .catch(() => { if (active) { setToast("Dashboard refresh nahi ho saka."); setLoading(false); } });

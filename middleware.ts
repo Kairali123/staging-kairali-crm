@@ -293,6 +293,7 @@ const exemptApiPaths = new Set([
   '/api/cron/kserve-lost-alert',
   '/api/kserve-alert-preview',
   '/api/voicecall/kserve-lead-lost/export',
+  '/api/lead-loss',
 ])
 
 // No active API prefix exemptions. `/api/meetings/*` stays behind the signed

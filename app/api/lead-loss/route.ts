@@ -161,170 +161,132 @@ async function queryDirectTable(
   return Object.entries(byDate).map(([date, v]) => ({ date, ...v }));
 }
 
-// ─── Buffer mobile & lead_id sets by date ───────────────────────────────────
+// ─── Unified Buffer, CRM, KServe, Sales & TAT in-memory query ─────────────────
 
-interface BufferQueryResult {
-  byDate: Record<string, Set<string>>;
-  byLeadId: Record<string, Set<string>>;
-  allBufferList: Array<{ mobile: string; time: number; dateStr: string; leadId: string }>;
+interface UnifiedBufferData {
+  companyData: Map<string, {
+    byDate: Record<string, Set<string>>;
+    byLeadId: Record<string, Set<string>>;
+    crmByDate: Record<string, Set<string>>;
+    crmByLeadId: Record<string, Set<string>>;
+    kvByDate: Record<string, Set<string>>;
+    sByDate: Record<string, Set<string>>;
+    assignTimeById: Map<string, number>;
+    assignTimeByMobile: Map<string, number>;
+  }>;
+  companyBufferMaps: Map<string, Map<string, Array<{ leadId: string; time: number; dateStr: string }>>>;
+  globalBufferMap: Map<string, Array<{ leadId: string; time: number; dateStr: string }>>;
 }
 
-async function queryBuffer(
+async function queryUnifiedBuffer(
   pool: any,
-  companyMatch: string[],
+  configs: CompanyConfig[],
   days: number
-): Promise<BufferQueryResult> {
-  const likeExprs = companyMatch.map(() => "LOWER(sbn.Lead_Relates_to_which_company) LIKE ?");
-  // Include rows where staging_buffer_new has no match (NULL) or no company set —
-  // otherwise NULL LIKE is NULL (falsy) and valid buffer rows are silently dropped.
-  const companyWhere = likeExprs.length > 0
-    ? `AND (sbn.Lead_id IS NULL OR sbn.Lead_Relates_to_which_company IS NULL OR sbn.Lead_Relates_to_which_company = '' OR ${likeExprs.join(" OR ")})`
-    : "";
-  const params: any[] = [days + 2, ...companyMatch.map((c) => `%${c.toLowerCase()}%`)];
-
+): Promise<UnifiedBufferData> {
   const [rows]: any[] = await pool.query(
     `SELECT DATE(mb.Date_Time) AS dt,
             mb.Date_Time AS arrival_time,
             mb.Mobile,
-            mb.lead_id
+            mb.lead_id,
+            sbn.Lead_id AS sbn_lead_id,
+            sbn.Lead_Relates_to_which_company,
+            sbn.Assign_To_MR_Main,
+            COALESCE(mb.actual_time, sbn.gpt_Extraction_Status, sbn.Timestamp_2, sbn.Sent_status) AS assign_time
      FROM master_buffer mb
      LEFT JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id
-     WHERE mb.Date_Time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-     ${companyWhere}`,
-    params
+     WHERE mb.Date_Time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)`,
+    [days + 2]
   );
 
-  const byDate: Record<string, Set<string>> = {};
-  const byLeadId: Record<string, Set<string>> = {};
-  const allBufferList: Array<{ mobile: string; time: number; dateStr: string; leadId: string }> = [];
+  const companyData = new Map<string, {
+    byDate: Record<string, Set<string>>;
+    byLeadId: Record<string, Set<string>>;
+    crmByDate: Record<string, Set<string>>;
+    crmByLeadId: Record<string, Set<string>>;
+    kvByDate: Record<string, Set<string>>;
+    sByDate: Record<string, Set<string>>;
+    assignTimeById: Map<string, number>;
+    assignTimeByMobile: Map<string, number>;
+  }>();
+
+  const companyBufferMaps = new Map<string, Map<string, Array<{ leadId: string; time: number; dateStr: string }>>>();
+  const globalBufferMap = new Map<string, Array<{ leadId: string; time: number; dateStr: string }>>();
+
+  for (const co of configs) {
+    companyData.set(co.companyKey, {
+      byDate: {},
+      byLeadId: {},
+      crmByDate: {},
+      crmByLeadId: {},
+      kvByDate: {},
+      sByDate: {},
+      assignTimeById: new Map(),
+      assignTimeByMobile: new Map(),
+    });
+    companyBufferMaps.set(co.companyKey, new Map());
+  }
 
   for (const r of rows as any[]) {
     const dt = rowDate(r.dt);
-    if (!byDate[dt]) byDate[dt] = new Set<string>();
-    if (!byLeadId[dt]) byLeadId[dt] = new Set<string>();
     const lid = String(r.lead_id ?? "").trim();
-    if (lid) byLeadId[dt].add(lid);
     const m = normMobile(r.Mobile);
-    if (m) byDate[dt].add(m);
-    const time = r.arrival_time ? new Date(r.arrival_time).getTime() : new Date(dt).getTime();
-    allBufferList.push({ mobile: m, time, dateStr: dt, leadId: lid });
+    const arrivalT = r.arrival_time ? new Date(r.arrival_time).getTime() : new Date(dt).getTime();
+    const relates = String(r.Lead_Relates_to_which_company ?? "").toLowerCase().trim();
+    const hasSbn = Boolean(r.sbn_lead_id || r.Assign_To_MR_Main || r.assign_time);
+    const assignee = String(r.Assign_To_MR_Main ?? "").trim();
+    const isKServe = assignee.toLowerCase().includes("kserve");
+    const isSales = Boolean(assignee && !isKServe);
+
+    // Global buffer entry
+    if (m) {
+      if (!globalBufferMap.has(m)) globalBufferMap.set(m, []);
+      globalBufferMap.get(m)!.push({ leadId: lid, time: arrivalT, dateStr: dt });
+    }
+
+    // Parsed assignment timestamp
+    let assignTMs: number | null = null;
+    if (assignee && r.assign_time) {
+      const parsed = parseDateRobust(r.assign_time);
+      if (parsed) assignTMs = parsed.getTime();
+    }
+
+    // Dispatch to matching companies
+    for (const co of configs) {
+      const matchesCompany = !relates || co.bufferMatch.some(bm => relates.includes(bm.toLowerCase()));
+      if (!matchesCompany) continue;
+
+      const cd = companyData.get(co.companyKey)!;
+      if (!cd.byDate[dt]) cd.byDate[dt] = new Set<string>();
+      if (!cd.byLeadId[dt]) cd.byLeadId[dt] = new Set<string>();
+      if (!cd.crmByDate[dt]) cd.crmByDate[dt] = new Set<string>();
+      if (!cd.crmByLeadId[dt]) cd.crmByLeadId[dt] = new Set<string>();
+      if (!cd.kvByDate[dt]) cd.kvByDate[dt] = new Set<string>();
+      if (!cd.sByDate[dt]) cd.sByDate[dt] = new Set<string>();
+
+      if (lid) cd.byLeadId[dt].add(lid);
+      if (m) cd.byDate[dt].add(m);
+
+      if (hasSbn) {
+        if (lid) cd.crmByLeadId[dt].add(lid);
+        if (m) cd.crmByDate[dt].add(m);
+      }
+      if (isKServe && m) cd.kvByDate[dt].add(m);
+      if (isSales && m) cd.sByDate[dt].add(m);
+
+      if (assignTMs !== null) {
+        if (lid) cd.assignTimeById.set(lid, assignTMs);
+        if (m) cd.assignTimeByMobile.set(m, assignTMs);
+      }
+
+      if (m) {
+        const coMap = companyBufferMaps.get(co.companyKey)!;
+        if (!coMap.has(m)) coMap.set(m, []);
+        coMap.get(m)!.push({ leadId: lid, time: arrivalT, dateStr: dt });
+      }
+    }
   }
-  return { byDate, byLeadId, allBufferList };
-}
 
-// ─── CRM mobile & lead_id sets by date ────────────────────────────────────────
-
-interface CrmQueryResult {
-  byDate: Record<string, Set<string>>;
-  byLeadId: Record<string, Set<string>>;
-}
-
-async function queryCRM(
-  pool: any,
-  companyMatch: string[],
-  days: number
-): Promise<CrmQueryResult> {
-  const likeExprs = companyMatch.map(() => "LOWER(sbn.Lead_Relates_to_which_company) LIKE ?");
-  const companyWhere = likeExprs.length > 0
-    ? `AND (sbn.Lead_Relates_to_which_company IS NULL OR sbn.Lead_Relates_to_which_company = '' OR ${likeExprs.join(" OR ")})`
-    : "";
-  const params: any[] = [days, ...companyMatch.map((c) => `%${c.toLowerCase()}%`)];
-
-  const [rows]: any[] = await pool.query(
-    `SELECT DATE(mb.Date_Time) AS dt, mb.Mobile, mb.lead_id
-     FROM master_buffer mb
-     INNER JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id
-     WHERE mb.Date_Time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-     ${companyWhere}`,
-    params
-  );
-
-  const byDate: Record<string, Set<string>> = {};
-  const byLeadId: Record<string, Set<string>> = {};
-  for (const r of rows as any[]) {
-    const dt = rowDate(r.dt);
-    if (!byDate[dt]) byDate[dt] = new Set<string>();
-    if (!byLeadId[dt]) byLeadId[dt] = new Set<string>();
-    const lid = String(r.lead_id ?? "").trim();
-    if (lid) byLeadId[dt].add(lid);
-    const m = normMobile(r.Mobile);
-    if (m) byDate[dt].add(m);
-  }
-  return { byDate, byLeadId };
-}
-
-// ─── KServe mobile & lead_id sets by date (staging_buffer_new.Assign_To_MR_Main) ───
-
-async function queryKServe(
-  pool: any,
-  companyMatch: string[],
-  days: number
-): Promise<CrmQueryResult> {
-  const likeExprs = companyMatch.map(() => "LOWER(sbn.Lead_Relates_to_which_company) LIKE ?");
-  const companyWhere = likeExprs.length > 0
-    ? `AND (sbn.Lead_Relates_to_which_company IS NULL OR sbn.Lead_Relates_to_which_company = '' OR ${likeExprs.join(" OR ")})`
-    : "";
-  const params: any[] = [days, ...companyMatch.map((c) => `%${c.toLowerCase()}%`)];
-  const [rows]: any[] = await pool.query(
-    `SELECT DATE(mb.Date_Time) AS dt, mb.Mobile, mb.lead_id
-     FROM master_buffer mb
-     INNER JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id
-     WHERE mb.Date_Time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-       AND LOWER(sbn.Assign_To_MR_Main) LIKE '%kserve%'
-       ${companyWhere}`,
-    params
-  );
-
-  const byDate: Record<string, Set<string>> = {};
-  const byLeadId: Record<string, Set<string>> = {};
-  for (const r of rows as any[]) {
-    const dt = rowDate(r.dt);
-    if (!byDate[dt]) byDate[dt] = new Set<string>();
-    if (!byLeadId[dt]) byLeadId[dt] = new Set<string>();
-    const lid = String(r.lead_id ?? "").trim();
-    if (lid) byLeadId[dt].add(lid);
-    const m = normMobile(r.Mobile);
-    if (m) byDate[dt].add(m);
-  }
-  return { byDate, byLeadId };
-}
-
-// ─── Sales mobile & lead_id sets by date (staging_buffer_new.Assign_To_MR_Main) ────
-
-async function querySales(
-  pool: any,
-  companyMatch: string[],
-  days: number
-): Promise<CrmQueryResult> {
-  const likeExprs = companyMatch.map(() => "LOWER(sbn.Lead_Relates_to_which_company) LIKE ?");
-  const companyWhere = likeExprs.length > 0
-    ? `AND (sbn.Lead_Relates_to_which_company IS NULL OR sbn.Lead_Relates_to_which_company = '' OR ${likeExprs.join(" OR ")})`
-    : "";
-  const params: any[] = [days, ...companyMatch.map((c) => `%${c.toLowerCase()}%`)];
-  const [rows]: any[] = await pool.query(
-    `SELECT DATE(mb.Date_Time) AS dt, mb.Mobile, mb.lead_id
-     FROM master_buffer mb
-     INNER JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id
-     WHERE mb.Date_Time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-       AND sbn.Assign_To_MR_Main IS NOT NULL
-       AND sbn.Assign_To_MR_Main != ''
-       AND LOWER(sbn.Assign_To_MR_Main) NOT LIKE '%kserve%'
-       ${companyWhere}`,
-    params
-  );
-
-  const byDate: Record<string, Set<string>> = {};
-  const byLeadId: Record<string, Set<string>> = {};
-  for (const r of rows as any[]) {
-    const dt = rowDate(r.dt);
-    if (!byDate[dt]) byDate[dt] = new Set<string>();
-    if (!byLeadId[dt]) byLeadId[dt] = new Set<string>();
-    const lid = String(r.lead_id ?? "").trim();
-    if (lid) byLeadId[dt].add(lid);
-    const m = normMobile(r.Mobile);
-    if (m) byDate[dt].add(m);
-  }
-  return { byDate, byLeadId };
+  return { companyData, companyBufferMaps, globalBufferMap };
 }
 
 function parseDateRobust(val: any): Date | null {
@@ -361,69 +323,6 @@ function parseDateRobust(val: any): Date | null {
     return isNaN(parsed.getTime()) ? null : parsed;
   } catch {
     return null;
-  }
-}
-
-// ─── TAT (Turn-around time in seconds) by date — per source ─────────────────
-// Matches each lead from the source table with master_buffer/staging_buffer_new
-// to calculate: TAT = Assignment Timestamp − Direct Sheet Timestamp.
-// Calculates average TAT for each company and data source group separately.
-
-async function queryTAT(
-  pool: any,
-  srcCfg: SourceConfig,
-  days: number
-): Promise<Record<string, { avgSec: number }>> {
-  const sourceWhere = srcCfg.sourceFilter
-    ? "AND (" + srcCfg.sourceFilter.replace(/\b(lead_relates_to_which_company|company_by_extension|website_name|new_category|src|utm_medium)\b/gi, (m) => "src." + m) + ")"
-    : "";
-  const dateColExpr = srcCfg.dateCol.includes("(")
-    ? srcCfg.dateCol.replace(/\b(timestamp|chat_created_date_time|Created_date_time|date_time|create_date_time|received_at)\b/gi, (m) => `src.\`${m}\``)
-    : `src.\`${srcCfg.dateCol}\``;
-  const params: any[] = [days];
-  try {
-    const [rows]: any[] = await pool.query(
-      `SELECT DATE(${dateColExpr}) AS dt,
-              ${dateColExpr} AS arrival_time,
-              COALESCE(mb.actual_time, sbn.gpt_Extraction_Status, sbn.Timestamp_2, sbn.Sent_status) AS assign_time
-       FROM \`${srcCfg.table}\` src
-       LEFT JOIN master_buffer mb 
-         ON mb.lead_id COLLATE utf8mb4_unicode_ci = src.\`${srcCfg.leadIdCol}\` COLLATE utf8mb4_unicode_ci
-       LEFT JOIN staging_buffer_new sbn 
-         ON sbn.Lead_id COLLATE utf8mb4_unicode_ci = src.\`${srcCfg.leadIdCol}\` COLLATE utf8mb4_unicode_ci
-       WHERE ${dateColExpr} >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-         AND (sbn.Assign_To_MR_Main IS NOT NULL AND sbn.Assign_To_MR_Main != '')
-         ${sourceWhere}`,
-      params
-    );
-
-    const dateStats: Record<string, { totalSec: number; count: number }> = {};
-    for (const r of rows as any[]) {
-      const dt = rowDate(r.dt);
-      const arrival = parseDateRobust(r.arrival_time);
-      if (!arrival) continue;
-
-      const reached = parseDateRobust(r.assign_time);
-      if (!reached) continue;
-
-      const diffSec = Math.floor((reached.getTime() - arrival.getTime()) / 1000);
-      if (diffSec >= 0 && diffSec <= 86400) {
-        if (!dateStats[dt]) dateStats[dt] = { totalSec: 0, count: 0 };
-        dateStats[dt].totalSec += diffSec;
-        dateStats[dt].count += 1;
-      }
-    }
-
-    const byDate: Record<string, { avgSec: number }> = {};
-    for (const [dt, stat] of Object.entries(dateStats)) {
-      if (stat.count > 0) {
-        byDate[dt] = { avgSec: Math.round(stat.totalSec / stat.count) };
-      }
-    }
-    return byDate;
-  } catch (err) {
-    console.warn(`[lead-loss] queryTAT error for ${srcCfg.source}:`, err);
-    return {};
   }
 }
 
@@ -919,58 +818,25 @@ export async function GET(request: Request) {
       return handleDetailsRequest(pool, requestUrl);
     }
 
-    const days = Math.min(parseInt(requestUrl.searchParams.get("days") ?? "90", 10), 180);
+    const days = Math.min(parseInt(requestUrl.searchParams.get("days") ?? "30", 10), 180);
     const companyFilter = (requestUrl.searchParams.get("company") ?? "").toLowerCase();
     const scannedAt = new Date().toISOString();
     const allDates = new Set<string>();
     const rowMap: Record<string, any> = {};
 
-    const companyData = await Promise.all(
-      COMPANY_CONFIG.map(async (co) => {
-        if (companyFilter && !co.company.toLowerCase().includes(companyFilter)) return null;
-        const [bufferRes, crmData, kserveData, salesData] = await Promise.all([
-          queryBuffer(pool, co.bufferMatch, days),
-          queryCRM(pool, co.bufferMatch, days),
-          queryKServe(pool, co.bufferMatch, days),
-          querySales(pool, co.bufferMatch, days),
-        ]);
-        return { co, bufferRes, crmData, kserveData, salesData };
-      })
+    const activeConfigs = COMPANY_CONFIG.filter(
+      (co) => !companyFilter || co.company.toLowerCase().includes(companyFilter)
     );
 
-    // Build per-company and global buffer maps for 24h prior buffer matching
-    const companyBufferMaps = new Map<string, Map<string, Array<{ leadId: string; time: number; dateStr: string }>>>();
-    const globalBufferMap = new Map<string, Array<{ leadId: string; time: number; dateStr: string }>>();
+    const { companyData, companyBufferMaps, globalBufferMap } = await queryUnifiedBuffer(pool, activeConfigs, days);
 
-    for (const cd of companyData) {
+    for (const co of activeConfigs) {
+      const cd = companyData.get(co.companyKey);
       if (!cd) continue;
-      const coMap = new Map<string, Array<{ leadId: string; time: number; dateStr: string }>>();
-      for (const b of cd.bufferRes.allBufferList) {
-        if (!coMap.has(b.mobile)) coMap.set(b.mobile, []);
-        coMap.get(b.mobile)!.push({ leadId: b.leadId, time: b.time, dateStr: b.dateStr });
 
-        if (!globalBufferMap.has(b.mobile)) globalBufferMap.set(b.mobile, []);
-        globalBufferMap.get(b.mobile)!.push({ leadId: b.leadId, time: b.time, dateStr: b.dateStr });
-      }
-      companyBufferMaps.set(cd.co.companyKey, coMap);
-    }
-
-    for (const cd of companyData) {
-      if (!cd) continue;
-      const { co, bufferRes, crmData, kserveData, salesData } = cd;
-
-      // Use company-scoped buffer map for 24h prior duplicate detection, with fallback to global buffer map
-      const companyBufMap = companyBufferMaps.get(co.companyKey) ?? new Map<string, Array<{ leadId: string; time: number; dateStr: string }>>();
+      const companyBufMap = companyBufferMaps.get(co.companyKey) ?? new Map();
 
       for (const srcCfg of co.sources) {
-        // Fetch TAT per-source so each source gets its own average (not company-wide average)
-        let tatData: Record<string, { avgSec: number }> = {};
-        try {
-          tatData = await queryTAT(pool, srcCfg, days);
-        } catch (err) {
-          console.warn(`[lead-loss] TAT fetch failed for ${srcCfg.source}:`, err);
-        }
-
         let directByDate: DirectEntry[];
         try {
           directByDate = await queryDirectTable(pool, srcCfg, days);
@@ -983,14 +849,12 @@ export async function GET(request: Request) {
           allDates.add(date);
           const key = `${co.company}__${srcCfg.source}__${date}`;
 
-          const bufSet: Set<string> = bufferRes.byDate[date] ?? new Set<string>();
-          const bufLeadIdSet: Set<string> = bufferRes.byLeadId[date] ?? new Set<string>();
-          const crmSet: Set<string> = crmData.byDate[date] ?? new Set<string>();
-          const crmLeadIdSet: Set<string> = crmData.byLeadId[date] ?? new Set<string>();
-          const kvSet: Set<string> = kserveData.byDate[date] ?? new Set<string>();
-          const sSet: Set<string> = salesData.byDate[date] ?? new Set<string>();
-          const avgTatSec = tatData[date]?.avgSec || 0;
-          const avgTatMin = Math.round(avgTatSec / 60);
+          const bufSet: Set<string> = cd.byDate[date] ?? new Set<string>();
+          const bufLeadIdSet: Set<string> = cd.byLeadId[date] ?? new Set<string>();
+          const crmSet: Set<string> = cd.crmByDate[date] ?? new Set<string>();
+          const crmLeadIdSet: Set<string> = cd.crmByLeadId[date] ?? new Set<string>();
+          const kvSet: Set<string> = cd.kvByDate[date] ?? new Set<string>();
+          const sSet: Set<string> = cd.sByDate[date] ?? new Set<string>();
 
           const direct = leadIds.length;
           let buffer = 0, crm = 0, kserve = 0, sales = 0;
@@ -999,11 +863,25 @@ export async function GET(request: Request) {
           let lateTransfers = 0;
           const seenDirectMobiles = new Set<string>();
 
+          let totalTatSec = 0;
+          let tatCount = 0;
+
           for (let i = 0; i < mobiles.length; i++) {
             const raw = mobiles[i];
             const m = normMobile(raw);
             const leadId = String(leadIds[i] ?? "").trim();
             const t = timestamps?.[i] ?? new Date(date).getTime();
+
+            // Calculate per-source, per-lead TAT:
+            // TAT = Assignment Timestamp − Direct Sheet Timestamp
+            const assignTMs = (leadId && cd.assignTimeById.get(leadId)) ?? (m ? cd.assignTimeByMobile.get(m) : null);
+            if (assignTMs !== null && assignTMs !== undefined && t) {
+              const diffSec = Math.floor((assignTMs - t) / 1000);
+              if (diffSec >= 0 && diffSec <= 86400) {
+                totalTatSec += diffSec;
+                tatCount++;
+              }
+            }
 
             const inBufById = Boolean(leadId && bufLeadIdSet.has(leadId));
             const inBufByMobile = Boolean(m && bufSet.has(m));
@@ -1044,6 +922,9 @@ export async function GET(request: Request) {
               sameDayDuplicates++;
             }
           }
+
+          const avgTatSec = tatCount > 0 ? Math.round(totalTatSec / tatCount) : 0;
+          const avgTatMin = Math.round(avgTatSec / 60);
 
           const duplicate = sameDayDuplicates + prior24hDuplicates + lateTransfers;
           const medium = direct;
