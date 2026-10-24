@@ -902,6 +902,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
 
   return Response.json({
     live: true,
+    version: "v4-synced",
     mode: "Live SQL Direct Details",
     rows,
   });
@@ -1139,8 +1140,8 @@ export async function GET(request: Request) {
 
     return Response.json({
       live: true,
-      schemaVersion: 3,
-      logicVersion: "sql-vlookup-v3",
+      schemaVersion: 4,
+      logicVersion: "sql-vlookup-v4-synced",
       mode: "Live SQL reconciliation",
       crmMode: "SQL",
       scannedAt,
