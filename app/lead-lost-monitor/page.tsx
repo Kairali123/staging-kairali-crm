@@ -339,9 +339,9 @@ export default function Home() {
   const sources = [...new Set(rows.map(r => r.source))].sort();
   const dates = [...new Set(rows.map(r => r.date))].sort((a, b) => b.localeCompare(a));
   const visible = useMemo(() => rows.filter(row => {
-    const rowHealth = row.mismatch ? "Data Mismatch" : row.directMediumGap || row.mediumBufferLost || row.masterCrmLost ? "Lost" : row.slaBreaches ? "TAT breach" : "Reconciled";
+    const rowHealth = row.mismatch ? "Data Mismatch" : (row.directMediumGap || (row.unexplainedMediumGap ?? 0) || row.masterCrmLost) ? "Lost" : row.slaBreaches ? "TAT breach" : "Reconciled";
     return (company === "All companies" || row.company === company) && (source === "All sources" || row.source === source) && (date === "All dates" || row.date === date) && (health === "All status" || health === rowHealth) && `${row.company} ${row.source} ${row.date}`.toLowerCase().includes(query.toLowerCase());
-  }).sort((a, b) => b.date.localeCompare(a.date) || a.company.localeCompare(b.company) || (sort === "Highest loss" ? (b.directMediumGap + b.mediumBufferLost + b.masterCrmLost) - (a.directMediumGap + a.mediumBufferLost + a.masterCrmLost) : sort === "Highest TAT" ? b.avgTatMin - a.avgTatMin : a.source.localeCompare(b.source)) || a.source.localeCompare(b.source)), [rows, company, source, date, health, query, sort]);
+  }).sort((a, b) => b.date.localeCompare(a.date) || a.company.localeCompare(b.company) || (sort === "Highest loss" ? (b.directMediumGap + (b.unexplainedMediumGap ?? 0) + b.masterCrmLost) - (a.directMediumGap + (a.unexplainedMediumGap ?? 0) + a.masterCrmLost) : sort === "Highest TAT" ? b.avgTatMin - a.avgTatMin : a.source.localeCompare(b.source)) || a.source.localeCompare(b.source)), [rows, company, source, date, health, query, sort]);
 
   const groups = useMemo(() => {
     const map = new Map<string, TrackerRow[]>();
@@ -356,8 +356,8 @@ export default function Home() {
   const activeExpandedDate = expandedDate; // Minimise by default
   const allRecords = visible.flatMap(r => r.records ?? r.issues ?? []);
   const summary = visible.reduce((a, r) => ({ direct: a.direct + r.direct, medium: a.medium + r.medium, duplicate: a.duplicate + r.duplicate, expectedDuplicateGap: a.expectedDuplicateGap + r.expectedDuplicateGap, toBuffer: a.toBuffer + r.bufferTransfer, buffer: a.buffer + r.buffer, mediumLost: a.mediumLost + r.mediumBufferLost, unexplainedMediumGap: (a.unexplainedMediumGap || 0) + (r.unexplainedMediumGap ?? 0), crm: a.crm + r.crm, sameDayCrm: a.sameDayCrm + r.sameDayCrm, lateTransfer: a.lateTransfer + r.lateTransfer, masterLost: a.masterLost + r.masterCrmLost, assigned: a.assigned + r.assigned, sales: a.sales + (r.sales || 0), kserve: a.kserve + (r.kserve || 0), breaches: a.breaches + r.slaBreaches, tatSum: a.tatSum + (r.avgTatSec || (r.avgTatMin ? r.avgTatMin * 60 : 0)) * (r.buffer || 1), tatWeight: a.tatWeight + ((r.avgTatSec || r.avgTatMin) ? (r.buffer || 1) : 0), mismatches: a.mismatches + Number(r.mismatch) }), { direct: 0, medium: 0, duplicate: 0, expectedDuplicateGap: 0, toBuffer: 0, buffer: 0, mediumLost: 0, unexplainedMediumGap: 0, crm: 0, sameDayCrm: 0, lateTransfer: 0, masterLost: 0, assigned: 0, sales: 0, kserve: 0, breaches: 0, tatSum: 0, tatWeight: 0, mismatches: 0 });
-  const openLoss = visible.reduce((total, row) => total + row.directMediumGap + row.mediumBufferLost + row.masterCrmLost + Math.max(0, row.crm - row.assigned), 0);
-  const tatBreachCount = visible.reduce((total, row) => total + (!row.mismatch && !row.directMediumGap && !row.mediumBufferLost && !row.masterCrmLost ? row.slaBreaches : 0), 0);
+  const openLoss = visible.reduce((total, row) => total + row.directMediumGap + (row.unexplainedMediumGap ?? 0) + row.masterCrmLost + Math.max(0, row.crm - row.assigned), 0);
+  const tatBreachCount = visible.reduce((total, row) => total + (!row.mismatch && !row.directMediumGap && !(row.unexplainedMediumGap ?? 0) && !row.masterCrmLost ? row.slaBreaches : 0), 0);
   const reconciledCount = Math.max(0, summary.direct - openLoss);
   const reconciledPercent = summary.direct ? Math.round(reconciledCount / summary.direct * 1000) / 10 : 0;
   const funnelLeaks = [
@@ -747,7 +747,7 @@ export default function Home() {
                 {groups.map((group, gi) => {
                   const isDateOpen = activeExpandedDate === group.date;
                   const isToday = group.date === new Date(new Date().getTime() + 5.5*60*60*1000).toISOString().slice(0,10);
-                  const totalLost = group.total.masterCrmLost + group.total.mediumBufferLost;
+                  const totalLost = group.total.masterCrmLost + (group.total.unexplainedMediumGap ?? 0) + (group.total.directMediumGap ?? 0);
                   const lossRate = group.total.direct > 0 ? Math.round(totalLost / group.total.direct * 100) : 0;
                   const allClear = totalLost === 0;
                   return (
@@ -861,7 +861,7 @@ export default function Home() {
                           </tr>
                           {/* Source rows */}
                           {cg.rows.map(row => {
-                            const rowLost = row.masterCrmLost+row.mediumBufferLost+row.directMediumGap;
+                            const rowLost = row.masterCrmLost + (row.unexplainedMediumGap ?? 0) + row.directMediumGap;
                             const rowRate = row.direct>0?Math.round(rowLost/row.direct*100):0;
                             const rowClear = rowLost===0;
                             return (
@@ -975,18 +975,29 @@ export default function Home() {
                             </td>
                             <td style={{padding:"8px 10px",textAlign:"center",color:"#334e68",fontSize:12,fontFamily:"monospace",fontWeight:700}}>{cg.total.tatWeight > 0 ? formatHHMMSS(Math.round(cg.total.tatSum/cg.total.tatWeight)) : '—'}</td>
                             <td style={{padding:"8px 10px",textAlign:"center"}}>
-                              <span style={{
-                                display:"inline-flex",alignItems:"center",gap:3,padding:"2px 7px",borderRadius:20,fontSize:9,fontWeight:700,
-                                background:(cg.total.masterCrmLost+cg.total.mediumBufferLost)===0?"#f0fdf4":(cg.total.masterCrmLost+cg.total.mediumBufferLost)>0?"#fff0f0":"#fff9f0",
-                                color:(cg.total.masterCrmLost+cg.total.mediumBufferLost)===0?"#166534":(cg.total.masterCrmLost+cg.total.mediumBufferLost)>0?"#991b1b":"#92400e"
-                              }}>
-                                {(cg.total.masterCrmLost+cg.total.mediumBufferLost)===0?"Clear":(cg.total.masterCrmLost+cg.total.mediumBufferLost)>0?"Lost":"Pending"}
-                              </span>
+                              {(() => {
+                                const compLost = (cg.total.unexplainedMediumGap ?? 0) + cg.total.masterCrmLost + (cg.total.directMediumGap ?? 0);
+                                const compClear = compLost === 0;
+                                return (
+                                  <span style={{
+                                    display:"inline-flex",alignItems:"center",gap:3,padding:"2px 7px",borderRadius:20,fontSize:9,fontWeight:700,
+                                    background: compClear ? "#f0fdf4" : compLost > 0 ? "#fff0f0" : "#fff9f0",
+                                    color: compClear ? "#166534" : compLost > 0 ? "#991b1b" : "#92400e"
+                                  }}>
+                                    {compClear ? "Clear" : compLost > 0 ? "Lost" : "Pending"}
+                                  </span>
+                                );
+                              })()}
                             </td>
                             <td style={{padding:"8px 10px",textAlign:"center"}}>
-                              <span style={{fontSize:11,fontWeight:800,color:(cg.total.masterCrmLost+cg.total.mediumBufferLost+cg.total.directMediumGap)>0?"#991b1b":"#166534"}}>
-                                {cg.total.direct>0?Math.round((cg.total.masterCrmLost+cg.total.mediumBufferLost+cg.total.directMediumGap)/cg.total.direct*100):0}%
-                              </span>
+                              {(() => {
+                                const compLost = (cg.total.unexplainedMediumGap ?? 0) + cg.total.masterCrmLost + (cg.total.directMediumGap ?? 0);
+                                return (
+                                  <span style={{fontSize:11,fontWeight:800,color: compLost > 0 ? "#991b1b" : "#166534"}}>
+                                    {cg.total.direct > 0 ? Math.round(compLost / cg.total.direct * 100) : 0}%
+                                  </span>
+                                );
+                              })()}
                             </td>
                           </tr>
                         </Fragment>
