@@ -737,10 +737,6 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       const bufMatch = sameDayMap.get(leadId) || (norm ? sameDayMap.get(norm) : null);
       const isDifferentLead = Boolean(bufMatch && bufMatch.lead_id && String(bufMatch.lead_id).trim() !== leadId);
       const sameDayGlobalMatch = (!bufMatch && norm) ? sameDayGlobalMap.get(norm) : null;
-      const rawTime = parseDateRobust(r.date_time) || (r.date_time ? new Date(r.date_time) : null);
-      const formattedTime = rawTime ? rawTime.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
-      const generatedAt = rawTime ? rawTime.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : date;
-      const leadTime = rawTime && !isNaN(rawTime.getTime()) ? rawTime.getTime() : new Date(`${date}T23:59:59`).getTime();
 
       // 24-hour lookback in master_buffer (across all buffer entries in 48-hour window)
       const prior24Match = (!bufMatch && !sameDayGlobalMatch && norm) ? bufferList.find((b: any) => {
