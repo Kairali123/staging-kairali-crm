@@ -248,7 +248,7 @@ async function queryUnifiedBuffer(
     // Global buffer entry
     if (m) {
       if (!globalBufferMap.has(m)) globalBufferMap.set(m, []);
-      globalBufferMap.get(m)!.push({ leadId: lid, time: arrivalT, dateStr: dt });
+      globalBufferMap.get(m)!.push({ leadId: lid, time: arrivalT, dateStr: dt, mobile: m } as any);
     }
 
     // Parsed assignment timestamp
@@ -289,7 +289,7 @@ async function queryUnifiedBuffer(
       if (m) {
         const coMap = companyBufferMaps.get(co.companyKey)!;
         if (!coMap.has(m)) coMap.set(m, []);
-        coMap.get(m)!.push({ leadId: lid, time: arrivalT, dateStr: dt });
+        coMap.get(m)!.push({ leadId: lid, time: arrivalT, dateStr: dt, mobile: m } as any);
       }
     }
   }
@@ -357,18 +357,35 @@ function buildLostRecords(
     const norm = normMobile(mobile);
     const t = directTimestamps?.[i] ?? new Date(date).getTime();
 
+    if (!norm) {
+      records.push({
+        id: leadId, name: "", phone: mobile || "—", date, company, source,
+        generatedAt: date, timestamp: date, transferTimestamp: "", bufferTimestamp: "",
+        currentStatus: "Filtered (No Mobile / Incomplete)", transferStatus: "Filtered",
+        bufferStatus: "Filtered", crmStatus: "Filtered",
+        assignee: "", tatMin: 0, tat: "—",
+        isDuplicate: true, validDuplicate: true, expectedDuplicateGap: true,
+        inMedium: true, toBuffer: false, inBuffer: false, inCrm: false, assigned: false,
+        mediumBufferLost: true,
+        stage: "direct", status: "Duplicate",
+        reason: "Filtered intentionally: incomplete lead (no mobile number captured in chat)",
+      });
+      return;
+    }
+
     const inBufById = Boolean(leadId && bufLeadIdSet?.has(leadId));
     const inBuf = (norm ? bufSet.has(norm) : false) || inBufById;
     const isDirectDupe = Boolean(norm && seen24h.has(norm));
     if (norm && !seen24h.has(norm)) seen24h.set(norm, leadId);
 
     const bufs = norm ? (globalBufferMap.get(norm) || []) : [];
-    const matchingBufRow = norm ? bufs.find(b => b.mobile === norm) : null;
+    const matchingBufRow = norm ? (bufs.find(b => b.dateStr === date) || bufs[0] || null) : null;
     const isDifferentLead = Boolean(!inBufById && matchingBufRow && matchingBufRow.leadId && matchingBufRow.leadId !== leadId);
 
     const prior24Match = (!inBuf && norm) ? bufs.find(b => {
       const diffHours = (t - b.time) / (3600 * 1000);
-      return (diffHours >= -6 && diffHours <= 48) || (b.dateStr && b.dateStr <= date);
+      // Buffer arrived 0-24h BEFORE this direct lead = intentional 24h duplicate filter
+      return diffHours >= 0 && diffHours <= 24;
     }) : null;
 
     if (inBuf && !isDifferentLead) {
@@ -549,7 +566,16 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
     return bufferCache[cacheKey];
   }
 
-  const targets: Array<{ rowId: string; company: string; source: string; date: string; co: CompanyConfig; srcCfg: SourceConfig }> = [];
+  interface TargetGroup {
+    rowId: string;
+    company: string;
+    source: string;
+    date: string;
+    co: CompanyConfig;
+    srcConfigs: SourceConfig[];
+  }
+
+  const targetMap = new Map<string, TargetGroup>();
 
   if (requestedIds.length > 0) {
     for (const rid of requestedIds) {
@@ -564,9 +590,16 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       }
       const co = COMPANY_CONFIG.find(c => c.company.toLowerCase() === compName.toLowerCase());
       if (!co) continue;
-      const srcCfg = co.sources.find(s => s.source.toLowerCase() === srcName.toLowerCase());
-      if (!srcCfg) continue;
-      targets.push({ rowId: rid, company: co.company, source: srcCfg.source, date: dtStr, co, srcCfg });
+      const matchingSrcConfigs = co.sources.filter(s => s.source.toLowerCase() === srcName.toLowerCase());
+      if (matchingSrcConfigs.length === 0) continue;
+      targetMap.set(rid, {
+        rowId: rid,
+        company: co.company,
+        source: matchingSrcConfigs[0].source,
+        date: dtStr,
+        co,
+        srcConfigs: matchingSrcConfigs,
+      });
     }
   } else if (dateParam) {
     let normDate = dateParam;
@@ -575,54 +608,70 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       normDate = `${y}-${m}-${d}`;
     }
     for (const co of COMPANY_CONFIG) {
+      const sourceGroupMap = new Map<string, SourceConfig[]>();
       for (const srcCfg of co.sources) {
-        targets.push({ rowId: `${co.company}__${srcCfg.source}__${normDate}`, company: co.company, source: srcCfg.source, date: normDate, co, srcCfg });
+        if (!sourceGroupMap.has(srcCfg.source)) sourceGroupMap.set(srcCfg.source, []);
+        sourceGroupMap.get(srcCfg.source)!.push(srcCfg);
+      }
+      for (const [srcName, srcConfigs] of sourceGroupMap.entries()) {
+        const rid = `${co.company}__${srcName}__${normDate}`;
+        targetMap.set(rid, {
+          rowId: rid,
+          company: co.company,
+          source: srcName,
+          date: normDate,
+          co,
+          srcConfigs,
+        });
       }
     }
   }
 
+  const targets = Array.from(targetMap.values());
+
   const rows = (await Promise.all(targets.map(async t => {
-    const { rowId, company, source, date, co, srcCfg } = t;
+    const { rowId, company, source, date, co, srcConfigs } = t;
     const { sameDayMap, sameDayGlobalMap, bufferList } = await getBufferMap(date, co.bufferMatch);
 
-    const nameCol = srcCfg.nameCol ? `\`${srcCfg.nameCol}\`` : "NULL";
-    const emailCol = srcCfg.emailCol ? `\`${srcCfg.emailCol}\`` : "NULL";
-    const where = srcCfg.sourceFilter ? `AND (${srcCfg.sourceFilter})` : "";
-    const dateExpr = srcCfg.dateCol.includes("(") ? srcCfg.dateCol : `\`${srcCfg.dateCol}\``;
-
     let directRows: any[] = [];
-    try {
-      const sqlFast = `
-        SELECT \`${srcCfg.leadIdCol}\` AS lead_id,
-               \`${srcCfg.mobileCol}\` AS mobile,
-               ${nameCol} AS client_name,
-               ${emailCol} AS email,
-               ${dateExpr} AS date_time
-        FROM \`${srcCfg.table}\`
-        WHERE ${dateExpr} >= ? AND ${dateExpr} < DATE_ADD(?, INTERVAL 1 DAY)
-        ${where}
-        ORDER BY ${dateExpr} ASC
-      `;
-      const [r]: any[] = await pool.query(sqlFast, [date, date]);
-      directRows = r;
-    } catch {
+    for (const srcCfg of srcConfigs) {
+      const nameCol = srcCfg.nameCol ? `\`${srcCfg.nameCol}\`` : "NULL";
+      const emailCol = srcCfg.emailCol ? `\`${srcCfg.emailCol}\`` : "NULL";
+      const where = srcCfg.sourceFilter ? `AND (${srcCfg.sourceFilter})` : "";
+      const dateExpr = srcCfg.dateCol.includes("(") ? srcCfg.dateCol : `\`${srcCfg.dateCol}\``;
+
       try {
-        const sqlFallback = `
+        const sqlFast = `
           SELECT \`${srcCfg.leadIdCol}\` AS lead_id,
                  \`${srcCfg.mobileCol}\` AS mobile,
                  ${nameCol} AS client_name,
                  ${emailCol} AS email,
                  ${dateExpr} AS date_time
           FROM \`${srcCfg.table}\`
-          WHERE DATE(${dateExpr}) = ?
+          WHERE ${dateExpr} >= ? AND ${dateExpr} < DATE_ADD(?, INTERVAL 1 DAY)
           ${where}
           ORDER BY ${dateExpr} ASC
         `;
-        const [r]: any[] = await pool.query(sqlFallback, [date]);
-        directRows = r;
-      } catch (err) {
-        console.error(`[lead-loss-details] failed for ${srcCfg.table}:`, err);
-        return null;
+        const [r]: any[] = await pool.query(sqlFast, [date, date]);
+        directRows.push(...r);
+      } catch {
+        try {
+          const sqlFallback = `
+            SELECT \`${srcCfg.leadIdCol}\` AS lead_id,
+                   \`${srcCfg.mobileCol}\` AS mobile,
+                   ${nameCol} AS client_name,
+                   ${emailCol} AS email,
+                   ${dateExpr} AS date_time
+            FROM \`${srcCfg.table}\`
+            WHERE DATE(${dateExpr}) = ?
+            ${where}
+            ORDER BY ${dateExpr} ASC
+          `;
+          const [r]: any[] = await pool.query(sqlFallback, [date]);
+          directRows.push(...r);
+        } catch (err) {
+          console.error(`[lead-loss-details] failed for ${srcCfg.table}:`, err);
+        }
       }
     }
 
@@ -642,6 +691,49 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       const isDup = Boolean(norm && seenMobiles.has(norm));
       if (norm) seenMobiles.add(norm);
 
+      const rawTime = parseDateRobust(r.date_time) || (r.date_time ? new Date(r.date_time) : null);
+      const formattedTime = rawTime ? rawTime.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
+      const generatedAt = rawTime ? rawTime.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : date;
+      const leadTime = rawTime && !isNaN(rawTime.getTime()) ? rawTime.getTime() : new Date(`${date}T23:59:59`).getTime();
+
+      if (!norm) {
+        records.push({
+          id: leadId,
+          name: r.client_name ? String(r.client_name).trim() : "",
+          phone: rawMobile || "—",
+          email: r.email ? String(r.email).trim() : "",
+          date,
+          company,
+          source,
+          generatedAt,
+          timestamp: formattedTime || date,
+          transferTimestamp: "",
+          bufferTimestamp: "",
+          currentStatus: "Filtered (No Mobile / Incomplete)",
+          transferStatus: "Filtered",
+          bufferStatus: "Filtered",
+          crmStatus: "Filtered",
+          assignee: "Unassigned",
+          tatMin: 0,
+          tat: "—",
+          isDuplicate: true,
+          validDuplicate: true,
+          expectedDuplicateGap: true,
+          lateTransfer: false,
+          inMedium: true,
+          toBuffer: false,
+          inBuffer: false,
+          inCrm: false,
+          assigned: false,
+          mediumBufferLost: true,
+          masterCrmLost: false,
+          stage: "direct",
+          status: "Duplicate",
+          reason: "Filtered intentionally: incomplete lead (no mobile number captured in chat)",
+        });
+        continue;
+      }
+
       const bufMatch = sameDayMap.get(leadId) || (norm ? sameDayMap.get(norm) : null);
       const isDifferentLead = Boolean(bufMatch && bufMatch.lead_id && String(bufMatch.lead_id).trim() !== leadId);
       const sameDayGlobalMatch = (!bufMatch && norm) ? sameDayGlobalMap.get(norm) : null;
@@ -658,10 +750,11 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
         const bTime = bObj ? bObj.getTime() : 0;
         if (!bTime) {
           const bDate = rowDate(b.Date_Time);
-          return bDate && bDate <= date;
+          return false; // can't determine time, skip
         }
         const diffHours = (leadTime - bTime) / (3600 * 1000);
-        return diffHours >= -6 && diffHours <= 48;
+        // Buffer arrived 0-24h BEFORE this direct lead = intentional 24h duplicate filter
+        return diffHours >= 0 && diffHours <= 24;
       }) : null;
 
       // Late-transfer check: buffer entry arrived AFTER this Direct API lead (next-day or within 72h forward)
@@ -891,6 +984,12 @@ export async function GET(request: Request) {
               }
             }
 
+            if (!m) {
+              // Incomplete lead (no phone): cannot be staged to buffer -> filtered
+              sameDayDuplicates++;
+              continue;
+            }
+
             const inBufById = Boolean(leadId && bufLeadIdSet.has(leadId));
             const inBufByMobile = Boolean(m && bufSet.has(m));
             const inBuf = inBufById || inBufByMobile;
@@ -899,12 +998,13 @@ export async function GET(request: Request) {
 
             // Check company-scoped buffer first, then fall back to global buffer across all companies
             const bufs = (m ? (companyBufMap.get(m) || globalBufferMap.get(m)) : []) || [];
-            const matchingBufRow = m ? bufs.find(b => b.mobile === m) : null;
+            const matchingBufRow = m ? (bufs.find(b => b.dateStr === date) || bufs[0] || null) : null;
             const isDifferentLead = Boolean(!inBufById && matchingBufRow && matchingBufRow.leadId && matchingBufRow.leadId !== leadId);
 
             const priorMatch = (!inBuf && m) ? bufs.find(b => {
               const diffHours = (t - b.time) / (3600 * 1000);
-              return (diffHours >= -6 && diffHours <= 48) || (b.dateStr && b.dateStr <= date);
+              // Buffer arrived 0-24h BEFORE this direct lead = intentional 24h duplicate filter
+              return diffHours >= 0 && diffHours <= 24;
             }) : null;
 
             // Late transfer: buffer arrived AFTER direct API lead (next-day or within 72h forward)
