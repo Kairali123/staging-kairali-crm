@@ -198,6 +198,90 @@ const LEADGUARD_CSS = `@import url('https://fonts.googleapis.com/css2?family=Arc
     width: 100%;
   }
 }
+
+/* Live animation below KPI section */
+@keyframes auditPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.65; }
+}
+@keyframes flowStream {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+@keyframes connectorGlow {
+  0% { color: #94a3b8; transform: translateX(0); }
+  50% { color: #0eae91; transform: translateX(4px); }
+  100% { color: #94a3b8; transform: translateX(0); }
+}
+@keyframes dangerBreath {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.25); }
+  50% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0.08); }
+}
+
+.audit-pulse-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25);
+  animation: auditPulse 2s ease-in-out infinite;
+  margin-right: 7px;
+  flex-shrink: 0;
+}
+
+.pipeline-stream-bar {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  overflow: hidden;
+  margin: 14px 0 16px;
+  display: flex;
+}
+
+.pipeline-stream-segment {
+  height: 100%;
+  position: relative;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.pipeline-stream-segment::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent);
+  animation: flowStream 2.2s infinite linear;
+}
+
+.audit-card-interactive {
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.audit-card-interactive:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.audit-card-danger {
+  animation: dangerBreath 2.2s infinite ease-in-out;
+}
+
+.connector-animated b {
+  display: inline-block;
+  animation: connectorGlow 1.8s ease-in-out infinite;
+}
+
+.stage {
+  transition: all 0.2s ease !important;
+}
+
+.stage:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(14, 174, 145, 0.12) !important;
+}
 .date-total-row {
   background: #eef7f5;
   border-top: 2px solid #b9ddd5;
@@ -732,8 +816,9 @@ export default function Home() {
       }}>
         <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px"}}>
           <div>
-            <p style={{margin: 0, fontSize: "10px", fontWeight: 800, letterSpacing: "1.2px", color: "#64748b", textTransform: "uppercase"}}>
-              LEAD CLASSIFICATION AUDIT · ONE-VIEW INTEGRITY STATUS
+            <p style={{margin: 0, fontSize: "10px", fontWeight: 800, letterSpacing: "1.2px", color: "#64748b", textTransform: "uppercase", display: "flex", alignItems: "center"}}>
+              <span className="audit-pulse-dot" />
+              LEAD CLASSIFICATION AUDIT · LIVE INTEGRITY FLOW
             </p>
             <h3 style={{margin: "2px 0 0", fontSize: "15px", fontWeight: 700, color: "#0f172a"}}>
               Actual Lost (Technical Failure) vs Intentional Filter (24h Mobile Duplicate)
@@ -744,11 +829,30 @@ export default function Home() {
           </span>
         </div>
 
+        {/* Dynamic Animated Flow Stream Bar */}
+        {(() => {
+          const total = summary.direct || 1;
+          const assignedPct = Math.min(100, Math.round(((summary.sales + summary.kserve) / total) * 100));
+          const dupePct = Math.min(100 - assignedPct, Math.round((summary.duplicate / total) * 100));
+          const lostCount = summary.unexplainedMediumGap + summary.masterLost;
+          const lostPct = lostCount > 0 ? Math.max(1, Math.min(100 - assignedPct - dupePct, Math.round((lostCount / total) * 100))) : 0;
+          return (
+            <div className="pipeline-stream-bar" title={`Delivered: ${assignedPct}% · Filtered: ${dupePct}% · Lost: ${lostPct}%`}>
+              <div className="pipeline-stream-segment" style={{ width: `${assignedPct}%`, background: "linear-gradient(90deg, #10b981, #059669)" }} />
+              <div className="pipeline-stream-segment" style={{ width: `${dupePct}%`, background: "linear-gradient(90deg, #f59e0b, #d97706)" }} />
+              {lostPct > 0 && (
+                <div className="pipeline-stream-segment" style={{ width: `${lostPct}%`, background: "linear-gradient(90deg, #ef4444, #dc2626)" }} />
+              )}
+            </div>
+          );
+        })()}
+
         <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px"}}>
           {/* 1. Total Received */}
           <div
+            className="audit-card-interactive"
             onClick={() => openDetailedStage("All Direct API Source Leads", "direct")}
-            style={{background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px", cursor: "pointer", transition: "all .15s ease"}}
+            style={{background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px", cursor: "pointer"}}
             title="Click to view & verify all Direct API leads"
           >
             <div style={{display: "flex", justifyContent: "space-between", alignItems: "center"}}>
@@ -760,7 +864,7 @@ export default function Home() {
           </div>
 
           {/* 2. 24h Duplicate Filtered */}
-          <div style={{background: "#fffbeb", border: "1px solid #fef3c7", borderRadius: "10px", padding: "12px 14px"}}>
+          <div className="audit-card-interactive" style={{background: "#fffbeb", border: "1px solid #fef3c7", borderRadius: "10px", padding: "12px 14px"}}>
             <div style={{display: "flex", justifyContent: "space-between", alignItems: "center"}}>
               <span style={{fontSize: "10px", fontWeight: 800, color: "#b45309", letterSpacing: "0.5px"}}>2. DUPLICATE FILTERED (NOT LOST)</span>
               <span style={{background: "#fef3c7", color: "#92400e", borderRadius: "12px", padding: "2px 8px", fontSize: "10px", fontWeight: 700}}>Chhannt Gaya</span>
@@ -770,17 +874,22 @@ export default function Home() {
           </div>
 
           {/* 3. Actual Lost (Technical Failure) */}
-          <div style={{background: "#fef2f2", border: "1px solid #fee2e2", borderRadius: "10px", padding: "12px 14px"}}>
-            <div style={{display: "flex", justifyContent: "space-between", alignItems: "center"}}>
-              <span style={{fontSize: "10px", fontWeight: 800, color: "#b91c1c", letterSpacing: "0.5px"}}>3. ACTUAL LOST (TECHNICAL ISSUE)</span>
-              <span style={{background: "#fee2e2", color: "#991b1b", borderRadius: "12px", padding: "2px 8px", fontSize: "10px", fontWeight: 700}}>Failed Sync</span>
-            </div>
-            <div style={{fontSize: "22px", fontWeight: 800, color: "#dc2626", margin: "6px 0 2px"}}>{fmt(summary.unexplainedMediumGap + summary.masterLost)}</div>
-            <p style={{margin: 0, fontSize: "11px", color: "#b91c1c"}}>Trigger failure / sheet transfer gap (Gap 2: {fmt(summary.unexplainedMediumGap)} + Gap 3: {fmt(summary.masterLost)})</p>
-          </div>
+          {(() => {
+            const actualLostVal = summary.unexplainedMediumGap + summary.masterLost;
+            return (
+              <div className={`audit-card-interactive ${actualLostVal > 0 ? "audit-card-danger" : ""}`} style={{background: "#fef2f2", border: "1px solid #fee2e2", borderRadius: "10px", padding: "12px 14px"}}>
+                <div style={{display: "flex", justifyContent: "space-between", alignItems: "center"}}>
+                  <span style={{fontSize: "10px", fontWeight: 800, color: "#b91c1c", letterSpacing: "0.5px"}}>3. ACTUAL LOST (TECHNICAL ISSUE)</span>
+                  <span style={{background: "#fee2e2", color: "#991b1b", borderRadius: "12px", padding: "2px 8px", fontSize: "10px", fontWeight: 700}}>Failed Sync</span>
+                </div>
+                <div style={{fontSize: "22px", fontWeight: 800, color: "#dc2626", margin: "6px 0 2px"}}>{fmt(actualLostVal)}</div>
+                <p style={{margin: 0, fontSize: "11px", color: "#b91c1c"}}>Trigger failure / sheet transfer gap (Gap 2: {fmt(summary.unexplainedMediumGap)} + Gap 3: {fmt(summary.masterLost)})</p>
+              </div>
+            );
+          })()}
 
           {/* 4. Delivered to Sales & KServe */}
-          <div style={{background: "#f0fdf4", border: "1px solid #dcfce7", borderRadius: "10px", padding: "12px 14px"}}>
+          <div className="audit-card-interactive" style={{background: "#f0fdf4", border: "1px solid #dcfce7", borderRadius: "10px", padding: "12px 14px"}}>
             <div style={{display: "flex", justifyContent: "space-between", alignItems: "center"}}>
               <span style={{fontSize: "10px", fontWeight: 800, color: "#15803d", letterSpacing: "0.5px"}}>4. FORWARDED UNIQUE (ASSIGNED)</span>
               <span style={{background: "#dcfce7", color: "#166534", borderRadius: "12px", padding: "2px 8px", fontSize: "10px", fontWeight: 700}}>Delivered</span>
@@ -790,7 +899,7 @@ export default function Home() {
           </div>
         </div>
       </section>
-      <section className="pipeline-card"><div className="section-title"><div><p>LIVE ID FUNNEL</p><h2>Lead ID proof through every stage</h2></div><span>{payload?.crmMode ?? "CRM source unavailable"}</span></div><div className="pipeline">{pipelineKeys.map((key, index) => { const count = visible.reduce((n, row) => n + row[key], 0); return <div className="pipeline-wrap" key={key}><button className={`stage ${key === "assigned" ? "success" : ""}`} onClick={() => openDetailedStage(labels[key], key)}><span>{index + 1}</span><small>{labels[key]}</small><strong>{fmt(count)}</strong><em>{summary.direct ? Math.round(count / summary.direct * 100) : 0}%</em></button>{index < pipelineKeys.length - 1 && <i className="connector"><b>→</b></i>}</div>; })}</div><div className="funnel-note"><span className="green-dot"/> Duplicate/Delete is explained—not lost. Every count is deduplicated by Lead ID and grouped by Date + Company + Verified Source.</div></section>
+      <section className="pipeline-card"><div className="section-title"><div><p>LIVE ID FUNNEL</p><h2>Lead ID proof through every stage</h2></div><span>{payload?.crmMode ?? "CRM source unavailable"}</span></div><div className="pipeline">{pipelineKeys.map((key, index) => { const count = visible.reduce((n, row) => n + row[key], 0); return <div className="pipeline-wrap" key={key}><button className={`stage ${key === "assigned" ? "success" : ""}`} onClick={() => openDetailedStage(labels[key], key)}><span>{index + 1}</span><small>{labels[key]}</small><strong>{fmt(count)}</strong><em>{summary.direct ? Math.round(count / summary.direct * 100) : 0}%</em></button>{index < pipelineKeys.length - 1 && <i className="connector connector-animated"><b>→</b></i>}</div>; })}</div><div className="funnel-note"><span className="green-dot"/> Duplicate/Delete is explained—not lost. Every count is deduplicated by Lead ID and grouped by Date + Company + Verified Source.</div></section>
       <section className="loss-command" id="lost-radar"><div className="section-title"><div><p>LOST LEAD RADAR</p><h2>Exactly where reconciliation is breaking</h2></div><span className={`health-chip ${summary.mismatches ? "stale" : "current"}`}>{summary.mismatches ? `⚠ ${summary.mismatches} formula mismatch` : "● Formula validation passed"}</span></div><div className="loss-grid"><article className="live-master-card"><div className="radar-visual"><i/><i/><i/><span><small>OPEN</small><strong>{fmt(openLoss)}</strong><em>exceptions</em></span></div><div className="master-copy"><p>LATEST RECONCILIATION · {payload?.currentSummary?.date ? dateLabel(payload.currentSummary.date) : "—"}</p><h3>Medium → Buffer and Master → CRM</h3><div className="master-metrics"><span><small>Buffer</small><strong>{fmt(summary.buffer)}</strong></span><span><small>Same-day CRM</small><strong>{fmt(summary.sameDayCrm)}</strong></span><span><small>Late transfer</small><strong>{fmt(summary.lateTransfer)}</strong></span><span className="danger"><small>Actual lost</small><strong>{fmt(summary.unexplainedMediumGap + summary.masterLost)}</strong></span></div><button onClick={() => openDetailed("All open reconciliation exceptions", x => lossStages.some(stage => stage.select(x)), "lost-map")}>Open exact lost leads →</button></div></article><article className="break-map"><header><div><p>LIVE STAGE MAP</p><h3>Date + Company + Source</h3></div><span>Click a stage to audit</span></header><div className="break-list">{lossStages.map((stage, index) => <button key={stage.label} onClick={() => openDetailed(`${stage.label} lost leads`, stage.select, "lost-map")}><span className="break-rank">0{index + 1}</span><span className="break-copy"><strong>{stage.label}</strong><small>{stage.hint}</small><i><b style={{ width: `${Math.max(3, stage.count / largestLoss * 100)}%` }}/></i></span><em className={stage.count ? "hot" : "clear"}>{fmt(stage.count)}<small>{stage.count ? (stage.label.includes("KServe") ? " unassigned" : " lost") : " clear"}</small></em></button>)}</div></article></div></section>
       {/* ═══ PREMIUM RECONCILIATION TABLE ═══════════════════════════════════ */}
       <section id="reconciliation" style={{
