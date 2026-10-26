@@ -491,7 +491,7 @@ export default function Home() {
       if (!response.ok || !data.live) throw new Error(data.diagnostic || "Live reconciliation source unavailable");
       if (force) setToast("Cache bypassed. Fresh sheet scan completed.");
     } catch (error) {
-      setToast(error instanceof Error ? error.message : "Dashboard refresh nahi ho saka.");
+      setToast(error instanceof Error ? error.message : "Dashboard could not be refreshed.");
     } finally {
       setLoading(false);
       setForceRefreshing(false);
@@ -514,7 +514,7 @@ export default function Home() {
     fetch("/api/lead-loss?days=30", { cache: "no-store" })
       .then(response => response.json())
       .then(data => { if (active) { setPayload(data); setDetailRows(null); setLoading(false); } })
-      .catch(() => { if (active) { setToast("Dashboard refresh nahi ho saka."); setLoading(false); } });
+      .catch(() => { if (active) { setToast("Dashboard could not be refreshed."); setLoading(false); } });
     return () => { active = false; };
   }, []);
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(""), 3200); return () => clearTimeout(timer); }, [toast]);
@@ -564,7 +564,7 @@ export default function Home() {
     if (!missingIds.length) return uniqueIds.map(id => cached.get(id)).filter(Boolean) as TrackerRow[];
     setDetailError("");
     setDetailsLoading(true);
-    setToast("Exact Lead IDs load ho rahe hain…");
+    setToast("Loading exact Lead IDs…");
     try {
       const batches = Array.from({ length: Math.ceil(missingIds.length / 50) }, (_, index) => missingIds.slice(index * 50, index * 50 + 50));
       const loaded = (await Promise.all(batches.map(async ids => {
@@ -579,7 +579,7 @@ export default function Home() {
       return uniqueIds.map(id => cached.get(id)).filter(Boolean) as TrackerRow[];
     } catch {
       setDetailError("Lead details source timed out. Please retry.");
-      setToast("Lead details load nahi ho sake. Please retry.");
+      setToast("Lead details could not be loaded. Please retry.");
       return null;
     } finally { setDetailsLoading(false); }
   };
@@ -752,7 +752,7 @@ export default function Home() {
           <button className="force-refresh" onClick={() => load(true)} disabled={loading}>{forceRefreshing ? "Scanning all sheets…" : "⟳ Force fresh scan"}</button>
         </div>
       </header>
-      <section className={`alert-strip ${!payload?.live || summary.mismatches ? "tracker-stale" : ""}`}><div className="alert-icon">!</div><div><strong>{loading && !payload ? "Connecting to live Google Sheets…" : payload && !payload.live ? "Live reconciliation source unavailable" : summary.mismatches ? `${summary.mismatches} Data Mismatch row${summary.mismatches > 1 ? "s" : ""} found` : openLoss ? `${openLoss} lead reconciliation exception${openLoss > 1 ? "s" : ""}` : "All Lead IDs are reconciled"}</strong><p>{loading && !payload ? "Latest Date + Company + Source reconciliation is loading. Counts will appear automatically." : payload && !payload.live ? `${payload.diagnostic ?? "Secure Google Sheets bridge did not return live rows."} No demo counts are shown.` : summary.mismatches ? "Row formulas failed—highlighted rows par click karke exact Lead IDs audit karein." : openLoss ? "Lost radar exact pipeline stage aur records identify karta hai." : "Direct, duplicate, buffer and CRM formulas match."}</p></div><button onClick={() => payload?.live ? openDetailed("Reconciliation exceptions", x => x.status !== "Resolved") : load()} disabled={loading || detailsLoading}>{payload?.live ? detailsLoading ? "Loading Lead IDs…" : "Review leads →" : loading ? "Connecting…" : "Retry live sync →"}</button></section>
+      <section className={`alert-strip ${!payload?.live || summary.mismatches ? "tracker-stale" : ""}`}><div className="alert-icon">!</div><div><strong>{loading && !payload ? "Connecting to live Google Sheets…" : payload && !payload.live ? "Live reconciliation source unavailable" : summary.mismatches ? `${summary.mismatches} Data Mismatch row${summary.mismatches > 1 ? "s" : ""} found` : openLoss ? `${openLoss} lead reconciliation exception${openLoss > 1 ? "s" : ""}` : "All Lead IDs are reconciled"}</strong><p>{loading && !payload ? "Latest Date + Company + Source reconciliation is loading. Counts will appear automatically." : payload && !payload.live ? `${payload.diagnostic ?? "Secure Google Sheets bridge did not return live rows."} No demo counts are shown.` : summary.mismatches ? "Row formulas failed—click highlighted rows to audit exact Lead IDs." : openLoss ? "Lost radar identifies the exact pipeline stage and records." : "Direct, duplicate, buffer and CRM formulas match."}</p></div><button onClick={() => payload?.live ? openDetailed("Reconciliation exceptions", x => x.status !== "Resolved") : load()} disabled={loading || detailsLoading}>{payload?.live ? detailsLoading ? "Loading Lead IDs…" : "Review leads →" : loading ? "Connecting…" : "Retry live sync →"}</button></section>
       <section className="filters"><label className="search"><span>⌕</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search company, source or date…"/></label><select value={company} onChange={e => setCompany(e.target.value)}><option>All companies</option>{companies.map(x => <option key={x}>{x}</option>)}</select><select value={source} onChange={e => setSource(e.target.value)}><option>All sources</option>{sources.map(x => <option key={x}>{x}</option>)}</select><select value={date} onChange={e => setDate(e.target.value)}><option>All dates</option>{dates.map(x => <option key={x} value={x}>{dateLabel(x)}</option>)}</select><select value={health} onChange={e => setHealth(e.target.value)}><option>All status</option><option>Data Mismatch</option><option>Lost</option><option>TAT breach</option><option>Reconciled</option></select><button className="clear" onClick={reset}>Clear</button></section>
       <section className="kpis">
         <button className="kpi" onClick={() => openDetailedStage("All Direct API Source Leads", "direct")}>
@@ -867,7 +867,7 @@ export default function Home() {
           <div className="audit-card-interactive" style={{background: "#fffbeb", border: "1px solid #fef3c7", borderRadius: "10px", padding: "12px 14px"}}>
             <div style={{display: "flex", justifyContent: "space-between", alignItems: "center"}}>
               <span style={{fontSize: "10px", fontWeight: 800, color: "#b45309", letterSpacing: "0.5px"}}>2. DUPLICATE FILTERED (NOT LOST)</span>
-              <span style={{background: "#fef3c7", color: "#92400e", borderRadius: "12px", padding: "2px 8px", fontSize: "10px", fontWeight: 700}}>Chhannt Gaya</span>
+              <span style={{background: "#fef3c7", color: "#92400e", borderRadius: "12px", padding: "2px 8px", fontSize: "10px", fontWeight: 700}}>Filtered Out</span>
             </div>
             <div style={{fontSize: "22px", fontWeight: 800, color: "#d97706", margin: "6px 0 2px"}}>{fmt(summary.duplicate)}</div>
             <p style={{margin: 0, fontSize: "11px", color: "#b45309"}}>24-hr same mobile repetition, filtered intentionally</p>
@@ -1331,7 +1331,7 @@ export default function Home() {
         <div className="gap-console-intro"><div><span className="gap-console-kicker">GAP TOTAL</span><strong>{detailsLoading ? "…" : filteredDrawer.length}</strong></div><p>{selectedGapMeta.description} Counts stay anchored to the original source date wherever the lead eventually lands.</p></div>
         <div className="gap-console-ledger"><span className="unexplained"><small>ACTUAL LOST</small><strong>{detailsLoading ? "—" : actualLostCount}</strong><em>needs audit</em></span><span className="transient"><small>LATE TRANSFER</small><strong>{detailsLoading ? "—" : transientCount}</strong><em>not lost</em></span><span className="deleted"><small>DELETED</small><strong>{detailsLoading ? "—" : deletedCount}</strong><em>reason verified</em></span></div>
         <div className="gap-console-toolbar"><input value={drawerQuery} onChange={e => { setDrawerQuery(e.target.value); setPage(1); }} placeholder="Search Lead ID, name, mobile, source or status…"/><div>{selected.sheetUrl && <a href={selected.sheetUrl} target="_blank" rel="noreferrer">Open data sheet ↗</a>}<button onClick={exportCsv} disabled={!filteredDrawer.length}>Export CSV</button></div></div>
-        <div className="gap-console-body">{detailsLoading ? <div className="gap-console-loading"><i/><strong>Exact Lead IDs load ho rahe hain</strong><span>Popup open hai—sheet reconciliation background mein complete ho rahi hai.</span></div> : detailError ? <div className="gap-console-error"><strong>Details load nahi ho sake</strong><span>{detailError}</span></div> : filteredDrawer.length ? auditSections.map(section => { const sectionOpen = openAuditSections.has(section.key); return <section className={`gap-bucket ${section.key}`} key={section.key}>
+        <div className="gap-console-body">{detailsLoading ? <div className="gap-console-loading"><i/><strong>Loading exact Lead IDs…</strong><span>Popup is open — sheet reconciliation is completing in the background.</span></div> : detailError ? <div className="gap-console-error"><strong>Details could not be loaded</strong><span>{detailError}</span></div> : filteredDrawer.length ? auditSections.map(section => { const sectionOpen = openAuditSections.has(section.key); return <section className={`gap-bucket ${section.key}`} key={section.key}>
           <button className="gap-bucket-head" aria-expanded={sectionOpen} onClick={() => toggleAuditSection(section.key)}><span className="gap-eye">{sectionOpen ? "◉" : "○"}</span><strong>{section.title}</strong><em>{section.description}</em>{section.key === "deleted" && <span className="gap-reason-total">3 REASONS</span>}<b>{auditSectionCount(section.key)}</b></button>
           {sectionOpen && <div className="gap-bucket-content">{section.key === "deleted" && <div className="gap-delete-reasons">{deletedReasonOptions.map(option => <button className={deletedReasonFilter === option.key ? "active" : ""} aria-expanded={deletedReasonFilter === option.key} key={option.key} onClick={() => { setDeletedReasonFilter(deletedReasonFilter === option.key ? "all" : option.key); setExpandedAuditLead(null); }}><span className="gap-delete-branch">⌁</span><span className="gap-delete-copy"><strong>{option.label}</strong><em>{option.description}</em></span><b>{deletedReasonCount(option.key)}</b></button>)}</div>}{(section.key !== "deleted" || deletedReasonFilter !== "all") && (section.rows.length ? <div className="gap-record-scroll"><table className="gap-record-table"><thead><tr><th></th><th>Lead ID</th><th>Name</th><th>Mobile / Email</th><th>Source</th><th>Enquiry time</th><th>Actual status / reason</th><th>Held</th></tr></thead><tbody>{section.rows.map(lead => { const openLead = expandedAuditLead === lead.id; const status = lostReasonStatus(lead); const original = lead.original; const deleteStatus = deletedReason(lead); return <Fragment key={`${lead.id}-${lead.stage}`}>
             <tr className={`gap-record ${openLead ? "selected" : ""}`} onClick={() => setExpandedAuditLead(openLead ? null : lead.id)}><td><span className="gap-caret">{openLead ? "▾" : "▸"}</span></td><td><strong>{lead.id}</strong></td><td>{lead.name || "Unnamed lead"}</td><td><span>{lead.phone || "—"}</span><small>{lead.email || "—"}</small></td><td>{lead.source}</td><td>{lead.generatedAt || lead.timestamp || dateLabel(lead.date)}</td><td><span className={`gap-reason-chip ${section.key}`}>{auditReasonLabel(lead)}</span><small>{section.key === "unexplained" ? status.detail : section.key === "deleted" ? deleteStatus.detail : lead.reason}</small></td><td><strong className={section.key === "unexplained" ? "gap-age-hot" : ""}>{lead.tat || `${lead.tatMin || 0}m`}</strong></td></tr>
@@ -1343,7 +1343,7 @@ export default function Home() {
           </Fragment>; })}
                         
     </tbody></table></div> : <div className="gap-section-empty">No {section.title.toLowerCase()} records on this page.</div>)}</div>}
-        </section>; }) : <div className="gap-console-empty"><strong>No matching leads</strong><span>Search clear karke dobara dekhein.</span></div>}</div>
+        </section>; }) : <div className="gap-console-empty"><strong>No matching leads</strong><span>Try clearing the search to see all leads.</span></div>}</div>
         <footer className="gap-console-foot"><span>{detailsLoading ? "Loading exact records…" : `${filteredDrawer.length} rows · Page ${page} of ${pageCount}`}</span><button disabled={detailsLoading} onClick={() => setOpenAuditSections(openAuditSections.size === 3 ? new Set() : new Set(["unexplained", "transient", "deleted"]))}>{openAuditSections.size === 3 ? "Hide all sections" : "Show all sections"}</button><div>{filteredDrawer.length > pageSize && <><button disabled={page === 1} onClick={() => setPage(p => p - 1)}>Previous</button><button disabled={page === pageCount} onClick={() => setPage(p => p + 1)}>Next</button></>}<button onClick={() => setSelected(null)}>Close</button></div></footer>
       </section>
     </div> : selected && (
@@ -1429,12 +1429,12 @@ export default function Home() {
             {detailsLoading ? (
               <div style={{textAlign: "center", padding: "60px 20px", color: "#64748b"}}>
                 <div style={{margin: "0 auto 14px", width: 34, height: 34, border: "3px solid #e2e8f0", borderTopColor: "#2563eb", borderRadius: "50%", animation: "spin 0.8s linear infinite"}} />
-                <strong style={{display: "block", fontSize: 15, color: "#0f172a", marginBottom: 4}}>Direct API lead records load ho rahe hain…</strong>
-                <p style={{margin: 0, fontSize: 12, color: "#64748b"}}>Live database se exact leads aur buffer/CRM allocation verify ho rahi hai.</p>
+                <strong style={{display: "block", fontSize: 15, color: "#0f172a", marginBottom: 4}}>Loading Direct API lead records…</strong>
+                <p style={{margin: 0, fontSize: 12, color: "#64748b"}}>Verifying exact leads and buffer/CRM allocation from the live database.</p>
               </div>
             ) : detailError ? (
               <div style={{textAlign: "center", padding: "30px 20px", color: "#991b1b", background: "#fef2f2", borderRadius: 8, margin: "20px 0"}}>
-                <strong style={{display: "block", fontSize: 14, marginBottom: 4}}>Details load nahi ho sake</strong>
+                <strong style={{display: "block", fontSize: 14, marginBottom: 4}}>Details could not be loaded</strong>
                 <span style={{fontSize: 12}}>{detailError}</span>
               </div>
             ) : pagedDrawer.length ? pagedDrawer.map(lead => (
@@ -1500,7 +1500,7 @@ export default function Home() {
               <div className="empty-drawer" style={{textAlign: "center", padding: "40px 20px", color: "#64748b"}}>
                 <span style={{fontSize: 28, display: "block", marginBottom: 8}}>🔍</span>
                 <h3 style={{margin: "4px 0", fontSize: 14, color: "#0f172a"}}>No matching leads found</h3>
-                <p style={{margin: 0, fontSize: 12}}>Search clear karke ya different filter select karke dekhein.</p>
+                <p style={{margin: 0, fontSize: 12}}>Try clearing the search or selecting a different filter.</p>
               </div>
             )}
           </div>
