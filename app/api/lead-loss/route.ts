@@ -194,18 +194,19 @@ async function queryUnifiedBuffer(
   days: number
 ): Promise<UnifiedBufferData> {
   const [rows]: any[] = await pool.query(
-    `SELECT DATE(mb.Date_Time) AS dt,
-            mb.Date_Time AS arrival_time,
-            mb.Mobile,
+    `SELECT DATE(COALESCE(mb.Date_Time, mb.actual_time, mb.Timestamp)) AS dt,
+            COALESCE(mb.Date_Time, mb.actual_time, mb.Timestamp) AS arrival_time,
+            COALESCE(NULLIF(TRIM(mb.Mobile), ''), NULLIF(TRIM(sbn.Phone_Number_of_User), '')) AS Mobile,
             mb.lead_id,
             sbn.Lead_id AS sbn_lead_id,
-            sbn.Lead_Relates_to_which_company,
+            COALESCE(sbn.Lead_Relates_to_which_company, sbn.KAPPL_KTAHV, mb.WebSite_Name, '') AS Lead_Relates_to_which_company,
             sbn.Assign_To_MR_Main,
             COALESCE(mb.actual_time, sbn.gpt_Extraction_Status, sbn.Timestamp_2, sbn.Sent_status) AS assign_time
      FROM master_buffer mb
      LEFT JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id
-     WHERE mb.Date_Time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)`,
-    [days + 2]
+     WHERE (mb.Date_Time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+        OR mb.Timestamp >= DATE_SUB(CURDATE(), INTERVAL ? DAY))`,
+    [days + 2, days + 2]
   );
 
   const companyData = new Map<string, {
@@ -887,14 +888,27 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       });
     }
 
+    const bufferCount = records.filter(r => r.inBuffer).length;
+    const lostBufferCount = records.filter(r => r.inMedium && !r.inBuffer).length;
+    const unexplainedLost = records.filter(r => r.status === "Lost" && (r.stage === "buffer" || r.mediumBufferLost)).length;
+    const dupeCount = records.filter(r => r.isDuplicate || r.validDuplicate || r.expectedDuplicateGap).length;
+
     return {
       id: rowId,
       date,
       company,
       source,
       direct: directRows.length,
+      medium: directRows.length,
+      buffer: bufferCount,
+      mediumBufferLost: lostBufferCount,
+      unexplainedMediumGap: unexplainedLost,
+      duplicate: dupeCount,
+      expectedDuplicateGap: dupeCount,
+      crm: records.filter(r => r.inCrm).length,
       records,
       issues: records.filter(rec => rec.status === "Lost"),
+      gapRecordsIncluded: true,
     };
   }))).filter(Boolean);
 
@@ -1074,6 +1088,7 @@ export async function GET(request: Request) {
             }
             existing.records.push(...lostRecords);
             existing.issues.push(...lostRecords.filter((r: any) => r.status === "Lost"));
+            existing.gapRecordsIncluded = true;
           } else {
             rowMap[key] = {
               id: key, date, company: co.company, source: srcCfg.source,
@@ -1085,6 +1100,7 @@ export async function GET(request: Request) {
               avgTatSec, avgTatMin, slaBreaches: 0, mismatch: false, validationErrors: [],
               records: lostRecords,
               issues: lostRecords.filter((r: any) => r.status === "Lost"),
+              gapRecordsIncluded: true,
             };
           }
         }

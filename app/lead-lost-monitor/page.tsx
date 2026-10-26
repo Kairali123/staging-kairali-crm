@@ -593,10 +593,16 @@ export default function Home() {
           <span className="kpi-icon violet">◷</span>
           <div><small>TRANSFER TO KSERVE</small><strong>{fmt(summary.kserve)}</strong></div>
         </button>
-        <button className={openLoss > 0 ? "kpi danger" : "kpi"} onClick={() => openDetailed("Loss %", () => true)}>
-          <span className={openLoss > 0 ? "kpi-icon red" : "kpi-icon green"}>%</span>
-          <div><small>LOSS %</small><strong>{summary.direct?Math.round(openLoss/summary.direct*100):0}%</strong></div>
-        </button>
+        {(() => {
+          const grandActualLost = summary.unexplainedMediumGap + summary.masterLost + visible.reduce((n, row) => n + row.directMediumGap, 0);
+          const topLossRate = summary.direct ? Math.round(grandActualLost / summary.direct * 100) : 0;
+          return (
+            <button className={grandActualLost > 0 ? "kpi danger" : "kpi"} onClick={() => openDetailed("Loss %", () => true)}>
+              <span className={grandActualLost > 0 ? "kpi-icon red" : "kpi-icon green"}>%</span>
+              <div><small>LOSS %</small><strong>{topLossRate}%</strong></div>
+            </button>
+          );
+        })()}
       </section>
 
       {/* ═══ LEAD AUDIT CLASSIFICATION: ACTUAL LOST VS 24H DUPLICATE FILTERED ═══════════ */}
@@ -669,7 +675,7 @@ export default function Home() {
         </div>
       </section>
       <section className="pipeline-card"><div className="section-title"><div><p>LIVE ID FUNNEL</p><h2>Lead ID proof through every stage</h2></div><span>{payload?.crmMode ?? "CRM source unavailable"}</span></div><div className="pipeline">{pipelineKeys.map((key, index) => { const count = visible.reduce((n, row) => n + row[key], 0); return <div className="pipeline-wrap" key={key}><button className={`stage ${key === "assigned" ? "success" : ""}`} onClick={() => openDetailedStage(labels[key], key)}><span>{index + 1}</span><small>{labels[key]}</small><strong>{fmt(count)}</strong><em>{summary.direct ? Math.round(count / summary.direct * 100) : 0}%</em></button>{index < pipelineKeys.length - 1 && <i className="connector"><b>→</b></i>}</div>; })}</div><div className="funnel-note"><span className="green-dot"/> Duplicate/Delete is explained—not lost. Every count is deduplicated by Lead ID and grouped by Date + Company + Verified Source.</div></section>
-      <section className="loss-command" id="lost-radar"><div className="section-title"><div><p>LOST LEAD RADAR</p><h2>Exactly where reconciliation is breaking</h2></div><span className={`health-chip ${summary.mismatches ? "stale" : "current"}`}>{summary.mismatches ? `⚠ ${summary.mismatches} formula mismatch` : "● Formula validation passed"}</span></div><div className="loss-grid"><article className="live-master-card"><div className="radar-visual"><i/><i/><i/><span><small>OPEN</small><strong>{fmt(openLoss)}</strong><em>exceptions</em></span></div><div className="master-copy"><p>LATEST RECONCILIATION · {payload?.currentSummary?.date ? dateLabel(payload.currentSummary.date) : "—"}</p><h3>Medium → Buffer and Master → CRM</h3><div className="master-metrics"><span><small>Buffer</small><strong>{fmt(summary.buffer)}</strong></span><span><small>Same-day CRM</small><strong>{fmt(summary.sameDayCrm)}</strong></span><span><small>Late transfer</small><strong>{fmt(summary.lateTransfer)}</strong></span><span className="danger"><small>Actual lost</small><strong>{fmt(summary.unexplainedMediumGap + summary.masterLost)}</strong></span></div><button onClick={() => openDetailed("All open reconciliation exceptions", x => lossStages.some(stage => stage.select(x)), "lost-map")}>Open exact lost leads →</button></div></article><article className="break-map"><header><div><p>LIVE STAGE MAP</p><h3>Date + Company + Source</h3></div><span>Click a stage to audit</span></header><div className="break-list">{lossStages.map((stage, index) => <button key={stage.label} onClick={() => openDetailed(`${stage.label} lost leads`, stage.select, "lost-map")}><span className="break-rank">0{index + 1}</span><span className="break-copy"><strong>{stage.label}</strong><small>{stage.hint}</small><i><b style={{ width: `${Math.max(3, stage.count / largestLoss * 100)}%` }}/></i></span><em className={stage.count ? "hot" : "clear"}>{fmt(stage.count)}<small>{stage.count ? " lost" : " clear"}</small></em></button>)}</div></article></div></section>
+      <section className="loss-command" id="lost-radar"><div className="section-title"><div><p>LOST LEAD RADAR</p><h2>Exactly where reconciliation is breaking</h2></div><span className={`health-chip ${summary.mismatches ? "stale" : "current"}`}>{summary.mismatches ? `⚠ ${summary.mismatches} formula mismatch` : "● Formula validation passed"}</span></div><div className="loss-grid"><article className="live-master-card"><div className="radar-visual"><i/><i/><i/><span><small>OPEN</small><strong>{fmt(openLoss)}</strong><em>exceptions</em></span></div><div className="master-copy"><p>LATEST RECONCILIATION · {payload?.currentSummary?.date ? dateLabel(payload.currentSummary.date) : "—"}</p><h3>Medium → Buffer and Master → CRM</h3><div className="master-metrics"><span><small>Buffer</small><strong>{fmt(summary.buffer)}</strong></span><span><small>Same-day CRM</small><strong>{fmt(summary.sameDayCrm)}</strong></span><span><small>Late transfer</small><strong>{fmt(summary.lateTransfer)}</strong></span><span className="danger"><small>Actual lost</small><strong>{fmt(summary.unexplainedMediumGap + summary.masterLost)}</strong></span></div><button onClick={() => openDetailed("All open reconciliation exceptions", x => lossStages.some(stage => stage.select(x)), "lost-map")}>Open exact lost leads →</button></div></article><article className="break-map"><header><div><p>LIVE STAGE MAP</p><h3>Date + Company + Source</h3></div><span>Click a stage to audit</span></header><div className="break-list">{lossStages.map((stage, index) => <button key={stage.label} onClick={() => openDetailed(`${stage.label} lost leads`, stage.select, "lost-map")}><span className="break-rank">0{index + 1}</span><span className="break-copy"><strong>{stage.label}</strong><small>{stage.hint}</small><i><b style={{ width: `${Math.max(3, stage.count / largestLoss * 100)}%` }}/></i></span><em className={stage.count ? "hot" : "clear"}>{fmt(stage.count)}<small>{stage.count ? (stage.label.includes("KServe") ? " unassigned" : " lost") : " clear"}</small></em></button>)}</div></article></div></section>
       {/* ═══ PREMIUM RECONCILIATION TABLE ═══════════════════════════════════ */}
       <section id="reconciliation" style={{
         background:"#fff",border:"1px solid #e5ebf0",borderRadius:14,
@@ -689,7 +695,7 @@ export default function Home() {
               ● {fmt(visible.reduce((s,r)=>s+r.crm,0))} Received
             </span>
             <span style={{background:"#fff0f0",color:"#991b1b",border:"1px solid #fecaca",borderRadius:8,padding:"6px 11px",fontSize:10,fontWeight:700}}>
-              ✕ {fmt(visible.reduce((s,r)=>s+r.masterCrmLost,0))} Lost
+              ✕ {fmt(visible.reduce((s,r)=>s + r.masterCrmLost + (r.unexplainedMediumGap ?? 0) + r.directMediumGap, 0))} Lost
             </span>
             <span style={{background:"#fff9f0",color:"#92400e",border:"1px solid #fde68a",borderRadius:8,padding:"6px 11px",fontSize:10,fontWeight:700}}>
               ◷ {fmt(visible.reduce((s,r)=>s+r.mediumBufferLost,0))} Pending
@@ -1010,7 +1016,9 @@ export default function Home() {
                 {groups.length > 0 && (() => {
                   const totalCompanies = [...new Set(groups.flatMap(g=>g.companies.map(c=>c.company)))].length;
                   const totalSources = [...new Set(groups.flatMap(g=>g.rows.map(r=>r.source)))].length;
-                  const grandLossRate = summary.direct>0?Math.round(openLoss/summary.direct*100):0;
+                  const grandActualLost = summary.unexplainedMediumGap + summary.masterLost + visible.reduce((n, row) => n + row.directMediumGap, 0);
+                  const grandLossRate = summary.direct > 0 ? Math.round(grandActualLost / summary.direct * 100) : 0;
+                  const grandAllClear = grandActualLost === 0;
                   return (
                     <tr style={{background:"#f1f5f9",borderTop:"3px solid #cbd5e1"}}>
                       <td style={{padding:"14px 18px",textAlign:"left"}}>
@@ -1068,10 +1076,10 @@ export default function Home() {
                       </td>
                       <td style={{padding:"14px 10px",textAlign:"center",color:"#0f172a",fontSize:13,fontFamily:"monospace",fontWeight:800}}>{summary.tatWeight > 0 ? formatHHMMSS(Math.round(summary.tatSum/summary.tatWeight)) : '—'}</td>
                       <td style={{padding:"14px 10px",textAlign:"center"}}>
-                        <span style={{display:"inline-flex",alignItems:"center",gap:3,padding:"4px 10px",borderRadius:20,fontSize:10,fontWeight:800,background:openLoss===0?"#f0fdf4":"#fff0f0",color:openLoss===0?"#166534":"#991b1b"}}>{openLoss===0?"Clear":`${fmt(openLoss)} Lost`}</span>
+                        <span style={{display:"inline-flex",alignItems:"center",gap:3,padding:"4px 10px",borderRadius:20,fontSize:10,fontWeight:800,background:grandAllClear?"#f0fdf4":"#fff0f0",color:grandAllClear?"#166534":"#991b1b"}}>{grandAllClear?"Clear":`${fmt(grandActualLost)} Lost`}</span>
                       </td>
                       <td style={{padding:"14px 10px",textAlign:"center"}}>
-                        <span style={{padding:"5px 12px",borderRadius:20,fontSize:12,fontWeight:900,background:grandLossRate>20?"#fee2e2":"#fef3c7",color:grandLossRate>20?"#991b1b":"#92400e"}}>{grandLossRate}%</span>
+                        <span style={{padding:"5px 12px",borderRadius:20,fontSize:12,fontWeight:900,background:grandAllClear?"#dcfce7":grandLossRate>20?"#fee2e2":"#fef3c7",color:grandAllClear?"#166534":grandLossRate>20?"#991b1b":"#92400e"}}>{grandAllClear?"0%":`${grandLossRate}%`}</span>
                       </td>
                     </tr>
                   );
