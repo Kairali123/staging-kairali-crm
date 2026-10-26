@@ -172,6 +172,13 @@ const formatHHMMSS = (sec?: number | null) => {
   const s = Math.floor(total % 60);
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
+const formatLossRate = (lost: number, direct: number): string => {
+  if (lost <= 0 || direct <= 0) return "0%";
+  const pct = (lost / direct) * 100;
+  if (pct >= 10) return `${Math.round(pct)}%`;
+  if (pct >= 1) return `${Number(pct.toFixed(1))}%`;
+  return `${Number(pct.toFixed(2))}%`;
+};
 const dateLabel = (value: string) => { const date = new Date(`${value}T00:00:00`); return Number.isNaN(date.valueOf()) ? value : date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }); };
 const normalizeRow = (row: TrackerRow): TrackerRow => ({
   ...row,
@@ -595,11 +602,11 @@ export default function Home() {
         </button>
         {(() => {
           const grandActualLost = summary.unexplainedMediumGap + summary.masterLost + visible.reduce((n, row) => n + row.directMediumGap, 0);
-          const topLossRate = summary.direct ? Math.round(grandActualLost / summary.direct * 100) : 0;
+          const topLossRate = formatLossRate(grandActualLost, summary.direct);
           return (
             <button className={grandActualLost > 0 ? "kpi danger" : "kpi"} onClick={() => openDetailed("Loss %", () => true)}>
               <span className={grandActualLost > 0 ? "kpi-icon red" : "kpi-icon green"}>%</span>
-              <div><small>LOSS %</small><strong>{topLossRate}%</strong></div>
+              <div><small>LOSS %</small><strong>{topLossRate}</strong></div>
             </button>
           );
         })()}
@@ -846,9 +853,9 @@ export default function Home() {
                         <td style={{padding:"12px 10px",textAlign:"center"}}>
                           <span style={{
                             padding:"4px 10px",borderRadius:20,fontSize:11,fontWeight:800,
-                            background:allClear?"#dcfce7":lossRate>20?"#fee2e2":lossRate>5?"#fef3c7":"#fef9c3",
-                            color:allClear?"#166534":lossRate>20?"#991b1b":lossRate>5?"#92400e":"#713f12",
-                          }}>{allClear?"0%":`${lossRate}%`}</span>
+                            background:allClear?"#dcfce7":totalLost>0?"#fee2e2":"#fef3c7",
+                            color:allClear?"#166534":totalLost>0?"#991b1b":"#92400e",
+                          }}>{allClear?"0%":formatLossRate(totalLost, group.total.direct)}</span>
                         </td>
                       </tr>
 
@@ -922,7 +929,7 @@ export default function Home() {
                                   <span style={{display:"inline-flex",alignItems:"center",gap:3,padding:"3px 8px",borderRadius:20,fontSize:9,fontWeight:700,background:rowClear?"#f0fdf4":rowLost>0?"#fff0f0":"#fff9f0",color:rowClear?"#166534":rowLost>0?"#991b1b":"#92400e"}}>{rowClear?"Clear":rowLost>0?"Lost":"Pending"}</span>
                                 </td>
                                 <td style={{padding:"9px 10px",textAlign:"center"}}>
-                                  <span style={{display:"inline-block",padding:"3px 8px",borderRadius:20,fontSize:10,fontWeight:800,background:rowClear?"#dcfce7":rowRate>30?"#fee2e2":rowRate>10?"#fef3c7":"#fff9f0",color:rowClear?"#166534":rowRate>30?"#991b1b":rowRate>10?"#92400e":"#78350f"}}>{rowClear?"0%":`${rowRate}%`}</span>
+                                  <span style={{display:"inline-block",padding:"3px 8px",borderRadius:20,fontSize:10,fontWeight:800,background:rowClear?"#dcfce7":rowLost>0?"#fee2e2":"#fef3c7",color:rowClear?"#166534":rowLost>0?"#991b1b":"#92400e"}}>{rowClear?"0%":formatLossRate(rowLost, row.direct)}</span>
                                 </td>
                               </tr>
                             );
@@ -998,9 +1005,10 @@ export default function Home() {
                             <td style={{padding:"8px 10px",textAlign:"center"}}>
                               {(() => {
                                 const compLost = (cg.total.unexplainedMediumGap ?? 0) + cg.total.masterCrmLost + (cg.total.directMediumGap ?? 0);
+                                const compClear = compLost === 0;
                                 return (
-                                  <span style={{fontSize:11,fontWeight:800,color: compLost > 0 ? "#991b1b" : "#166534"}}>
-                                    {cg.total.direct > 0 ? Math.round(compLost / cg.total.direct * 100) : 0}%
+                                  <span style={{fontSize:11,fontWeight:800,color: compClear ? "#166534" : "#991b1b"}}>
+                                    {compClear ? "0%" : formatLossRate(compLost, cg.total.direct)}
                                   </span>
                                 );
                               })()}
@@ -1017,7 +1025,7 @@ export default function Home() {
                   const totalCompanies = [...new Set(groups.flatMap(g=>g.companies.map(c=>c.company)))].length;
                   const totalSources = [...new Set(groups.flatMap(g=>g.rows.map(r=>r.source)))].length;
                   const grandActualLost = summary.unexplainedMediumGap + summary.masterLost + visible.reduce((n, row) => n + row.directMediumGap, 0);
-                  const grandLossRate = summary.direct > 0 ? Math.round(grandActualLost / summary.direct * 100) : 0;
+                  const grandLossText = formatLossRate(grandActualLost, summary.direct);
                   const grandAllClear = grandActualLost === 0;
                   return (
                     <tr style={{background:"#f1f5f9",borderTop:"3px solid #cbd5e1"}}>
@@ -1079,7 +1087,7 @@ export default function Home() {
                         <span style={{display:"inline-flex",alignItems:"center",gap:3,padding:"4px 10px",borderRadius:20,fontSize:10,fontWeight:800,background:grandAllClear?"#f0fdf4":"#fff0f0",color:grandAllClear?"#166534":"#991b1b"}}>{grandAllClear?"Clear":`${fmt(grandActualLost)} Lost`}</span>
                       </td>
                       <td style={{padding:"14px 10px",textAlign:"center"}}>
-                        <span style={{padding:"5px 12px",borderRadius:20,fontSize:12,fontWeight:900,background:grandAllClear?"#dcfce7":grandLossRate>20?"#fee2e2":"#fef3c7",color:grandAllClear?"#166534":grandLossRate>20?"#991b1b":"#92400e"}}>{grandAllClear?"0%":`${grandLossRate}%`}</span>
+                        <span style={{padding:"5px 12px",borderRadius:20,fontSize:12,fontWeight:900,background:grandAllClear?"#dcfce7":grandActualLost>0?"#fee2e2":"#fef3c7",color:grandAllClear?"#166534":grandActualLost>0?"#991b1b":"#92400e"}}>{grandLossText}</span>
                       </td>
                     </tr>
                   );
