@@ -70,37 +70,132 @@ const LEADGUARD_CSS = `@import url('https://fonts.googleapis.com/css2?family=Arc
 .gap-reason-total{border:1px solid var(--gc-rule);background:#fff;color:var(--gc-muted);padding:2px 7px;font:700 8px ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.7px}.gap-delete-reasons{display:block;background:#fff;overflow:visible}.gap-delete-reasons button{width:100%;display:grid;grid-template-columns:24px minmax(0,1fr) auto;align-items:center;gap:6px;border:0;border-left:3px solid transparent;border-bottom:1px solid var(--gc-rule);background:#fff;color:var(--gc-ink);padding:9px 17px;text-align:left}.gap-delete-reasons button:hover{background:#fafafd}.gap-delete-reasons button.active{border-left-color:var(--gc-accent);border-bottom-color:var(--gc-rule);background:#f7f6fc;color:var(--gc-ink)}.gap-delete-branch{color:#a4acb6!important;font:700 13px ui-monospace,'SF Mono',Menlo,monospace!important}.gap-delete-copy{display:flex;align-items:baseline;gap:10px;min-width:0;white-space:normal!important}.gap-delete-copy strong{font:700 11px 'DM Sans'!important;white-space:nowrap}.gap-delete-copy em{color:var(--gc-muted);font:500 10px 'DM Sans';font-style:normal}.gap-delete-reasons button>b{font:700 11px ui-monospace,'SF Mono',Menlo,monospace}.gap-evidence-table{grid-template-columns:22px minmax(150px,1fr) minmax(130px,.75fr) minmax(130px,1fr) minmax(100px,1fr) minmax(150px,1.2fr)}.gap-evidence-table b{white-space:normal;line-height:1.25}
 @media(max-width:680px){.gap-console-backdrop{padding:0;align-items:end}.gap-console{width:100%;height:100%;max-height:100%;border-radius:0}.gap-console-intro{display:block}.gap-console-intro p{margin-top:8px}.gap-console-ledger{margin-left:12px;margin-right:12px}.gap-console-ledger>span{padding:8px}.gap-console-ledger strong{font-size:18px}.gap-console-toolbar{align-items:stretch;flex-direction:column}.gap-console-toolbar>div{justify-content:flex-end}.gap-bucket-head{padding-left:11px}.gap-bucket-head em{display:none}.gap-delete-reasons{grid-template-columns:repeat(6,minmax(125px,1fr))}.gap-stage-track{display:grid;grid-template-columns:1fr 1fr;gap:12px}.gap-stage-node:not(:last-child):after{display:none}.gap-contact-detail{grid-template-columns:1fr 1fr}.gap-evidence header{display:block}.gap-evidence header em{display:block;margin:4px 0 0}.gap-evidence-table{grid-template-columns:18px minmax(120px,1fr) 75px}.gap-evidence-table>*:nth-child(6n+4),.gap-evidence-table>*:nth-child(6n+5),.gap-evidence-table>*:nth-child(6n+6){display:none}.gap-console-foot>span{display:none}}
 .gap-console-loading,.gap-console-error{min-height:220px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:36px 18px;color:var(--gc-muted)}.gap-console-loading i{width:28px;height:28px;border:3px solid var(--gc-rule);border-top-color:var(--gc-accent);border-radius:50%;animation:gap-console-spin .7s linear infinite;margin-bottom:13px}.gap-console-loading strong,.gap-console-error strong{color:var(--gc-ink);font-size:13px}.gap-console-loading span,.gap-console-error span{font-size:10px;margin-top:5px}.gap-console-error{background:var(--gc-alarm-soft)}.gap-console-error strong{color:var(--gc-alarm)}@keyframes gap-console-spin{to{transform:rotate(360deg)}}
+.topbar {
+  min-height: 80px;
+  height: auto !important;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 0;
+}
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.topbar-actions button {
+  padding: 8px 12px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all .15s ease;
+}
+.topbar-actions button:hover {
+  background: #e2e8f0;
+}
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+.refresh {
+  border: 0;
+  background: var(--teal-dark);
+  color: #fff;
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s ease;
+}
+.refresh:hover:not(:disabled) {
+  background: #066456;
+}
 .force-refresh {
   border: 1px solid #9c5906;
   border-radius: 8px;
   background: #b76b08;
   color: #fff;
-  min-width: 142px;
-  padding: 10px 14px;
+  padding: 9px 14px;
+  font-size: 11px;
   font-weight: 750;
   white-space: nowrap;
   cursor: pointer;
+  transition: background .15s ease;
 }
 
 .force-refresh:hover:not(:disabled) {
   background: #985806;
 }
 
-.force-refresh:disabled {
+.force-refresh:disabled,
+.refresh:disabled {
   opacity: .55;
   cursor: not-allowed;
 }
 
+@media (max-width: 1024px) {
+  .topbar {
+    gap: 10px;
+  }
+  .top-actions {
+    margin-left: 0;
+  }
+}
+
 @media (max-width: 760px) {
+  .topbar {
+    height: auto !important;
+    padding: 10px 0;
+    gap: 8px;
+  }
+  .topbar h1 {
+    font-size: 18px;
+  }
   .top-actions {
     gap: 6px;
+    width: 100%;
+    justify-content: flex-start;
   }
-
+  .topbar-actions {
+    width: 100%;
+  }
   .refresh,
   .force-refresh {
+    flex: 1 1 auto;
+    text-align: center;
+    padding: 8px 10px;
+    font-size: 10.5px;
     min-width: 0;
-    padding: 9px 8px;
-    font-size: 10px;
+  }
+  .mode {
+    padding: 6px 9px;
+    font-size: 9px;
+  }
+}
+
+@media (max-width: 480px) {
+  .top-actions {
+    flex-wrap: wrap;
+  }
+  .mode {
+    width: 100%;
+    text-align: center;
+  }
+  .refresh,
+  .force-refresh {
+    width: 100%;
   }
 }
 .date-total-row {
@@ -558,7 +653,21 @@ export default function Home() {
   return <div className="shell"><LeadGuardStyle />
     
     <main>
-      <header className="topbar"><div><p>OPERATIONS / LEAD CONTROL</p><h1>CRM reconciliation command center</h1></div><div className="topbar-actions" style={{display: "flex", gap: "10px", marginLeft: "auto", marginRight: "20px"}}><button onClick={() => openDetailed("Open incidents", x => x.status !== "Resolved")} style={{padding: "8px 12px", background: "#f1f5f9", borderRadius: "6px", fontSize: "12px", fontWeight: "bold"}}>! Incidents {summary.breaches + openLoss}</button><button onClick={() => openDetailed("Duplicate proof", x => x.validDuplicate ?? Boolean(x.original))} style={{padding: "8px 12px", background: "#f1f5f9", borderRadius: "6px", fontSize: "12px", fontWeight: "bold"}}>⌘ Duplicate proof</button></div><div className="top-actions"><span className={`mode ${payload?.live ? "live" : "demo"}`}><i/>{payload?.live ? "LIVE DATA" : payload ? "SOURCE ERROR" : "CONNECTING"}</span><button className="refresh" onClick={() => load(false)} disabled={loading}>{loading && !forceRefreshing ? "Refreshing…" : "↻ Refresh now"}</button><button className="force-refresh" onClick={() => load(true)} disabled={loading}>{forceRefreshing ? "Scanning all sheets…" : "⟳ Force fresh scan"}</button></div></header>
+      <header className="topbar">
+        <div className="topbar-title">
+          <p>OPERATIONS / LEAD CONTROL</p>
+          <h1>CRM reconciliation command center</h1>
+        </div>
+        <div className="topbar-actions">
+          <button type="button" onClick={() => openDetailed("Open incidents", x => x.status !== "Resolved")}>! Incidents {summary.breaches + openLoss}</button>
+          <button type="button" onClick={() => openDetailed("Duplicate proof", x => x.validDuplicate ?? Boolean(x.original))}>⌘ Duplicate proof</button>
+        </div>
+        <div className="top-actions">
+          <span className={`mode ${payload?.live ? "live" : "demo"}`}><i/>{payload?.live ? "LIVE DATA" : payload ? "SOURCE ERROR" : "CONNECTING"}</span>
+          <button className="refresh" onClick={() => load(false)} disabled={loading}>{loading && !forceRefreshing ? "Refreshing…" : "↻ Refresh"}</button>
+          <button className="force-refresh" onClick={() => load(true)} disabled={loading}>{forceRefreshing ? "Scanning all sheets…" : "⟳ Force fresh scan"}</button>
+        </div>
+      </header>
       <section className={`alert-strip ${!payload?.live || summary.mismatches ? "tracker-stale" : ""}`}><div className="alert-icon">!</div><div><strong>{loading && !payload ? "Connecting to live Google Sheets…" : payload && !payload.live ? "Live reconciliation source unavailable" : summary.mismatches ? `${summary.mismatches} Data Mismatch row${summary.mismatches > 1 ? "s" : ""} found` : openLoss ? `${openLoss} lead reconciliation exception${openLoss > 1 ? "s" : ""}` : "All Lead IDs are reconciled"}</strong><p>{loading && !payload ? "Latest Date + Company + Source reconciliation is loading. Counts will appear automatically." : payload && !payload.live ? `${payload.diagnostic ?? "Secure Google Sheets bridge did not return live rows."} No demo counts are shown.` : summary.mismatches ? "Row formulas failed—highlighted rows par click karke exact Lead IDs audit karein." : openLoss ? "Lost radar exact pipeline stage aur records identify karta hai." : "Direct, duplicate, buffer and CRM formulas match."}</p></div><button onClick={() => payload?.live ? openDetailed("Reconciliation exceptions", x => x.status !== "Resolved") : load()} disabled={loading || detailsLoading}>{payload?.live ? detailsLoading ? "Loading Lead IDs…" : "Review leads →" : loading ? "Connecting…" : "Retry live sync →"}</button></section>
       <section className="filters"><label className="search"><span>⌕</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search company, source or date…"/></label><select value={company} onChange={e => setCompany(e.target.value)}><option>All companies</option>{companies.map(x => <option key={x}>{x}</option>)}</select><select value={source} onChange={e => setSource(e.target.value)}><option>All sources</option>{sources.map(x => <option key={x}>{x}</option>)}</select><select value={date} onChange={e => setDate(e.target.value)}><option>All dates</option>{dates.map(x => <option key={x} value={x}>{dateLabel(x)}</option>)}</select><select value={health} onChange={e => setHealth(e.target.value)}><option>All status</option><option>Data Mismatch</option><option>Lost</option><option>TAT breach</option><option>Reconciled</option></select><button className="clear" onClick={reset}>Clear</button></section>
       <section className="kpis">
