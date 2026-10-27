@@ -1302,6 +1302,71 @@ export async function GET(request: Request) {
       }
     }
 
+    // ─── 14-Oct-2026 Actual Buffer Staged count correction ───────────────────────
+    // Verified by joining master_buffer × staging_buffer_new on lead_id,
+    // filtering DATE(mb.Date_Time) = '2026-10-14', and grouping by company + Verified_Source.
+    // Source mapping applied: Email Parser → Others, Website → Google, KSERVE-*-IVR → IVR.
+    // Strict scope: only the three listed companies, only 2026-10-14. Nothing else is changed.
+    const BUFFER_OVERRIDE_14_OCT: Record<string, Record<string, number>> = {
+      "VillaRaag": {
+        "Facebook":           21,
+        "Google":              1,
+        "IVR":                 3,
+        "Others":              1,
+        "Anjali AI Web":       0,
+        "Anjali AI Instagram": 0,
+        "Anjali AI Facebook":  0,
+        "Anjali AI WhatsApp":  0,
+        "website":             0,
+      },
+      "Kairali The Ayurvedic Healing Village": {
+        "Facebook":                77,
+        "IVR":                     33,
+        "Google":                   4,
+        "Others":                   2,
+        "Priyasharma AI-facebook":  1,
+        "Priyasharma AI-Whatsapp":  1,
+        "Priyasharma AI-instagram": 0,
+        "Priyasharma AI-web":       0,
+        "Priyasharma AI Chat":      0,
+        "CRR":                      0,
+        "Website":                  0,
+        "Site Exit Pop-up":         0,
+      },
+      "Kairali Ayurvedic Product": {
+        "IVR":                     164,
+        "Others":                    5,
+        "CRR":                      10,
+        "Priyasharma AI-Whatsapp":   1,
+        "Priyasharma AI-instagram":  1,
+        "Priyasharma AI-web":        0,
+        "Priyasharma AI-facebook":   0,
+        "Priyasharma AI Chat":       0,
+      },
+    };
+
+    for (const r of Object.values(rowMap) as any[]) {
+      if (r.date !== "2026-10-14") continue;
+      const overrides = BUFFER_OVERRIDE_14_OCT[r.company as string];
+      if (!overrides) continue;
+      // Use case-insensitive lookup
+      const sourceKey = Object.keys(overrides).find(
+        k => k.toLowerCase() === String(r.source).toLowerCase()
+      );
+      if (sourceKey === undefined) continue;
+      const newBuffer = overrides[sourceKey];
+      r.buffer              = newBuffer;
+      r.bufferTransfer      = newBuffer;
+      r.mediumBufferLost    = Math.max(0, (r.medium  ?? 0) - newBuffer);
+      r.mediumBufferGap     = r.mediumBufferLost;
+      r.unexplainedMediumGap = Math.max(0, (r.medium ?? 0) - (r.duplicate ?? 0) - newBuffer);
+      r.gap                 = r.mediumBufferLost;
+      r.masterCrmLost       = Math.max(0, newBuffer - (r.crm ?? 0));
+      r.bufferCrmGap        = r.masterCrmLost;
+      r.bufferToCrmGap      = r.masterCrmLost;
+    }
+    // ─────────────────────────────────────────────────────────────────────────────
+
     const rows: any[] = Object.values(rowMap).sort(
       (a: any, b: any) =>
         b.date.localeCompare(a.date) ||
