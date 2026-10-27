@@ -13,6 +13,9 @@ interface SourceConfig {
   nameCol?: string;
   emailCol?: string;
   sourceFilter?: string;
+  /** Column that holds sent/transfer status; rows with value LIKE 'Transfer to Delete%'
+   *  are counted in Direct but classified as Gap 1 (Direct→Medium) losses. */
+  sentStatusDeleteCol?: string;
 }
 
 interface CompanyConfig {
@@ -36,10 +39,10 @@ const COMPANY_CONFIG: CompanyConfig[] = [
       // Filter by company: Villaraag.
       // SRC column mapping: Widget or Iframe = Web, Instagram = Instagram, Messenger = Facebook, API or WhatsApp = WhatsApp.
       // Note: check both mail_status and src for robust source matching.
-      { source: "Anjali AI Web", table: "villaraag_chatbase_leads_api_anjali_menon", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "(lead_relates_to_which_company LIKE '%villa%' OR lead_relates_to_which_company LIKE '%raag%' OR lead_relates_to_which_company IS NULL OR lead_relates_to_which_company = '') AND (mail_status = 'Widget or Iframe' OR mail_status = 'Web' OR src = 'Widget or Iframe' OR src = 'Web')" },
-      { source: "Anjali AI Instagram", table: "villaraag_chatbase_leads_api_anjali_menon", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "(lead_relates_to_which_company LIKE '%villa%' OR lead_relates_to_which_company LIKE '%raag%' OR lead_relates_to_which_company IS NULL OR lead_relates_to_which_company = '') AND (mail_status = 'Instagram' OR src = 'Instagram')" },
-      { source: "Anjali AI Facebook", table: "villaraag_chatbase_leads_api_anjali_menon", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "(lead_relates_to_which_company LIKE '%villa%' OR lead_relates_to_which_company LIKE '%raag%' OR lead_relates_to_which_company IS NULL OR lead_relates_to_which_company = '') AND (mail_status = 'Messenger' OR mail_status = 'Facebook' OR src = 'Messenger' OR src = 'Facebook')" },
-      { source: "Anjali AI WhatsApp", table: "villaraag_chatbase_leads_api_anjali_menon", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "(lead_relates_to_which_company LIKE '%villa%' OR lead_relates_to_which_company LIKE '%raag%' OR lead_relates_to_which_company IS NULL OR lead_relates_to_which_company = '') AND (mail_status = 'API' OR mail_status = 'WhatsApp' OR src = 'API' OR src = 'WhatsApp')" },
+      { source: "Anjali AI Web", table: "villaraag_chatbase_leads_api_anjali_menon", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(lead_relates_to_which_company LIKE '%villa%' OR lead_relates_to_which_company LIKE '%raag%' OR lead_relates_to_which_company IS NULL OR lead_relates_to_which_company = '') AND (mail_status = 'Widget or Iframe' OR mail_status = 'Web' OR src = 'Widget or Iframe' OR src = 'Web')" },
+      { source: "Anjali AI Instagram", table: "villaraag_chatbase_leads_api_anjali_menon", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(lead_relates_to_which_company LIKE '%villa%' OR lead_relates_to_which_company LIKE '%raag%' OR lead_relates_to_which_company IS NULL OR lead_relates_to_which_company = '') AND (mail_status = 'Instagram' OR src = 'Instagram')" },
+      { source: "Anjali AI Facebook", table: "villaraag_chatbase_leads_api_anjali_menon", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(lead_relates_to_which_company LIKE '%villa%' OR lead_relates_to_which_company LIKE '%raag%' OR lead_relates_to_which_company IS NULL OR lead_relates_to_which_company = '') AND (mail_status = 'Messenger' OR mail_status = 'Facebook' OR src = 'Messenger' OR src = 'Facebook')" },
+      { source: "Anjali AI WhatsApp", table: "villaraag_chatbase_leads_api_anjali_menon", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(lead_relates_to_which_company LIKE '%villa%' OR lead_relates_to_which_company LIKE '%raag%' OR lead_relates_to_which_company IS NULL OR lead_relates_to_which_company = '') AND (mail_status = 'API' OR mail_status = 'WhatsApp' OR src = 'API' OR src = 'WhatsApp')" },
       { source: "IVR", table: "ivr_lead_api_knowrality", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "lead_id", nameCol: "name_of_client", emailCol: "email_id", sourceFilter: "((lead_relates_to_which_company LIKE '%villa%' AND lead_relates_to_which_company NOT LIKE '%village%') OR lead_relates_to_which_company LIKE '%raag%' OR (company_by_extension LIKE '%villa%' AND company_by_extension NOT LIKE '%village%') OR company_by_extension LIKE '%raag%')" },
       { source: "Others", table: "bulk_whatsapp_reply_enquiry_generation", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "source_id", nameCol: "client_name", emailCol: "email_id", sourceFilter: "website_name LIKE '%villa%' OR website_name LIKE '%raag%'" },
       // Email Parser leads for VillaRaag (Unit column filtered for VillaRaag; 9 cases on 14-Oct)
@@ -65,10 +68,10 @@ const COMPANY_CONFIG: CompanyConfig[] = [
       // Priyasharma AI: Column W (Timestamp); Column O (Healing Village + Ayurvedic Centers); Column AO (SRC)
       // Filter by timestamp column only (stored in IST; do NOT convert TZ).
       // Healing Village + Ayurvedic Centers both = KTAHV. SRC: Widget or Iframe=AI-Web, Instagram=AI-Instagram, API or WhatsApp=AI-WhatsApp, Messenger=AI-Facebook.
-      { source: "Priyasharma AI-web", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "(src = 'Widget or Iframe' OR mail_status = 'Widget or Iframe') AND (LOWER(lead_relates_to_which_company) LIKE '%healing village%' OR LOWER(lead_relates_to_which_company) LIKE '%ktahv%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic center%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic centre%')" },
-      { source: "Priyasharma AI-instagram", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "(src = 'Instagram' OR mail_status = 'Instagram') AND (LOWER(lead_relates_to_which_company) LIKE '%healing village%' OR LOWER(lead_relates_to_which_company) LIKE '%ktahv%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic center%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic centre%')" },
-      { source: "Priyasharma AI-Whatsapp", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "(src = 'WhatsApp' OR src = 'API' OR mail_status = 'WhatsApp' OR mail_status = 'API') AND (LOWER(lead_relates_to_which_company) LIKE '%healing village%' OR LOWER(lead_relates_to_which_company) LIKE '%ktahv%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic center%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic centre%')" },
-      { source: "Priyasharma AI-facebook", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "(src = 'Facebook' OR src = 'Messenger' OR mail_status = 'Facebook' OR mail_status = 'Messenger') AND (LOWER(lead_relates_to_which_company) LIKE '%healing village%' OR LOWER(lead_relates_to_which_company) LIKE '%ktahv%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic center%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic centre%')" },
+      { source: "Priyasharma AI-web", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(src = 'Widget or Iframe' OR mail_status = 'Widget or Iframe') AND (LOWER(lead_relates_to_which_company) LIKE '%healing village%' OR LOWER(lead_relates_to_which_company) LIKE '%ktahv%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic center%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic centre%')" },
+      { source: "Priyasharma AI-instagram", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(src = 'Instagram' OR mail_status = 'Instagram') AND (LOWER(lead_relates_to_which_company) LIKE '%healing village%' OR LOWER(lead_relates_to_which_company) LIKE '%ktahv%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic center%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic centre%')" },
+      { source: "Priyasharma AI-Whatsapp", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(src = 'WhatsApp' OR src = 'API' OR mail_status = 'WhatsApp' OR mail_status = 'API') AND (LOWER(lead_relates_to_which_company) LIKE '%healing village%' OR LOWER(lead_relates_to_which_company) LIKE '%ktahv%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic center%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic centre%')" },
+      { source: "Priyasharma AI-facebook", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(src = 'Facebook' OR src = 'Messenger' OR mail_status = 'Facebook' OR mail_status = 'Messenger') AND (LOWER(lead_relates_to_which_company) LIKE '%healing village%' OR LOWER(lead_relates_to_which_company) LIKE '%ktahv%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic center%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic centre%')" },
       { source: "Priyasharma AI Chat", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "(src IS NULL OR src NOT IN ('Widget or Iframe', 'API', 'Instagram', 'WhatsApp', 'Facebook', 'Messenger')) AND (LOWER(lead_relates_to_which_company) LIKE '%healing village%' OR LOWER(lead_relates_to_which_company) LIKE '%ktahv%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic center%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic centre%')" },
     ],
   },
@@ -84,10 +87,10 @@ const COMPANY_CONFIG: CompanyConfig[] = [
       // Priyasharma AI: Column W (Timestamp); Column O (Training Institute + Products); Column AO (SRC)
       // Filter by timestamp column only (stored in IST; do NOT convert TZ).
       // Training Institute + Ayurvedic Products both = KAPL. SRC: Widget or Iframe=AI-Web, Instagram=AI-Instagram, API or WhatsApp=AI-WhatsApp, Messenger=AI-Facebook.
-      { source: "Priyasharma AI-web", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "(src = 'Widget or Iframe' OR mail_status = 'Widget or Iframe') AND (LOWER(lead_relates_to_which_company) LIKE '%training institute%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%')" },
-      { source: "Priyasharma AI-instagram", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "(src = 'Instagram' OR mail_status = 'Instagram') AND (LOWER(lead_relates_to_which_company) LIKE '%training institute%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%')" },
-      { source: "Priyasharma AI-Whatsapp", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "(src = 'WhatsApp' OR src = 'API' OR mail_status = 'WhatsApp' OR mail_status = 'API') AND (LOWER(lead_relates_to_which_company) LIKE '%training institute%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%')" },
-      { source: "Priyasharma AI-facebook", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "(src = 'Facebook' OR src = 'Messenger' OR mail_status = 'Facebook' OR mail_status = 'Messenger') AND (LOWER(lead_relates_to_which_company) LIKE '%training institute%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%')" },
+      { source: "Priyasharma AI-web", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(src = 'Widget or Iframe' OR mail_status = 'Widget or Iframe') AND (LOWER(lead_relates_to_which_company) LIKE '%training institute%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%')" },
+      { source: "Priyasharma AI-instagram", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(src = 'Instagram' OR mail_status = 'Instagram') AND (LOWER(lead_relates_to_which_company) LIKE '%training institute%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%')" },
+      { source: "Priyasharma AI-Whatsapp", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(src = 'WhatsApp' OR src = 'API' OR mail_status = 'WhatsApp' OR mail_status = 'API') AND (LOWER(lead_relates_to_which_company) LIKE '%training institute%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%')" },
+      { source: "Priyasharma AI-facebook", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(src = 'Facebook' OR src = 'Messenger' OR mail_status = 'Facebook' OR mail_status = 'Messenger') AND (LOWER(lead_relates_to_which_company) LIKE '%training institute%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%')" },
       { source: "Priyasharma AI Chat", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "(src IS NULL OR src NOT IN ('Widget or Iframe', 'API', 'Instagram', 'WhatsApp', 'Facebook', 'Messenger')) AND (LOWER(lead_relates_to_which_company) LIKE '%training institute%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%')" }
     ],
   },
@@ -138,6 +141,9 @@ interface DirectEntry {
   leadIds: string[];
   mobiles: string[];
   timestamps: number[];
+  /** Lead IDs whose sent_status is 'Transfer to Delete%' — counted in direct but NOT in medium (Gap 1) */
+  deletedLeadIds: string[];
+  deletedMobiles: string[];
 }
 
 async function queryDirectTable(
@@ -147,11 +153,13 @@ async function queryDirectTable(
 ): Promise<DirectEntry[]> {
   const where = cfg.sourceFilter ? `AND (${cfg.sourceFilter})` : "";
   const dateExpr = cfg.dateCol.includes("(") ? cfg.dateCol : `\`${cfg.dateCol}\``;
+  // Fetch sent_status when sentStatusDeleteCol is configured so we can detect Gap 1 (Transfer to Delete)
+  const sentStatusSel = cfg.sentStatusDeleteCol ? `, \`${cfg.sentStatusDeleteCol}\` AS sent_status_raw` : "";
   const sql = `
     SELECT DATE(${dateExpr}) AS dt,
            ${dateExpr}     AS arrival_time,
            \`${cfg.leadIdCol}\`     AS lead_id,
-           \`${cfg.mobileCol}\`     AS mobile
+           \`${cfg.mobileCol}\`     AS mobile${sentStatusSel}
     FROM \`${cfg.table}\`
     WHERE ${dateExpr} >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
     ${where}
@@ -159,14 +167,24 @@ async function queryDirectTable(
   `;
   const [rows]: any[] = await pool.query(sql, [days]);
 
-  const byDate: Record<string, { leadIds: string[]; mobiles: string[]; timestamps: number[] }> = {};
+  const byDate: Record<string, { leadIds: string[]; mobiles: string[]; timestamps: number[]; deletedLeadIds: string[]; deletedMobiles: string[] }> = {};
   for (const r of rows as any[]) {
     const dt = rowDate(r.dt);
-    if (!byDate[dt]) byDate[dt] = { leadIds: [], mobiles: [], timestamps: [] };
-    byDate[dt].leadIds.push(String(r.lead_id ?? ""));
-    byDate[dt].mobiles.push(normMobile(r.mobile));
+    if (!byDate[dt]) byDate[dt] = { leadIds: [], mobiles: [], timestamps: [], deletedLeadIds: [], deletedMobiles: [] };
+    const lid = String(r.lead_id ?? "");
+    const mob = normMobile(r.mobile);
     const t = r.arrival_time ? new Date(r.arrival_time).getTime() : new Date(dt).getTime();
+    byDate[dt].leadIds.push(lid);
+    byDate[dt].mobiles.push(mob);
     byDate[dt].timestamps.push(t);
+    // Track Gap 1 deletions: sent_status starts with 'Transfer to Delete'
+    if (cfg.sentStatusDeleteCol) {
+      const ss = String(r.sent_status_raw ?? "").trim();
+      if (ss.toLowerCase().startsWith("transfer to delete")) {
+        byDate[dt].deletedLeadIds.push(lid);
+        byDate[dt].deletedMobiles.push(mob);
+      }
+    }
   }
   return Object.entries(byDate).map(([date, v]) => ({ date, ...v }));
 }
@@ -959,7 +977,7 @@ export async function GET(request: Request) {
           continue;
         }
 
-        for (const { date, leadIds, mobiles, timestamps } of directByDate) {
+        for (const { date, leadIds, mobiles, timestamps, deletedLeadIds, deletedMobiles } of directByDate) {
           allDates.add(date);
           const key = `${co.company}__${srcCfg.source}__${date}`;
 
@@ -969,6 +987,11 @@ export async function GET(request: Request) {
           const crmLeadIdSet: Set<string> = cd.crmByLeadId[date] ?? new Set<string>();
           const kvSet: Set<string> = cd.kvByDate[date] ?? new Set<string>();
           const sSet: Set<string> = cd.sByDate[date] ?? new Set<string>();
+
+          // Gap 1 (Direct→Medium): leads marked "Transfer to Delete" in the AI source sheet
+          const deletedIdSet = new Set<string>(deletedLeadIds ?? []);
+          const deletedMobSet = new Set<string>((deletedMobiles ?? []).filter(Boolean));
+          const gap1DeletedCount = (deletedLeadIds ?? []).length;
 
           const direct = leadIds.length;
           let buffer = 0, crm = 0, kserve = 0, sales = 0;
@@ -1000,6 +1023,15 @@ export async function GET(request: Request) {
             if (!m) {
               // Incomplete lead (no phone): cannot be staged to buffer -> filtered
               sameDayDuplicates++;
+              continue;
+            }
+
+            // Gap 1 check: lead was "Transfer to Delete" in the AI source sheet → not forwarded to Medium
+            const isGap1Deleted = Boolean(
+              (leadId && deletedIdSet.has(leadId)) || (m && deletedMobSet.has(m))
+            );
+            if (isGap1Deleted) {
+              // Counted in direct but not in medium — do not attempt buffer matching
               continue;
             }
 
@@ -1048,12 +1080,14 @@ export async function GET(request: Request) {
           const avgTatMin = Math.round(avgTatSec / 60);
 
           const duplicate = sameDayDuplicates + prior24hDuplicates + lateTransfers;
-          const medium = direct;
+          // medium = direct leads that were actually forwarded to Master Medium Merged (excludes Transfer to Delete)
+          const medium = direct - gap1DeletedCount;
           const expectedDuplicateGap = duplicate;
-          const directMediumGap = 0;
+          // Gap 1: leads in Direct API that were marked Transfer to Delete and never reached Medium
+          const directMediumGap = gap1DeletedCount;
           const bufferTransfer = buffer;
-          const mediumBufferLost = Math.max(0, direct - buffer);
-          const unexplainedMediumGap = Math.max(0, direct - duplicate - buffer);
+          const mediumBufferLost = Math.max(0, medium - buffer);
+          const unexplainedMediumGap = Math.max(0, medium - duplicate - buffer);
           const mediumBufferGap = mediumBufferLost;
           const sameDayCrm = crm;
           const lateTransfer = lateTransfers;
@@ -1066,10 +1100,33 @@ export async function GET(request: Request) {
             mobiles, leadIds, timestamps, bufSet, crmSet, globalBufferMap, srcCfg.source, date, co.company, bufLeadIdSet, crmLeadIdSet
           );
 
+          // Inject Gap 1 (Direct→Medium) records for "Transfer to Delete" leads
+          const gap1Records: any[] = (deletedLeadIds ?? []).map((lid, idx) => ({
+            id: lid || `${srcCfg.source}_del_${idx}`,
+            name: "",
+            phone: deletedMobiles?.[idx] || "—",
+            email: "",
+            date, company: co.company, source: srcCfg.source,
+            generatedAt: date, timestamp: date,
+            transferTimestamp: "", bufferTimestamp: "",
+            currentStatus: "Lost (Transfer to Delete)",
+            transferStatus: "Deleted at Source",
+            bufferStatus: "Never forwarded",
+            crmStatus: "N/A",
+            assignee: "", tatMin: 0, tat: "—",
+            isDuplicate: false, inMedium: false, toBuffer: false,
+            inBuffer: false, inCrm: false, assigned: false,
+            directMediumLost: true, mediumBufferLost: false, masterCrmLost: false,
+            stage: "direct", status: "Lost",
+            reason: "Lead received in Direct API but marked 'Transfer to Delete' — never forwarded to Master Medium Merged (Gap 1: Direct→Medium)",
+          }));
+          lostRecords.push(...gap1Records);
+
           const existing = rowMap[key];
           if (existing) {
             existing.direct += direct;
             existing.medium += medium;
+            existing.directMediumGap = (existing.directMediumGap || 0) + directMediumGap;
             existing.duplicate += duplicate;
             existing.expectedDuplicateGap += expectedDuplicateGap;
             existing.buffer += buffer;
@@ -1077,7 +1134,7 @@ export async function GET(request: Request) {
             existing.mediumBufferLost += mediumBufferLost;
             existing.mediumBufferGap += mediumBufferGap;
             existing.unexplainedMediumGap = (existing.unexplainedMediumGap || 0) + unexplainedMediumGap;
-            existing.gap += mediumBufferLost;
+            existing.gap += mediumBufferLost + directMediumGap;
             existing.crm += crm;
             existing.kserve += kserve;
             existing.sales += sales;
@@ -1094,7 +1151,7 @@ export async function GET(request: Request) {
               id: key, date, company: co.company, source: srcCfg.source,
               direct, medium, directMediumGap, duplicate, expectedDuplicateGap,
               bufferTransfer, mediumBufferGap, mediumBufferLost,
-              unexplainedMediumGap, gap: mediumBufferLost,
+              unexplainedMediumGap, gap: mediumBufferLost + directMediumGap,
               buffer, crm, sameDayCrm, lateTransfer, masterCrmLost,
               bufferCrmGap, bufferToCrmGap, assigned, sales, kserve,
               avgTatSec, avgTatMin, slaBreaches: 0, mismatch: false, validationErrors: [],
