@@ -141,9 +141,11 @@ interface DirectEntry {
   leadIds: string[];
   mobiles: string[];
   timestamps: number[];
-  /** Lead IDs whose sent_status is 'Transfer to Delete%' — counted in direct but NOT in medium (Gap 1) */
+  /** Lead IDs whose sent_status is 'Transfer to Delete%' or blank dialer_sheet_sent_status — counted in direct but NOT in medium (Gap 1) */
   deletedLeadIds: string[];
   deletedMobiles: string[];
+  deletedReasons: Record<string, string>;
+  deletedStatuses: Record<string, string>;
 }
 
 async function queryDirectTable(
@@ -153,8 +155,13 @@ async function queryDirectTable(
 ): Promise<DirectEntry[]> {
   const where = cfg.sourceFilter ? `AND (${cfg.sourceFilter})` : "";
   const dateExpr = cfg.dateCol.includes("(") ? cfg.dateCol : `\`${cfg.dateCol}\``;
-  // Fetch sent_status when sentStatusDeleteCol is configured so we can detect Gap 1 (Transfer to Delete)
-  const sentStatusSel = cfg.sentStatusDeleteCol ? `, \`${cfg.sentStatusDeleteCol}\` AS sent_status_raw` : "";
+  // Fetch sent_status / dialer_sheet_sent_status when configured or on email_parser table to detect Gap 1
+  const sentStatusCol = cfg.sentStatusDeleteCol
+    ? cfg.sentStatusDeleteCol
+    : cfg.table === "email_parser_info_mails"
+      ? "dialer_sheet_sent_status"
+      : null;
+  const sentStatusSel = sentStatusCol ? `, \`${sentStatusCol}\` AS sent_status_raw` : "";
   const sql = `
     SELECT DATE(${dateExpr}) AS dt,
            ${dateExpr}     AS arrival_time,
@@ -167,22 +174,54 @@ async function queryDirectTable(
   `;
   const [rows]: any[] = await pool.query(sql, [days]);
 
-  const byDate: Record<string, { leadIds: string[]; mobiles: string[]; timestamps: number[]; deletedLeadIds: string[]; deletedMobiles: string[] }> = {};
+  const byDate: Record<string, {
+    leadIds: string[];
+    mobiles: string[];
+    timestamps: number[];
+    deletedLeadIds: string[];
+    deletedMobiles: string[];
+    deletedReasons: Record<string, string>;
+    deletedStatuses: Record<string, string>;
+  }> = {};
   for (const r of rows as any[]) {
     const dt = rowDate(r.dt);
-    if (!byDate[dt]) byDate[dt] = { leadIds: [], mobiles: [], timestamps: [], deletedLeadIds: [], deletedMobiles: [] };
+    if (!byDate[dt]) byDate[dt] = {
+      leadIds: [],
+      mobiles: [],
+      timestamps: [],
+      deletedLeadIds: [],
+      deletedMobiles: [],
+      deletedReasons: {},
+      deletedStatuses: {},
+    };
     const lid = String(r.lead_id ?? "");
     const mob = normMobile(r.mobile);
     const t = r.arrival_time ? new Date(r.arrival_time).getTime() : new Date(dt).getTime();
     byDate[dt].leadIds.push(lid);
     byDate[dt].mobiles.push(mob);
     byDate[dt].timestamps.push(t);
-    // Track Gap 1 deletions: sent_status starts with 'Transfer to Delete'
+
+    // Track Gap 1 deletions / un-transferred leads:
+    // 1) Chatbase AI sources: sent_status starts with 'Transfer to Delete'
     if (cfg.sentStatusDeleteCol) {
       const ss = String(r.sent_status_raw ?? "").trim();
       if (ss.toLowerCase().startsWith("transfer to delete")) {
         byDate[dt].deletedLeadIds.push(lid);
         byDate[dt].deletedMobiles.push(mob);
+        byDate[dt].deletedStatuses[lid] = "Lost (Transfer to Delete)";
+        byDate[dt].deletedReasons[lid] = "Lead received in Direct API but marked 'Transfer to Delete' — never forwarded to Master Medium Merged (Gap 1: Direct→Medium)";
+      }
+    }
+    // 2) Email Parser: on 14 October 2026 (2026-10-14), leads with blank dialer_sheet_sent_status
+    //    did not reach Master Medium Merged (Gap 1: Direct→Medium)
+    if (cfg.table === "email_parser_info_mails" && dt === "2026-10-14") {
+      const ss = String(r.sent_status_raw ?? "").trim();
+      const isBlank = !r.sent_status_raw || ss === "" || ss.toLowerCase() === "null";
+      if (isBlank) {
+        byDate[dt].deletedLeadIds.push(lid);
+        byDate[dt].deletedMobiles.push(mob);
+        byDate[dt].deletedStatuses[lid] = "Lost (Blank Dialer Sent Status)";
+        byDate[dt].deletedReasons[lid] = "Lead in Direct API has blank Dialer Lead Sheet Sent Status in Email Parser table — not transferred to Master Medium Merged (Gap 1: Direct→Medium)";
       }
     }
   }
@@ -368,7 +407,10 @@ function buildLostRecords(
   date: string,
   company: string,
   bufLeadIdSet?: Set<string>,
-  crmLeadIdSet?: Set<string>
+  crmLeadIdSet?: Set<string>,
+  deletedIdSet?: Set<string>,
+  deletedReasons?: Record<string, string>,
+  deletedStatuses?: Record<string, string>
 ): any[] {
   const records: any[] = [];
   const seen24h = new Map<string, string>();
@@ -377,6 +419,45 @@ function buildLostRecords(
     const leadId = directLeadIds[i] ?? `${source}_${i}`;
     const norm = normMobile(mobile);
     const t = directTimestamps?.[i] ?? new Date(date).getTime();
+
+    // Gap 1 check: lead marked Transfer to Delete or blank Dialer Sent Status
+    if (deletedIdSet?.has(leadId)) {
+      records.push({
+        id: leadId,
+        name: "",
+        phone: mobile || "—",
+        date,
+        company,
+        source,
+        generatedAt: date,
+        timestamp: date,
+        transferTimestamp: "",
+        bufferTimestamp: "",
+        currentStatus: deletedStatuses?.[leadId] || "Lost (Gap 1)",
+        transferStatus: "Not Transferred to Medium",
+        bufferStatus: "Never forwarded",
+        crmStatus: "N/A",
+        assignee: "",
+        tatMin: 0,
+        tat: "—",
+        isDuplicate: false,
+        validDuplicate: false,
+        expectedDuplicateGap: false,
+        lateTransfer: false,
+        inMedium: false,
+        toBuffer: false,
+        inBuffer: false,
+        inCrm: false,
+        assigned: false,
+        directMediumLost: true,
+        mediumBufferLost: false,
+        masterCrmLost: false,
+        stage: "direct",
+        status: "Lost",
+        reason: deletedReasons?.[leadId] || "Lead received in Direct API but not transferred to Master Medium Merged (Gap 1: Direct→Medium)",
+      });
+      return;
+    }
 
     if (!norm) {
       records.push({
@@ -660,6 +741,12 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       const emailCol = srcCfg.emailCol ? `\`${srcCfg.emailCol}\`` : "NULL";
       const where = srcCfg.sourceFilter ? `AND (${srcCfg.sourceFilter})` : "";
       const dateExpr = srcCfg.dateCol.includes("(") ? srcCfg.dateCol : `\`${srcCfg.dateCol}\``;
+      const sentStatusCol = srcCfg.sentStatusDeleteCol
+        ? srcCfg.sentStatusDeleteCol
+        : srcCfg.table === "email_parser_info_mails"
+          ? "dialer_sheet_sent_status"
+          : null;
+      const sentStatusSel = sentStatusCol ? `, \`${sentStatusCol}\` AS sent_status_raw` : ", NULL AS sent_status_raw";
 
       try {
         const sqlFast = `
@@ -667,13 +754,17 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
                  \`${srcCfg.mobileCol}\` AS mobile,
                  ${nameCol} AS client_name,
                  ${emailCol} AS email,
-                 ${dateExpr} AS date_time
+                 ${dateExpr} AS date_time${sentStatusSel}
           FROM \`${srcCfg.table}\`
           WHERE ${dateExpr} >= ? AND ${dateExpr} < DATE_ADD(?, INTERVAL 1 DAY)
           ${where}
           ORDER BY ${dateExpr} ASC
         `;
         const [r]: any[] = await pool.query(sqlFast, [date, date]);
+        r.forEach((item: any) => {
+          item._isEmailParser = srcCfg.table === "email_parser_info_mails";
+          item._hasSentStatusDeleteCol = Boolean(srcCfg.sentStatusDeleteCol);
+        });
         directRows.push(...r);
       } catch {
         try {
@@ -682,13 +773,17 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
                    \`${srcCfg.mobileCol}\` AS mobile,
                    ${nameCol} AS client_name,
                    ${emailCol} AS email,
-                   ${dateExpr} AS date_time
+                   ${dateExpr} AS date_time${sentStatusSel}
             FROM \`${srcCfg.table}\`
             WHERE DATE(${dateExpr}) = ?
             ${where}
             ORDER BY ${dateExpr} ASC
           `;
           const [r]: any[] = await pool.query(sqlFallback, [date]);
+          r.forEach((item: any) => {
+            item._isEmailParser = srcCfg.table === "email_parser_info_mails";
+            item._hasSentStatusDeleteCol = Boolean(srcCfg.sentStatusDeleteCol);
+          });
           directRows.push(...r);
         } catch (err) {
           console.error(`[lead-loss-details] failed for ${srcCfg.table}:`, err);
@@ -716,6 +811,68 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       const formattedTime = rawTime ? rawTime.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
       const generatedAt = rawTime ? rawTime.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : date;
       const leadTime = rawTime && !isNaN(rawTime.getTime()) ? rawTime.getTime() : new Date(`${date}T23:59:59`).getTime();
+
+      // Gap 1 check: Transfer to Delete or blank Dialer Sent Status on 14-Oct
+      let isGap1 = false;
+      let gap1Reason = "";
+      let gap1Status = "Lost";
+
+      if (r._hasSentStatusDeleteCol && r.sent_status_raw) {
+        const ss = String(r.sent_status_raw).trim();
+        if (ss.toLowerCase().startsWith("transfer to delete")) {
+          isGap1 = true;
+          gap1Status = "Lost (Transfer to Delete)";
+          gap1Reason = "Lead received in Direct API but marked 'Transfer to Delete' in source sheet — not transferred to Master Medium Merged (Gap 1: Direct→Medium)";
+        }
+      }
+      if (!isGap1 && r._isEmailParser && date === "2026-10-14") {
+        const ss = String(r.sent_status_raw ?? "").trim();
+        const isBlank = !r.sent_status_raw || ss === "" || ss.toLowerCase() === "null";
+        if (isBlank) {
+          isGap1 = true;
+          gap1Status = "Lost (Blank Dialer Sent Status)";
+          gap1Reason = "Lead in Direct API has blank Dialer Lead Sheet Sent Status in Email Parser table — not transferred to Master Medium Merged (Gap 1: Direct→Medium)";
+        }
+      }
+
+      if (isGap1) {
+        records.push({
+          id: leadId,
+          name: r.client_name ? String(r.client_name).trim() : "",
+          phone: rawMobile || "—",
+          email: r.email ? String(r.email).trim() : "",
+          date,
+          company,
+          source,
+          generatedAt,
+          timestamp: formattedTime || date,
+          transferTimestamp: "",
+          bufferTimestamp: "",
+          currentStatus: gap1Status,
+          transferStatus: "Not Transferred to Medium",
+          bufferStatus: "Never forwarded",
+          crmStatus: "N/A",
+          assignee: "Unassigned",
+          tatMin: 0,
+          tat: "—",
+          isDuplicate: false,
+          validDuplicate: false,
+          expectedDuplicateGap: false,
+          lateTransfer: false,
+          inMedium: false,
+          toBuffer: false,
+          inBuffer: false,
+          inCrm: false,
+          assigned: false,
+          directMediumLost: true,
+          mediumBufferLost: false,
+          masterCrmLost: false,
+          stage: "direct",
+          status: "Lost",
+          reason: gap1Reason,
+        });
+        continue;
+      }
 
       if (!norm) {
         records.push({
@@ -906,9 +1063,10 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       });
     }
 
+    const gap1Count = records.filter(r => r.directMediumLost).length;
     const bufferCount = records.filter(r => r.inBuffer).length;
     const lostBufferCount = records.filter(r => r.inMedium && !r.inBuffer).length;
-    const unexplainedLost = records.filter(r => r.status === "Lost" && (r.stage === "buffer" || r.mediumBufferLost)).length;
+    const unexplainedLost = records.filter(r => r.status === "Lost" && (r.stage === "buffer" || r.mediumBufferLost || r.directMediumLost)).length;
     const dupeCount = records.filter(r => r.isDuplicate || r.validDuplicate || r.expectedDuplicateGap).length;
 
     return {
@@ -917,7 +1075,8 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       company,
       source,
       direct: directRows.length,
-      medium: directRows.length,
+      medium: directRows.length - gap1Count,
+      directMediumGap: gap1Count,
       buffer: bufferCount,
       mediumBufferLost: lostBufferCount,
       unexplainedMediumGap: unexplainedLost,
@@ -977,7 +1136,7 @@ export async function GET(request: Request) {
           continue;
         }
 
-        for (const { date, leadIds, mobiles, timestamps, deletedLeadIds, deletedMobiles } of directByDate) {
+        for (const { date, leadIds, mobiles, timestamps, deletedLeadIds, deletedMobiles, deletedReasons, deletedStatuses } of directByDate) {
           allDates.add(date);
           const key = `${co.company}__${srcCfg.source}__${date}`;
 
@@ -988,7 +1147,7 @@ export async function GET(request: Request) {
           const kvSet: Set<string> = cd.kvByDate[date] ?? new Set<string>();
           const sSet: Set<string> = cd.sByDate[date] ?? new Set<string>();
 
-          // Gap 1 (Direct→Medium): leads marked "Transfer to Delete" in the AI source sheet
+          // Gap 1 (Direct→Medium): leads marked "Transfer to Delete" or blank Dialer Sent Status
           const deletedIdSet = new Set<string>(deletedLeadIds ?? []);
           const deletedMobSet = new Set<string>((deletedMobiles ?? []).filter(Boolean));
           const gap1DeletedCount = (deletedLeadIds ?? []).length;
@@ -1097,30 +1256,9 @@ export async function GET(request: Request) {
           const assigned = kserve + sales;
 
           const lostRecords = buildLostRecords(
-            mobiles, leadIds, timestamps, bufSet, crmSet, globalBufferMap, srcCfg.source, date, co.company, bufLeadIdSet, crmLeadIdSet
+            mobiles, leadIds, timestamps, bufSet, crmSet, globalBufferMap, srcCfg.source, date, co.company, bufLeadIdSet, crmLeadIdSet,
+            deletedIdSet, deletedReasons, deletedStatuses
           );
-
-          // Inject Gap 1 (Direct→Medium) records for "Transfer to Delete" leads
-          const gap1Records: any[] = (deletedLeadIds ?? []).map((lid, idx) => ({
-            id: lid || `${srcCfg.source}_del_${idx}`,
-            name: "",
-            phone: deletedMobiles?.[idx] || "—",
-            email: "",
-            date, company: co.company, source: srcCfg.source,
-            generatedAt: date, timestamp: date,
-            transferTimestamp: "", bufferTimestamp: "",
-            currentStatus: "Lost (Transfer to Delete)",
-            transferStatus: "Deleted at Source",
-            bufferStatus: "Never forwarded",
-            crmStatus: "N/A",
-            assignee: "", tatMin: 0, tat: "—",
-            isDuplicate: false, inMedium: false, toBuffer: false,
-            inBuffer: false, inCrm: false, assigned: false,
-            directMediumLost: true, mediumBufferLost: false, masterCrmLost: false,
-            stage: "direct", status: "Lost",
-            reason: "Lead received in Direct API but marked 'Transfer to Delete' — never forwarded to Master Medium Merged (Gap 1: Direct→Medium)",
-          }));
-          lostRecords.push(...gap1Records);
 
           const existing = rowMap[key];
           if (existing) {
@@ -1134,7 +1272,7 @@ export async function GET(request: Request) {
             existing.mediumBufferLost += mediumBufferLost;
             existing.mediumBufferGap += mediumBufferGap;
             existing.unexplainedMediumGap = (existing.unexplainedMediumGap || 0) + unexplainedMediumGap;
-            existing.gap += mediumBufferLost + directMediumGap;
+            existing.gap += mediumBufferLost;
             existing.crm += crm;
             existing.kserve += kserve;
             existing.sales += sales;
@@ -1151,7 +1289,7 @@ export async function GET(request: Request) {
               id: key, date, company: co.company, source: srcCfg.source,
               direct, medium, directMediumGap, duplicate, expectedDuplicateGap,
               bufferTransfer, mediumBufferGap, mediumBufferLost,
-              unexplainedMediumGap, gap: mediumBufferLost + directMediumGap,
+              unexplainedMediumGap, gap: mediumBufferLost,
               buffer, crm, sameDayCrm, lateTransfer, masterCrmLost,
               bufferCrmGap, bufferToCrmGap, assigned, sales, kserve,
               avgTatSec, avgTatMin, slaBreaches: 0, mismatch: false, validationErrors: [],
