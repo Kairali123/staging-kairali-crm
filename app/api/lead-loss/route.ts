@@ -128,8 +128,8 @@ const BUFFER_OVERRIDE_14_OCT: Record<string, Record<string, number>> = {
     "Google":                   4,
     "Others":                   3,
     "Priyasharma AI-facebook":  1,
-    "Priyasharma AI-Whatsapp":  1,
-    "Priyasharma AI-instagram": 0,
+    "Priyasharma AI-Whatsapp":  2,
+    "Priyasharma AI-instagram": 1,
     "Priyasharma AI-web":       0,
     "Priyasharma AI Chat":      0,
     "CRR":                      0,
@@ -137,7 +137,45 @@ const BUFFER_OVERRIDE_14_OCT: Record<string, Record<string, number>> = {
     "Site Exit Pop-up":         0,
   },
   "Kairali Ayurvedic Product": {
-    "IVR":                     152,
+    "IVR":                     154,
+    "Others":                    6,
+    "CRR":                      10,
+    "Priyasharma AI-Whatsapp":   1,
+    "Priyasharma AI-instagram":  1,
+    "Priyasharma AI-web":        0,
+    "Priyasharma AI-facebook":   0,
+    "Priyasharma AI Chat":       0,
+  },
+};
+
+const CRM_OVERRIDE_14_OCT: Record<string, Record<string, number>> = {
+  "VillaRaag": {
+    "Facebook":           21,
+    "Google":              1,
+    "IVR":                 3,
+    "Others":              1,
+    "Anjali AI Web":       0,
+    "Anjali AI Instagram": 0,
+    "Anjali AI Facebook":  0,
+    "Anjali AI WhatsApp":  0,
+    "website":             0,
+  },
+  "Kairali The Ayurvedic Healing Village": {
+    "Facebook":                77,
+    "IVR":                     23,
+    "Google":                   4,
+    "Others":                   3,
+    "Priyasharma AI-facebook":  1,
+    "Priyasharma AI-Whatsapp":  2,
+    "Priyasharma AI-instagram": 1,
+    "Priyasharma AI-web":       0,
+    "Priyasharma AI Chat":      0,
+    "CRR":                      0,
+    "Website":                  0,
+    "Site Exit Pop-up":         0,
+  },
+  "Kairali Ayurvedic Product": {
+    "IVR":                     150,
     "Others":                    6,
     "CRR":                      10,
     "Priyasharma AI-Whatsapp":   1,
@@ -364,8 +402,11 @@ async function queryUnifiedBuffer(
     // Dispatch to matching companies
     for (const co of configs) {
       const isKtahvOther14OctLead = dt === "2026-10-14" &&
-        co.companyKey === "KTAHV" &&
-        lid.startsWith("wamid.HBgMOTE5NDUwNTA5Mjg5FQIAEhggQTVDOTA4QTJFNTk3NkVENEZEM0E1QkUyRDkwM0Q1RTMA");
+        co.companyKey === "KTAHV" && (
+          lid.startsWith("wamid.HBgMOTE5NDUwNTA5Mjg5FQIAEhggQTVDOTA4QTJFNTk3NkVENEZEM0E1QkUyRDkwM0Q1RTMA") ||
+          lid === "b3478f99-979f-4139-8a5c-0d9ea3164b48" ||
+          lid === "2da37719-4b29-41a4-b2ce-2d17115cb138"
+        );
       const matchesCompany = isKtahvOther14OctLead || !relates || co.bufferMatch.some(bm => relates.includes(bm.toLowerCase()));
       if (!matchesCompany) continue;
 
@@ -704,7 +745,11 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
           const coName = String(b.Lead_Relates_to_which_company || "").toLowerCase();
           const isKtahvOther14OctLead = dtStr === "2026-10-14" &&
             companyMatch.some(c => c.toLowerCase().includes("healing village")) &&
-            b.lead_id && String(b.lead_id).startsWith("wamid.HBgMOTE5NDUwNTA5Mjg5FQIAEhggQTVDOTA4QTJFNTk3NkVENEZEM0E1QkUyRDkwM0Q1RTMA");
+            b.lead_id && (
+              String(b.lead_id).startsWith("wamid.HBgMOTE5NDUwNTA5Mjg5FQIAEhggQTVDOTA4QTJFNTk3NkVENEZEM0E1QkUyRDkwM0Q1RTMA") ||
+              String(b.lead_id) === "b3478f99-979f-4139-8a5c-0d9ea3164b48" ||
+              String(b.lead_id) === "2da37719-4b29-41a4-b2ce-2d17115cb138"
+            );
           const matchesCo = isKtahvOther14OctLead || companyMatch.length === 0 || !coName || companyMatch.some(c => coName.includes(c.toLowerCase()));
           if (matchesCo) {
             if (m) sameDayMap.set(m, b);
@@ -923,7 +968,12 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
         continue;
       }
 
-      if (!norm) {
+      const isSpecial14OctLead = date === "2026-10-14" && (
+        leadId === "2da37719-4b29-41a4-b2ce-2d17115cb138" ||
+        leadId === "ac0eac0d-319d-4d4e-804e-42e9332b7d07"
+      );
+
+      if (!norm && !isSpecial14OctLead) {
         records.push({
           id: leadId,
           name: r.client_name ? String(r.client_name).trim() : "",
@@ -1115,6 +1165,8 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
     const gap1Count = records.filter(r => r.directMediumLost).length;
     let bufferCount = records.filter(r => r.inBuffer).length;
 
+    let crmCount = records.filter(r => r.inCrm).length;
+
     if (date === "2026-10-14") {
       const compKey = Object.keys(BUFFER_OVERRIDE_14_OCT).find(
         k => k.toLowerCase() === (company || "").toLowerCase()
@@ -1126,6 +1178,19 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
         );
         if (srcKey !== undefined) {
           bufferCount = overrides[srcKey];
+        }
+      }
+
+      const crmCompKey = Object.keys(CRM_OVERRIDE_14_OCT).find(
+        k => k.toLowerCase() === (company || "").toLowerCase()
+      );
+      if (crmCompKey) {
+        const crmOverrides = CRM_OVERRIDE_14_OCT[crmCompKey];
+        const crmSrcKey = Object.keys(crmOverrides).find(
+          k => k.toLowerCase() === (source || "").toLowerCase()
+        );
+        if (crmSrcKey !== undefined) {
+          crmCount = crmOverrides[crmSrcKey];
         }
       }
     }
@@ -1147,7 +1212,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       unexplainedMediumGap: unexplainedLost,
       duplicate: dupeCount,
       expectedDuplicateGap: dupeCount,
-      crm: records.filter(r => r.inCrm).length,
+      crm: crmCount,
       records,
       issues: records.filter(rec => rec.status === "Lost"),
       gapRecordsIncluded: true,
@@ -1389,6 +1454,26 @@ export async function GET(request: Request) {
       r.masterCrmLost       = Math.max(0, newBuffer - (r.crm ?? 0));
       r.bufferCrmGap        = r.masterCrmLost;
       r.bufferToCrmGap      = r.masterCrmLost;
+    }
+
+    // ─── 14-Oct-2026 Actual CRM Reconciled count correction ─────────────────────
+    for (const r of Object.values(rowMap) as any[]) {
+      if (r.date !== "2026-10-14") continue;
+      const compKey = Object.keys(CRM_OVERRIDE_14_OCT).find(
+        k => k.toLowerCase() === String(r.company).toLowerCase()
+      );
+      if (!compKey) continue;
+      const overrides = CRM_OVERRIDE_14_OCT[compKey];
+      const sourceKey = Object.keys(overrides).find(
+        k => k.toLowerCase() === String(r.source).toLowerCase()
+      );
+      if (sourceKey === undefined) continue;
+      const newCrm = overrides[sourceKey];
+      r.crm = newCrm;
+      r.sameDayCrm = newCrm;
+      r.masterCrmLost = Math.max(0, (r.buffer ?? 0) - newCrm);
+      r.bufferCrmGap = r.masterCrmLost;
+      r.bufferToCrmGap = r.masterCrmLost;
     }
     // ─────────────────────────────────────────────────────────────────────────────
 
