@@ -175,7 +175,7 @@ const CRM_OVERRIDE_14_OCT: Record<string, Record<string, number>> = {
     "Site Exit Pop-up":         0,
   },
   "Kairali Ayurvedic Product": {
-    "IVR":                     150,
+    "IVR":                     154,
     "Others":                    6,
     "CRR":                      10,
     "Priyasharma AI-Whatsapp":   1,
@@ -183,6 +183,44 @@ const CRM_OVERRIDE_14_OCT: Record<string, Record<string, number>> = {
     "Priyasharma AI-web":        0,
     "Priyasharma AI-facebook":   0,
     "Priyasharma AI Chat":       0,
+  },
+};
+
+const TRANSFERS_OVERRIDE_14_OCT: Record<string, Record<string, { sales: number; kserve: number }>> = {
+  "VillaRaag": {
+    "Facebook":           { sales: 15, kserve: 6 },
+    "Google":             { sales: 0,  kserve: 1 },
+    "IVR":                { sales: 2,  kserve: 1 },
+    "Others":             { sales: 1,  kserve: 0 },
+    "Anjali AI Web":       { sales: 0,  kserve: 0 },
+    "Anjali AI Instagram": { sales: 0,  kserve: 0 },
+    "Anjali AI Facebook":  { sales: 0,  kserve: 0 },
+    "Anjali AI WhatsApp":  { sales: 0,  kserve: 0 },
+    "website":             { sales: 0,  kserve: 0 },
+  },
+  "Kairali The Ayurvedic Healing Village": {
+    "Facebook":                { sales: 76, kserve: 1 },
+    "IVR":                     { sales: 8,  kserve: 15 },
+    "Google":                  { sales: 4,  kserve: 0 },
+    "Others":                  { sales: 3,  kserve: 0 },
+    "Priyasharma AI-facebook": { sales: 1,  kserve: 0 },
+    "Priyasharma AI-Whatsapp": { sales: 2,  kserve: 0 },
+    "Priyasharma AI-instagram":{ sales: 1,  kserve: 0 },
+    "Priyasharma AI-web":      { sales: 0,  kserve: 0 },
+    "Priyasharma AI Chat":     { sales: 0,  kserve: 0 },
+    "CRR":                     { sales: 0,  kserve: 0 },
+    "Website":                 { sales: 0,  kserve: 0 },
+    "Site Exit Pop-up":        { sales: 0,  kserve: 0 },
+  },
+  "Kairali Ayurvedic Product": {
+    "IVR":                     { sales: 14, kserve: 140 },
+    "Others":                  { sales: 6,  kserve: 0 },
+    "CRR":                     { sales: 10, kserve: 0 },
+    "Priyasharma AI-Whatsapp":  { sales: 1,  kserve: 0 },
+    "Priyasharma AI-instagram": { sales: 1,  kserve: 0 },
+    "Priyasharma AI-web":       { sales: 0,  kserve: 0 },
+    "Priyasharma AI-facebook":  { sales: 0,  kserve: 0 },
+    "Priyasharma AI Chat":      { sales: 0,  kserve: 0 },
   },
 };
 
@@ -970,7 +1008,8 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
 
       const isSpecial14OctLead = date === "2026-10-14" && (
         leadId === "2da37719-4b29-41a4-b2ce-2d17115cb138" ||
-        leadId === "ac0eac0d-319d-4d4e-804e-42e9332b7d07"
+        leadId === "ac0eac0d-319d-4d4e-804e-42e9332b7d07" ||
+        leadId === "1662622948532302"
       );
 
       if (!norm && !isSpecial14OctLead) {
@@ -1167,6 +1206,9 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
 
     let crmCount = records.filter(r => r.inCrm).length;
 
+    let salesCount = records.filter(r => r.assigned && !(r.assignee || "").toLowerCase().includes("kserve")).length;
+    let kserveCount = records.filter(r => r.assigned && (r.assignee || "").toLowerCase().includes("kserve")).length;
+
     if (date === "2026-10-14") {
       const compKey = Object.keys(BUFFER_OVERRIDE_14_OCT).find(
         k => k.toLowerCase() === (company || "").toLowerCase()
@@ -1193,6 +1235,20 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
           crmCount = crmOverrides[crmSrcKey];
         }
       }
+
+      const trCompKey = Object.keys(TRANSFERS_OVERRIDE_14_OCT).find(
+        k => k.toLowerCase() === (company || "").toLowerCase()
+      );
+      if (trCompKey) {
+        const trOverrides = TRANSFERS_OVERRIDE_14_OCT[trCompKey];
+        const trSrcKey = Object.keys(trOverrides).find(
+          k => k.toLowerCase() === (source || "").toLowerCase()
+        );
+        if (trSrcKey !== undefined) {
+          salesCount = trOverrides[trSrcKey].sales;
+          kserveCount = trOverrides[trSrcKey].kserve;
+        }
+      }
     }
 
     const lostBufferCount = Math.max(0, (directRows.length - gap1Count) - bufferCount);
@@ -1213,6 +1269,9 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       duplicate: dupeCount,
       expectedDuplicateGap: dupeCount,
       crm: crmCount,
+      sales: salesCount,
+      kserve: kserveCount,
+      assigned: salesCount + kserveCount,
       records,
       issues: records.filter(rec => rec.status === "Lost"),
       gapRecordsIncluded: true,
@@ -1474,6 +1533,24 @@ export async function GET(request: Request) {
       r.masterCrmLost = Math.max(0, (r.buffer ?? 0) - newCrm);
       r.bufferCrmGap = r.masterCrmLost;
       r.bufferToCrmGap = r.masterCrmLost;
+    }
+
+    // ─── 14-Oct-2026 Transfer to Sales & KServe count correction ───────────────
+    for (const r of Object.values(rowMap) as any[]) {
+      if (r.date !== "2026-10-14") continue;
+      const compKey = Object.keys(TRANSFERS_OVERRIDE_14_OCT).find(
+        k => k.toLowerCase() === String(r.company).toLowerCase()
+      );
+      if (!compKey) continue;
+      const overrides = TRANSFERS_OVERRIDE_14_OCT[compKey];
+      const sourceKey = Object.keys(overrides).find(
+        k => k.toLowerCase() === String(r.source).toLowerCase()
+      );
+      if (sourceKey === undefined) continue;
+      const tr = overrides[sourceKey];
+      r.sales    = tr.sales;
+      r.kserve   = tr.kserve;
+      r.assigned = tr.sales + tr.kserve;
     }
     // ─────────────────────────────────────────────────────────────────────────────
 
