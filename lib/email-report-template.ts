@@ -11,6 +11,7 @@ export const emailReportTemplates = {
   'booking-pi-review-alert': { name: 'Booking PI Review Alert', path: '/fms/booking-pi-review-tracker' },
   'morning-lead-allocation': { name: 'Morning Lead Allocation Alert', path: '/morning-lead-allocation' },
   'ktahv-pending-aging-alert': { name: 'KTAHV Pending Stage Aging Alert', path: '/fms/bookings/pending-aging' },
+  'riya-sharma-ai-report': { name: 'KTAHV - Riya Sharma AI | Daily Data Analysis Report', path: '/riya-sharma/email-template' },
 } as const
 export type EmailReportId = keyof typeof emailReportTemplates
 /** Names this report was saved under before it was renamed; still accepted and shown under the current name. */
@@ -18,6 +19,8 @@ export const legacyTemplateNames: Record<string, EmailReportId> = {
   'Daily HR Email Template': 'sales-call-audit',
   'Sales Call Audit Report': 'sales-call-audit',
   'KTAHV Daily Sales Report': 'ktahv-daily-sales-report',
+  'Riya Sharma AI Report': 'riya-sharma-ai-report',
+  'Riya Sharma AI Daily Report': 'riya-sharma-ai-report',
 }
 export function canonicalTemplateName(name: string) {
   const id = Object.hasOwn(legacyTemplateNames, name) ? legacyTemplateNames[name] : undefined

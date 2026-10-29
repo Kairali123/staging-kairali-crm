@@ -305,6 +305,69 @@ export async function GET(req: NextRequest) {
         console.warn('[email-trigger-config] Auto-seed KTAHV ktahv-daily-sales-report skipped:', err)
       }
     }
+    // Auto-seed: KTAHV - Riya Sharma AI | Daily Data Analysis Report (daily 08:30 IST)
+    if (!state.triggers.some(t => t.reportId === 'riya-sharma-ai-report') && !state.seedSuppressed?.includes('riya-sharma-ai-report')) {
+      try {
+        state = await transaction(s => {
+          if (!s.triggers.some(t => t.reportId === 'riya-sharma-ai-report')) {
+            const now5 = Date.now()
+            s.triggers.push({
+              id: randomUUID(),
+              revision: 1,
+              name: 'KTAHV - Riya Sharma AI | Daily Data Analysis Report',
+              reportId: 'riya-sharma-ai-report',
+              source: emailReportTemplates['riya-sharma-ai-report'].name,
+              template: emailReportTemplates['riya-sharma-ai-report'].name,
+              department: 'Guest Relations',
+              company: 'KTAHV',
+              to: 'gm.hv@kairali.com, director@kairali.com, dme@kairali.com, sysadmin@kairali.com',
+              cc: '',
+              bcc: '',
+              subject: 'KTAHV - Riya Sharma AI | Daily Data Analysis Report | {{report_date}}',
+              body: '',
+              bodyType: 'Full report in email body',
+              intro: 'Dear Team,\n\nPlease find attached the Report Analysis Data Sheet for Riya Sharma AI under KTAHV. The report includes key insights, trends, and performance metrics for your review.',
+              closing: 'This is an automated email—please do not reply. If you have any questions or require further assistance, kindly contact [IT Team].\n\nBest regards,\nIT Team',
+              period: 'Today',
+              reportDetail: 'Full report',
+              status: 'Active',
+              frequency: 'Daily',
+              time: '08:30',
+              custom: '08:30',
+              interval: '6',
+              weekday: 'Monday',
+              monthday: '1',
+              timezone: 'Asia/Kolkata',
+              start: new Date(now5).toISOString().slice(0, 10),
+              end: '',
+              attachment: 'None',
+              mode: 'Same email to all recipients',
+              condition: 'Always send',
+              retry: 'No retries',
+              missed: 'Skip missed run',
+              replyTo: 'sysadmin@kairali.com',
+              owner: 'system',
+              updatedAt: new Date(now5).toISOString(),
+              nextRun: nextRun({
+                frequency: 'Daily',
+                time: '08:30',
+                custom: '08:30',
+                interval: '6',
+                weekday: 'Monday',
+                monthday: '1',
+                timezone: 'Asia/Kolkata',
+                start: new Date(now5).toISOString().slice(0, 10),
+                end: '',
+              } as any, now5),
+              lastResult: '—',
+            })
+          }
+          return s
+        })
+      } catch (err) {
+        console.warn('[email-trigger-config] Auto-seed riya-sharma-ai-report skipped:', err)
+      }
+    }
     if (!state.triggers.some(t => t.reportId === 'client-assigned-doctor-report') && !state.seedSuppressed?.includes('client-assigned-doctor-report') && state.triggers.length < 100) {
       state = await transaction(s => { seedDoctorAssignmentDraft(s); return s })
     }

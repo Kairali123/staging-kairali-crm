@@ -132,6 +132,10 @@ export default function EmailConfigBridge({ document: documentHtml }: { document
           const response = await fetch('/api/pending-aging-preview', { signal: current.signal, cache: 'no-store' })
           html = await response.text()
           if (!response.ok) throw new Error('Pending Aging preview unavailable')
+        } else if (id === 'riya-sharma-ai-report') {
+          const response = await fetch('/api/riya-sharma-preview', { signal: current.signal, cache: 'no-store' })
+          html = await response.text()
+          if (!response.ok) throw new Error('Riya Sharma AI report preview unavailable')
         } else {
           const response = await fetch('/api/marketing-daily-report?' + new URLSearchParams({ date: message.date }), { signal: current.signal, cache: 'no-store' })
           const data = await response.json()
