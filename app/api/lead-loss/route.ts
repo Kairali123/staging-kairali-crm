@@ -258,10 +258,11 @@ function isSameLeadId(directId: string, bufId: string): boolean {
   const d = String(directId).trim().toLowerCase();
   const b = String(bufId).trim().toLowerCase();
   if (d === b) return true;
-  if (b.includes(d) || d.includes(b)) return true;
-  const cleanB = b.replace(/^(fb_ahv-|fb_vr-|fb-|ktahv-|vr_|vr-|kappl-|kapl-|ahv-|kapl_)/i, "");
-  const cleanD = d.replace(/^(fb_ahv-|fb_vr-|fb-|ktahv-|vr_|vr-|kappl-|kapl-|ahv-|kapl_)/i, "");
-  return cleanB === cleanD || cleanB.includes(cleanD) || cleanD.includes(cleanB);
+  if (d.length >= 6 && b.includes(d)) return true;
+  if (b.length >= 6 && d.includes(b)) return true;
+  const cleanB = b.replace(/^(fb_ahv-|fb_vr-|fb-|ktahv-|vr_|vr-|kappl-|kapl-|ahv-|kapl_|client-|re_visit-|ds-|kg-)/i, "");
+  const cleanD = d.replace(/^(fb_ahv-|fb_vr-|fb-|ktahv-|vr_|vr-|kappl-|kapl-|ahv-|kapl_|client-|re_visit-|ds-|kg-)/i, "");
+  return cleanB === cleanD || (cleanD.length >= 6 && cleanB.includes(cleanD)) || (cleanB.length >= 6 && cleanD.includes(cleanB));
 }
 
 // ─── 14-Oct-2026: popup record alignment ─────────────────────────────────────
@@ -1054,11 +1055,19 @@ async function queryUnifiedBuffer(
       if (!cd.kvByDate[dt]) cd.kvByDate[dt] = new Set<string>();
       if (!cd.sByDate[dt]) cd.sByDate[dt] = new Set<string>();
 
-      if (lid) cd.byLeadId[dt].add(lid);
+      if (lid) {
+        cd.byLeadId[dt].add(lid);
+        const cleanLid = lid.replace(/^(fb_ahv-|fb_vr-|fb-|ktahv-|vr_|vr-|kappl-|kapl-|ahv-|kapl_|client-|re_visit-|ds-|kg-)/i, "");
+        if (cleanLid) cd.byLeadId[dt].add(cleanLid);
+      }
       if (m) cd.byDate[dt].add(m);
 
       if (hasSbn) {
-        if (lid) cd.crmByLeadId[dt].add(lid);
+        if (lid) {
+          cd.crmByLeadId[dt].add(lid);
+          const cleanLid = lid.replace(/^(fb_ahv-|fb_vr-|fb-|ktahv-|vr_|vr-|kappl-|kapl-|ahv-|kapl_|client-|re_visit-|ds-|kg-)/i, "");
+          if (cleanLid) cd.crmByLeadId[dt].add(cleanLid);
+        }
         if (m) cd.crmByDate[dt].add(m);
       }
       if (isKServe && m) cd.kvByDate[dt].add(m);
@@ -1381,7 +1390,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
           if (m) sameDayGlobalMap.set(m, b);
           if (b.lead_id) {
             sameDayGlobalMap.set(String(b.lead_id), b);
-            const stripped = String(b.lead_id).replace(/^(fb_ahv-|fb_vr-|fb-|ktahv-|vr_|vr-|kappl-|kapl-|ahv-|kapl_)/i, "");
+            const stripped = String(b.lead_id).replace(/^(fb_ahv-|fb_vr-|fb-|ktahv-|vr_|vr-|kappl-|kapl-|ahv-|kapl_|client-|re_visit-|ds-|kg-)/i, "");
             if (stripped) sameDayGlobalMap.set(stripped, b);
           }
           const coName = String(b.Lead_Relates_to_which_company || "").toLowerCase();
@@ -1397,7 +1406,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
             if (m) sameDayMap.set(m, b);
             if (b.lead_id) {
               sameDayMap.set(String(b.lead_id), b);
-              const stripped = String(b.lead_id).replace(/^(fb_ahv-|fb_vr-|fb-|ktahv-|vr_|vr-|kappl-|kapl-|ahv-|kapl_)/i, "");
+              const stripped = String(b.lead_id).replace(/^(fb_ahv-|fb_vr-|fb-|ktahv-|vr_|vr-|kappl-|kapl-|ahv-|kapl_|client-|re_visit-|ds-|kg-)/i, "");
               if (stripped) sameDayMap.set(stripped, b);
             }
           }
@@ -1807,6 +1816,8 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
         assigned,
         mediumBufferLost: !inBuffer,
         masterCrmLost: inBuffer && !inCrm,
+        mediumBufferState: inBuffer ? "Reconciled" : undefined,
+        masterCrmState: inCrm ? "Reconciled" : currentStatus.includes("Late") ? "Late Transfer" : undefined,
         stage: inCrm ? "crm" : inBuffer ? "buffer" : status === "Duplicate" ? "direct" : status === "Delayed" ? "direct" : "buffer",
         status,
         reason,
