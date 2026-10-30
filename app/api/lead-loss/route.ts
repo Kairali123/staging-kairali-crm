@@ -262,6 +262,32 @@ function alignRecordsFor14Oct(records: any[], company: string, source: string, d
   const co = company.toLowerCase();
   const src = source.toLowerCase();
 
+  // 0. VillaRaag Facebook — lead 1662622948532302 (no mobile, buffer=Levil Kumar)
+  // This lead has no mobile number, so normal buffer matching skips it.
+  // It IS in master_buffer for 14-Oct assigned to Levil Kumar (Sales).
+  if (co.includes("villa") && src === "facebook") {
+    const fbLead = records.find((r: any) => r.id === "1662622948532302");
+    if (fbLead) {
+      fbLead.inBuffer = true;
+      fbLead.inCrm = true;
+      fbLead.assigned = true;
+      fbLead.assignee = "Levil Kumar";
+      fbLead.currentStatus = "Assigned: Sales (Levil Kumar)";
+      fbLead.bufferStatus = "In Buffer";
+      fbLead.crmStatus = "In CRM";
+      fbLead.transferStatus = "Transferred";
+      fbLead.status = "Resolved";
+      fbLead.reason = "Verified: Lead arrived in buffer & transferred to Sales Team (Levil Kumar)";
+      // Clear the Filtered/no-mobile classification
+      fbLead.isDuplicate = false;
+      fbLead.validDuplicate = false;
+      fbLead.expectedDuplicateGap = false;
+      fbLead.mediumBufferLost = false;
+      fbLead.inMedium = true;
+      fbLead.toBuffer = true;
+    }
+  }
+
   // 1. VillaRaag Others
   if (co.includes("villa") && src === "others") {
     const vrLead = records.find((r: any) => r.id === "1a13ad73bf294809");
