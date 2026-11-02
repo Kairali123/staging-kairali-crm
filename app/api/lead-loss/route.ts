@@ -91,7 +91,9 @@ const COMPANY_CONFIG: CompanyConfig[] = [
       { source: "Priyasharma AI-instagram", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(src = 'Instagram' OR mail_status = 'Instagram') AND (LOWER(lead_relates_to_which_company) LIKE '%training institute%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%')" },
       { source: "Priyasharma AI-Whatsapp", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(src = 'WhatsApp' OR src = 'API' OR mail_status = 'WhatsApp' OR mail_status = 'API') AND (LOWER(lead_relates_to_which_company) LIKE '%training institute%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%')" },
       { source: "Priyasharma AI-facebook", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(src = 'Facebook' OR src = 'Messenger' OR mail_status = 'Facebook' OR mail_status = 'Messenger') AND (LOWER(lead_relates_to_which_company) LIKE '%training institute%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%')" },
-      { source: "Priyasharma AI Chat", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "(src IS NULL OR src NOT IN ('Widget or Iframe', 'API', 'Instagram', 'WhatsApp', 'Facebook', 'Messenger')) AND (LOWER(lead_relates_to_which_company) LIKE '%training institute%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%')" }
+      { source: "Priyasharma AI Chat", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "(src IS NULL OR src NOT IN ('Widget or Iframe', 'API', 'Instagram', 'WhatsApp', 'Facebook', 'Messenger')) AND (LOWER(lead_relates_to_which_company) LIKE '%training institute%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%')" },
+      // Kairali Products Website source: Shopify abandoned checkouts (enquiry_id matches buffer lead_id directly)
+      { source: "Website", table: "shopify_abandoned_checkouts", dateCol: "created_at", mobileCol: "phone", leadIdCol: "enquiry_id", nameCol: "customer", emailCol: "email" }
     ],
   },
   {
@@ -956,6 +958,8 @@ interface UnifiedBufferData {
     crmByLeadId: Record<string, Set<string>>;
     kvByDate: Record<string, Set<string>>;
     sByDate: Record<string, Set<string>>;
+    kvByLeadId: Record<string, Set<string>>;
+    sByLeadId: Record<string, Set<string>>;
     assignTimeById: Map<string, number>;
     assignTimeByMobile: Map<string, number>;
   }>;
@@ -991,6 +995,8 @@ async function queryUnifiedBuffer(
     crmByLeadId: Record<string, Set<string>>;
     kvByDate: Record<string, Set<string>>;
     sByDate: Record<string, Set<string>>;
+    kvByLeadId: Record<string, Set<string>>;
+    sByLeadId: Record<string, Set<string>>;
     assignTimeById: Map<string, number>;
     assignTimeByMobile: Map<string, number>;
   }>();
@@ -1006,6 +1012,8 @@ async function queryUnifiedBuffer(
       crmByLeadId: {},
       kvByDate: {},
       sByDate: {},
+      kvByLeadId: {},
+      sByLeadId: {},
       assignTimeById: new Map(),
       assignTimeByMobile: new Map(),
     });
@@ -1054,6 +1062,8 @@ async function queryUnifiedBuffer(
       if (!cd.crmByLeadId[dt]) cd.crmByLeadId[dt] = new Set<string>();
       if (!cd.kvByDate[dt]) cd.kvByDate[dt] = new Set<string>();
       if (!cd.sByDate[dt]) cd.sByDate[dt] = new Set<string>();
+      if (!cd.kvByLeadId[dt]) cd.kvByLeadId[dt] = new Set<string>();
+      if (!cd.sByLeadId[dt]) cd.sByLeadId[dt] = new Set<string>();
 
       if (lid) {
         cd.byLeadId[dt].add(lid);
@@ -1072,6 +1082,18 @@ async function queryUnifiedBuffer(
       }
       if (isKServe && m) cd.kvByDate[dt].add(m);
       if (isSales && m) cd.sByDate[dt].add(m);
+
+      // Also track by lead_id for leads with no mobile (e.g. email-parser leads)
+      if (isKServe && lid) {
+        cd.kvByLeadId[dt].add(lid);
+        const cleanLid = lid.replace(/^(fb_ahv-|fb_vr-|fb-|ktahv-|vr_|vr-|kappl-|kapl-|ahv-|kapl_|client-|re_visit-|ds-|kg-)/i, "");
+        if (cleanLid && cleanLid !== lid) cd.kvByLeadId[dt].add(cleanLid);
+      }
+      if (isSales && lid) {
+        cd.sByLeadId[dt].add(lid);
+        const cleanLid = lid.replace(/^(fb_ahv-|fb_vr-|fb-|ktahv-|vr_|vr-|kappl-|kapl-|ahv-|kapl_|client-|re_visit-|ds-|kg-)/i, "");
+        if (cleanLid && cleanLid !== lid) cd.sByLeadId[dt].add(cleanLid);
+      }
 
       if (assignTMs !== null) {
         if (lid) cd.assignTimeById.set(lid, assignTMs);
@@ -1963,6 +1985,8 @@ export async function GET(request: Request) {
           const crmLeadIdSet: Set<string> = cd.crmByLeadId[date] ?? new Set<string>();
           const kvSet: Set<string> = cd.kvByDate[date] ?? new Set<string>();
           const sSet: Set<string> = cd.sByDate[date] ?? new Set<string>();
+          const kvLeadIdSet: Set<string> = cd.kvByLeadId[date] ?? new Set<string>();
+          const sLeadIdSet: Set<string> = cd.sByLeadId[date] ?? new Set<string>();
 
           // Gap 1 (Direct→Medium): leads marked "Transfer to Delete" or blank Dialer Sent Status
           const deletedIdSet = new Set<string>(deletedLeadIds ?? []);
@@ -1997,9 +2021,19 @@ export async function GET(request: Request) {
             }
 
             if (!m) {
-              // Incomplete lead (no phone): cannot be staged to buffer -> filtered
-              sameDayDuplicates++;
-              continue;
+              // Incomplete lead (no phone): check if it can be matched to buffer by lead_id
+              const inBufByIdNoMobile = Boolean(leadId && bufLeadIdSet.has(leadId));
+              if (!inBufByIdNoMobile) {
+                // Truly incomplete lead (no phone, not in buffer): filtered as duplicate
+                sameDayDuplicates++;
+                continue;
+              }
+              // Lead has no mobile but IS in buffer by lead_id — count it properly
+              buffer++;
+              if (leadId && crmLeadIdSet.has(leadId)) crm++;
+              if (leadId && kvLeadIdSet.has(leadId)) kserve++;
+              if (leadId && sLeadIdSet.has(leadId)) sales++;
+              continue; // skip mobile-based logic below
             }
 
             // Gap 1 check: lead was "Transfer to Delete" in the AI source sheet → not forwarded to Medium
@@ -2042,8 +2076,8 @@ export async function GET(request: Request) {
               } else {
                 buffer++;
                 if ((m && crmSet.has(m)) || (leadId && crmLeadIdSet.has(leadId))) crm++;
-                if (m && kvSet.has(m)) kserve++;
-                if (m && sSet.has(m)) sales++;
+                if ((m && kvSet.has(m)) || (leadId && kvLeadIdSet.has(leadId))) kserve++;
+                if ((m && sSet.has(m)) || (leadId && sLeadIdSet.has(leadId))) sales++;
               }
             } else if (isDifferentLead || priorMatch) {
               prior24hDuplicates++;
