@@ -271,13 +271,22 @@ function normSource(s: string): string {
   return String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-function bufferMatchesSource(cfgSource: string, verifiedSource: string, dataSource?: string): boolean {
+function bufferMatchesSource(cfgSource: string, verifiedSource: string, dataSource?: string, company?: string): boolean {
   const cNorm = normSource(cfgSource);
   const vNorm = normSource(verifiedSource);
+  const coLower = (company || "").toLowerCase();
+  const isKtahv = coLower.includes("healing village") || coLower.includes("ktahv");
+  // VillaRaag: guard against matching "healing village" (has "villa" substring)
+  const isVillaraag = (coLower.includes("villa") || coLower.includes("villaraag") || coLower.includes("raag")) && !coLower.includes("healing village");
+
   if (vNorm) {
     if (cNorm === vNorm) return true;
     if (cNorm.includes("website") && (vNorm.includes("siteexitpopup") || vNorm.includes("website"))) return true;
     if (cNorm.includes("other") && (vNorm.includes("emailparser") || vNorm.includes("other"))) return true;
+    // Google rule: for KTAHV, Website and Site Exit Pop-Up leads count under Google
+    if (cNorm === "google" && isKtahv && (vNorm.includes("website") || vNorm.includes("siteexitpopup"))) return true;
+    // Google rule: for VillaRaag, Website leads count under Google
+    if (cNorm === "google" && isVillaraag && vNorm.includes("website")) return true;
     return false;
   }
   if (dataSource) {
@@ -286,6 +295,10 @@ function bufferMatchesSource(cfgSource: string, verifiedSource: string, dataSour
     if (cNorm.includes("other") && dLower.includes("email parser")) return true;
     if (cNorm === "google" && dLower.includes("ppc enquiry")) return true;
     if (cNorm.includes("website") && (dLower.includes("website") || dLower.includes("contact us") || dLower.includes("online consultation") || dLower.includes("abandoned cart"))) return true;
+    // Google rule (no Verified_Source): for KTAHV, website/contact us/online consultation data sources count under Google
+    if (cNorm === "google" && isKtahv && (dLower.includes("website") || dLower.includes("contact us") || dLower.includes("online consultation") || dLower.includes("popup"))) return true;
+    // Google rule (no Verified_Source): for VillaRaag, website/online enquiry data sources count under Google
+    if (cNorm === "google" && isVillaraag && (dLower.includes("website") || dLower.includes("online enquiry"))) return true;
   }
   return false;
 }
@@ -1103,7 +1116,12 @@ async function queryUnifiedBuffer(
           lid === "b3478f99-979f-4139-8a5c-0d9ea3164b48" ||
           lid === "2da37719-4b29-41a4-b2ce-2d17115cb138"
         );
-      const matchesCompany = isKtahvOther14OctLead || !relates || co.bufferMatch.some(bm => relates.includes(bm.toLowerCase()));
+      const matchesCompany = isKtahvOther14OctLead || !relates || (
+        co.companyKey === "VILLARAAG"
+          // VillaRaag must not accidentally absorb "healing village" leads (which contain "villa")
+          ? (!relates.includes("healing village") && !relates.includes("ktahv") && co.bufferMatch.some(bm => relates.includes(bm.toLowerCase())))
+          : co.bufferMatch.some(bm => relates.includes(bm.toLowerCase()))
+      );
       if (!matchesCompany) continue;
 
       const cd = companyData.get(co.companyKey)!;
@@ -1148,7 +1166,7 @@ async function queryUnifiedBuffer(
 
       // Source-specific buffer sets
       for (const srcCfg of co.sources) {
-        if (bufferMatchesSource(srcCfg.source, vSrc, dSrc)) {
+        if (bufferMatchesSource(srcCfg.source, vSrc, dSrc, co.company)) {
           const srcKey = `${dt}__${normSource(srcCfg.source)}`;
           if (!cd.bySourceDate[srcKey]) cd.bySourceDate[srcKey] = new Set<string>();
           if (!cd.bySourceLeadId[srcKey]) cd.bySourceLeadId[srcKey] = new Set<string>();
@@ -1330,12 +1348,12 @@ function buildLostRecords(
 
     const bufs = norm ? (globalBufferMap.get(norm) || []) : [];
     const matchingBufRow = norm ? (
-      bufs.find((b: any) => b.dateStr === date && bufferMatchesSource(source, b.verifiedSource, b.dataSource)) ||
+      bufs.find((b: any) => b.dateStr === date && bufferMatchesSource(source, b.verifiedSource, b.dataSource, company)) ||
       bufs.find(b => b.dateStr === date) ||
       bufs[0] ||
       null
     ) : null;
-    const isSourceMatch = Boolean(matchingBufRow && bufferMatchesSource(source, (matchingBufRow as any).verifiedSource, (matchingBufRow as any).dataSource));
+    const isSourceMatch = Boolean(matchingBufRow && bufferMatchesSource(source, (matchingBufRow as any).verifiedSource, (matchingBufRow as any).dataSource, company));
     const isSameDay = Boolean(matchingBufRow && matchingBufRow.dateStr === date && isSourceMatch);
     const isLeadMatch = Boolean(matchingBufRow && matchingBufRow.leadId && isSameLeadId(leadId, matchingBufRow.leadId));
     const isDifferentLead = Boolean(!inBufById && matchingBufRow && matchingBufRow.leadId && (!isSameDay || !isSourceMatch) && !isLeadMatch);
@@ -1464,8 +1482,8 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
 
   const bufferCache: Record<string, Promise<{ sameDayMap: Map<string, any>; sameDayGlobalMap: Map<string, any>; bufferList: any[] }>> = {};
 
-  function getBufferMap(dtStr: string, companyMatch: string[] = [], source: string = ""): Promise<{ sameDayMap: Map<string, any>; sameDayGlobalMap: Map<string, any>; bufferList: any[] }> {
-    const cacheKey = `${dtStr}__${companyMatch.join(",")}__${source}`;
+  function getBufferMap(dtStr: string, companyMatch: string[] = [], source: string = "", company: string = ""): Promise<{ sameDayMap: Map<string, any>; sameDayGlobalMap: Map<string, any>; bufferList: any[] }> {
+    const cacheKey = `${dtStr}__${companyMatch.join(",")}__${source}__${company}`;
     if (bufferCache[cacheKey]) return bufferCache[cacheKey];
     bufferCache[cacheKey] = (async () => {
       let bufRows: any[] = [];
@@ -1527,8 +1545,13 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
               String(b.lead_id) === "b3478f99-979f-4139-8a5c-0d9ea3164b48" ||
               String(b.lead_id) === "2da37719-4b29-41a4-b2ce-2d17115cb138"
             );
-          const matchesCo = isKtahvOther14OctLead || companyMatch.length === 0 || !coName || companyMatch.some(c => coName.includes(c.toLowerCase()));
-          const matchesSrc = !source || dtStr === "2026-10-14" || bufferMatchesSource(source, b.Verified_Source, b.Data_Source);
+          const isVillaraag = (company.toLowerCase().includes("villa") || company.toLowerCase().includes("raag")) && !company.toLowerCase().includes("healing village");
+          const matchesCo = isKtahvOther14OctLead || companyMatch.length === 0 || !coName || (
+            isVillaraag
+              ? (!coName.includes("healing village") && !coName.includes("ktahv") && companyMatch.some(c => coName.includes(c.toLowerCase())))
+              : companyMatch.some(c => coName.includes(c.toLowerCase()))
+          );
+          const matchesSrc = !source || dtStr === "2026-10-14" || bufferMatchesSource(source, b.Verified_Source, b.Data_Source, company);
           if (matchesCo && matchesSrc) {
             if (m) sameDayMap.set(m, b);
             if (b.lead_id) {
@@ -1609,7 +1632,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
 
   const rows = (await Promise.all(targets.map(async t => {
     const { rowId, company, source, date, co, srcConfigs } = t;
-    const { sameDayMap, sameDayGlobalMap, bufferList } = await getBufferMap(date, co.bufferMatch, source);
+    const { sameDayMap, sameDayGlobalMap, bufferList } = await getBufferMap(date, co.bufferMatch, source, company);
 
     let directRows: any[] = [];
     for (const srcCfg of srcConfigs) {
@@ -1798,7 +1821,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
 
       const bufMatch = sameDayMap.get(leadId) || (norm ? sameDayMap.get(norm) : null);
       const isLeadIdMatch = Boolean(bufMatch && bufMatch.lead_id && isSameLeadId(leadId, String(bufMatch.lead_id)));
-      const isSourceMatch = Boolean(bufMatch && (date === "2026-10-14" || bufferMatchesSource(source, bufMatch.Verified_Source, bufMatch.Data_Source)));
+      const isSourceMatch = Boolean(bufMatch && (date === "2026-10-14" || bufferMatchesSource(source, bufMatch.Verified_Source, bufMatch.Data_Source, company)));
       const isSameDayMatch = Boolean(bufMatch && rowDate(bufMatch.Date_Time) === date && isSourceMatch);
       const isDifferentLead = Boolean(bufMatch && bufMatch.lead_id && !isLeadIdMatch && !isSameDayMatch);
       const sameDayGlobalMatch = (!bufMatch && norm) ? sameDayGlobalMap.get(norm) : null;
@@ -2162,12 +2185,12 @@ export async function GET(request: Request) {
             // Check company-scoped buffer first, then fall back to global buffer across all companies
             const bufs = (m ? (companyBufMap.get(m) || globalBufferMap.get(m)) : []) || [];
             const matchingBufRow = m ? (
-              bufs.find((b: any) => b.dateStr === date && bufferMatchesSource(srcCfg.source, b.verifiedSource, b.dataSource)) ||
+              bufs.find((b: any) => b.dateStr === date && bufferMatchesSource(srcCfg.source, b.verifiedSource, b.dataSource, co.company)) ||
               bufs.find((b: any) => b.dateStr === date) ||
               bufs[0] ||
               null
             ) : null;
-            const isSourceMatch = Boolean(matchingBufRow && bufferMatchesSource(srcCfg.source, (matchingBufRow as any).verifiedSource, (matchingBufRow as any).dataSource));
+            const isSourceMatch = Boolean(matchingBufRow && bufferMatchesSource(srcCfg.source, (matchingBufRow as any).verifiedSource, (matchingBufRow as any).dataSource, co.company));
             const isSameDay = Boolean(matchingBufRow && matchingBufRow.dateStr === date && isSourceMatch);
             const isLeadMatch = Boolean(matchingBufRow && matchingBufRow.leadId && isSameLeadId(leadId, matchingBufRow.leadId));
             const isDifferentLead = Boolean(!inBufById && matchingBufRow && matchingBufRow.leadId && (!isSameDay || !isSourceMatch) && !isLeadMatch);
