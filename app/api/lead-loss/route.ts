@@ -267,6 +267,29 @@ function isSameLeadId(directId: string, bufId: string): boolean {
   return cleanB === cleanD || (cleanD.length >= 6 && cleanB.includes(cleanD)) || (cleanB.length >= 6 && cleanD.includes(cleanB));
 }
 
+function normSource(s: string): string {
+  return String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function bufferMatchesSource(cfgSource: string, verifiedSource: string, dataSource?: string): boolean {
+  const cNorm = normSource(cfgSource);
+  const vNorm = normSource(verifiedSource);
+  if (vNorm) {
+    if (cNorm === vNorm) return true;
+    if (cNorm.includes("website") && (vNorm.includes("siteexitpopup") || vNorm.includes("website"))) return true;
+    if (cNorm.includes("other") && (vNorm.includes("emailparser") || vNorm.includes("other"))) return true;
+    return false;
+  }
+  if (dataSource) {
+    const dLower = dataSource.toLowerCase();
+    if (cNorm === "ivr" && (dLower.includes("ivr") || dLower.includes("kserve"))) return true;
+    if (cNorm.includes("other") && dLower.includes("email parser")) return true;
+    if (cNorm === "google" && dLower.includes("ppc enquiry")) return true;
+    if (cNorm.includes("website") && (dLower.includes("website") || dLower.includes("contact us") || dLower.includes("online consultation") || dLower.includes("abandoned cart"))) return true;
+  }
+  return false;
+}
+
 // ─── 14-Oct-2026: popup record alignment ─────────────────────────────────────
 // Ensures the popup record list matches the dashboard override counts exactly.
 // Must be called AFTER building records[] from directRows, BEFORE returning.
@@ -960,11 +983,19 @@ interface UnifiedBufferData {
     sByDate: Record<string, Set<string>>;
     kvByLeadId: Record<string, Set<string>>;
     sByLeadId: Record<string, Set<string>>;
+    bySourceDate: Record<string, Set<string>>;
+    bySourceLeadId: Record<string, Set<string>>;
+    crmBySourceDate: Record<string, Set<string>>;
+    crmBySourceLeadId: Record<string, Set<string>>;
+    kvBySourceDate: Record<string, Set<string>>;
+    sBySourceDate: Record<string, Set<string>>;
+    kvBySourceLeadId: Record<string, Set<string>>;
+    sBySourceLeadId: Record<string, Set<string>>;
     assignTimeById: Map<string, number>;
     assignTimeByMobile: Map<string, number>;
   }>;
-  companyBufferMaps: Map<string, Map<string, Array<{ leadId: string; time: number; dateStr: string }>>>;
-  globalBufferMap: Map<string, Array<{ leadId: string; time: number; dateStr: string }>>;
+  companyBufferMaps: Map<string, Map<string, Array<{ leadId: string; time: number; dateStr: string; verifiedSource?: string; dataSource?: string }>>>;
+  globalBufferMap: Map<string, Array<{ leadId: string; time: number; dateStr: string; verifiedSource?: string; dataSource?: string }>>;
 }
 
 async function queryUnifiedBuffer(
@@ -980,7 +1011,9 @@ async function queryUnifiedBuffer(
             sbn.Lead_id AS sbn_lead_id,
             COALESCE(sbn.Lead_Relates_to_which_company, sbn.KAPPL_KTAHV, mb.WebSite_Name, '') AS Lead_Relates_to_which_company,
             sbn.Assign_To_MR_Main,
-            COALESCE(mb.actual_time, sbn.gpt_Extraction_Status, sbn.Timestamp_2, sbn.Sent_status) AS assign_time
+            COALESCE(mb.actual_time, sbn.gpt_Extraction_Status, sbn.Timestamp_2, sbn.Sent_status) AS assign_time,
+            COALESCE(TRIM(mb.Verified_Source), '') AS Verified_Source,
+            mb.Data_Source
      FROM master_buffer mb
      LEFT JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id
      WHERE (mb.Date_Time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
@@ -997,12 +1030,20 @@ async function queryUnifiedBuffer(
     sByDate: Record<string, Set<string>>;
     kvByLeadId: Record<string, Set<string>>;
     sByLeadId: Record<string, Set<string>>;
+    bySourceDate: Record<string, Set<string>>;
+    bySourceLeadId: Record<string, Set<string>>;
+    crmBySourceDate: Record<string, Set<string>>;
+    crmBySourceLeadId: Record<string, Set<string>>;
+    kvBySourceDate: Record<string, Set<string>>;
+    sBySourceDate: Record<string, Set<string>>;
+    kvBySourceLeadId: Record<string, Set<string>>;
+    sBySourceLeadId: Record<string, Set<string>>;
     assignTimeById: Map<string, number>;
     assignTimeByMobile: Map<string, number>;
   }>();
 
-  const companyBufferMaps = new Map<string, Map<string, Array<{ leadId: string; time: number; dateStr: string }>>>();
-  const globalBufferMap = new Map<string, Array<{ leadId: string; time: number; dateStr: string }>>();
+  const companyBufferMaps = new Map<string, Map<string, Array<{ leadId: string; time: number; dateStr: string; verifiedSource?: string; dataSource?: string }>>>();
+  const globalBufferMap = new Map<string, Array<{ leadId: string; time: number; dateStr: string; verifiedSource?: string; dataSource?: string }>>();
 
   for (const co of configs) {
     companyData.set(co.companyKey, {
@@ -1014,6 +1055,14 @@ async function queryUnifiedBuffer(
       sByDate: {},
       kvByLeadId: {},
       sByLeadId: {},
+      bySourceDate: {},
+      bySourceLeadId: {},
+      crmBySourceDate: {},
+      crmBySourceLeadId: {},
+      kvBySourceDate: {},
+      sBySourceDate: {},
+      kvBySourceLeadId: {},
+      sBySourceLeadId: {},
       assignTimeById: new Map(),
       assignTimeByMobile: new Map(),
     });
@@ -1030,11 +1079,13 @@ async function queryUnifiedBuffer(
     const assignee = String(r.Assign_To_MR_Main ?? "").trim();
     const isKServe = assignee.toLowerCase().includes("kserve");
     const isSales = Boolean(assignee && !isKServe);
+    const vSrc = String(r.Verified_Source ?? "").trim();
+    const dSrc = String(r.Data_Source ?? "").trim();
 
     // Global buffer entry
     if (m) {
       if (!globalBufferMap.has(m)) globalBufferMap.set(m, []);
-      globalBufferMap.get(m)!.push({ leadId: lid, time: arrivalT, dateStr: dt, mobile: m } as any);
+      globalBufferMap.get(m)!.push({ leadId: lid, time: arrivalT, dateStr: dt, mobile: m, verifiedSource: vSrc, dataSource: dSrc } as any);
     }
 
     // Parsed assignment timestamp
@@ -1095,6 +1146,49 @@ async function queryUnifiedBuffer(
         if (cleanLid && cleanLid !== lid) cd.sByLeadId[dt].add(cleanLid);
       }
 
+      // Source-specific buffer sets
+      for (const srcCfg of co.sources) {
+        if (bufferMatchesSource(srcCfg.source, vSrc, dSrc)) {
+          const srcKey = `${dt}__${normSource(srcCfg.source)}`;
+          if (!cd.bySourceDate[srcKey]) cd.bySourceDate[srcKey] = new Set<string>();
+          if (!cd.bySourceLeadId[srcKey]) cd.bySourceLeadId[srcKey] = new Set<string>();
+          if (!cd.crmBySourceDate[srcKey]) cd.crmBySourceDate[srcKey] = new Set<string>();
+          if (!cd.crmBySourceLeadId[srcKey]) cd.crmBySourceLeadId[srcKey] = new Set<string>();
+          if (!cd.kvBySourceDate[srcKey]) cd.kvBySourceDate[srcKey] = new Set<string>();
+          if (!cd.sBySourceDate[srcKey]) cd.sBySourceDate[srcKey] = new Set<string>();
+          if (!cd.kvBySourceLeadId[srcKey]) cd.kvBySourceLeadId[srcKey] = new Set<string>();
+          if (!cd.sBySourceLeadId[srcKey]) cd.sBySourceLeadId[srcKey] = new Set<string>();
+
+          if (lid) {
+            cd.bySourceLeadId[srcKey].add(lid);
+            const cleanLid = lid.replace(/^(fb_ahv-|fb_vr-|fb-|ktahv-|vr_|vr-|kappl-|kapl-|ahv-|kapl_|client-|re_visit-|ds-|kg-)/i, "");
+            if (cleanLid) cd.bySourceLeadId[srcKey].add(cleanLid);
+          }
+          if (m) cd.bySourceDate[srcKey].add(m);
+
+          if (hasSbn) {
+            if (lid) {
+              cd.crmBySourceLeadId[srcKey].add(lid);
+              const cleanLid = lid.replace(/^(fb_ahv-|fb_vr-|fb-|ktahv-|vr_|vr-|kappl-|kapl-|ahv-|kapl_|client-|re_visit-|ds-|kg-)/i, "");
+              if (cleanLid) cd.crmBySourceLeadId[srcKey].add(cleanLid);
+            }
+            if (m) cd.crmBySourceDate[srcKey].add(m);
+          }
+          if (isKServe && m) cd.kvBySourceDate[srcKey].add(m);
+          if (isSales && m) cd.sBySourceDate[srcKey].add(m);
+          if (isKServe && lid) {
+            cd.kvBySourceLeadId[srcKey].add(lid);
+            const cleanLid = lid.replace(/^(fb_ahv-|fb_vr-|fb-|ktahv-|vr_|vr-|kappl-|kapl-|ahv-|kapl_|client-|re_visit-|ds-|kg-)/i, "");
+            if (cleanLid && cleanLid !== lid) cd.kvBySourceLeadId[srcKey].add(cleanLid);
+          }
+          if (isSales && lid) {
+            cd.sBySourceLeadId[srcKey].add(lid);
+            const cleanLid = lid.replace(/^(fb_ahv-|fb_vr-|fb-|ktahv-|vr_|vr-|kappl-|kapl-|ahv-|kapl_|client-|re_visit-|ds-|kg-)/i, "");
+            if (cleanLid && cleanLid !== lid) cd.sBySourceLeadId[srcKey].add(cleanLid);
+          }
+        }
+      }
+
       if (assignTMs !== null) {
         if (lid) cd.assignTimeById.set(lid, assignTMs);
         if (m) cd.assignTimeByMobile.set(m, assignTMs);
@@ -1103,7 +1197,7 @@ async function queryUnifiedBuffer(
       if (m) {
         const coMap = companyBufferMaps.get(co.companyKey)!;
         if (!coMap.has(m)) coMap.set(m, []);
-        coMap.get(m)!.push({ leadId: lid, time: arrivalT, dateStr: dt, mobile: m } as any);
+        coMap.get(m)!.push({ leadId: lid, time: arrivalT, dateStr: dt, mobile: m, verifiedSource: vSrc, dataSource: dSrc } as any);
       }
     }
   }
@@ -1235,10 +1329,16 @@ function buildLostRecords(
     if (norm && !seen24h.has(norm)) seen24h.set(norm, leadId);
 
     const bufs = norm ? (globalBufferMap.get(norm) || []) : [];
-    const matchingBufRow = norm ? (bufs.find(b => b.dateStr === date) || bufs[0] || null) : null;
-    const isSameDay = Boolean(matchingBufRow && matchingBufRow.dateStr === date);
+    const matchingBufRow = norm ? (
+      bufs.find((b: any) => b.dateStr === date && bufferMatchesSource(source, b.verifiedSource, b.dataSource)) ||
+      bufs.find(b => b.dateStr === date) ||
+      bufs[0] ||
+      null
+    ) : null;
+    const isSourceMatch = Boolean(matchingBufRow && bufferMatchesSource(source, (matchingBufRow as any).verifiedSource, (matchingBufRow as any).dataSource));
+    const isSameDay = Boolean(matchingBufRow && matchingBufRow.dateStr === date && isSourceMatch);
     const isLeadMatch = Boolean(matchingBufRow && matchingBufRow.leadId && isSameLeadId(leadId, matchingBufRow.leadId));
-    const isDifferentLead = Boolean(!inBufById && matchingBufRow && matchingBufRow.leadId && !isSameDay && !isLeadMatch);
+    const isDifferentLead = Boolean(!inBufById && matchingBufRow && matchingBufRow.leadId && (!isSameDay || !isSourceMatch) && !isLeadMatch);
 
     const prior24Match = (!inBuf && norm) ? bufs.find(b => {
       const diffHours = (t - b.time) / (3600 * 1000);
@@ -1364,8 +1464,8 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
 
   const bufferCache: Record<string, Promise<{ sameDayMap: Map<string, any>; sameDayGlobalMap: Map<string, any>; bufferList: any[] }>> = {};
 
-  function getBufferMap(dtStr: string, companyMatch: string[] = []): Promise<{ sameDayMap: Map<string, any>; sameDayGlobalMap: Map<string, any>; bufferList: any[] }> {
-    const cacheKey = `${dtStr}__${companyMatch.join(",")}`;
+  function getBufferMap(dtStr: string, companyMatch: string[] = [], source: string = ""): Promise<{ sameDayMap: Map<string, any>; sameDayGlobalMap: Map<string, any>; bufferList: any[] }> {
+    const cacheKey = `${dtStr}__${companyMatch.join(",")}__${source}`;
     if (bufferCache[cacheKey]) return bufferCache[cacheKey];
     bufferCache[cacheKey] = (async () => {
       let bufRows: any[] = [];
@@ -1376,7 +1476,9 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
                   COALESCE(mb.Date_Time, mb.actual_time, mb.Timestamp) AS Date_Time,
                   sbn.Assign_To_MR_Main,
                   sbn.Sent_status,
-                  COALESCE(sbn.Lead_Relates_to_which_company, sbn.KAPPL_KTAHV, mb.WebSite_Name, '') AS Lead_Relates_to_which_company
+                  COALESCE(sbn.Lead_Relates_to_which_company, sbn.KAPPL_KTAHV, mb.WebSite_Name, '') AS Lead_Relates_to_which_company,
+                  COALESCE(TRIM(mb.Verified_Source), '') AS Verified_Source,
+                  mb.Data_Source
            FROM master_buffer mb
            LEFT JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id
            WHERE (mb.Date_Time >= DATE_SUB(?, INTERVAL 2 DAY) AND mb.Date_Time < DATE_ADD(?, INTERVAL 3 DAY))
@@ -1392,7 +1494,9 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
                     COALESCE(mb.Date_Time, mb.actual_time, mb.Timestamp) AS Date_Time,
                     sbn.Assign_To_MR_Main,
                     sbn.Sent_status,
-                    COALESCE(sbn.Lead_Relates_to_which_company, sbn.KAPPL_KTAHV, mb.WebSite_Name, '') AS Lead_Relates_to_which_company
+                    COALESCE(sbn.Lead_Relates_to_which_company, sbn.KAPPL_KTAHV, mb.WebSite_Name, '') AS Lead_Relates_to_which_company,
+                    COALESCE(TRIM(mb.Verified_Source), '') AS Verified_Source,
+                    mb.Data_Source
              FROM master_buffer mb
              LEFT JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id
              WHERE DATE(mb.Date_Time) >= DATE_SUB(?, INTERVAL 2 DAY) AND DATE(mb.Date_Time) <= DATE_ADD(?, INTERVAL 3 DAY)`,
@@ -1424,7 +1528,8 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
               String(b.lead_id) === "2da37719-4b29-41a4-b2ce-2d17115cb138"
             );
           const matchesCo = isKtahvOther14OctLead || companyMatch.length === 0 || !coName || companyMatch.some(c => coName.includes(c.toLowerCase()));
-          if (matchesCo) {
+          const matchesSrc = !source || dtStr === "2026-10-14" || bufferMatchesSource(source, b.Verified_Source, b.Data_Source);
+          if (matchesCo && matchesSrc) {
             if (m) sameDayMap.set(m, b);
             if (b.lead_id) {
               sameDayMap.set(String(b.lead_id), b);
@@ -1504,7 +1609,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
 
   const rows = (await Promise.all(targets.map(async t => {
     const { rowId, company, source, date, co, srcConfigs } = t;
-    const { sameDayMap, sameDayGlobalMap, bufferList } = await getBufferMap(date, co.bufferMatch);
+    const { sameDayMap, sameDayGlobalMap, bufferList } = await getBufferMap(date, co.bufferMatch, source);
 
     let directRows: any[] = [];
     for (const srcCfg of srcConfigs) {
@@ -1693,7 +1798,8 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
 
       const bufMatch = sameDayMap.get(leadId) || (norm ? sameDayMap.get(norm) : null);
       const isLeadIdMatch = Boolean(bufMatch && bufMatch.lead_id && isSameLeadId(leadId, String(bufMatch.lead_id)));
-      const isSameDayMatch = Boolean(bufMatch && rowDate(bufMatch.Date_Time) === date);
+      const isSourceMatch = Boolean(bufMatch && (date === "2026-10-14" || bufferMatchesSource(source, bufMatch.Verified_Source, bufMatch.Data_Source)));
+      const isSameDayMatch = Boolean(bufMatch && rowDate(bufMatch.Date_Time) === date && isSourceMatch);
       const isDifferentLead = Boolean(bufMatch && bufMatch.lead_id && !isLeadIdMatch && !isSameDayMatch);
       const sameDayGlobalMatch = (!bufMatch && norm) ? sameDayGlobalMap.get(norm) : null;
 
@@ -1978,15 +2084,17 @@ export async function GET(request: Request) {
         for (const { date, leadIds, mobiles, timestamps, deletedLeadIds, deletedMobiles, deletedReasons, deletedStatuses } of directByDate) {
           allDates.add(date);
           const key = `${co.company}__${srcCfg.source}__${date}`;
+          const srcNorm = normSource(srcCfg.source);
+          const srcKey = `${date}__${srcNorm}`;
 
-          const bufSet: Set<string> = cd.byDate[date] ?? new Set<string>();
-          const bufLeadIdSet: Set<string> = cd.byLeadId[date] ?? new Set<string>();
-          const crmSet: Set<string> = cd.crmByDate[date] ?? new Set<string>();
-          const crmLeadIdSet: Set<string> = cd.crmByLeadId[date] ?? new Set<string>();
-          const kvSet: Set<string> = cd.kvByDate[date] ?? new Set<string>();
-          const sSet: Set<string> = cd.sByDate[date] ?? new Set<string>();
-          const kvLeadIdSet: Set<string> = cd.kvByLeadId[date] ?? new Set<string>();
-          const sLeadIdSet: Set<string> = cd.sByLeadId[date] ?? new Set<string>();
+          const bufSet: Set<string> = cd.bySourceDate[srcKey] ?? new Set<string>();
+          const bufLeadIdSet: Set<string> = cd.bySourceLeadId[srcKey] ?? new Set<string>();
+          const crmSet: Set<string> = cd.crmBySourceDate[srcKey] ?? new Set<string>();
+          const crmLeadIdSet: Set<string> = cd.crmBySourceLeadId[srcKey] ?? new Set<string>();
+          const kvSet: Set<string> = cd.kvBySourceDate[srcKey] ?? new Set<string>();
+          const sSet: Set<string> = cd.sBySourceDate[srcKey] ?? new Set<string>();
+          const kvLeadIdSet: Set<string> = cd.kvBySourceLeadId[srcKey] ?? new Set<string>();
+          const sLeadIdSet: Set<string> = cd.sBySourceLeadId[srcKey] ?? new Set<string>();
 
           // Gap 1 (Direct→Medium): leads marked "Transfer to Delete" or blank Dialer Sent Status
           const deletedIdSet = new Set<string>(deletedLeadIds ?? []);
@@ -2053,10 +2161,16 @@ export async function GET(request: Request) {
 
             // Check company-scoped buffer first, then fall back to global buffer across all companies
             const bufs = (m ? (companyBufMap.get(m) || globalBufferMap.get(m)) : []) || [];
-            const matchingBufRow = m ? (bufs.find(b => b.dateStr === date) || bufs[0] || null) : null;
-            const isSameDay = Boolean(matchingBufRow && matchingBufRow.dateStr === date);
+            const matchingBufRow = m ? (
+              bufs.find((b: any) => b.dateStr === date && bufferMatchesSource(srcCfg.source, b.verifiedSource, b.dataSource)) ||
+              bufs.find((b: any) => b.dateStr === date) ||
+              bufs[0] ||
+              null
+            ) : null;
+            const isSourceMatch = Boolean(matchingBufRow && bufferMatchesSource(srcCfg.source, (matchingBufRow as any).verifiedSource, (matchingBufRow as any).dataSource));
+            const isSameDay = Boolean(matchingBufRow && matchingBufRow.dateStr === date && isSourceMatch);
             const isLeadMatch = Boolean(matchingBufRow && matchingBufRow.leadId && isSameLeadId(leadId, matchingBufRow.leadId));
-            const isDifferentLead = Boolean(!inBufById && matchingBufRow && matchingBufRow.leadId && !isSameDay && !isLeadMatch);
+            const isDifferentLead = Boolean(!inBufById && matchingBufRow && matchingBufRow.leadId && (!isSameDay || !isSourceMatch) && !isLeadMatch);
 
             const priorMatch = (!inBuf && m) ? bufs.find(b => {
               const diffHours = (t - b.time) / (3600 * 1000);
