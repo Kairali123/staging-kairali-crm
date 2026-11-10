@@ -1051,6 +1051,8 @@ async function queryUnifiedBuffer(
     sBySourceDate: Record<string, Set<string>>;
     kvBySourceLeadId: Record<string, Set<string>>;
     sBySourceLeadId: Record<string, Set<string>>;
+    assigneeBySourceLeadId: Record<string, Map<string, string>>;
+    assigneeBySourceMobile: Record<string, Map<string, string>>;
     assignTimeById: Map<string, number>;
     assignTimeByMobile: Map<string, number>;
   }>();
@@ -1076,6 +1078,8 @@ async function queryUnifiedBuffer(
       sBySourceDate: {},
       kvBySourceLeadId: {},
       sBySourceLeadId: {},
+      assigneeBySourceLeadId: {},
+      assigneeBySourceMobile: {},
       assignTimeById: new Map(),
       assignTimeByMobile: new Map(),
     });
@@ -1176,13 +1180,25 @@ async function queryUnifiedBuffer(
           if (!cd.sBySourceDate[srcKey]) cd.sBySourceDate[srcKey] = new Set<string>();
           if (!cd.kvBySourceLeadId[srcKey]) cd.kvBySourceLeadId[srcKey] = new Set<string>();
           if (!cd.sBySourceLeadId[srcKey]) cd.sBySourceLeadId[srcKey] = new Set<string>();
+          if (!cd.assigneeBySourceLeadId[srcKey]) cd.assigneeBySourceLeadId[srcKey] = new Map<string, string>();
+          if (!cd.assigneeBySourceMobile[srcKey]) cd.assigneeBySourceMobile[srcKey] = new Map<string, string>();
 
           if (lid) {
             cd.bySourceLeadId[srcKey].add(lid);
             const cleanLid = lid.replace(/^(fb_ahv-|fb_vr-|fb-|ktahv-|vr_|vr-|kappl-|kapl-|ahv-|kapl_|client-|re_visit-|ds-|kg-)/i, "");
             if (cleanLid) cd.bySourceLeadId[srcKey].add(cleanLid);
+            if (assignee) {
+              cd.assigneeBySourceLeadId[srcKey].set(lid, assignee);
+              if (cleanLid) cd.assigneeBySourceLeadId[srcKey].set(cleanLid, assignee);
+            }
           }
-          if (m) cd.bySourceDate[srcKey].add(m);
+          if (m) {
+            cd.bySourceDate[srcKey].add(m);
+            const isTransferredRow = lid.includes("-T") || dSrc.toLowerCase().startsWith("kserve-");
+            if (assignee && (!cd.assigneeBySourceMobile[srcKey].has(m) || !isTransferredRow)) {
+              cd.assigneeBySourceMobile[srcKey].set(m, assignee);
+            }
+          }
 
           if (hasSbn) {
             if (lid) {
@@ -2162,8 +2178,11 @@ export async function GET(request: Request) {
               // Lead has no mobile but IS in buffer by lead_id — count it properly
               buffer++;
               if (leadId && crmLeadIdSet.has(leadId)) crm++;
-              if (leadId && kvLeadIdSet.has(leadId)) kserve++;
-              if (leadId && sLeadIdSet.has(leadId)) sales++;
+              const assNoMobile = leadId ? (cd.assigneeBySourceLeadId[srcKey]?.get(leadId) || "") : "";
+              if (assNoMobile) {
+                if (assNoMobile.toLowerCase().includes("kserve")) kserve++;
+                else sales++;
+              }
               continue; // skip mobile-based logic below
             }
 
@@ -2213,8 +2232,15 @@ export async function GET(request: Request) {
               } else {
                 buffer++;
                 if ((m && crmSet.has(m)) || (leadId && crmLeadIdSet.has(leadId))) crm++;
-                if ((m && kvSet.has(m)) || (leadId && kvLeadIdSet.has(leadId))) kserve++;
-                if ((m && sSet.has(m)) || (leadId && sLeadIdSet.has(leadId))) sales++;
+                const ass = (leadId && cd.assigneeBySourceLeadId[srcKey]?.get(leadId)) ||
+                            (m ? cd.assigneeBySourceMobile[srcKey]?.get(m) : "") || "";
+                if (ass) {
+                  if (ass.toLowerCase().includes("kserve")) {
+                    kserve++;
+                  } else {
+                    sales++;
+                  }
+                }
               }
             } else if (isDifferentLead || priorMatch) {
               prior24hDuplicates++;
