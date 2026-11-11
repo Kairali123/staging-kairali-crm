@@ -92,8 +92,12 @@ const COMPANY_CONFIG: CompanyConfig[] = [
       { source: "Priyasharma AI-Whatsapp", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(src = 'WhatsApp' OR src = 'API' OR mail_status = 'WhatsApp' OR mail_status = 'API') AND (LOWER(lead_relates_to_which_company) LIKE '%training institute%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%')" },
       { source: "Priyasharma AI-facebook", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(src = 'Facebook' OR src = 'Messenger' OR mail_status = 'Facebook' OR mail_status = 'Messenger') AND (LOWER(lead_relates_to_which_company) LIKE '%training institute%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%')" },
       { source: "Priyasharma AI Chat", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "(src IS NULL OR src NOT IN ('Widget or Iframe', 'API', 'Instagram', 'WhatsApp', 'Facebook', 'Messenger')) AND (LOWER(lead_relates_to_which_company) LIKE '%training institute%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%')" },
-      // Kairali Products Website source: Shopify abandoned checkouts (enquiry_id matches buffer lead_id directly)
-      { source: "Website", table: "shopify_abandoned_checkouts", dateCol: "created_at", mobileCol: "phone", leadIdCol: "enquiry_id", nameCol: "customer", emailCol: "email" }
+      // CRR data sources: 3 tables (pob_lost_clients_tracker_fms, data_repush_to_calling_sheet_mr_app_tp_CallingSheetPush, repeat_orders_from_new_orders_calling_enquiry_fms_main)
+      { source: "CRR", table: "pob_lost_clients_tracker_fms", dateCol: "timestamp_stage1", mobileCol: "contact_stage1", leadIdCol: "uid_stage1", nameCol: "client_name_stage1", emailCol: "email_stage1" },
+      { source: "CRR", table: "data_repush_to_calling_sheet_mr_app_tp_CallingSheetPush", dateCol: "time_stamp", mobileCol: "mobile", leadIdCol: "id_value", nameCol: "name_of_client", emailCol: "email_id" },
+      { source: "CRR", table: "repeat_orders_from_new_orders_calling_enquiry_fms_main", dateCol: "time_stamp", mobileCol: "mobile", leadIdCol: "lead_id", nameCol: "name_of_client", emailCol: "email_id" },
+      // Kairali Products Website source: Shopify abandoned checkouts (enquiry_id matches buffer lead_id directly; filter by timeStamp column)
+      { source: "Website", table: "shopify_abandoned_checkouts", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "enquiry_id", nameCol: "customer", emailCol: "email" }
     ],
   },
   {
@@ -299,6 +303,7 @@ function bufferMatchesSource(cfgSource: string, verifiedSource: string, dataSour
     if (cNorm === "google" && isKtahv && (dLower.includes("website") || dLower.includes("contact us") || dLower.includes("online consultation") || dLower.includes("popup"))) return true;
     // Google rule (no Verified_Source): for VillaRaag, website/online enquiry data sources count under Google
     if (cNorm === "google" && isVillaraag && (dLower.includes("website") || dLower.includes("online enquiry"))) return true;
+    if (cNorm === "crr" && (dLower.includes("crr") || dLower.includes("lost clients") || dLower.includes("repeat orders") || dLower.includes("calling sheet"))) return true;
   }
   return false;
 }
@@ -1120,7 +1125,12 @@ async function queryUnifiedBuffer(
           lid === "b3478f99-979f-4139-8a5c-0d9ea3164b48" ||
           lid === "2da37719-4b29-41a4-b2ce-2d17115cb138"
         );
-      const matchesCompany = isKtahvOther14OctLead || !relates || (
+      const isKapplLead = co.companyKey === "KAPL" && (
+        assignee.toUpperCase() === "KAPPL" ||
+        relates.includes("kappl") ||
+        relates.includes("product")
+      );
+      const matchesCompany = isKtahvOther14OctLead || isKapplLead || !relates || (
         co.companyKey === "VILLARAAG"
           // VillaRaag must not accidentally absorb "healing village" leads (which contain "villa")
           ? (!relates.includes("healing village") && !relates.includes("ktahv") && co.bufferMatch.some(bm => relates.includes(bm.toLowerCase())))
@@ -1451,10 +1461,12 @@ function buildLostRecords(
         reason: "Duplicate mobile in Direct API on same day",
       });
     } else {
-      // Check if mobile arrived in buffer AFTER this lead (late transfer: next day or within 48h forward)
+      // Check if mobile or leadId arrived in buffer AFTER this lead (late transfer: next day or within 7 days forward)
       const lateMatch = bufs.find(b => {
+        const isMatch = (leadId && b.leadId && isSameLeadId(leadId, b.leadId)) || (norm && b.mobile === norm);
+        if (!isMatch) return false;
         const diffHours = (b.time - t) / (3600 * 1000); // positive = buffer came after lead
-        return diffHours > 0 && diffHours <= 72;
+        return diffHours > 0 && diffHours <= 168;
       });
       if (lateMatch) {
         records.push({
@@ -1466,9 +1478,9 @@ function buildLostRecords(
           isDuplicate: false, validDuplicate: false, expectedDuplicateGap: false,
           lateTransfer: true,
           inMedium: true, toBuffer: false, inBuffer: false, inCrm: false, assigned: false,
-          mediumBufferLost: true,
+          mediumBufferLost: false,
           stage: "direct", status: "Delayed",
-          reason: `Late Transfer: Lead received in Direct API on ${date} but buffer entry arrived on ${lateMatch.dateStr} (transferred next day)`,
+          reason: `Late Transfer: Lead received in Direct API on ${date} but buffer entry arrived on ${lateMatch.dateStr} (transferred next day — not lost)`,
         });
       } else {
         records.push({
@@ -1562,7 +1574,12 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
               String(b.lead_id) === "2da37719-4b29-41a4-b2ce-2d17115cb138"
             );
           const isVillaraag = (company.toLowerCase().includes("villa") || company.toLowerCase().includes("raag")) && !company.toLowerCase().includes("healing village");
-          const matchesCo = isKtahvOther14OctLead || companyMatch.length === 0 || !coName || (
+          const isKapplLead = companyMatch.some(c => c.toLowerCase().includes("kappl") || c.toLowerCase().includes("product")) && (
+            String(b.Assign_To_MR_Main || "").trim().toUpperCase() === "KAPPL" ||
+            coName.includes("kappl") ||
+            coName.includes("product")
+          );
+          const matchesCo = isKtahvOther14OctLead || isKapplLead || companyMatch.length === 0 || !coName || (
             isVillaraag
               ? (!coName.includes("healing village") && !coName.includes("ktahv") && companyMatch.some(c => coName.includes(c.toLowerCase())))
               : companyMatch.some(c => coName.includes(c.toLowerCase()))
@@ -1857,15 +1874,16 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
         return diffHours >= 0 && diffHours <= 24;
       }) : null;
 
-      // Late-transfer check: buffer entry arrived AFTER this Direct API lead (next-day or within 72h forward)
-      const lateTransferMatch = (!bufMatch && !sameDayGlobalMatch && !prior24Match && norm) ? bufferList.find((b: any) => {
+      // Late-transfer check: buffer entry arrived AFTER this Direct API lead (next-day or within 168h forward)
+      const lateTransferMatch = (!bufMatch && !sameDayGlobalMatch && !prior24Match && (norm || leadId)) ? bufferList.find((b: any) => {
         const bnm = normMobile(b.Mobile);
-        if (bnm !== norm) return false;
+        const isMatch = (norm && bnm === norm) || (leadId && b.lead_id && isSameLeadId(leadId, String(b.lead_id)));
+        if (!isMatch) return false;
         const bObj = parseDateRobust(b.Date_Time) || (b.Date_Time ? new Date(b.Date_Time) : null);
         const bTime = bObj ? bObj.getTime() : 0;
         if (!bTime) return false;
         const diffHours = (bTime - leadTime) / (3600 * 1000); // positive = buffer came AFTER lead
-        return diffHours > 0 && diffHours <= 72;
+        return diffHours > 0 && diffHours <= 168;
       }) : null;
 
       let status: "Resolved" | "Duplicate" | "Lost" | "Delayed" = "Lost";
@@ -1981,7 +1999,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
         inBuffer,
         inCrm,
         assigned,
-        mediumBufferLost: !inBuffer,
+        mediumBufferLost: status === "Lost",
         masterCrmLost: inBuffer && !inCrm,
         mediumBufferState: inBuffer ? "Reconciled" : undefined,
         masterCrmState: inCrm ? "Reconciled" : currentStatus.includes("Late") ? "Late Transfer" : undefined,
@@ -1989,6 +2007,69 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
         status,
         reason,
       });
+    }
+
+    // For CRR, include buffer leads that reached master_buffer on this date from previous pushes/directly
+    if (source.toLowerCase() === "crr") {
+      const seenIds = new Set(records.map(r => r.id).filter(Boolean));
+      const seenMobiles = new Set(records.map(r => normMobile(r.phone)).filter(Boolean));
+      for (const b of bufferList) {
+        if (rowDate(b.Date_Time) !== date) continue;
+        if (!bufferMatchesSource(source, b.Verified_Source, b.Data_Source, company)) continue;
+        const bCo = String(b.Lead_Relates_to_which_company || "").toLowerCase();
+        const isKappl = (String(b.Assign_To_MR_Main || "").trim().toUpperCase() === "KAPPL") || bCo.includes("product") || bCo.includes("kappl") || bCo.includes("kapl");
+        if (!isKappl && co.companyKey === "KAPL") continue;
+
+        const bLid = String(b.lead_id || "").trim();
+        const bMob = normMobile(b.Mobile);
+        if ((bLid && seenIds.has(bLid)) || (bMob && seenMobiles.has(bMob))) {
+          continue;
+        }
+        if (bLid) seenIds.add(bLid);
+        if (bMob) seenMobiles.add(bMob);
+
+        const hasSbn = Boolean(b.Assign_To_MR_Main || b.Sent_status);
+        const assignee = String(b.Assign_To_MR_Main || "").trim();
+        const isKServe = assignee.toLowerCase().includes("kserve");
+        const isSales = Boolean(assignee && !isKServe);
+
+        records.push({
+          id: bLid,
+          name: "",
+          phone: b.Mobile || "—",
+          email: "",
+          date,
+          company,
+          source,
+          generatedAt: date,
+          timestamp: b.Date_Time ? new Date(new Date(b.Date_Time).getTime() + 5.5 * 3600 * 1000).toLocaleString("en-IN") : date,
+          transferTimestamp: date,
+          bufferTimestamp: date,
+          currentStatus: hasSbn ? (isKServe ? "Assigned: KServe" : isSales ? `Assigned: Sales (${assignee})` : "In CRM") : "In Buffer",
+          transferStatus: "Transferred",
+          bufferStatus: "In Buffer",
+          crmStatus: hasSbn ? "In CRM" : "Not in CRM",
+          assignee: isKServe ? "KServe" : (assignee || "Unassigned"),
+          tatMin: 0,
+          tat: "—",
+          isDuplicate: false,
+          validDuplicate: false,
+          expectedDuplicateGap: false,
+          lateTransfer: false,
+          inMedium: true,
+          toBuffer: true,
+          inBuffer: true,
+          inCrm: Boolean(hasSbn),
+          assigned: Boolean(isSales || isKServe),
+          mediumBufferLost: false,
+          masterCrmLost: !hasSbn,
+          mediumBufferState: "Reconciled",
+          masterCrmState: hasSbn ? "Reconciled" : undefined,
+          stage: hasSbn ? "crm" : "buffer",
+          status: "Resolved",
+          reason: "Buffer entry arrived on this date (CRR Reconciled)",
+        });
+      }
     }
 
     // ─── 14-Oct-2026: align popup records to match dashboard override counts ──
@@ -2046,9 +2127,13 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       }
     }
 
-    const lostBufferCount = Math.max(0, (directRows.length - gap1Count) - bufferCount);
+    const lostBufferCount = source.toLowerCase() === "crr"
+      ? records.filter(r => r.status === "Lost").length
+      : Math.max(0, (directRows.length - gap1Count) - bufferCount);
     const dupeCount = records.filter(r => r.isDuplicate || r.validDuplicate || r.expectedDuplicateGap).length;
-    const unexplainedLost = Math.max(0, (directRows.length - gap1Count) - dupeCount - bufferCount);
+    const unexplainedLost = source.toLowerCase() === "crr"
+      ? lostBufferCount
+      : Math.max(0, (directRows.length - gap1Count) - dupeCount - bufferCount);
 
     return {
       id: rowId,
@@ -2220,10 +2305,12 @@ export async function GET(request: Request) {
               return diffHours >= 0 && diffHours <= 24;
             }) : null;
 
-            // Late transfer: buffer arrived AFTER direct API lead (next-day or within 72h forward)
-            const lateMatch = (!inBuf && !priorMatch && !isDirectDupe && m) ? bufs.find(b => {
+            // Late transfer: buffer arrived AFTER direct API lead (next-day or within 168h forward)
+            const lateMatch = (!inBuf && !priorMatch && !isDirectDupe && (m || leadId)) ? bufs.find(b => {
+              const isMatch = (leadId && b.leadId && isSameLeadId(leadId, b.leadId)) || (m && b.mobile === m);
+              if (!isMatch) return false;
               const diffHours = (b.time - t) / (3600 * 1000); // positive = buffer came after lead
-              return diffHours > 0 && diffHours <= 72;
+              return diffHours > 0 && diffHours <= 168;
             }) : null;
 
             if (inBuf && !isDifferentLead) {
@@ -2314,6 +2401,56 @@ export async function GET(request: Request) {
               gapRecordsIncluded: true,
             };
           }
+        }
+      }
+    }
+
+    // ─── CRR: ensure Actual Buffer Staged and Actual CRM Reconciled match buffer tables ──
+    const kapplCd = companyData.get("KAPL");
+    if (kapplCd) {
+      for (const r of Object.values(rowMap) as any[]) {
+        if (r.date === "2026-10-14") continue; // preserved by 14-Oct overrides
+        if (String(r.source).toUpperCase() === "CRR" && r.company === "Kairali Ayurvedic Product") {
+          const srcKey = `${r.date}__crr`;
+          const bufLeadsCount = kapplCd.bySourceLeadId[srcKey]?.size ?? kapplCd.bySourceDate[srcKey]?.size ?? 0;
+          const crmLeadsCount = kapplCd.crmBySourceLeadId[srcKey]?.size ?? kapplCd.crmBySourceDate[srcKey]?.size ?? 0;
+          r.buffer = bufLeadsCount;
+          r.bufferTransfer = bufLeadsCount;
+          r.crm = crmLeadsCount;
+          r.sameDayCrm = crmLeadsCount;
+          r.mediumBufferLost = r.records.filter((x: any) => x.status === "Lost").length;
+          r.mediumBufferGap = r.mediumBufferLost;
+          r.unexplainedMediumGap = r.mediumBufferLost;
+          r.gap = r.mediumBufferLost;
+          r.masterCrmLost = Math.max(0, r.buffer - r.crm);
+          r.bufferCrmGap = r.masterCrmLost;
+          r.bufferToCrmGap = r.masterCrmLost;
+        }
+      }
+
+      // Also ensure dates where CRR had buffer records but 0 direct leads appear on dashboard
+      for (const [srcKey, leadIdSet] of Object.entries(kapplCd.bySourceLeadId)) {
+        if (!srcKey.endsWith("__crr")) continue;
+        const dt = srcKey.replace(/__crr$/, "");
+        if (dt === "2026-10-14") continue;
+        const key = `Kairali Ayurvedic Product__CRR__${dt}`;
+        if (!rowMap[key]) {
+          allDates.add(dt);
+          const bufCount = leadIdSet.size;
+          const crmCount = kapplCd.crmBySourceLeadId[srcKey]?.size ?? 0;
+          rowMap[key] = {
+            id: key, date: dt, company: "Kairali Ayurvedic Product", source: "CRR",
+            direct: 0, medium: 0, directMediumGap: 0, duplicate: 0, expectedDuplicateGap: 0,
+            bufferTransfer: bufCount, mediumBufferGap: 0, mediumBufferLost: 0,
+            unexplainedMediumGap: 0, gap: 0,
+            buffer: bufCount, crm: crmCount, sameDayCrm: crmCount, lateTransfer: 0, masterCrmLost: Math.max(0, bufCount - crmCount),
+            bufferCrmGap: Math.max(0, bufCount - crmCount), bufferToCrmGap: Math.max(0, bufCount - crmCount),
+            assigned: crmCount, sales: crmCount, kserve: 0,
+            avgTatSec: 0, avgTatMin: 0, slaBreaches: 0, mismatch: false, validationErrors: [],
+            records: [],
+            issues: [],
+            gapRecordsIncluded: true,
+          };
         }
       }
     }
