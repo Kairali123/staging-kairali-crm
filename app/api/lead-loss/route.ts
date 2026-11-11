@@ -95,7 +95,7 @@ const COMPANY_CONFIG: CompanyConfig[] = [
       // CRR data sources: 3 tables (pob_lost_clients_tracker_fms, data_repush_to_calling_sheet_mr_app_tp_CallingSheetPush, repeat_orders_from_new_orders_calling_enquiry_fms_main)
       { source: "CRR", table: "pob_lost_clients_tracker_fms", dateCol: "timestamp_stage1", mobileCol: "contact_stage1", leadIdCol: "uid_stage1", nameCol: "client_name_stage1", emailCol: "email_stage1" },
       { source: "CRR", table: "data_repush_to_calling_sheet_mr_app_tp_CallingSheetPush", dateCol: "time_stamp", mobileCol: "mobile", leadIdCol: "id_value", nameCol: "name_of_client", emailCol: "email_id" },
-      { source: "CRR", table: "repeat_orders_from_new_orders_calling_enquiry_fms_main", dateCol: "time_stamp", mobileCol: "mobile", leadIdCol: "lead_id", nameCol: "name_of_client", emailCol: "email_id" },
+      { source: "CRR", table: "repeat_orders_from_new_orders_calling_enquiry_fms_main", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "lead_id", nameCol: "name_of_client", emailCol: "email_id" },
       // Kairali Products Website source: Shopify abandoned checkouts (enquiry_id matches buffer lead_id directly; filter by timeStamp column)
       { source: "Website", table: "shopify_abandoned_checkouts", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "enquiry_id", nameCol: "customer", emailCol: "email" }
     ],
