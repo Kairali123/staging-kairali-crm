@@ -319,7 +319,7 @@ type LeadRecord = {
   email?: string;
   companyRaw?: string; directConfig?: string;
   transferTimestamp: string; bufferTimestamp: string; currentStatus: string; transferStatus: string; bufferStatus: string; crmStatus: string;
-  assignee: string; tatMin: number; tat: string; isDuplicate: boolean; validDuplicate?: boolean; expectedDuplicateGap?: boolean; lateTransfer?: boolean; sameDayCrm?: boolean; mediumBufferLost?: boolean; masterCrmLost?: boolean; mediumBufferState?: string; masterCrmState?: string; inMedium: boolean; toBuffer: boolean; inBuffer: boolean; inCrm: boolean; assigned: boolean;
+  assignee: string; tatMin: number; tat: string; isDuplicate: boolean; validDuplicate?: boolean; expectedDuplicateGap?: boolean; lateTransfer?: boolean; sameDayCrm?: boolean; mediumBufferLost?: boolean; masterCrmLost?: boolean; mediumBufferState?: string; masterCrmState?: string; inMedium: boolean; inDirect?: boolean; toBuffer: boolean; inBuffer: boolean; inCrm: boolean; assigned: boolean;
   stage: string; status: "Lost" | "Duplicate" | "Delayed" | "Resolved"; reason: string; directUrl?: string; destinationUrl?: string; crmUrl?: string;
   original?: { id: string; name?: string; phone?: string; email?: string; company?: string; source: string; generatedAt: string; assignee: string; matchBasis?: string; url?: string };
 };
@@ -395,17 +395,17 @@ const hasDeleteProof = (lead: LeadRecord) => {
   return evidence.includes("spam") || evidence.includes("deleted") || evidence.includes("delete sheet");
 };
 const stageRecords = (records: LeadRecord[], key: StageKey) => ({
-  direct: records,
+  direct: records.filter(x => x.inDirect !== false),
   medium: records.filter(x => x.inMedium),
   directMediumGap: records.filter(x => !x.inMedium),
   duplicate: records.filter(x => x.validDuplicate ?? Boolean(x.original)),
   expectedDuplicateGap: records.filter(x => x.expectedDuplicateGap),
   bufferTransfer: records.filter(x => x.toBuffer),
-  mediumBufferGap: records.filter(x => x.mediumBufferLost || (x.inMedium && !x.inBuffer)),
-  mediumBufferLost: records.filter(x => x.mediumBufferLost || (x.inMedium && !x.inBuffer)),
-  gap: records.filter(x => x.mediumBufferLost || (x.inMedium && !x.inBuffer)),
+  mediumBufferGap: records.filter(x => x.mediumBufferLost || (x.inMedium && !x.inBuffer && !x.lateTransfer)),
+  mediumBufferLost: records.filter(x => x.mediumBufferLost || (x.inMedium && !x.inBuffer && !x.lateTransfer)),
+  gap: records.filter(x => x.mediumBufferLost || (x.inMedium && !x.inBuffer && !x.lateTransfer)),
   buffer: records.filter(x => x.mediumBufferState === "Reconciled" || (!x.mediumBufferState && x.inBuffer)),
-  crm: records.filter(x => x.masterCrmState === "Reconciled" || x.masterCrmState === "Late Transfer" || (!x.masterCrmState && x.inCrm)),
+  crm: records.filter(x => x.source?.toUpperCase() === "CRR" ? x.inCrm : (x.masterCrmState === "Reconciled" || x.masterCrmState === "Late Transfer" || (!x.masterCrmState && x.inCrm))),
   sameDayCrm: records.filter(x => x.sameDayCrm),
   lateTransfer: records.filter(x => x.lateTransfer),
   masterCrmLost: records.filter(x => x.masterCrmLost),

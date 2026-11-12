@@ -95,7 +95,7 @@ const COMPANY_CONFIG: CompanyConfig[] = [
       // CRR data sources: 3 tables (pob_lost_clients_tracker_fms, data_repush_to_calling_sheet_mr_app_tp_CallingSheetPush, repeat_orders_from_new_orders_calling_enquiry_fms_main)
       { source: "CRR", table: "pob_lost_clients_tracker_fms", dateCol: "timestamp_stage1", mobileCol: "contact_stage1", leadIdCol: "uid_stage1", nameCol: "client_name_stage1", emailCol: "email_stage1" },
       { source: "CRR", table: "data_repush_to_calling_sheet_mr_app_tp_CallingSheetPush", dateCol: "time_stamp", mobileCol: "mobile", leadIdCol: "id_value", nameCol: "name_of_client", emailCol: "email_id" },
-      { source: "CRR", table: "repeat_orders_from_new_orders_calling_enquiry_fms_main", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "lead_id", nameCol: "name_of_client", emailCol: "email_id" },
+      { source: "CRR", table: "repeat_orders_from_new_orders_calling_enquiry_fms_main", dateCol: "time_stamp", mobileCol: "mobile", leadIdCol: "lead_id", nameCol: "name_of_client", emailCol: "email_id" },
       // Kairali Products Website source: Shopify abandoned checkouts (enquiry_id matches buffer lead_id directly; filter by timeStamp column)
       { source: "Website", table: "shopify_abandoned_checkouts", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "enquiry_id", nameCol: "customer", emailCol: "email" }
     ],
@@ -892,6 +892,9 @@ function alignRecordsFor14Oct(records: any[], company: string, source: string, d
     }
   }
 
+  records.forEach(r => {
+    if (r.inDirect === undefined) r.inDirect = true;
+  });
   return records;
 }
 
@@ -930,6 +933,7 @@ async function queryDirectTable(
            \`${cfg.mobileCol}\`     AS mobile${sentStatusSel}
     FROM \`${cfg.table}\`
     WHERE ${dateExpr} >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+      AND ${dateExpr} <= DATE_ADD(CURDATE(), INTERVAL 1 DAY)
     ${where}
     ORDER BY ${dateExpr} ASC
   `;
@@ -1498,6 +1502,9 @@ function buildLostRecords(
       }
     }
   });
+  records.forEach(r => {
+    if (r.inDirect === undefined) r.inDirect = true;
+  });
   return records;
 }
 
@@ -2009,6 +2016,10 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       });
     }
 
+    records.forEach(r => {
+      if (r.inDirect === undefined) r.inDirect = true;
+    });
+
     // For CRR, include buffer leads that reached master_buffer on this date from previous pushes/directly
     if (source.toLowerCase() === "crr") {
       const seenIds = new Set(records.map(r => r.id).filter(Boolean));
@@ -2056,7 +2067,8 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
           validDuplicate: false,
           expectedDuplicateGap: false,
           lateTransfer: false,
-          inMedium: true,
+          inMedium: false,
+          inDirect: false,
           toBuffer: true,
           inBuffer: true,
           inCrm: Boolean(hasSbn),
@@ -2414,10 +2426,16 @@ export async function GET(request: Request) {
           const srcKey = `${r.date}__crr`;
           const bufLeadsCount = kapplCd.bySourceLeadId[srcKey]?.size ?? kapplCd.bySourceDate[srcKey]?.size ?? 0;
           const crmLeadsCount = kapplCd.crmBySourceLeadId[srcKey]?.size ?? kapplCd.crmBySourceDate[srcKey]?.size ?? 0;
+          const sLeadsCount = kapplCd.sBySourceLeadId[srcKey]?.size ?? kapplCd.sBySourceDate[srcKey]?.size ?? 0;
+          const kvLeadsCount = kapplCd.kvBySourceLeadId[srcKey]?.size ?? kapplCd.kvBySourceDate[srcKey]?.size ?? 0;
           r.buffer = bufLeadsCount;
           r.bufferTransfer = bufLeadsCount;
           r.crm = crmLeadsCount;
           r.sameDayCrm = crmLeadsCount;
+          const finalSales = sLeadsCount > 0 ? sLeadsCount : Math.max(0, crmLeadsCount - kvLeadsCount);
+          r.sales = finalSales;
+          r.kserve = kvLeadsCount;
+          r.assigned = finalSales + kvLeadsCount;
           r.mediumBufferLost = r.records.filter((x: any) => x.status === "Lost").length;
           r.mediumBufferGap = r.mediumBufferLost;
           r.unexplainedMediumGap = r.mediumBufferLost;
