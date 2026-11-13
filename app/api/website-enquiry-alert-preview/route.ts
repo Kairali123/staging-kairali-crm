@@ -20,6 +20,8 @@ export async function GET(req: NextRequest) {
     if (searchParams.get('campaignName')) sample.campaignName = searchParams.get('campaignName')!
     if (searchParams.get('sourceUrl')) sample.sourceUrl = searchParams.get('sourceUrl')!
     if (searchParams.get('dataSource')) sample.dataSource = searchParams.get('dataSource')!
+    if (searchParams.get('message')) sample.rawMessage = searchParams.get('message')!
+    if (searchParams.get('rawMessage')) sample.rawMessage = searchParams.get('rawMessage')!
 
     const html = buildWebsiteEnquiryAlertEmail(sample)
 
