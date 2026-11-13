@@ -292,6 +292,7 @@ const exemptApiPaths = new Set([
   '/api/cron/email-triggers', // Handler verifies local worker secret; hosted execution is disabled.
   '/api/cron/kserve-lost-alert',
   '/api/kserve-alert-preview',
+  '/api/website-enquiry-alert-preview',
   '/api/voicecall/kserve-lead-lost/export',
   '/api/lead-loss',
 ])
