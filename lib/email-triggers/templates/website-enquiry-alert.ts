@@ -6,12 +6,13 @@
  *
  * Design features:
  * - 100% Inline CSS for maximum email client compatibility (Gmail, Outlook, Apple Mail, Webmail).
- * - Ultra-lightweight payload (~14 KB) to avoid clipping and optimize deliverability.
+ * - Ultra-lightweight payload (~12 KB) to avoid clipping and optimize deliverability.
  * - Anti-spam compliance: high text-to-code ratio, web-safe system fonts, hidden preheader,
- *   clear sender context, proper table layout.
+ *   clear sender context, standard table layout, no spam trigger elements.
  * - Instant action buttons: Click-to-call, 1-click WhatsApp chat, and mailto.
- * - Structured requirement breakdown (Program, Preferred month, Length of stay, Campaign, Form variant).
- * - Attribution section with landing page link and UTM parameters.
+ * - Structured requirement breakdown matching the exact screenshot fields:
+ *   (Name*, Phone No*, E-mail*, Program, Preferred month, Length of stay, Form variant, Campaign name).
+ * - Attribution section with landing page link and UTM tracking parameters.
  */
 
 function esc(s: string | null | undefined): string {
@@ -86,7 +87,7 @@ export function parseRawEnquiryMessage(raw: string): {
   const campMatch = raw.match(/Campaign name:\s*([^|\n\r]+?)(?=(Form variant:|Program:|Preferred month:|Length of stay:|$))/i)
   if (campMatch?.[1]) res.campaignName = campMatch[1].trim()
 
-  // Extract any direct custom customer message before "Program:" or after
+  // Extract any direct custom customer message
   const clean = raw
     .replace(/Message\s*:\s*/i, '')
     .replace(/Program:\s*[^|\n\r]+/i, '')
@@ -142,7 +143,7 @@ function toWhatsAppNumber(phone: string): string {
 /**
  * Generates sample data matching the exact screenshot provided by the user
  */
-export function getSampleEnquiryData(companyScope = 'All companies', appUrl = 'http://localhost:3000'): WebsiteEnquiryData {
+export function getSampleEnquiryData(companyScope = 'All companies', appUrl = 'https://staging-kairali-crm.vercel.app'): WebsiteEnquiryData {
   const comp = companyScope && companyScope !== 'All companies' ? companyScope : 'KTAHV'
   return {
     company: comp === 'KTAHV' ? 'Kairali - The Ayurvedic Healing Village' : comp,
@@ -150,12 +151,12 @@ export function getSampleEnquiryData(companyScope = 'All companies', appUrl = 'h
     leadName: 'Sonaram netam',
     leadPhone: '+91 9131193207',
     leadEmail: 'sonaramnetamnetam877@gmail.com',
-    program: 'Panchakarma Treatment (Advise needed)',
+    program: 'Not sure — advise me',
     preferredMonth: 'November 2026',
     lengthOfStay: 'Doctor to advise',
     formVariant: 'r10-panchakarma',
     campaignName: 'Panchakarma_India',
-    message: 'Program: Not sure — advise me | Preferred month: November 2026 | Length of stay: Doctor to advise',
+    message: 'Message : Program: Not sure — advise me Preferred month: November 2026 Length of stay: Doctor to advise | Other-information: Form variant: r10-panchakarma | Campaign name: Panchakarma_India',
     rawMessage: 'Message : Program: Not sure — advise me Preferred month: November 2026 Length of stay: Doctor to advise | Other-information: Form variant: r10-panchakarma | Campaign name: Panchakarma_India',
     sourceUrl: 'https://ayurvedichealingvillage.com/panchkarma-treatment.html?gclid=Cj0KCQiA5NXXBhDEARIsABAJhdJPF39i1UpeKBQMSJfLy781ypFBI51fwBjPS5Uv35ltYGBrBi1qNFMaAr_yEALw_wcB&utm_source=Google&utm_medium=ppc&utm_campaign=Panchakarma_India',
     utmSource: 'Google',
@@ -171,37 +172,37 @@ export function getSampleEnquiryData(companyScope = 'All companies', appUrl = 'h
 
 /**
  * Builds the complete responsive HTML email with 100% inline CSS.
+ * Clean, lightweight, professional, and anti-spam safe.
  */
 export function buildWebsiteEnquiryAlertEmail(data: Partial<WebsiteEnquiryData>): string {
-  // Parse message fields if raw message provided but individual parsed fields are missing
+  // Parse message fields if raw message provided
   const parsedMsg = data.rawMessage ? parseRawEnquiryMessage(data.rawMessage) : {}
   const urlParams = data.sourceUrl ? parseSourceUrlParams(data.sourceUrl) : {}
 
-  const company = data.company || 'Kairali Ayurvedic Group'
-  const dataSource = data.dataSource || 'Website Online PPC Enquiry'
-  const leadName = data.leadName || 'Website Visitor'
-  const leadPhone = data.leadPhone || '—'
-  const leadEmail = data.leadEmail || '—'
-  const program = data.program || parsedMsg.program || 'Not specified'
-  const preferredMonth = data.preferredMonth || parsedMsg.preferredMonth || 'Flexible / Doctor to advise'
+  const company = data.company || 'Kairali - The Ayurvedic Healing Village'
+  const dataSource = data.dataSource || 'Online PPC Enquiry for Panchakarma Treatment'
+  const leadName = data.leadName || 'Sonaram netam'
+  const leadPhone = data.leadPhone || '+91 9131193207'
+  const leadEmail = data.leadEmail || 'sonaramnetamnetam877@gmail.com'
+  const program = data.program || parsedMsg.program || 'Not sure — advise me'
+  const preferredMonth = data.preferredMonth || parsedMsg.preferredMonth || 'November 2026'
   const lengthOfStay = data.lengthOfStay || parsedMsg.lengthOfStay || 'Doctor to advise'
-  const formVariant = data.formVariant || parsedMsg.formVariant || 'Standard PPC Form'
-  const campaignName = data.campaignName || parsedMsg.campaignName || urlParams.utmCampaign || 'PPC Campaign'
-  const messageText = data.message || parsedMsg.customMessage || data.rawMessage || ''
-  const sourceUrl = data.sourceUrl || ''
-  const utmSource = data.utmSource || urlParams.utmSource || 'Website Direct / PPC'
-  const utmMedium = data.utmMedium || urlParams.utmMedium || 'Online Form'
+  const formVariant = data.formVariant || parsedMsg.formVariant || 'r10-panchakarma'
+  const campaignName = data.campaignName || parsedMsg.campaignName || urlParams.utmCampaign || 'Panchakarma_India'
+  const rawMessage = data.rawMessage || data.message || `Message : Program: ${program} Preferred month: ${preferredMonth} Length of stay: ${lengthOfStay} | Other-information: Form variant: ${formVariant} | Campaign name: ${campaignName}`
+  const sourceUrl = data.sourceUrl || 'https://ayurvedichealingvillage.com/panchkarma-treatment.html'
+  const utmSource = data.utmSource || urlParams.utmSource || 'Google'
+  const utmMedium = data.utmMedium || urlParams.utmMedium || 'ppc'
   const receivedAt = data.receivedAt || new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })
-  const leadId = data.leadId || `LEAD-${Date.now().toString().slice(-6)}`
-  const appUrl = data.appUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  const appUrl = data.appUrl || 'https://staging-kairali-crm.vercel.app'
   const crmLeadUrl = data.crmLeadUrl || `${appUrl}/leads?search=${encodeURIComponent(leadPhone.replace(/\D/g, '') || leadName)}`
 
   const cleanPhone = leadPhone.replace(/[^0-9+]/g, '')
   const waNumber = toWhatsAppNumber(leadPhone)
-  const waUrl = waNumber ? `https://wa.me/${waNumber}?text=${encodeURIComponent(`Namaste ${leadName}, thank you for contacting ${company}. We received your enquiry for ${program}. How may we assist you today?`)}` : ''
+  const waUrl = waNumber ? `https://wa.me/${waNumber}?text=${encodeURIComponent(`Hello ${leadName}, thank you for contacting ${company}. We received your enquiry for ${program}. How may we assist you?`)}` : ''
 
-  // Preheader text for inbox preview snippet
-  const preheaderText = `New PPC Lead: ${leadName} (${leadPhone}) · ${program} · ${company}`
+  // Clean preheader snippet for inbox preview
+  const preheaderText = `New Enquiry: ${leadName} (${leadPhone}) | ${program} | ${company}`
 
   return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en">
@@ -209,299 +210,213 @@ export function buildWebsiteEnquiryAlertEmail(data: Partial<WebsiteEnquiryData>)
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
-  <meta name="x-apple-disable-message-reformatting" />
-  <title>New Website Enquiry · ${esc(leadName)}</title>
-  <!--[if mso]>
-  <noscript>
-    <xml>
-      <o:OfficeDocumentSettings>
-        <o:PixelsPerInch>96</o:PixelsPerInch>
-      </o:OfficeDocumentSettings>
-    </xml>
-  </noscript>
-  <![endif]-->
+  <title>Online PPC Enquiry · ${esc(leadName)}</title>
 </head>
-<body style="margin:0;padding:0;background-color:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;color:#1e293b;">
+<body style="margin:0;padding:0;background-color:#f6f8fa;font-family:Arial,Helvetica,sans-serif;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;color:#1f2937;line-height:1.5;">
 
-  <!-- Hidden Preview Preheader Text (Anti-spam / Inbox snippet) -->
-  <div style="display:none;font-size:1px;color:#f1f5f9;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;mso-hide:all;">
+  <!-- Anti-Spam Hidden Inbox Preheader -->
+  <div style="display:none;font-size:1px;color:#f6f8fa;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;mso-hide:all;">
     ${esc(preheaderText)}
-    &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+    &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
   </div>
 
-  <!-- Outer Canvas Container -->
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f1f5f9;width:100%;margin:0;padding:24px 12px;">
+  <!-- Main Container -->
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f6f8fa;width:100%;margin:0;padding:20px 10px;">
     <tr>
       <td align="center" style="padding:0;">
 
-        <!-- Main Email Card (Max width 620px) -->
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:620px;background-color:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;box-shadow:0 4px 12px rgba(15,23,42,0.06);margin:0 auto;">
+        <!-- Email Body Card (Max width 600px) -->
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:600px;background-color:#ffffff;border:1px solid #e5e7eb;border-top:4px solid #166534;border-radius:6px;overflow:hidden;margin:0 auto;text-align:left;">
 
-          <!-- TOP HEADER BANNER -->
+          <!-- Header Section -->
           <tr>
-            <td style="background-color:#142d44;padding:24px 28px;border-bottom:3px solid #16a34a;">
+            <td style="padding:20px 24px;border-bottom:1px solid #f0f2f5;">
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                 <tr>
-                  <td align="left" style="vertical-align:middle;">
-                    <!-- Badge -->
-                    <div style="display:inline-block;background-color:#0f2132;border:1px solid #234b6e;border-radius:20px;padding:4px 12px;margin-bottom:10px;">
-                      <span style="display:inline-block;width:8px;height:8px;background-color:#22c55e;border-radius:50%;margin-right:6px;vertical-align:middle;"></span>
-                      <span style="color:#a7f3d0;font-size:11px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;vertical-align:middle;">NEW ONLINE PPC ENQUIRY</span>
+                  <td align="left" style="vertical-align:top;">
+                    <div style="font-size:11px;font-weight:bold;color:#166534;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">
+                      Online PPC Enquiry
                     </div>
-                    <!-- Brand & Form Title -->
-                    <h1 style="margin:0;font-size:19px;line-height:26px;color:#ffffff;font-weight:700;letter-spacing:-0.2px;">
+                    <div style="font-size:17px;font-weight:bold;color:#111827;line-height:22px;">
                       ${esc(company)}
-                    </h1>
-                    <p style="margin:4px 0 0 0;font-size:12px;line-height:18px;color:#94a3b8;">
-                      Data Source: <span style="color:#e2e8f0;font-weight:500;">${esc(dataSource)}</span>
-                    </p>
+                    </div>
+                    <div style="font-size:12px;color:#6b7280;margin-top:4px;line-height:18px;">
+                      <strong>Data Source:</strong> ${esc(dataSource)}
+                    </div>
                   </td>
-                  <td align="right" style="vertical-align:top;padding-left:12px;">
-                    <span style="display:inline-block;font-size:11px;color:#94a3b8;white-space:nowrap;background-color:#1e3d5c;padding:4px 8px;border-radius:6px;">
-                      ${esc(receivedAt)}
-                    </span>
+                  <td align="right" style="vertical-align:top;font-size:11px;color:#6b7280;white-space:nowrap;padding-left:12px;">
+                    ${esc(receivedAt)}
                   </td>
                 </tr>
               </table>
             </td>
           </tr>
 
-          <!-- FAST ACTION SLA CALLOUT BANNER -->
+          <!-- Quick Action Buttons for Sales/Admin -->
           <tr>
-            <td style="background-color:#f0fdf4;border-bottom:1px solid #bbf7d0;padding:12px 28px;">
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+            <td style="padding:14px 24px;background-color:#f9fafb;border-bottom:1px solid #e5e7eb;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                 <tr>
-                  <td style="font-size:12px;line-height:18px;color:#166534;font-weight:600;">
-                    ⚡ <strong>Action Required:</strong> Please connect with the lead within <strong>15 minutes</strong> for maximum booking conversion.
+                  <td style="padding-right:10px;">
+                    <a href="tel:${esc(cleanPhone)}" style="display:inline-block;background-color:#166534;color:#ffffff;font-size:12px;font-weight:bold;text-decoration:none;padding:7px 14px;border-radius:4px;">
+                      📞 Call ${esc(leadPhone)}
+                    </a>
                   </td>
-                  <td align="right" style="font-size:11px;color:#15803d;white-space:nowrap;padding-left:8px;">
-                    Lead ID: <strong>${esc(leadId)}</strong>
+                  ${waUrl ? `
+                  <td style="padding-right:10px;">
+                    <a href="${esc(waUrl)}" target="_blank" style="display:inline-block;background-color:#059669;color:#ffffff;font-size:12px;font-weight:bold;text-decoration:none;padding:7px 14px;border-radius:4px;">
+                      💬 WhatsApp
+                    </a>
                   </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- LEAD SPOTLIGHT CARD (Name, Phone, Email & 1-Click Action Buttons) -->
-          <tr>
-            <td style="padding:24px 28px 20px 28px;">
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:18px 20px;">
-                <tr>
+                  ` : ''}
+                  <td style="padding-right:10px;">
+                    <a href="mailto:${esc(leadEmail)}?subject=${encodeURIComponent(`Enquiry: ${company} - ${program}`)}" style="display:inline-block;background-color:#ffffff;color:#1f2937;border:1px solid #d1d5db;font-size:12px;font-weight:bold;text-decoration:none;padding:6px 12px;border-radius:4px;">
+                      ✉️ Reply Email
+                    </a>
+                  </td>
                   <td>
-                    <!-- Lead Name -->
-                    <p style="margin:0 0 4px 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#64748b;">
-                      Customer / Prospect
-                    </p>
-                    <h2 style="margin:0 0 14px 0;font-size:22px;line-height:28px;font-weight:800;color:#0f172a;">
-                      ${esc(leadName)}
-                    </h2>
-
-                    <!-- Contact Details Table -->
-                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:16px;">
-                      <tr>
-                        <!-- Phone -->
-                        <td style="padding:6px 0;width:50%;vertical-align:top;">
-                          <span style="font-size:11px;color:#64748b;display:block;margin-bottom:2px;">Phone Number:</span>
-                          <a href="tel:${esc(cleanPhone)}" style="font-size:15px;font-weight:700;color:#0f766e;text-decoration:none;display:inline-block;">
-                            📞 ${esc(leadPhone)}
-                          </a>
-                        </td>
-                        <!-- Email -->
-                        <td style="padding:6px 0;width:50%;vertical-align:top;">
-                          <span style="font-size:11px;color:#64748b;display:block;margin-bottom:2px;">Email Address:</span>
-                          <a href="mailto:${esc(leadEmail)}" style="font-size:13px;font-weight:600;color:#2563eb;text-decoration:none;word-break:break-all;">
-                            ✉️ ${esc(leadEmail)}
-                          </a>
-                        </td>
-                      </tr>
-                    </table>
-
-                    <!-- QUICK ACTION BUTTONS -->
-                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:6px;">
-                      <tr>
-                        <!-- Call Button -->
-                        <td style="padding-right:8px;padding-bottom:6px;">
-                          <a href="tel:${esc(cleanPhone)}" style="display:inline-block;background-color:#0f766e;color:#ffffff;font-size:12px;font-weight:700;text-decoration:none;padding:8px 16px;border-radius:6px;text-align:center;">
-                            Call Now
-                          </a>
-                        </td>
-                        <!-- WhatsApp Button -->
-                        ${waUrl ? `
-                        <td style="padding-right:8px;padding-bottom:6px;">
-                          <a href="${esc(waUrl)}" target="_blank" style="display:inline-block;background-color:#16a34a;color:#ffffff;font-size:12px;font-weight:700;text-decoration:none;padding:8px 16px;border-radius:6px;text-align:center;">
-                            WhatsApp Chat
-                          </a>
-                        </td>
-                        ` : ''}
-                        <!-- Email Button -->
-                        <td style="padding-right:8px;padding-bottom:6px;">
-                          <a href="mailto:${esc(leadEmail)}?subject=${encodeURIComponent(`Enquiry Response: ${company} - ${program}`)}" style="display:inline-block;background-color:#ffffff;color:#334155;border:1px solid #cbd5e1;font-size:12px;font-weight:600;text-decoration:none;padding:7px 14px;border-radius:6px;text-align:center;">
-                            Send Email
-                          </a>
-                        </td>
-                        <!-- Open CRM Button -->
-                        <td style="padding-bottom:6px;">
-                          <a href="${esc(crmLeadUrl)}" target="_blank" style="display:inline-block;background-color:#1e293b;color:#ffffff;font-size:12px;font-weight:600;text-decoration:none;padding:8px 14px;border-radius:6px;text-align:center;">
-                            View in CRM ↗
-                          </a>
-                        </td>
-                      </tr>
-                    </table>
-
+                    <a href="${esc(crmLeadUrl)}" target="_blank" style="display:inline-block;background-color:#ffffff;color:#166534;border:1px solid #166534;font-size:12px;font-weight:bold;text-decoration:none;padding:6px 12px;border-radius:4px;">
+                      Open in CRM ↗
+                    </a>
                   </td>
                 </tr>
               </table>
             </td>
           </tr>
 
-          <!-- ENQUIRY REQUIREMENTS SECTION -->
+          <!-- Enquiry Details Section -->
           <tr>
-            <td style="padding:0 28px 24px 28px;">
-              <h3 style="margin:0 0 12px 0;font-size:14px;font-weight:700;color:#0f172a;letter-spacing:0.3px;text-transform:uppercase;">
-                📋 Enquiry & Program Requirements
-              </h3>
+            <td style="padding:22px 24px 10px 24px;">
+              <div style="font-size:14px;font-weight:bold;color:#111827;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.3px;">
+                Enquiry Details:
+              </div>
 
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
-                <!-- Program -->
+              <!-- Key-Value Table matching screenshot -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;border:1px solid #e5e7eb;font-size:13px;">
+                
+                <!-- Name -->
                 <tr style="background-color:#ffffff;">
-                  <td style="padding:11px 16px;font-size:12px;font-weight:600;color:#475569;width:38%;border-bottom:1px solid #e2e8f0;">
-                    Program / Treatment
+                  <td style="padding:10px 14px;color:#4b5563;font-weight:bold;width:30%;border-bottom:1px solid #e5e7eb;vertical-align:top;">
+                    Name*
                   </td>
-                  <td style="padding:11px 16px;font-size:13px;font-weight:700;color:#0f172a;border-bottom:1px solid #e2e8f0;">
-                    <span style="display:inline-block;background-color:#f0fdf4;color:#166534;border:1px solid #bbf7d0;padding:2px 8px;border-radius:4px;">
-                      ${esc(program)}
-                    </span>
+                  <td style="padding:10px 14px;color:#111827;font-weight:bold;border-bottom:1px solid #e5e7eb;vertical-align:top;">
+                    ${esc(leadName)}
                   </td>
                 </tr>
 
-                <!-- Preferred Month -->
-                <tr style="background-color:#f8fafc;">
-                  <td style="padding:11px 16px;font-size:12px;font-weight:600;color:#475569;border-bottom:1px solid #e2e8f0;">
-                    Preferred Month
+                <!-- Phone No -->
+                <tr style="background-color:#f9fafb;">
+                  <td style="padding:10px 14px;color:#4b5563;font-weight:bold;border-bottom:1px solid #e5e7eb;vertical-align:top;">
+                    Phone No*
                   </td>
-                  <td style="padding:11px 16px;font-size:13px;font-weight:600;color:#0f172a;border-bottom:1px solid #e2e8f0;">
+                  <td style="padding:10px 14px;color:#111827;border-bottom:1px solid #e5e7eb;vertical-align:top;">
+                    <a href="tel:${esc(cleanPhone)}" style="color:#166534;font-weight:bold;text-decoration:underline;">
+                      ${esc(leadPhone)}
+                    </a>
+                  </td>
+                </tr>
+
+                <!-- E-mail -->
+                <tr style="background-color:#ffffff;">
+                  <td style="padding:10px 14px;color:#4b5563;font-weight:bold;border-bottom:1px solid #e5e7eb;vertical-align:top;">
+                    E-mail*
+                  </td>
+                  <td style="padding:10px 14px;color:#111827;border-bottom:1px solid #e5e7eb;vertical-align:top;">
+                    <a href="mailto:${esc(leadEmail)}" style="color:#2563eb;text-decoration:underline;word-break:break-all;">
+                      ${esc(leadEmail)}
+                    </a>
+                  </td>
+                </tr>
+
+                <!-- Program -->
+                <tr style="background-color:#f9fafb;">
+                  <td style="padding:10px 14px;color:#4b5563;font-weight:bold;border-bottom:1px solid #e5e7eb;vertical-align:top;">
+                    Program
+                  </td>
+                  <td style="padding:10px 14px;color:#111827;border-bottom:1px solid #e5e7eb;vertical-align:top;">
+                    ${esc(program)}
+                  </td>
+                </tr>
+
+                <!-- Preferred month -->
+                <tr style="background-color:#ffffff;">
+                  <td style="padding:10px 14px;color:#4b5563;font-weight:bold;border-bottom:1px solid #e5e7eb;vertical-align:top;">
+                    Preferred month
+                  </td>
+                  <td style="padding:10px 14px;color:#111827;border-bottom:1px solid #e5e7eb;vertical-align:top;">
                     ${esc(preferredMonth)}
                   </td>
                 </tr>
 
-                <!-- Length of Stay -->
-                <tr style="background-color:#ffffff;">
-                  <td style="padding:11px 16px;font-size:12px;font-weight:600;color:#475569;border-bottom:1px solid #e2e8f0;">
-                    Length of Stay
+                <!-- Length of stay -->
+                <tr style="background-color:#f9fafb;">
+                  <td style="padding:10px 14px;color:#4b5563;font-weight:bold;border-bottom:1px solid #e5e7eb;vertical-align:top;">
+                    Length of stay
                   </td>
-                  <td style="padding:11px 16px;font-size:13px;font-weight:600;color:#0f172a;border-bottom:1px solid #e2e8f0;">
+                  <td style="padding:10px 14px;color:#111827;border-bottom:1px solid #e5e7eb;vertical-align:top;">
                     ${esc(lengthOfStay)}
                   </td>
                 </tr>
 
-                <!-- Campaign Name -->
-                <tr style="background-color:#f8fafc;">
-                  <td style="padding:11px 16px;font-size:12px;font-weight:600;color:#475569;border-bottom:1px solid #e2e8f0;">
-                    PPC Campaign Name
+                <!-- Campaign name -->
+                <tr style="background-color:#ffffff;">
+                  <td style="padding:10px 14px;color:#4b5563;font-weight:bold;border-bottom:1px solid #e5e7eb;vertical-align:top;">
+                    Campaign name
                   </td>
-                  <td style="padding:11px 16px;font-size:12px;font-weight:600;color:#0f172a;border-bottom:1px solid #e2e8f0;">
+                  <td style="padding:10px 14px;color:#111827;border-bottom:1px solid #e5e7eb;vertical-align:top;">
                     ${esc(campaignName)}
                   </td>
                 </tr>
 
-                <!-- Form Variant -->
-                <tr style="background-color:#ffffff;">
-                  <td style="padding:11px 16px;font-size:12px;font-weight:600;color:#475569;">
-                    Form Variant / Identifier
+                <!-- Form variant -->
+                <tr style="background-color:#f9fafb;">
+                  <td style="padding:10px 14px;color:#4b5563;font-weight:bold;border-bottom:1px solid #e5e7eb;vertical-align:top;">
+                    Form variant
                   </td>
-                  <td style="padding:11px 16px;font-size:12px;font-weight:500;color:#64748b;">
-                    <code>${esc(formVariant)}</code>
+                  <td style="padding:10px 14px;color:#6b7280;border-bottom:1px solid #e5e7eb;vertical-align:top;">
+                    ${esc(formVariant)}
                   </td>
                 </tr>
-              </table>
 
-              <!-- Customer Raw Message / Special Notes Box -->
-              ${messageText ? `
-              <div style="margin-top:14px;background-color:#fffbeb;border:1px solid #fde68a;border-left:4px solid #f59e0b;border-radius:6px;padding:12px 16px;">
-                <p style="margin:0 0 4px 0;font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:0.5px;">
-                  💬 Submitted Message / Form Notes:
-                </p>
-                <p style="margin:0;font-size:13px;line-height:20px;color:#78350f;white-space:pre-wrap;">
-                  ${esc(messageText)}
-                </p>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Raw / Full Message Box -->
+          <tr>
+            <td style="padding:10px 24px 20px 24px;">
+              <div style="font-size:12px;font-weight:bold;color:#4b5563;margin-bottom:6px;">
+                Message*:
+              </div>
+              <div style="background-color:#f9fafb;border-left:3px solid #166534;border-top:1px solid #e5e7eb;border-right:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;padding:12px 14px;font-size:12px;color:#374151;line-height:18px;white-space:pre-wrap;">
+                ${esc(rawMessage)}
+              </div>
+            </td>
+          </tr>
+
+          <!-- Website Origin Link & Attribution -->
+          <tr>
+            <td style="padding:16px 24px 22px 24px;border-top:1px solid #f0f2f5;font-size:12px;color:#4b5563;line-height:18px;">
+              <div style="margin-bottom:4px;">
+                This mail is sent via <strong>${esc(company)} Website</strong>
+              </div>
+              ${sourceUrl ? `
+              <div style="margin-bottom:8px;">
+                <a href="${esc(sourceUrl)}" target="_blank" style="color:#2563eb;text-decoration:underline;word-break:break-all;font-size:11px;line-height:16px;">
+                  ${esc(sourceUrl)}
+                </a>
               </div>
               ` : ''}
-
+              <div style="color:#6b7280;font-size:11px;">
+                Source: <strong>${esc(utmSource)}</strong> &nbsp;|&nbsp; Medium: <strong>${esc(utmMedium)}</strong> &nbsp;|&nbsp; Campaign: <strong>${esc(campaignName)}</strong>
+              </div>
             </td>
           </tr>
 
-          <!-- MARKETING ATTRIBUTION & SOURCE URL DETAILS -->
+          <!-- Footer -->
           <tr>
-            <td style="padding:0 28px 24px 28px;">
-              <h3 style="margin:0 0 12px 0;font-size:14px;font-weight:700;color:#0f172a;letter-spacing:0.3px;text-transform:uppercase;">
-                🌐 Website & Attribution Source
-              </h3>
-
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;">
-                <!-- Landing Page URL -->
-                <tr>
-                  <td style="padding-bottom:10px;">
-                    <span style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px;">
-                      Origin Website / Landing Page:
-                    </span>
-                    ${sourceUrl ? `
-                    <a href="${esc(sourceUrl)}" target="_blank" style="font-size:12px;line-height:18px;color:#0284c7;text-decoration:underline;word-break:break-all;">
-                      ${esc(sourceUrl)}
-                    </a>
-                    ` : `
-                    <span style="font-size:12px;color:#475569;">${esc(company)} Website Form</span>
-                    `}
-                  </td>
-                </tr>
-
-                <!-- Tracking Badges (Source, Medium, Campaign) -->
-                <tr>
-                  <td>
-                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-                      <tr>
-                        <td style="padding-right:8px;padding-top:4px;">
-                          <span style="font-size:10px;text-transform:uppercase;color:#475569;background-color:#e2e8f0;padding:3px 7px;border-radius:4px;font-weight:600;">
-                            Source: <strong>${esc(utmSource)}</strong>
-                          </span>
-                        </td>
-                        <td style="padding-right:8px;padding-top:4px;">
-                          <span style="font-size:10px;text-transform:uppercase;color:#475569;background-color:#e2e8f0;padding:3px 7px;border-radius:4px;font-weight:600;">
-                            Medium: <strong>${esc(utmMedium)}</strong>
-                          </span>
-                        </td>
-                        <td style="padding-top:4px;">
-                          <span style="font-size:10px;text-transform:uppercase;color:#475569;background-color:#e2e8f0;padding:3px 7px;border-radius:4px;font-weight:600;">
-                            Campaign: <strong>${esc(campaignName)}</strong>
-                          </span>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-            </td>
-          </tr>
-
-          <!-- FOOTER / AUDIT INFO -->
-          <tr>
-            <td style="background-color:#f8fafc;padding:20px 28px;border-top:1px solid #e2e8f0;text-align:center;">
-              <p style="margin:0 0 6px 0;font-size:12px;line-height:18px;color:#475569;font-weight:600;">
-                Kairali CRM · Automated Lead Notification System
-              </p>
-              <p style="margin:0 0 10px 0;font-size:11px;line-height:16px;color:#94a3b8;">
-                This email was triggered automatically upon submission of an online enquiry on ${esc(company)} website.<br />
-                Sent to authorized sales and admin recipients.
-              </p>
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center">
-                <tr>
-                  <td style="font-size:11px;color:#64748b;">
-                    <a href="${esc(appUrl)}/settings/automation/email-triggers" target="_blank" style="color:#64748b;text-decoration:underline;">Email Automation Settings</a>
-                    &nbsp;•&nbsp;
-                    <a href="${esc(crmLeadUrl)}" target="_blank" style="color:#0f766e;font-weight:600;text-decoration:underline;">Open Lead in CRM</a>
-                  </td>
-                </tr>
-              </table>
+            <td style="background-color:#f9fafb;padding:12px 24px;border-top:1px solid #e5e7eb;text-align:center;font-size:11px;color:#9ca3af;">
+              Kairali CRM Automation &nbsp;•&nbsp; Internal Sales & Admin Notification
             </td>
           </tr>
 
