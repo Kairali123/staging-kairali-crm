@@ -5,7 +5,7 @@
  * Displays the exact email body that will be received by sales reps and admin.
  * Uses the exact sample data requested: Sivagnanam Surendra (7956382557).
  */
-import { buildWebsiteEnquiryAlertEmail, getSampleEnquiryData } from '@/lib/email-triggers/templates/website-enquiry-alert'
+import { buildWebsiteEnquiryAlertEmail, getSampleEnquiryData } from '../../../lib/email-triggers/templates/website-enquiry-alert'
 
 export const dynamic = 'force-dynamic'
 
@@ -161,7 +161,7 @@ export default async function WebsiteEnquiryAlertPreviewPage() {
               padding: '12px 20px',
               fontSize: 12,
               color: '#64748b',
-              line-height: '1.6',
+              lineHeight: '1.6',
             }}
           >
             <div>
