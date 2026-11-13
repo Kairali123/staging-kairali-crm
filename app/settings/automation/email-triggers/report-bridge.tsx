@@ -136,6 +136,10 @@ export default function EmailConfigBridge({ document: documentHtml }: { document
           const response = await fetch('/api/riya-sharma-preview', { signal: current.signal, cache: 'no-store' })
           html = await response.text()
           if (!response.ok) throw new Error('Riya Sharma AI report preview unavailable')
+        } else if (id === 'website-enquiry-alert') {
+          const response = await fetch('/api/website-enquiry-alert-preview?' + new URLSearchParams({ company: scope, date: message.date }), { signal: current.signal, cache: 'no-store' })
+          html = await response.text()
+          if (!response.ok) throw new Error('Website enquiry preview unavailable')
         } else {
           const response = await fetch('/api/marketing-daily-report?' + new URLSearchParams({ date: message.date }), { signal: current.signal, cache: 'no-store' })
           const data = await response.json()
