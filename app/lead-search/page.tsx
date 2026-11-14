@@ -49,6 +49,9 @@ import {
   Calendar,
   ShieldCheck,
   ChevronRight,
+  ChevronLeft,
+  ChevronsLeft,
+  ChevronsRight,
   Share2,
   Tag,
   Info,
@@ -112,7 +115,7 @@ interface LeadJourney {
   }
 }
 
-function formatDate(iso: string) {
+function formatDate(iso?: string | null) {
   if (!iso) return "—"
   try {
     return new Date(iso).toLocaleString("en-IN", {
@@ -155,11 +158,25 @@ function calculateTat(startDate?: string, endDate?: string): string {
 
 function getFinalStatusColor(status: string) {
   const s = status?.toLowerCase() || ""
-  if (s.includes("convert")) return "bg-green-100 text-green-700 border-green-200"
-  if (s.includes("cold") || s.includes("lost")) return "bg-red-100 text-red-700 border-red-200"
-  if (s.includes("follow") || s.includes("future")) return "bg-blue-100 text-blue-700 border-blue-200"
-  if (s.includes("not connect") || s.includes("no answer")) return "bg-amber-100 text-amber-700 border-amber-200"
-  return "bg-gray-100 text-gray-700 border-gray-200"
+  if (s.includes("convert") || s.includes("order") || s.includes("won") || s.includes("close")) {
+    return "bg-emerald-100 text-emerald-800 border-emerald-300 font-semibold"
+  }
+  if (s.includes("meet") || s.includes("visit") || s.includes("pitch")) {
+    return "bg-purple-100 text-purple-800 border-purple-300 font-semibold"
+  }
+  if (s.includes("cold") || s.includes("lost") || s.includes("not interest") || s.includes("junk") || s.includes("wrong")) {
+    return "bg-red-100 text-red-800 border-red-300"
+  }
+  if (s.includes("follow") || s.includes("future") || s.includes("interest") || s.includes("call back") || s.includes("callback")) {
+    return "bg-blue-100 text-blue-800 border-blue-300 font-semibold"
+  }
+  if (s.includes("not connect") || s.includes("no answer") || s.includes("rnr") || s.includes("busy") || s.includes("switch off")) {
+    return "bg-amber-100 text-amber-800 border-amber-300"
+  }
+  if (s.includes("qualified")) {
+    return "bg-teal-100 text-teal-800 border-teal-300 font-semibold"
+  }
+  return "bg-slate-100 text-slate-800 border-slate-200 font-medium"
 }
 
 function getKserveStatusBadge(kserveStatus: string, kserveRoute: string) {
@@ -1290,6 +1307,18 @@ function TimelineModal({ lead, onClose }: { lead: LeadJourney; onClose: () => vo
   )
 }
 
+function getPresetDisplayName(preset: string): string {
+  switch (preset) {
+    case "today": return "Today"
+    case "yesterday": return "Yesterday"
+    case "last7days": return "Last 7 Days"
+    case "thisMonth": return "This Month"
+    case "lastMonth": return "Last Month"
+    case "custom": return "Custom Range"
+    default: return "Today"
+  }
+}
+
 export default function LeadSearchPage() {
   const { user, isLoading, hasPermission } = useAuth()
   const router = useRouter()
@@ -1297,7 +1326,7 @@ export default function LeadSearchPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [results, setResults] = useState<LeadJourney[]>([])
   const [isSearching, setIsSearching] = useState(false)
-  const [isLoadingToday, setIsLoadingToday] = useState(false)
+  const [isLoadingDate, setIsLoadingDate] = useState(false)
   const [isDefaultView, setIsDefaultView] = useState(true)
   const [searchError, setSearchError] = useState("")
   const [selectedLead, setSelectedLead] = useState<LeadJourney | null>(null)
@@ -1305,35 +1334,96 @@ export default function LeadSearchPage() {
   const [isBulkMode, setIsBulkMode] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Date Filter & Pagination state
+  const [datePreset, setDatePreset] = useState<"today" | "yesterday" | "last7days" | "thisMonth" | "lastMonth" | "custom">("today")
+  const [startDate, setStartDate] = useState("")
+  const [endDate, setEndDate] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
+  const [totalCount, setTotalCount] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
+
   useEffect(() => {
     if (!isLoading && (!user || !hasPermission("leads.view"))) {
       router.push("/dashboard")
     }
   }, [user, isLoading, hasPermission, router])
 
-  const loadTodayLeads = async () => {
-    setIsLoadingToday(true)
+  const loadDateLeads = async (
+    preset: "today" | "yesterday" | "last7days" | "thisMonth" | "lastMonth" | "custom" = datePreset,
+    page: number = 1,
+    limit: number = pageSize,
+    customStart: string = startDate,
+    customEnd: string = endDate
+  ) => {
+    setIsLoadingDate(true)
     setSearchError("")
+    setDatePreset(preset)
     try {
-      const res = await fetch("/api/lead-journey")
+      let url = `/api/lead-journey?preset=${preset}&page=${page}&limit=${limit}`
+      if (preset === "custom" && customStart && customEnd) {
+        url += `&startDate=${encodeURIComponent(customStart)}&endDate=${encodeURIComponent(customEnd)}`
+      }
+      const res = await fetch(url, { cache: "no-store" })
       const data = await res.json()
       if (data.success && data.results) {
         setResults(data.results)
+        setTotalCount(data.totalCount ?? data.count ?? data.results.length)
+        setTotalPages(data.totalPages ?? Math.max(1, Math.ceil((data.totalCount ?? data.results.length) / limit)))
+        setCurrentPage(page)
         setIsDefaultView(true)
+      } else {
+        throw new Error(data.error || "Failed to load leads")
       }
     } catch (err: any) {
-      console.error("Failed to load today's leads:", err)
+      console.error("Failed to load leads by date range:", err)
+      setSearchError(err.message || "Failed to load leads for selected date range")
     } finally {
-      setIsLoadingToday(false)
+      setIsLoadingDate(false)
     }
   }
 
   // Load current date's leads automatically on initial page load
   useEffect(() => {
     if (!isLoading && user && hasPermission("leads.view")) {
-      loadTodayLeads()
+      loadDateLeads("today", 1, pageSize)
     }
   }, [isLoading, user, hasPermission])
+
+  const handlePresetChange = (preset: "today" | "yesterday" | "last7days" | "thisMonth" | "lastMonth" | "custom") => {
+    setDatePreset(preset)
+    if (preset !== "custom") {
+      setSearchQuery("")
+      setBulkText("")
+      loadDateLeads(preset, 1, pageSize)
+    }
+  }
+
+  const handleApplyCustomDate = () => {
+    if (!startDate || !endDate) return
+    setSearchQuery("")
+    setBulkText("")
+    loadDateLeads("custom", 1, pageSize, startDate, endDate)
+  }
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize)
+    if (isDefaultView) {
+      loadDateLeads(datePreset, 1, newSize, startDate, endDate)
+    } else {
+      setCurrentPage(1)
+      setTotalPages(Math.max(1, Math.ceil(totalCount / newSize)))
+    }
+  }
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage < 1 || newPage > totalPages) return
+    if (isDefaultView) {
+      loadDateLeads(datePreset, newPage, pageSize, startDate, endDate)
+    } else {
+      setCurrentPage(newPage)
+    }
+  }
 
   async function handleSearch(e?: React.FormEvent) {
     e?.preventDefault()
@@ -1346,7 +1436,11 @@ export default function LeadSearchPage() {
       const res = await fetch(`/api/lead-journey?q=${encodeURIComponent(searchQuery.trim())}`)
       const data = await res.json()
       if (!data.success) throw new Error(data.error || "Search failed")
-      setResults(data.results || [])
+      const list = data.results || []
+      setResults(list)
+      setTotalCount(list.length)
+      setTotalPages(Math.max(1, Math.ceil(list.length / pageSize)))
+      setCurrentPage(1)
     } catch (err: any) {
       setSearchError(err.message || "Failed to search")
     } finally {
@@ -1365,7 +1459,11 @@ export default function LeadSearchPage() {
       const res = await fetch(`/api/lead-journey?ids=${encodeURIComponent(ids.join(","))}`)
       const data = await res.json()
       if (!data.success) throw new Error(data.error || "Bulk search failed")
-      setResults(data.results || [])
+      const list = data.results || []
+      setResults(list)
+      setTotalCount(list.length)
+      setTotalPages(Math.max(1, Math.ceil(list.length / pageSize)))
+      setCurrentPage(1)
     } catch (err: any) {
       setSearchError(err.message || "Failed to bulk search")
     } finally {
@@ -1459,27 +1557,115 @@ export default function LeadSearchPage() {
           </Button>
         </div>
 
-        {/* Search Panel */}
+        {/* Search Panel + Date Range Filter Row */}
         {!isBulkMode ? (
-          <Card>
+          <Card className="border-slate-200 shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Single Record Search</CardTitle>
-              <CardDescription>Enter Lead ID, Mobile Number, Email, or Client Name</CardDescription>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                <div>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Search className="h-4 w-4 text-blue-600" /> Single Record Search & Date Filter
+                  </CardTitle>
+                  <CardDescription>Search by Lead ID, Mobile, Name, or browse incoming leads by date range</CardDescription>
+                </div>
+                {/* Active Date Preset Badge */}
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs bg-slate-50 text-slate-700 border-slate-300 flex items-center gap-1.5 px-2.5 py-1">
+                    <Calendar className="h-3.5 w-3.5 text-blue-600" />
+                    <span>Active Filter: <strong className="text-slate-900 font-bold">{getPresetDisplayName(datePreset)}</strong></span>
+                  </Badge>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSearch} className="flex gap-3">
-                <Input
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="e.g. 9876543210 or FB_AHV-108645... or name"
-                  className="flex-1"
-                  disabled={isSearching}
-                />
-                <Button type="submit" disabled={isSearching || !searchQuery.trim()}>
-                  {isSearching ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                  <span className="ml-2">Search</span>
-                </Button>
-              </form>
+            <CardContent className="space-y-3">
+              <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
+                {/* Search Form (Left Side) */}
+                <form onSubmit={handleSearch} className="flex-1 flex gap-2">
+                  <Input
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Search by Lead ID (e.g. FB_AHV-...), Mobile (9876543210), or Name..."
+                    className="flex-1 h-10 text-sm"
+                    disabled={isSearching}
+                  />
+                  <Button type="submit" disabled={isSearching || !searchQuery.trim()} className="h-10 px-4 bg-blue-600 hover:bg-blue-700 text-white">
+                    {isSearching ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                    <span className="ml-1.5 hidden sm:inline font-semibold">Search</span>
+                  </Button>
+                </form>
+
+                {/* Divider on large screens */}
+                <div className="hidden lg:block w-px h-8 bg-slate-200" />
+
+                {/* Date Presets Selector (Right Side of Search Section) */}
+                <div className="flex flex-wrap items-center gap-1 bg-slate-100/80 p-1 rounded-lg border border-slate-200">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 px-2 flex items-center gap-1">
+                    <Calendar className="h-3.5 w-3.5 text-slate-400" /> Date:
+                  </span>
+                  {[
+                    { key: "today", label: "Today" },
+                    { key: "yesterday", label: "Yesterday" },
+                    { key: "last7days", label: "Last 7 Days" },
+                    { key: "thisMonth", label: "This Month" },
+                    { key: "lastMonth", label: "Last Month" },
+                    { key: "custom", label: "Custom" },
+                  ].map(p => {
+                    const isActive = datePreset === p.key && isDefaultView
+                    const isCurrentLoading = isLoadingDate && datePreset === p.key
+                    return (
+                      <button
+                        key={p.key}
+                        type="button"
+                        onClick={() => handlePresetChange(p.key as any)}
+                        disabled={isLoadingDate}
+                        className={`px-2.5 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
+                          isActive
+                            ? "bg-blue-600 text-white shadow-xs font-bold"
+                            : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-900"
+                        } ${isLoadingDate ? "cursor-wait opacity-80" : ""}`}
+                      >
+                        {isCurrentLoading && <RefreshCcw className="h-3 w-3 animate-spin text-white" />}
+                        <span>{p.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Custom Date Pickers (Shown when Custom is selected) */}
+              {datePreset === "custom" && isDefaultView && (
+                <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-3 bg-blue-50/50 p-3 rounded-lg border border-blue-100">
+                  <span className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                    <Calendar className="h-3.5 w-3.5 text-blue-600" /> Custom Date Range:
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-slate-500 font-medium">From:</label>
+                    <Input
+                      type="date"
+                      value={startDate}
+                      onChange={e => setStartDate(e.target.value)}
+                      className="h-8 w-36 text-xs bg-white"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-slate-500 font-medium">To:</label>
+                    <Input
+                      type="date"
+                      value={endDate}
+                      onChange={e => setEndDate(e.target.value)}
+                      className="h-8 w-36 text-xs bg-white"
+                    />
+                  </div>
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold px-3"
+                    onClick={handleApplyCustomDate}
+                    disabled={!startDate || !endDate || isLoadingDate}
+                  >
+                    Apply Filter
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         ) : (
@@ -1525,53 +1711,65 @@ export default function LeadSearchPage() {
           </div>
         )}
 
-        {/* Loading Today's Leads */}
-        {isLoadingToday && results.length === 0 && (
+        {/* Loading Date Range Leads */}
+        {isLoadingDate && results.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-500">
-            <RefreshCcw className="h-7 w-7 animate-spin text-teal-600" />
-            <p className="text-sm font-medium">Loading current date leads...</p>
+            <RefreshCcw className="h-7 w-7 animate-spin text-blue-600" />
+            <p className="text-sm font-medium">Loading {getPresetDisplayName(datePreset)} leads...</p>
           </div>
         )}
 
         {/* Results */}
         {results.length > 0 && (
-          <Card>
-            <CardHeader className="pb-3">
+          <Card className="border-slate-200 shadow-sm overflow-hidden">
+            <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/60">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <CardTitle className="text-base">
-                      {isDefaultView ? "Today's Leads" : "Search Results"} ({results.length} Lead{results.length !== 1 ? "s" : ""})
+                    <CardTitle className="text-base font-bold text-slate-900">
+                      {isDefaultView ? (
+                        <>📅 {getPresetDisplayName(datePreset)}'s Leads</>
+                      ) : (
+                        <>🔍 Search Results</>
+                      )}
+                      <span className="text-sm font-normal text-slate-500 ml-1.5">
+                        ({totalCount.toLocaleString("en-IN")} Total Leads)
+                      </span>
                     </CardTitle>
                     {isDefaultView ? (
-                      <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 text-xs font-semibold">
-                        Today (Current Date)
+                      <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-xs font-semibold">
+                        {getPresetDisplayName(datePreset)}
                       </Badge>
                     ) : (
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-xs h-6 px-2 text-blue-600 hover:text-blue-800"
+                        className="text-xs h-6 px-2 text-blue-600 hover:text-blue-800 font-semibold"
                         onClick={() => {
                           setSearchQuery("")
                           setBulkText("")
-                          loadTodayLeads()
+                          handlePresetChange("today")
                         }}
                       >
                         ← Back to Today's Leads
                       </Button>
                     )}
                   </div>
-                  <CardDescription className="mt-1">
+                  <CardDescription className="mt-1 text-xs">
                     {isDefaultView
-                      ? "Showing latest leads arrived today. Click 'View Journey' to see full lifecycle timeline."
-                      : "Search results matching query. Click 'View Journey' to see full lifecycle timeline."}
+                      ? `Showing page ${currentPage} of ${totalPages} (${pageSize} leads/page). Click 'View Journey' to see full lifecycle timeline.`
+                      : `Found ${results.length} results matching query. Click 'View Journey' to see full lifecycle timeline.`}
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
                   {isDefaultView && (
-                    <Button variant="outline" size="sm" onClick={loadTodayLeads} disabled={isLoadingToday}>
-                      <RefreshCcw className={`h-4 w-4 mr-2 ${isLoadingToday ? "animate-spin" : ""}`} /> Refresh
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => loadDateLeads(datePreset, currentPage, pageSize, startDate, endDate)} 
+                      disabled={isLoadingDate}
+                    >
+                      <RefreshCcw className={`h-4 w-4 mr-2 ${isLoadingDate ? "animate-spin" : ""}`} /> Refresh
                     </Button>
                   )}
                   <Button variant="outline" size="sm" onClick={exportCSV}>
@@ -1580,7 +1778,16 @@ export default function LeadSearchPage() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="p-0">
+            <CardContent className="p-0 relative min-h-[220px]">
+              {/* Visual Loading Overlay when switching dates or pages */}
+              {isLoadingDate && (
+                <div className="absolute inset-0 bg-white/75 backdrop-blur-[1px] z-30 flex flex-col items-center justify-center gap-2">
+                  <RefreshCcw className="h-8 w-8 animate-spin text-blue-600" />
+                  <p className="text-xs font-bold text-slate-700 tracking-wide uppercase">
+                    Loading {getPresetDisplayName(datePreset)} leads...
+                  </p>
+                </div>
+              )}
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -1597,8 +1804,8 @@ export default function LeadSearchPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {results.map((lead, i) => (
-                      <TableRow key={i} className="hover:bg-slate-50 text-sm">
+                    {(isDefaultView ? results : results.slice((currentPage - 1) * pageSize, currentPage * pageSize)).map((lead, i) => (
+                      <TableRow key={lead.leadId || i} className="hover:bg-slate-50 text-sm">
                         <TableCell className="font-mono text-xs max-w-[140px] truncate" title={lead.leadId}>
                           {lead.leadId || "—"}
                         </TableCell>
@@ -1609,26 +1816,31 @@ export default function LeadSearchPage() {
                         <TableCell className="text-xs text-slate-600">{lead.mobile || "—"}</TableCell>
                         <TableCell className="text-xs text-slate-500">{formatDate(lead.bufferArrival)}</TableCell>
                         <TableCell>{getKserveStatusBadge(lead.kserveStatus, lead.kserveRoute)}</TableCell>
-                        <TableCell className="text-xs text-slate-700">{lead.assignedTo || "—"}</TableCell>
+                        <TableCell className="text-xs text-slate-700">
+                          <p className="font-medium text-slate-800">{lead.currentHolder || lead.assignedTo || "—"}</p>
+                          {lead.currentHolder && lead.assignedTo && lead.currentHolder !== lead.assignedTo && (
+                            <p className="text-[10px] text-slate-400">Orig: {lead.assignedTo}</p>
+                          )}
+                        </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-1">
-                            <PhoneCall className="h-3 w-3 text-slate-400" />
-                            <span className="text-xs font-semibold">{lead.totalFollowups}</span>
+                          <div className="flex items-center gap-1.5">
+                            <PhoneCall className="h-3.5 w-3.5 text-slate-400" />
+                            <span className="text-xs font-bold text-slate-800">{lead.totalFollowups}</span>
                           </div>
                           {lead.lastFollowupDate && (
-                            <p className="text-xs text-slate-400">{formatDate(lead.lastFollowupDate)}</p>
+                            <p className="text-[11px] text-slate-500 mt-0.5">{formatDate(lead.lastFollowupDate)}</p>
                           )}
                         </TableCell>
                         <TableCell>
                           {lead.finalStatus ? (
-                            <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${getFinalStatusColor(lead.finalStatus)}`}>
+                            <span className={`text-xs px-2.5 py-1 rounded-full border inline-block ${getFinalStatusColor(lead.finalStatus)}`}>
                               {lead.finalStatus}
                             </span>
                           ) : (
-                            <span className="text-xs text-slate-400">—</span>
+                            <span className="text-xs text-slate-400 font-medium">—</span>
                           )}
-                          {lead.conversionAmount && (
-                            <p className="text-xs text-green-600 font-semibold mt-0.5">
+                          {lead.conversionAmount && lead.conversionAmount > 0 && (
+                            <p className="text-xs text-emerald-600 font-bold mt-0.5">
                               ₹{lead.conversionAmount.toLocaleString("en-IN")}
                             </p>
                           )}
@@ -1648,12 +1860,112 @@ export default function LeadSearchPage() {
                   </TableBody>
                 </Table>
               </div>
+
+              {/* Table Footer with Record Count, 50/100/200 Select & Paging Navigation */}
+              <div className="p-4 border-t border-slate-200 bg-slate-50/70 flex flex-col md:flex-row items-center justify-between gap-4">
+                {/* Left: Record Range Summary */}
+                <div className="text-xs text-slate-600 font-medium flex items-center gap-2">
+                  <span>
+                    Showing <strong className="text-slate-900 font-bold">{totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1}</strong> to{" "}
+                    <strong className="text-slate-900 font-bold">{totalCount === 0 ? 0 : Math.min(currentPage * pageSize, totalCount)}</strong> of{" "}
+                    <strong className="text-slate-900 font-bold">{totalCount.toLocaleString("en-IN")}</strong> leads
+                  </span>
+                  {isLoadingDate && (
+                    <span className="inline-flex items-center gap-1 text-[11px] text-blue-600 font-semibold ml-2">
+                      <RefreshCcw className="h-3 w-3 animate-spin" /> Loading page...
+                    </span>
+                  )}
+                </div>
+
+                {/* Right: Page Size Selector (50/100/200) + Pagination Navigation */}
+                <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+                  {/* Rows per page selector: 50 / 100 / 200 */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-slate-500 font-medium">Rows:</span>
+                    <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-2xs">
+                      {[50, 100, 200].map(size => (
+                        <button
+                          key={size}
+                          type="button"
+                          onClick={() => handlePageSizeChange(size)}
+                          className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
+                            pageSize === size
+                              ? "bg-slate-900 text-white shadow-xs"
+                              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                          }`}
+                        >
+                          {size}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Paging Navigation Buttons */}
+                  <div className="flex items-center gap-1">
+                    {/* First Page */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-slate-600 disabled:opacity-40 bg-white"
+                      onClick={() => handlePageChange(1)}
+                      disabled={currentPage <= 1 || isLoadingDate}
+                      title="First Page"
+                    >
+                      <ChevronsLeft className="h-4 w-4" />
+                    </Button>
+
+                    {/* Previous Page */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-2 text-xs font-semibold text-slate-600 disabled:opacity-40 bg-white flex items-center gap-1"
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage <= 1 || isLoadingDate}
+                      title="Previous Page"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      <span className="hidden sm:inline">Prev</span>
+                    </Button>
+
+                    {/* Page indicator */}
+                    <div className="px-3 py-1 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-md shadow-2xs min-w-[95px] text-center">
+                      Page <span className="text-blue-600 font-extrabold">{currentPage}</span> of{" "}
+                      <span className="text-slate-900 font-extrabold">{totalPages}</span>
+                    </div>
+
+                    {/* Next Page */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-2 text-xs font-semibold text-slate-600 disabled:opacity-40 bg-white flex items-center gap-1"
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage >= totalPages || isLoadingDate}
+                      title="Next Page"
+                    >
+                      <span className="hidden sm:inline">Next</span>
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+
+                    {/* Last Page */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-slate-600 disabled:opacity-40 bg-white"
+                      onClick={() => handlePageChange(totalPages)}
+                      disabled={currentPage >= totalPages || isLoadingDate}
+                      title="Last Page"
+                    >
+                      <ChevronsRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
         )}
 
         {/* Empty state */}
-        {!isSearching && !isLoadingToday && results.length === 0 && !searchError && (
+        {!isSearching && !isLoadingDate && results.length === 0 && !searchError && (
           <div className="text-center py-16 text-slate-400">
             <Search className="h-12 w-12 mx-auto mb-4 opacity-30" />
             <p className="text-sm font-medium">No leads found</p>
@@ -1662,7 +1974,7 @@ export default function LeadSearchPage() {
               variant="outline"
               size="sm"
               className="mt-3 text-xs"
-              onClick={loadTodayLeads}
+              onClick={() => handlePresetChange("today")}
             >
               <RefreshCcw className="h-3.5 w-3.5 mr-1.5" /> Check Today's Leads
             </Button>
