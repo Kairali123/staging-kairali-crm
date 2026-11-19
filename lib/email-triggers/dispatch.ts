@@ -19,6 +19,7 @@ export async function buildEmail(t:Trigger,at:number){
  let date=localDay(at,'Asia/Kolkata');if(t.period==='Yesterday')date=new Date(Date.parse(date+'T00:00:00Z')-86400000).toISOString().slice(0,10);if(t.period==='Selected date')date=t.previewDate!
  const replace=(s:string)=>s.replaceAll('{{report_date}}',date).replaceAll('{{company_name}}',t.company).replaceAll('{{recipient_name}}','Team')
  let afterAccepted:(()=>Promise<void>)|undefined
+ let messages:Array<{subject:string;html:string;attachments?:any[];afterAccepted?:()=>Promise<void>}>|undefined
  let html='',hasData=true,attachments:any[]|undefined,donutSvg:string|null=null
  if(t.bodyType==='Full report in email body'){
   let reportTitle='Daily Report'
@@ -135,14 +136,40 @@ export async function buildEmail(t:Trigger,at:number){
    hasData=true
    html=buildWebsiteEnquiryAlertEmail(enquiryData)
   }
+  else if(t.reportId==='kserve-daily-call-audit-feedback-alert'){
+   reportTitle='Kserve Daily call Audit Feedback Alert'
+   reportSlug='Kserve-Daily-Call-Audit-Feedback-Alert'
+   const appUrl=process.env.NEXT_PUBLIC_APP_URL||'https://staging-kairali-crm.vercel.app'
+   const {loadPendingKserveFeedbacks,markKserveFeedbackEmailSent}=await import('./load-kserve-feedback')
+   const {buildKserveFeedbackAlertEmail,buildKserveFeedbackSubject}=await import('./templates/kserve-daily-call-audit-feedback-alert')
+   const pending=await loadPendingKserveFeedbacks({sinceDate:t.start,company:t.company,limit:50})
+   hasData=pending.length>0
+   const pNote=(s:string)=>(s||'').trim()?'<div style="padding:18px 24px;white-space:pre-wrap;font:14px/1.8 Arial">'+esc(replace(s))+'</div>':''
+   const recipientCount=[t.to,t.cc,t.bcc].flatMap(x=>x.split(',').filter(y=>y.trim())).length
+   messages=pending.map(item=>{
+    const itemSubject=buildKserveFeedbackSubject(t.subject,item,date,t.company)
+    let itemHtml=buildKserveFeedbackAlertEmail(item,appUrl)
+    itemHtml=itemHtml.includes('<!--email-intro-->')
+     ?itemHtml.replace('<!--email-intro-->',()=>pNote(t.intro)).replace('<!--email-closing-->',()=>pNote(t.closing))
+     :itemHtml.replace(/(<body[^>]*>)/,'$1'+pNote(t.intro)).replace('</body>',pNote(t.closing)+'</body>')
+    return {
+     subject:itemSubject,
+     html:itemHtml,
+     afterAccepted:()=>markKserveFeedbackEmailSent(item,{triggerId:t.id,recipientCount,subject:itemSubject}),
+    }
+   })
+   html=messages[0]?.html||''
+  }
   else{
    throw new Error(`Unhandled email trigger report template: "${t.reportId}"`)
   }
   const p=(s:string)=>(s||'').trim()?'<div style="padding:18px 24px;white-space:pre-wrap;font:14px/1.8 Arial">'+esc(replace(s))+'</div>':''
   // Reports with in-layout markers keep the note inside their centered column; others get it around <body>.
-  html=html.includes('<!--email-intro-->')?html.replace('<!--email-intro-->',()=>p(t.intro)).replace('<!--email-closing-->',()=>p(t.closing)):html.replace(/(<body[^>]*>)/,'$1'+p(t.intro)).replace('</body>',p(t.closing)+'</body>')
+  if(!messages){
+   html=html.includes('<!--email-intro-->')?html.replace('<!--email-intro-->',()=>p(t.intro)).replace('<!--email-closing-->',()=>p(t.closing)):html.replace(/(<body[^>]*>)/,'$1'+p(t.intro)).replace('</body>',p(t.closing)+'</body>')
+  }
   // booking-pi-review-alert and kserve-lead-lost-alert and sales-call-audit skip JPEG rendering — they use inline HTML tables
-  if(t.reportId!=='client-assigned-doctor-report'&&t.reportId!=='trigger-health-digest'&&t.reportId!=='sales-call-audit'&&t.reportId!=='kserve-lead-lost-alert'&&t.reportId!=='booking-pi-review-alert'&&t.reportId!=='ktahv-daily-sales-report'&&t.reportId!=='riya-sharma-ai-report'&&t.reportId!=='website-enquiry-alert'){
+  if(t.reportId!=='client-assigned-doctor-report'&&t.reportId!=='trigger-health-digest'&&t.reportId!=='sales-call-audit'&&t.reportId!=='kserve-lead-lost-alert'&&t.reportId!=='kserve-daily-call-audit-feedback-alert'&&t.reportId!=='booking-pi-review-alert'&&t.reportId!=='ktahv-daily-sales-report'&&t.reportId!=='riya-sharma-ai-report'&&t.reportId!=='website-enquiry-alert'){
    try{
     const {renderJPEG}=await import('@/lib/whatsapp-triggers/render')
     if(typeof renderJPEG==='function'){
@@ -168,7 +195,7 @@ export async function buildEmail(t:Trigger,at:number){
    }
   }
  }else html='<div style="white-space:pre-wrap;font:14px/1.8 Arial">'+esc(t.bodyType==='Static'?t.body:replace(t.body))+'</div>'
- return {subject:replace(t.subject),html,hasData,afterAccepted,...(attachments?{attachments}:{})}
+ return {subject:replace(t.subject),html,hasData,afterAccepted,...(messages?{messages}:{}),...(attachments?{attachments}:{})}
 }
 export type DispatchDeps={build:typeof buildEmail;send:(t:Trigger,email:{subject:string;html:string;attachments?:any[]})=>Promise<{accepted:number;rejected:number}>}
 const deps:DispatchDeps={build:buildEmail,send:async(t,email)=>{
@@ -198,7 +225,33 @@ export async function dispatchDue(now=Date.now(),io=deps){
    else{
     const allowed=await transaction(s=>{const current=s.triggers.find(x=>x.id===t.id),r=s.runs.find(x=>x.id===run.id)!;if(!current||current.status!=='Active'||current.revision!==t.revision){r.status='Skipped';return false}r.status='Sending';r.detail='Handing message to provider';return true})
     if(!allowed){status='Skipped';detail='Configuration changed or paused before delivery'}
-    else{sending=true;const {afterAccepted,...message}=email;const result=await io.send(t,message);if(result.accepted>0&&!result.rejected)await afterAccepted?.();status=result.rejected?'Partial':result.accepted?'Accepted':'Failed';detail=result.rejected?'Some recipients rejected; inspect mailbox before retrying':result.accepted?'Accepted by email provider (not delivery confirmation)':'Provider accepted no recipients'}
+    else if(email.messages&&email.messages.length>0){
+     sending=true
+     let sentCount=0,rejectedCount=0,failedCount=0
+     for(const item of email.messages){
+      const {afterAccepted:itemAfter,...itemMsg}=item
+      const res=await io.send(t,itemMsg)
+      if(res.accepted>0&&!res.rejected){
+       await itemAfter?.()
+       sentCount++
+      }else if(res.rejected){
+       rejectedCount++
+      }else{
+       failedCount++
+      }
+     }
+     if(rejectedCount>0||(failedCount>0&&sentCount>0)){
+      status='Partial'
+      detail=`Sent ${sentCount}/${email.messages.length} individual emails (${rejectedCount} rejected, ${failedCount} failed)`
+     }else if(sentCount>0){
+      status='Accepted'
+      detail=`Accepted by email provider · ${sentCount} individual email${sentCount===1?'':'s'} sent`
+     }else{
+      status='Failed'
+      detail='Provider accepted no recipients'
+     }
+    }
+    else{sending=true;const {afterAccepted,messages:_unused,...message}=email;const result=await io.send(t,message);if(result.accepted>0&&!result.rejected)await afterAccepted?.();status=result.rejected?'Partial':result.accepted?'Accepted':'Failed';detail=result.rejected?'Some recipients rejected; inspect mailbox before retrying':result.accepted?'Accepted by email provider (not delivery confirmation)':'Provider accepted no recipients'}
    }
   }catch(err:any){if(sending){status='Unknown';detail='Delivery outcome uncertain. Verify mailbox before resuming.'}else{console.error('[email-trigger dispatch error]', err);detail=err?.message?`Report generation failed: ${err.message}. No email sent.`:'Report generation failed. No email sent.'}}
   await transaction(s=>{const r=s.runs.find(x=>x.id===run.id)!;Object.assign(r,{status,detail,finishedAt:new Date().toISOString()});const current=s.triggers.find(x=>x.id===t.id);if(current){current.lastResult=status;if(['Unknown','Partial'].includes(status)){current.status='Paused';current.nextRun=null}}})

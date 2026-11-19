@@ -4,8 +4,8 @@ export function localDay(at:number,zone:string){return new Date(at+offsets[zone]
 export function validDay(day:string){return /^\d{4}-\d{2}-\d{2}$/.test(day)&&!Number.isNaN(Date.parse(day))&&new Date(day+'T00:00:00Z').toISOString().slice(0,10)===day}
 export function nextRun(s:Schedule,after:number):string|null{
  const offset=offsets[s.timezone]*60000,anchor=Date.parse(s.start+'T'+s.time+':00Z')-offset
- if(s.frequency==='Every 6 hours'){
-  const step=Number(s.interval)*3600000,n=Math.max(0,Math.floor((after-anchor)/step)+1),at=anchor+n*step
+ if(s.frequency==='Hourly'||s.frequency==='Every 6 hours'){
+  const step=Math.max(1,Number(s.interval)||1)*3600000,n=Math.max(0,Math.floor((after-anchor)/step)+1),at=anchor+n*step
   return s.end&&localDay(at,s.timezone)>s.end?null:new Date(at).toISOString()
  }
  if(s.frequency==='One-time')return anchor>after?new Date(anchor).toISOString():null

@@ -13,6 +13,7 @@ export const emailReportTemplates = {
   'ktahv-pending-aging-alert': { name: 'KTAHV Pending Stage Aging Alert', path: '/fms/bookings/pending-aging' },
   'riya-sharma-ai-report': { name: 'KTAHV - Riya Sharma AI | Daily Data Analysis Report', path: '/riya-sharma/email-template' },
   'website-enquiry-alert': { name: 'Website Lead & Online PPC Enquiry Alert', path: '/api/website-enquiry-alert-preview' },
+  'kserve-daily-call-audit-feedback-alert': { name: 'Kserve Daily call Audit Feedback Alert', path: '/api/kserve-feedback-alert-preview' },
 } as const
 export type EmailReportId = keyof typeof emailReportTemplates
 /** Names this report was saved under before it was renamed; still accepted and shown under the current name. */

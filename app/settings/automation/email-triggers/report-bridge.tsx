@@ -124,6 +124,10 @@ export default function EmailConfigBridge({ document: documentHtml }: { document
           const response = await fetch('/api/kserve-alert-preview', { signal: current.signal, cache: 'no-store' })
           html = await response.text()
           if (!response.ok) throw new Error('Preview unavailable')
+        } else if (id === 'kserve-daily-call-audit-feedback-alert') {
+          const response = await fetch('/api/kserve-feedback-alert-preview?' + new URLSearchParams({ company: scope }), { signal: current.signal, cache: 'no-store' })
+          html = await response.text()
+          if (!response.ok) throw new Error('KServe feedback preview unavailable')
         } else if (id === 'booking-pi-review-alert') {
           const response = await fetch('/api/booking-pi-review-preview', { signal: current.signal, cache: 'no-store' })
           html = await response.text()

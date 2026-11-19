@@ -9,6 +9,7 @@ import { nextRun } from '@/lib/email-triggers/schedule'
 import { emailReportTemplates, canonicalTemplateName } from '@/lib/email-report-template'
 import { seedDoctorAssignmentDraft } from '@/lib/email-triggers/doctor-assignment-default'
 import { seedTriggerHealthDraft } from '@/lib/email-triggers/trigger-health-default'
+import { seedKserveFeedbackTrigger, KSERVE_FEEDBACK_REPORT_ID } from '@/lib/email-triggers/kserve-feedback-default'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -370,6 +371,9 @@ export async function GET(req: NextRequest) {
     }
     if (!state.triggers.some(t => t.reportId === 'client-assigned-doctor-report') && !state.seedSuppressed?.includes('client-assigned-doctor-report') && state.triggers.length < 100) {
       state = await transaction(s => { seedDoctorAssignmentDraft(s); return s })
+    }
+    if (!state.triggers.some(t => t.reportId === KSERVE_FEEDBACK_REPORT_ID) && !state.seedSuppressed?.includes(KSERVE_FEEDBACK_REPORT_ID) && state.triggers.length < 100) {
+      state = await transaction(s => { seedKserveFeedbackTrigger(s); return s })
     }
     if (!process.env.VERCEL) {
       try {
