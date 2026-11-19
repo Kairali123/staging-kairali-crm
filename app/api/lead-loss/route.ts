@@ -16,6 +16,8 @@ interface SourceConfig {
   /** Column that holds sent/transfer status; rows with value LIKE 'Transfer to Delete%'
    *  are counted in Direct but classified as Gap 1 (Direct→Medium) losses. */
   sentStatusDeleteCol?: string;
+  /** When true, a blank/empty sent_status also temporarily counts as Gap 1 (Direct→Medium). */
+  blankSentStatusAsGap1?: boolean;
 }
 
 interface CompanyConfig {
@@ -43,6 +45,7 @@ const COMPANY_CONFIG: CompanyConfig[] = [
       { source: "Anjali AI Instagram", table: "villaraag_chatbase_leads_api_anjali_menon", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(lead_relates_to_which_company LIKE '%villa%' OR lead_relates_to_which_company LIKE '%raag%' OR lead_relates_to_which_company IS NULL OR lead_relates_to_which_company = '') AND (mail_status = 'Instagram' OR src = 'Instagram')" },
       { source: "Anjali AI Facebook", table: "villaraag_chatbase_leads_api_anjali_menon", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(lead_relates_to_which_company LIKE '%villa%' OR lead_relates_to_which_company LIKE '%raag%' OR lead_relates_to_which_company IS NULL OR lead_relates_to_which_company = '') AND (mail_status = 'Messenger' OR mail_status = 'Facebook' OR src = 'Messenger' OR src = 'Facebook')" },
       { source: "Anjali AI WhatsApp", table: "villaraag_chatbase_leads_api_anjali_menon", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(lead_relates_to_which_company LIKE '%villa%' OR lead_relates_to_which_company LIKE '%raag%' OR lead_relates_to_which_company IS NULL OR lead_relates_to_which_company = '') AND (mail_status = 'API' OR mail_status = 'WhatsApp' OR src = 'API' OR src = 'WhatsApp')" },
+      { source: "Anjali AI-Playground", table: "villaraag_chatbase_leads_api_anjali_menon", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(lead_relates_to_which_company LIKE '%villa%' OR lead_relates_to_which_company LIKE '%raag%' OR lead_relates_to_which_company IS NULL OR lead_relates_to_which_company = '') AND (src = 'Playground' OR mail_status = 'Playground')" },
       { source: "IVR", table: "ivr_lead_api_knowrality", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "lead_id", nameCol: "name_of_client", emailCol: "email_id", sourceFilter: "((lead_relates_to_which_company LIKE '%villa%' AND lead_relates_to_which_company NOT LIKE '%village%') OR lead_relates_to_which_company LIKE '%raag%' OR (company_by_extension LIKE '%villa%' AND company_by_extension NOT LIKE '%village%') OR company_by_extension LIKE '%raag%')" },
       { source: "Others", table: "bulk_whatsapp_reply_enquiry_generation", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "source_id", nameCol: "client_name", emailCol: "email_id", sourceFilter: "website_name LIKE '%villa%' OR website_name LIKE '%raag%'" },
       // Email Parser leads for VillaRaag (Unit column filtered for VillaRaag; 9 cases on 14-Oct)
@@ -72,7 +75,10 @@ const COMPANY_CONFIG: CompanyConfig[] = [
       { source: "Priyasharma AI-instagram", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(src = 'Instagram' OR mail_status = 'Instagram') AND (LOWER(lead_relates_to_which_company) LIKE '%healing village%' OR LOWER(lead_relates_to_which_company) LIKE '%ktahv%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic center%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic centre%')" },
       { source: "Priyasharma AI-Whatsapp", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(src = 'WhatsApp' OR src = 'API' OR mail_status = 'WhatsApp' OR mail_status = 'API') AND (LOWER(lead_relates_to_which_company) LIKE '%healing village%' OR LOWER(lead_relates_to_which_company) LIKE '%ktahv%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic center%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic centre%')" },
       { source: "Priyasharma AI-facebook", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(src = 'Facebook' OR src = 'Messenger' OR mail_status = 'Facebook' OR mail_status = 'Messenger') AND (LOWER(lead_relates_to_which_company) LIKE '%healing village%' OR LOWER(lead_relates_to_which_company) LIKE '%ktahv%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic center%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic centre%')" },
-      { source: "Priyasharma AI Chat", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "(src IS NULL OR src NOT IN ('Widget or Iframe', 'API', 'Instagram', 'WhatsApp', 'Facebook', 'Messenger')) AND (LOWER(lead_relates_to_which_company) LIKE '%healing village%' OR LOWER(lead_relates_to_which_company) LIKE '%ktahv%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic center%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic centre%')" },
+      { source: "PriyaSharma AI-Playground", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(src = 'Playground' OR mail_status = 'Playground') AND (LOWER(lead_relates_to_which_company) LIKE '%healing village%' OR LOWER(lead_relates_to_which_company) LIKE '%ktahv%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic center%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic centre%')" },
+      // PriyaSharma AI Chat for KTAHV: comes from Dr_Aarika_ChatBase_Leads_DB & KAPPL_Chat_Base_Leads_API_Priya_Sharma only
+      { source: "PriyaSharma AI Chat", table: "Dr_Aarika_ChatBase_Leads_DB", dateCol: "chat_created_date_time", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", blankSentStatusAsGap1: true, sourceFilter: "lead_relates_to_which_company IN ('Kairali The Ayurvedic Healing Village', 'Kairali Ayurvedic Centers') OR LOWER(lead_relates_to_which_company) LIKE '%healing village%' OR LOWER(lead_relates_to_which_company) LIKE '%ktahv%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic center%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic centre%'" },
+      { source: "PriyaSharma AI Chat", table: "KAPPL_Chat_Base_Leads_API_Priya_Sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", blankSentStatusAsGap1: true, sourceFilter: "lead_relates_to_which_company IN ('Kairali The Ayurvedic Healing Village', 'Kairali Ayurvedic Centers') OR LOWER(lead_relates_to_which_company) LIKE '%healing village%' OR LOWER(lead_relates_to_which_company) LIKE '%ktahv%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic center%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic centre%'" },
     ],
   },
   {
@@ -91,11 +97,13 @@ const COMPANY_CONFIG: CompanyConfig[] = [
       { source: "Priyasharma AI-instagram", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(src = 'Instagram' OR mail_status = 'Instagram') AND (LOWER(lead_relates_to_which_company) LIKE '%training institute%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%')" },
       { source: "Priyasharma AI-Whatsapp", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(src = 'WhatsApp' OR src = 'API' OR mail_status = 'WhatsApp' OR mail_status = 'API') AND (LOWER(lead_relates_to_which_company) LIKE '%training institute%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%')" },
       { source: "Priyasharma AI-facebook", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", sourceFilter: "(src = 'Facebook' OR src = 'Messenger' OR mail_status = 'Facebook' OR mail_status = 'Messenger') AND (LOWER(lead_relates_to_which_company) LIKE '%training institute%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%')" },
-      { source: "Priyasharma AI Chat", table: "kairali_chatbase_leads_api_priya_sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sourceFilter: "(src IS NULL OR src NOT IN ('Widget or Iframe', 'API', 'Instagram', 'WhatsApp', 'Facebook', 'Messenger')) AND (LOWER(lead_relates_to_which_company) LIKE '%training institute%' OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%')" },
+      // PriyaSharma AI Chat for KAPL: comes from Dr_Aarika_ChatBase_Leads_DB & KAPPL_Chat_Base_Leads_API_Priya_Sharma only
+      { source: "PriyaSharma AI Chat", table: "Dr_Aarika_ChatBase_Leads_DB", dateCol: "chat_created_date_time", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", blankSentStatusAsGap1: true, sourceFilter: "lead_relates_to_which_company IN ('Kairali Ayurvedic Products', 'Kairali Ayurvedic Training Institute') OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%' OR LOWER(lead_relates_to_which_company) LIKE '%training institute%'" },
+      { source: "PriyaSharma AI Chat", table: "KAPPL_Chat_Base_Leads_API_Priya_Sharma", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "lead_id", nameCol: "name", emailCol: "email", sentStatusDeleteCol: "sent_status", blankSentStatusAsGap1: true, sourceFilter: "lead_relates_to_which_company IN ('Kairali Ayurvedic Products', 'Kairali Ayurvedic Training Institute') OR LOWER(lead_relates_to_which_company) LIKE '%ayurvedic product%' OR LOWER(lead_relates_to_which_company) LIKE '%product%' OR LOWER(lead_relates_to_which_company) LIKE '%training institute%'" },
       // CRR data sources: 3 tables (pob_lost_clients_tracker_fms, data_repush_to_calling_sheet_mr_app_tp_CallingSheetPush, repeat_orders_from_new_orders_calling_enquiry_fms_main)
       { source: "CRR", table: "pob_lost_clients_tracker_fms", dateCol: "timestamp_stage1", mobileCol: "contact_stage1", leadIdCol: "uid_stage1", nameCol: "client_name_stage1", emailCol: "email_stage1" },
-      { source: "CRR", table: "data_repush_to_calling_sheet_mr_app_tp_CallingSheetPush", dateCol: "time_stamp", mobileCol: "mobile", leadIdCol: "id_value", nameCol: "name_of_client", emailCol: "email_id" },
-      { source: "CRR", table: "repeat_orders_from_new_orders_calling_enquiry_fms_main", dateCol: "time_stamp", mobileCol: "mobile", leadIdCol: "lead_id", nameCol: "name_of_client", emailCol: "email_id" },
+      { source: "CRR", table: "data_repush_to_calling_sheet_mr_app_tp_CallingSheetPush", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "id_value", nameCol: "name_of_client", emailCol: "email_id" },
+      { source: "CRR", table: "repeat_orders_from_new_orders_calling_enquiry_fms_main", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "lead_id", nameCol: "name_of_client", emailCol: "email_id" },
       // Kairali Products Website source: Shopify abandoned checkouts (enquiry_id matches buffer lead_id directly; filter by timeStamp column)
       { source: "Website", table: "shopify_abandoned_checkouts", dateCol: "timestamp", mobileCol: "phone", leadIdCol: "enquiry_id", nameCol: "customer", emailCol: "email" }
     ],
@@ -126,6 +134,7 @@ const BUFFER_OVERRIDE_14_OCT: Record<string, Record<string, number>> = {
     "Anjali AI Instagram": 0,
     "Anjali AI Facebook":  0,
     "Anjali AI WhatsApp":  0,
+    "Anjali AI-Playground": 0,
     "website":             0,
   },
   "Kairali The Ayurvedic Healing Village": {
@@ -138,6 +147,8 @@ const BUFFER_OVERRIDE_14_OCT: Record<string, Record<string, number>> = {
     "Priyasharma AI-instagram": 1,
     "Priyasharma AI-web":       0,
     "Priyasharma AI Chat":      0,
+    "PriyaSharma AI Chat":      0,
+    "PriyaSharma AI-Playground": 0,
     "CRR":                      0,
     "Website":                  0,
     "Site Exit Pop-up":         0,
@@ -151,6 +162,7 @@ const BUFFER_OVERRIDE_14_OCT: Record<string, Record<string, number>> = {
     "Priyasharma AI-web":        0,
     "Priyasharma AI-facebook":   0,
     "Priyasharma AI Chat":       0,
+    "PriyaSharma AI Chat":       0,
   },
 };
 
@@ -164,6 +176,7 @@ const CRM_OVERRIDE_14_OCT: Record<string, Record<string, number>> = {
     "Anjali AI Instagram": 0,
     "Anjali AI Facebook":  0,
     "Anjali AI WhatsApp":  0,
+    "Anjali AI-Playground": 0,
     "website":             0,
   },
   "Kairali The Ayurvedic Healing Village": {
@@ -176,6 +189,8 @@ const CRM_OVERRIDE_14_OCT: Record<string, Record<string, number>> = {
     "Priyasharma AI-instagram": 1,
     "Priyasharma AI-web":       0,
     "Priyasharma AI Chat":      0,
+    "PriyaSharma AI Chat":      0,
+    "PriyaSharma AI-Playground": 0,
     "CRR":                      0,
     "Website":                  0,
     "Site Exit Pop-up":         0,
@@ -189,6 +204,7 @@ const CRM_OVERRIDE_14_OCT: Record<string, Record<string, number>> = {
     "Priyasharma AI-web":        0,
     "Priyasharma AI-facebook":   0,
     "Priyasharma AI Chat":       0,
+    "PriyaSharma AI Chat":       0,
   },
 };
 
@@ -202,6 +218,7 @@ const TRANSFERS_OVERRIDE_14_OCT: Record<string, Record<string, { sales: number; 
     "Anjali AI Instagram": { sales: 0,  kserve: 0 },
     "Anjali AI Facebook":  { sales: 0,  kserve: 0 },
     "Anjali AI WhatsApp":  { sales: 0,  kserve: 0 },
+    "Anjali AI-Playground": { sales: 0,  kserve: 0 },
     "website":             { sales: 0,  kserve: 0 },
   },
   "Kairali The Ayurvedic Healing Village": {
@@ -214,6 +231,8 @@ const TRANSFERS_OVERRIDE_14_OCT: Record<string, Record<string, { sales: number; 
     "Priyasharma AI-instagram":{ sales: 1,  kserve: 0 },
     "Priyasharma AI-web":      { sales: 0,  kserve: 0 },
     "Priyasharma AI Chat":     { sales: 0,  kserve: 0 },
+    "PriyaSharma AI Chat":     { sales: 0,  kserve: 0 },
+    "PriyaSharma AI-Playground": { sales: 0,  kserve: 0 },
     "CRR":                     { sales: 0,  kserve: 0 },
     "Website":                 { sales: 0,  kserve: 0 },
     "Site Exit Pop-up":        { sales: 0,  kserve: 0 },
@@ -227,6 +246,7 @@ const TRANSFERS_OVERRIDE_14_OCT: Record<string, Record<string, { sales: number; 
     "Priyasharma AI-web":       { sales: 0,  kserve: 0 },
     "Priyasharma AI-facebook":  { sales: 0,  kserve: 0 },
     "Priyasharma AI Chat":      { sales: 0,  kserve: 0 },
+    "PriyaSharma AI Chat":      { sales: 0,  kserve: 0 },
   },
 };
 
@@ -967,14 +987,17 @@ async function queryDirectTable(
     byDate[dt].timestamps.push(t);
 
     // Track Gap 1 deletions / un-transferred leads:
-    // 1) Chatbase AI sources: sent_status starts with 'Transfer to Delete'
+    // 1) Chatbase AI sources: sent_status starts with 'Transfer to Delete' or blank if blankSentStatusAsGap1
     if (cfg.sentStatusDeleteCol) {
       const ss = String(r.sent_status_raw ?? "").trim();
-      if (ss.toLowerCase().startsWith("transfer to delete")) {
+      const isBlank = !r.sent_status_raw || ss === "" || ss.toLowerCase() === "null";
+      if (ss.toLowerCase().startsWith("transfer to delete") || (cfg.blankSentStatusAsGap1 && isBlank)) {
         byDate[dt].deletedLeadIds.push(lid);
         byDate[dt].deletedMobiles.push(mob);
-        byDate[dt].deletedStatuses[lid] = "Lost (Transfer to Delete)";
-        byDate[dt].deletedReasons[lid] = "Lead received in Direct API but marked 'Transfer to Delete' — never forwarded to Master Medium Merged (Gap 1: Direct→Medium)";
+        byDate[dt].deletedStatuses[lid] = isBlank ? "Pending (Blank Status)" : "Lost (Transfer to Delete)";
+        byDate[dt].deletedReasons[lid] = isBlank
+          ? "Lead received in Direct API with blank sent_status — temporarily counted in Gap 1: Direct→Medium"
+          : "Lead received in Direct API but marked 'Transfer to Delete' — never forwarded to Master Medium Merged (Gap 1: Direct→Medium)";
       }
     }
     // 2) Email Parser: on 14 October 2026 (2026-10-14), leads with blank dialer_sheet_sent_status
@@ -1703,6 +1726,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
         r.forEach((item: any) => {
           item._isEmailParser = srcCfg.table === "email_parser_info_mails";
           item._hasSentStatusDeleteCol = Boolean(srcCfg.sentStatusDeleteCol);
+          item._blankSentStatusAsGap1 = Boolean(srcCfg.blankSentStatusAsGap1);
         });
         directRows.push(...r);
       } catch {
@@ -1722,6 +1746,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
           r.forEach((item: any) => {
             item._isEmailParser = srcCfg.table === "email_parser_info_mails";
             item._hasSentStatusDeleteCol = Boolean(srcCfg.sentStatusDeleteCol);
+            item._blankSentStatusAsGap1 = Boolean(srcCfg.blankSentStatusAsGap1);
           });
           directRows.push(...r);
         } catch (err) {
@@ -1751,17 +1776,22 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       const generatedAt = rawTime ? rawTime.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : date;
       const leadTime = rawTime && !isNaN(rawTime.getTime()) ? rawTime.getTime() : new Date(`${date}T23:59:59`).getTime();
 
-      // Gap 1 check: Transfer to Delete or blank Dialer Sent Status on 14-Oct
+      // Gap 1 check: Transfer to Delete or blank Dialer Sent Status on 14-Oct, or blank sent_status when blankSentStatusAsGap1 is true
       let isGap1 = false;
       let gap1Reason = "";
       let gap1Status = "Lost";
 
-      if (r._hasSentStatusDeleteCol && r.sent_status_raw) {
-        const ss = String(r.sent_status_raw).trim();
+      if (r._hasSentStatusDeleteCol) {
+        const ss = String(r.sent_status_raw ?? "").trim();
+        const isBlank = !r.sent_status_raw || ss === "" || ss.toLowerCase() === "null";
         if (ss.toLowerCase().startsWith("transfer to delete")) {
           isGap1 = true;
           gap1Status = "Lost (Transfer to Delete)";
           gap1Reason = "Lead received in Direct API but marked 'Transfer to Delete' in source sheet — not transferred to Master Medium Merged (Gap 1: Direct→Medium)";
+        } else if (r._blankSentStatusAsGap1 && isBlank) {
+          isGap1 = true;
+          gap1Status = "Pending (Blank Status)";
+          gap1Reason = "Lead received in Direct API with blank sent_status — temporarily counted in Gap 1: Direct→Medium";
         }
       }
       if (!isGap1 && r._isEmailParser && date === "2026-10-14") {
@@ -1821,7 +1851,9 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
         leadId === "1a13b68ea0b00852"
       );
 
-      if (!norm && !isSpecial14OctLead) {
+      const bufMatch = (leadId ? sameDayMap.get(leadId) : null) || (norm ? sameDayMap.get(norm) : null);
+
+      if (!norm && !bufMatch && !isSpecial14OctLead) {
         records.push({
           id: leadId,
           name: r.client_name ? String(r.client_name).trim() : "",
@@ -1858,8 +1890,6 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
         });
         continue;
       }
-
-      const bufMatch = sameDayMap.get(leadId) || (norm ? sameDayMap.get(norm) : null);
       const isLeadIdMatch = Boolean(bufMatch && bufMatch.lead_id && isSameLeadId(leadId, String(bufMatch.lead_id)));
       const isSourceMatch = Boolean(bufMatch && (date === "2026-10-14" || bufferMatchesSource(source, bufMatch.Verified_Source, bufMatch.Data_Source, company)));
       const isSameDayMatch = Boolean(bufMatch && rowDate(bufMatch.Date_Time) === date && isSourceMatch);
@@ -2264,6 +2294,15 @@ export async function GET(request: Request) {
               }
             }
 
+            // Gap 1 check: lead was "Transfer to Delete" or blank status in the AI source sheet → not forwarded to Medium
+            const isGap1Deleted = Boolean(
+              (leadId && deletedIdSet.has(leadId)) || (m && deletedMobSet.has(m))
+            );
+            if (isGap1Deleted) {
+              // Counted in direct but not in medium — do not attempt buffer matching
+              continue;
+            }
+
             if (!m) {
               // Incomplete lead (no phone): check if it can be matched to buffer by lead_id
               const inBufByIdNoMobile = Boolean(leadId && bufLeadIdSet.has(leadId));
@@ -2281,15 +2320,6 @@ export async function GET(request: Request) {
                 else sales++;
               }
               continue; // skip mobile-based logic below
-            }
-
-            // Gap 1 check: lead was "Transfer to Delete" in the AI source sheet → not forwarded to Medium
-            const isGap1Deleted = Boolean(
-              (leadId && deletedIdSet.has(leadId)) || (m && deletedMobSet.has(m))
-            );
-            if (isGap1Deleted) {
-              // Counted in direct but not in medium — do not attempt buffer matching
-              continue;
             }
 
             const inBufById = Boolean(leadId && bufLeadIdSet.has(leadId));
