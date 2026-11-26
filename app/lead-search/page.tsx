@@ -97,6 +97,8 @@ interface LeadJourney {
   currentHolder?: string
   assignedDate?: string
   assignReason?: string
+  isDeleted?: boolean
+  isKserveOnly?: boolean
   isDirectRoute?: boolean
   routingType?: string
   kserveStatus: string
@@ -258,8 +260,8 @@ function getFinalStatusColor(status: string) {
 }
 
 function getKserveStatusBadge(kserveStatus: string, kserveRoute: string) {
-  if (!kserveStatus && !kserveRoute) {
-    return <Badge variant="outline" className="text-xs text-gray-500">Direct Route</Badge>
+  if (!kserveStatus && (!kserveRoute || kserveRoute.toLowerCase().includes("direct"))) {
+    return <Badge variant="outline" className="text-xs text-slate-600 bg-slate-50 border-slate-200">Direct Route</Badge>
   }
   const s = (kserveStatus || "").toLowerCase()
   // Negatives first: "Non-Qualified" / "Not Qualified" also contain "qualified".
@@ -268,6 +270,9 @@ function getKserveStatusBadge(kserveStatus: string, kserveRoute: string) {
   }
   if (s.includes("qualified") || s.includes("verified")) {
     return <Badge className="text-xs bg-emerald-100 text-emerald-700 border-emerald-200">KServe ✓ Qualified</Badge>
+  }
+  if (s.includes("pending") || s.includes("sent to kserve")) {
+    return <Badge className="text-xs bg-purple-100 text-purple-700 border-purple-200">KServe: {kserveStatus}</Badge>
   }
   return <Badge className="text-xs bg-blue-100 text-blue-700 border-blue-200">KServe: {kserveStatus || kserveRoute}</Badge>
 }
@@ -294,29 +299,33 @@ function TimelineModal({ lead, onClose }: { lead: LeadJourney; onClose: () => vo
     lead.convertedDate || lastCall?.callDate || lead.assignedDate
   )
 
-  const isDirect = lead.isDirectRoute ?? (!lead.stagingDate && !lead.kserveAgentName)
+  const isDirect = lead.isDirectRoute ?? (!lead.stagingDate && !lead.kserveAgentName && !lead.kserveStatus)
+  const isDeleted = Boolean(lead.isDeleted) || /data\s*backup.*delete|deleted/i.test(lead.assignedTo || "")
+  const isKserveOnly = Boolean(lead.isKserveOnly)
 
   // Current Ownership
-  const currentOwner = lead.currentHolder || lastCall?.agentName || lead.assignedTo || "Unassigned"
+  const currentOwner = isDeleted
+    ? "Data Backup - Deleted"
+    : lead.currentHolder || lastCall?.agentName || lead.assignedTo || "Unassigned"
   const currentOwnerId = lastCall?.agentId || ""
   const totalCallCount = Math.max(lead.totalFollowups, lead.followups.length)
 
   // Time elapsed since last call
   const timeSinceLastCall = lastCall?.callDate ? calculateTat(lastCall.callDate, new Date().toISOString()) : "—"
 
-  // Determine Lifecycle Stage: 1: Coming -> 2: Routed -> 3: Assigned -> 4: Follow-up Active -> 5: Closed
-  const isClosed = Boolean(
+  // Determine Lifecycle Stage: 1: Coming -> 2: Routed -> 3: Assigned (or Deleted End) -> 4: Follow-up Active -> 5: Closed
+  const isClosed = !isDeleted && Boolean(
     lead.finalStatus?.toLowerCase().includes("convert") ||
     lead.finalStatus?.toLowerCase().includes("cold") ||
     lead.finalStatus?.toLowerCase().includes("lost") ||
     lead.convertedDate
   )
-  const isFollowupActive = lead.followups.length > 0 && !isClosed
-  const isAssigned = Boolean(lead.assignedTo) && lead.followups.length === 0 && !isClosed
-  const isRouting = !lead.assignedTo && Boolean(lead.bufferArrival) && !isClosed
+  const isFollowupActive = !isDeleted && totalCallCount > 0 && !isClosed
+  const isAssigned = !isDeleted && !isKserveOnly && Boolean(lead.assignedTo) && totalCallCount === 0 && !isClosed
+  const isRouting = !isDeleted && (isKserveOnly || (!lead.assignedTo && Boolean(lead.bufferArrival))) && !isClosed
 
   // Current stage number for progress bar
-  const currentStageNumber = isClosed ? 5 : isFollowupActive ? 4 : isAssigned ? 3 : isRouting ? 2 : 1
+  const currentStageNumber = isDeleted ? 3 : isClosed ? 5 : isFollowupActive ? 4 : isAssigned ? 3 : isRouting ? 2 : 1
 
   // Accordion state: by default null = all stages minimized!
   const [activeStage, setActiveStage] = useState<number | null>(null)
@@ -334,42 +343,47 @@ function TimelineModal({ lead, onClose }: { lead: LeadJourney; onClose: () => vo
         {/* Styles defined globally in app/globals.css — journey-scroll, animate-dash-flow, animate-pulse-soft */}
 
         {/* Modal Fixed Header (Won't scroll away, stays docked at top) */}
-        <div className="flex-shrink-0 bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 text-white p-4 sm:p-5 border-b border-white/10 shadow-md">
+        <div className="flex-shrink-0 bg-gradient-to-r from-[#130b2e] via-[#1c1142] to-[#231649] text-white p-4 sm:p-5 border-b border-white/10 shadow-md">
           <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1 flex-1 min-w-0">
+            <div className="space-y-1.5 flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-xl sm:text-2xl font-black tracking-tight text-white truncate">
                   Lead Journey — {lead.clientName || lead.leadId}
                 </h3>
-                {isDirect ? (
+                {isDeleted ? (
+                  <Badge className="bg-rose-500/20 text-rose-200 border border-rose-400/50 text-xs px-2.5 py-0.5 flex items-center gap-1.5 shadow-sm">
+                    <XCircle className="h-3.5 w-3.5 text-rose-300" /> Data Backup - Deleted (Ended at Stage 3)
+                  </Badge>
+                ) : isDirect ? (
                   <Badge className="bg-amber-500/20 text-amber-300 border border-amber-400/40 text-xs px-2.5 py-0.5 flex items-center gap-1.5 shadow-sm">
                     <Zap className="h-3.5 w-3.5 fill-amber-400 text-amber-400" /> Direct Route (Bypassed KServe)
                   </Badge>
                 ) : (
-                  <Badge className="bg-purple-500/20 text-purple-300 border border-purple-400/40 text-xs px-2.5 py-0.5 flex items-center gap-1.5">
-                    <Bot className="h-3.5 w-3.5 text-purple-300" /> KServe Voice Qualified
+                  <Badge className="bg-purple-500/20 text-purple-200 border border-purple-400/50 text-xs px-2.5 py-0.5 flex items-center gap-1.5">
+                    <Bot className="h-3.5 w-3.5 text-purple-300" /> {isKserveOnly ? "KServe AI Voice Queue" : "KServe Voice Qualified"}
                   </Badge>
                 )}
-                {lead.finalStatus && (
+                {lead.finalStatus && !isDeleted && (
                   <Badge className={`text-xs font-bold px-2.5 py-0.5 ${getFinalStatusColor(lead.finalStatus)}`}>
                     {lead.finalStatus}
                   </Badge>
                 )}
               </div>
-              <p className="text-xs text-slate-300 flex items-center gap-2 sm:gap-2.5 flex-wrap">
-                <span><strong className="text-slate-100">ID:</strong> {lead.leadId}</span>
-                <span className="text-slate-500">·</span>
-                <span><strong className="text-slate-100">Phone:</strong> {lead.mobile || "—"}</span>
+              {/* Issue 1: Pipe | separators between ID, Phone, Category, Company */}
+              <p className="text-xs text-slate-200 flex items-center gap-2 sm:gap-2.5 flex-wrap">
+                <span><strong className="text-white">ID:</strong> {lead.leadId}</span>
+                <span className="text-slate-400 font-light">|</span>
+                <span><strong className="text-white">Phone:</strong> {lead.mobile || "—"}</span>
                 {lead.category && (
                   <>
-                    <span className="text-slate-500">·</span>
-                    <span className="text-slate-300"><strong className="text-slate-100">Category:</strong> {lead.category}</span>
+                    <span className="text-slate-400 font-light">|</span>
+                    <span><strong className="text-white">Category:</strong> {lead.category}</span>
                   </>
                 )}
                 {lead.company && (
                   <>
-                    <span className="text-slate-500">·</span>
-                    <span className="text-slate-300"><strong className="text-slate-100">Company:</strong> {lead.company}</span>
+                    <span className="text-slate-400 font-light">|</span>
+                    <span><strong className="text-white">Company:</strong> {lead.company}</span>
                   </>
                 )}
               </p>
@@ -386,152 +400,221 @@ function TimelineModal({ lead, onClose }: { lead: LeadJourney; onClose: () => vo
             </button>
           </div>
 
-          {/* Stepper: Responsive Visual Journey Progression */}
+          {/* Issue 2: Connected Journey Lifecycle Pipeline */}
           <div className="mt-4 pt-3 border-t border-white/10">
-            <div className="flex items-center justify-between text-xs mb-2 px-1">
-              <span className="font-bold text-slate-300 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
-                <Activity className="h-3.5 w-3.5 text-indigo-400" /> Journey Lifecycle Pipeline
+            <div className="flex items-center justify-between text-xs mb-2.5 px-0.5 flex-wrap gap-2">
+              <span className="font-bold text-white tracking-wide text-xs flex items-center gap-1.5">
+                <Activity className="h-4 w-4 text-indigo-300" /> Journey Lifecycle Pipeline
               </span>
-              <span className="text-[11px] font-semibold text-amber-300">
-                Current: {isClosed ? "Stage 5 · Closed" : isFollowupActive ? `Stage 4 · Active Follow-up (${totalCallCount} Calls)` : isAssigned ? "Stage 3 · Sales Assigned" : "Stage 1 · Buffer Arrival"}
+              <span className={`text-xs font-bold ${isDeleted ? "text-rose-300" : "text-amber-300"}`}>
+                Current:{" "}
+                {isDeleted
+                  ? "Stage 3 · Ended (Data Backup - Deleted)"
+                  : isClosed
+                  ? "Stage 5 · Closed"
+                  : isFollowupActive
+                  ? `Stage 4 · Active Follow-up (${totalCallCount} Calls)`
+                  : isKserveOnly
+                  ? "Stage 2 · KServe AI Voice Queue"
+                  : isAssigned
+                  ? "Stage 3 · Sales Assigned"
+                  : "Stage 1 · Buffer Arrival"}
               </span>
             </div>
 
-            {/* Responsive Stepper Container (clickable to toggle stages) */}
-            <div className="flex sm:grid sm:grid-cols-5 gap-2 overflow-x-auto pb-1 journey-scroll">
+            {/* Connected 5-Stage Pipeline Boxes with Horizontal Connector Lines */}
+            <div className="flex items-center overflow-x-auto pb-1 journey-scroll">
               {/* Step 1 */}
-              <div 
+              <div
                 onClick={() => toggleStage(1)}
-                className={`p-2 rounded-lg text-center min-w-[130px] sm:min-w-0 transition-all cursor-pointer hover:opacity-90 active:scale-95 ${
+                className={`flex-1 min-w-[140px] px-3 py-2.5 rounded-xl text-center transition-all cursor-pointer select-none hover:brightness-110 active:scale-[0.98] ${
                   activeStage === 1
-                    ? "bg-blue-600 border-2 border-blue-300 text-white shadow-md ring-2 ring-blue-300/40"
+                    ? "bg-indigo-600/80 border-2 border-indigo-300 text-white shadow-[0_0_16px_rgba(129,140,248,0.45)]"
                     : currentStageNumber >= 1
-                    ? "bg-blue-950/80 border border-blue-400/50 text-blue-200"
-                    : "bg-white/5 border border-white/5 text-slate-400"
+                    ? "bg-[#221d52]/90 border border-indigo-400/60 text-white"
+                    : "bg-white/5 border border-white/15 text-slate-400"
                 }`}
               >
-                <div className="flex items-center justify-center gap-1 mb-0.5">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-blue-400" />
-                  <span className="font-bold text-[11px]">1. Ingested</span>
+                <div className="flex items-center justify-center gap-1.5">
+                  <CheckCircle2 className="h-4 w-4 text-indigo-300 flex-shrink-0" />
+                  <span className="font-bold text-xs">1. Ingested</span>
                 </div>
-                <span className="text-[10px] text-slate-300 block truncate">
-                  {activeStage === 1 ? "[-] Open" : "[+] Buffer Arrival"}
+                <span className="text-[11px] text-slate-300 block truncate mt-0.5">
+                  Buffer Arrival
                 </span>
               </div>
+
+              {/* Connector 1 -> 2 */}
+              <div className={`h-[2px] w-4 sm:w-6 flex-shrink-0 ${currentStageNumber >= 2 ? "bg-purple-400/80" : "bg-white/20"}`} />
 
               {/* Step 2 */}
-              <div 
+              <div
                 onClick={() => toggleStage(2)}
-                className={`p-2 rounded-lg text-center min-w-[130px] sm:min-w-0 transition-all cursor-pointer hover:opacity-90 active:scale-95 ${
+                className={`flex-1 min-w-[140px] px-3 py-2.5 rounded-xl text-center transition-all cursor-pointer select-none hover:brightness-110 active:scale-[0.98] ${
                   activeStage === 2
-                    ? "bg-purple-600 border-2 border-purple-300 text-white shadow-md ring-2 ring-purple-300/40"
+                    ? "bg-purple-700/85 border-2 border-purple-300 text-white shadow-[0_0_16px_rgba(192,132,252,0.5)]"
+                    : currentStageNumber === 2 && isKserveOnly
+                    ? "bg-purple-900/90 border-2 border-purple-400 text-white shadow-[0_0_16px_rgba(192,132,252,0.45)]"
                     : currentStageNumber >= 2
-                    ? "bg-purple-950/80 border border-purple-400/50 text-purple-200"
-                    : "bg-white/5 border border-white/5 text-slate-400"
+                    ? "bg-[#31125e]/90 border border-purple-400/70 text-white"
+                    : "bg-white/5 border border-white/15 text-slate-400"
                 }`}
               >
-                <div className="flex items-center justify-center gap-1 mb-0.5">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-purple-400" />
-                  <span className="font-bold text-[11px]">2. Routed</span>
+                <div className="flex items-center justify-center gap-1.5">
+                  {currentStageNumber === 2 && isKserveOnly ? (
+                    <span className="h-3.5 w-3.5 rounded-full border-2 border-purple-300 flex items-center justify-center flex-shrink-0">
+                      <span className="h-1.5 w-1.5 rounded-full bg-purple-300 animate-pulse" />
+                    </span>
+                  ) : (
+                    <CheckCircle2 className="h-4 w-4 text-purple-300 flex-shrink-0" />
+                  )}
+                  <span className="font-bold text-xs">2. Routed</span>
                 </div>
-                <span className="text-[10px] text-slate-300 block truncate">
-                  {activeStage === 2 ? "[-] Open" : isDirect ? "[+] Direct Bypass" : "[+] KServe AI"}
+                <span className="text-[11px] text-slate-300 block truncate mt-0.5">
+                  {isDirect ? "Direct Bypass" : "KServe AI"}
                 </span>
               </div>
+
+              {/* Connector 2 -> 3 */}
+              <div className={`h-[2px] w-4 sm:w-6 flex-shrink-0 ${isDeleted ? "bg-rose-400/80" : currentStageNumber >= 3 ? "bg-indigo-400/80" : "bg-white/20"}`} />
 
               {/* Step 3 */}
-              <div 
+              <div
                 onClick={() => toggleStage(3)}
-                className={`p-2 rounded-lg text-center min-w-[130px] sm:min-w-0 transition-all cursor-pointer hover:opacity-90 active:scale-95 ${
-                  activeStage === 3
-                    ? "bg-indigo-600 border-2 border-indigo-300 text-white shadow-md ring-2 ring-indigo-300/40"
+                className={`flex-1 min-w-[140px] px-3 py-2.5 rounded-xl text-center transition-all cursor-pointer select-none hover:brightness-110 active:scale-[0.98] ${
+                  isDeleted
+                    ? "bg-rose-950/90 border-2 border-rose-400 text-white shadow-[0_0_16px_rgba(251,113,133,0.45)]"
+                    : activeStage === 3
+                    ? "bg-indigo-600/85 border-2 border-indigo-300 text-white shadow-[0_0_16px_rgba(129,140,248,0.45)]"
                     : currentStageNumber >= 3
-                    ? "bg-indigo-950/80 border border-indigo-400/50 text-indigo-200"
-                    : "bg-white/5 border border-white/5 text-slate-400"
+                    ? "bg-[#221d52]/90 border border-indigo-400/60 text-white"
+                    : "bg-white/5 border border-white/15 text-slate-400"
                 }`}
               >
-                <div className="flex items-center justify-center gap-1 mb-0.5">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-indigo-400" />
-                  <span className="font-bold text-[11px]">3. Assigned</span>
+                <div className="flex items-center justify-center gap-1.5">
+                  {isDeleted ? (
+                    <XCircle className="h-4 w-4 text-rose-300 flex-shrink-0" />
+                  ) : currentStageNumber >= 3 ? (
+                    <CheckCircle2 className="h-4 w-4 text-indigo-300 flex-shrink-0" />
+                  ) : (
+                    <span className="h-3.5 w-3.5 rounded-full border-2 border-slate-400 flex-shrink-0" />
+                  )}
+                  <span className="font-bold text-xs">{isDeleted ? "3. Deleted (End)" : "3. Assigned"}</span>
                 </div>
-                <span className="text-[10px] text-slate-300 block truncate">
-                  {activeStage === 3 ? "[-] Open" : `[+] ${lead.assignedTo || "Pending"}`}
+                <span className="text-[11px] text-slate-300 block truncate mt-0.5">
+                  {isDeleted ? "Data Backup" : isKserveOnly ? "Pending KServe" : lead.assignedTo || "Pending"}
                 </span>
               </div>
+
+              {/* Connector 3 -> 4 */}
+              <div className={`h-[2px] w-4 sm:w-6 flex-shrink-0 ${!isDeleted && currentStageNumber >= 4 ? "bg-amber-400/90" : "bg-white/20"}`} />
 
               {/* Step 4 */}
-              <div 
+              <div
                 onClick={() => toggleStage(4)}
-                className={`p-2 rounded-lg text-center min-w-[130px] sm:min-w-0 transition-all cursor-pointer hover:opacity-90 active:scale-95 ${
-                  activeStage === 4
-                    ? "bg-amber-600 border-2 border-amber-300 text-white shadow-md ring-2 ring-amber-300/40"
-                    : currentStageNumber === 4
-                    ? "bg-amber-950/90 border-2 border-amber-400 text-amber-200 shadow-lg ring-2 ring-amber-400/30"
+                className={`flex-1 min-w-[140px] px-3 py-2.5 rounded-xl text-center transition-all cursor-pointer select-none hover:brightness-110 active:scale-[0.98] ${
+                  isDeleted
+                    ? "bg-white/[0.03] border border-white/10 text-slate-500 opacity-50"
+                    : activeStage === 4 || currentStageNumber === 4
+                    ? "bg-gradient-to-b from-amber-700/70 to-amber-950/85 border-2 border-amber-400 text-white shadow-[0_0_18px_rgba(251,191,36,0.45)]"
                     : currentStageNumber > 4
-                    ? "bg-amber-950/60 border border-amber-400/40 text-amber-200"
-                    : "bg-white/5 border border-white/5 text-slate-400"
+                    ? "bg-amber-950/60 border border-amber-400/50 text-amber-100"
+                    : "bg-white/5 border border-white/15 text-slate-400"
                 }`}
               >
-                <div className="flex items-center justify-center gap-1 mb-0.5">
-                  {currentStageNumber === 4 ? (
-                    <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping" />
+                <div className="flex items-center justify-center gap-1.5">
+                  {!isDeleted && currentStageNumber === 4 ? (
+                    <span className="h-4 w-4 rounded-full border-2 border-amber-300 flex items-center justify-center flex-shrink-0">
+                      <span className="h-2 w-2 rounded-full bg-amber-300" />
+                    </span>
+                  ) : !isDeleted && currentStageNumber > 4 ? (
+                    <CheckCircle2 className="h-4 w-4 text-amber-300 flex-shrink-0" />
                   ) : (
-                    <CheckCircle2 className="h-3.5 w-3.5 text-amber-400" />
+                    <span className="h-3.5 w-3.5 rounded-full border-2 border-slate-400/70 flex-shrink-0" />
                   )}
-                  <span className="font-bold text-[11px]">4. Follow-up</span>
+                  <span className="font-bold text-xs">4. Follow-up</span>
                 </div>
-                <span className="text-[10px] text-slate-300 block truncate">
-                  {activeStage === 4 ? "[-] Open" : `[+] ${totalCallCount} Calls Dialed`}
+                <span className="text-[11px] text-slate-300 block truncate mt-0.5">
+                  {isDeleted ? "Skipped" : `${totalCallCount} Calls Dialed`}
                 </span>
               </div>
 
+              {/* Connector 4 -> 5 */}
+              <div className={`h-[2px] w-4 sm:w-6 flex-shrink-0 ${!isDeleted && isClosed ? "bg-emerald-400/90" : "bg-white/20"}`} />
+
               {/* Step 5 */}
-              <div 
+              <div
                 onClick={() => toggleStage(5)}
-                className={`p-2 rounded-lg text-center min-w-[130px] sm:min-w-0 transition-all cursor-pointer hover:opacity-90 active:scale-95 ${
-                  activeStage === 5
-                    ? "bg-emerald-600 border-2 border-emerald-300 text-white shadow-md ring-2 ring-emerald-300/40"
+                className={`flex-1 min-w-[140px] px-3 py-2.5 rounded-xl text-center transition-all cursor-pointer select-none hover:brightness-110 active:scale-[0.98] ${
+                  isDeleted
+                    ? "bg-white/[0.03] border border-white/10 text-slate-500 opacity-50"
+                    : activeStage === 5
+                    ? "bg-emerald-600/80 border-2 border-emerald-300 text-white shadow-[0_0_16px_rgba(52,211,153,0.45)]"
                     : isClosed
-                    ? "bg-emerald-950/90 border-2 border-emerald-400 text-emerald-200 shadow-lg"
-                    : "bg-white/5 border border-white/5 text-slate-400 opacity-60"
+                    ? "bg-emerald-950/90 border-2 border-emerald-400 text-emerald-100 shadow-[0_0_16px_rgba(52,211,153,0.35)]"
+                    : "bg-white/5 border border-white/15 text-slate-300"
                 }`}
               >
-                <div className="flex items-center justify-center gap-1 mb-0.5">
-                  <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />
-                  <span className="font-bold text-[11px]">5. Closing</span>
+                <div className="flex items-center justify-center gap-1.5">
+                  {!isDeleted && isClosed ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-300 flex-shrink-0" />
+                  ) : (
+                    <span className="h-3.5 w-3.5 rounded-full border-2 border-indigo-300/60 flex-shrink-0" />
+                  )}
+                  <span className="font-bold text-xs">5. Closing</span>
                 </div>
-                <span className="text-[10px] text-slate-300 block truncate">
-                  {activeStage === 5 ? "[-] Open" : `[+] ${isClosed ? lead.finalStatus : "In Progress"}`}
+                <span className="text-[11px] text-slate-300 block truncate mt-0.5">
+                  {isDeleted ? "Ended at Stage 3" : isClosed ? lead.finalStatus : "In Progress"}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Quick Metrics Banner */}
-          <div className="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-2 bg-white/10 backdrop-blur-md rounded-xl p-2.5 sm:p-3 border border-white/10">
-            <div>
-              <span className="text-[10px] uppercase font-bold tracking-wider text-slate-300">Total Journey TAT</span>
-              <p className="text-sm font-extrabold text-amber-300 flex items-center gap-1 mt-0.5">
-                <Clock className="h-3.5 w-3.5 text-amber-400" /> {totalJourneyTat}
-              </p>
+          {/* Issue 3: Single-Line Inline Metrics Bar matching screenshot */}
+          <div className="mt-3 rounded-xl bg-white/[0.07] border border-white/15 px-3.5 py-2.5 flex flex-wrap lg:flex-nowrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-7 h-7 rounded-full bg-indigo-500/25 border border-indigo-400/30 flex items-center justify-center flex-shrink-0">
+                <Clock className="h-3.5 w-3.5 text-amber-300" />
+              </span>
+              <span className="text-xs text-slate-200 whitespace-nowrap">
+                Total Journey TAT: <strong className="text-sm font-extrabold text-amber-300 ml-0.5">{totalJourneyTat}</strong>
+              </span>
             </div>
-            <div>
-              <span className="text-[10px] uppercase font-bold tracking-wider text-slate-300">Current Owner</span>
-              <p className="text-sm font-bold text-white mt-0.5 truncate flex items-center gap-1">
-                <User className="h-3.5 w-3.5 text-indigo-300" /> {currentOwner}
-              </p>
+
+            <div className="hidden lg:block w-px h-5 bg-white/15 flex-shrink-0" />
+
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-7 h-7 rounded-full bg-indigo-500/25 border border-indigo-400/30 flex items-center justify-center flex-shrink-0">
+                <User className="h-3.5 w-3.5 text-indigo-200" />
+              </span>
+              <span className="text-xs text-slate-200 truncate">
+                Current Owner: <strong className="text-sm font-extrabold text-white ml-0.5">{currentOwner}</strong>
+              </span>
             </div>
-            <div>
-              <span className="text-[10px] uppercase font-bold tracking-wider text-slate-300">Follow-up Calls</span>
-              <p className="text-sm font-bold text-indigo-200 mt-0.5 flex items-center gap-1">
-                <PhoneCall className="h-3.5 w-3.5 text-indigo-300" /> {totalCallCount} calls
-              </p>
+
+            <div className="hidden lg:block w-px h-5 bg-white/15 flex-shrink-0" />
+
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-7 h-7 rounded-full bg-indigo-500/25 border border-indigo-400/30 flex items-center justify-center flex-shrink-0">
+                <PhoneCall className="h-3.5 w-3.5 text-indigo-200" />
+              </span>
+              <span className="text-xs text-slate-200 whitespace-nowrap">
+                Follow-up Calls: <strong className="text-sm font-extrabold text-white ml-0.5">{totalCallCount} calls</strong>
+              </span>
             </div>
-            <div>
-              <span className="text-[10px] uppercase font-bold tracking-wider text-slate-300">Final Outcome</span>
-              <p className="text-sm font-bold text-emerald-300 mt-0.5 truncate">
-                {lead.finalStatus || "Follow-up Open"}
-              </p>
+
+            <div className="hidden lg:block w-px h-5 bg-white/15 flex-shrink-0" />
+
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-7 h-7 rounded-full bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center flex-shrink-0">
+                <TrendingUp className="h-3.5 w-3.5 text-emerald-300" />
+              </span>
+              <span className="text-xs text-slate-200 truncate">
+                Final Outcome:{" "}
+                <strong className={`text-sm font-extrabold ml-0.5 ${isDeleted ? "text-rose-300" : "text-emerald-300"}`}>
+                  {lead.finalStatus || (isKserveOnly ? "KServe Pending" : "Follow-up Open")}
+                </strong>
+              </span>
             </div>
           </div>
         </div>
@@ -596,26 +679,32 @@ function TimelineModal({ lead, onClose }: { lead: LeadJourney; onClose: () => vo
                 onClick={() => toggleStage(1)}
                 className="p-3.5 sm:p-4 flex items-center justify-between gap-3 cursor-pointer select-none hover:bg-slate-50/80 transition-colors"
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white flex-shrink-0 font-bold text-xs shadow-xs ${
+                <div className="flex items-start gap-3 min-w-0 flex-1">
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-white flex-shrink-0 font-bold text-xs shadow-xs ${
                     activeStage === 1 ? "bg-blue-600 ring-4 ring-blue-100" : "bg-blue-500"
                   }`}>
                     <FileText className="h-4 w-4" />
                   </div>
-                  <div className="min-w-0">
+                  <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-[11px] font-bold w-[68px] justify-center py-0.5 mt-0.5 flex-shrink-0">
+                    Stage 1
+                  </Badge>
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-[11px] font-bold px-2 py-0">
-                        Stage 1
-                      </Badge>
-                      <h4 className="text-sm font-bold text-slate-900 truncate">
+                      <h4 className="text-sm font-bold text-slate-900">
                         Buffer Arrival (Lead Ingestion)
                       </h4>
-                      <Badge variant="outline" className="text-[10px] text-slate-500 bg-slate-50 border-slate-200">
+                      <span className="text-slate-300">|</span>
+                      <span className="text-xs text-slate-600 inline-flex items-center gap-1 font-medium">
+                        <Calendar className="h-3.5 w-3.5 text-slate-400" />
                         {formatDate(lead.bufferArrival)}
-                      </Badge>
+                      </span>
                     </div>
-                    <p className="text-xs text-slate-500 truncate mt-0.5">
-                      Source: <strong className="text-slate-700">{lead.leadSource || "Website"}</strong> · Category: <strong className="text-slate-700">{lead.category || "—"}</strong> · Company: {lead.company || "—"}
+                    <p className="text-xs text-slate-500 truncate mt-1">
+                      Source: <strong className="text-slate-800">{lead.dataSource || lead.leadSource || "Website"}</strong>
+                      <span className="mx-2 text-slate-300">|</span>
+                      Category: <strong className="text-slate-800">{lead.category || "—"}</strong>
+                      <span className="mx-2 text-slate-300">|</span>
+                      Company: <strong className="text-slate-800">{lead.company || "—"}</strong>
                     </p>
                   </div>
                 </div>
@@ -709,36 +798,36 @@ function TimelineModal({ lead, onClose }: { lead: LeadJourney; onClose: () => vo
                 onClick={() => toggleStage(2)}
                 className="p-3.5 sm:p-4 flex items-center justify-between gap-3 cursor-pointer select-none hover:bg-slate-50/80 transition-colors"
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white flex-shrink-0 font-bold text-xs shadow-xs ${
+                <div className="flex items-start gap-3 min-w-0 flex-1">
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-white flex-shrink-0 font-bold text-xs shadow-xs ${
                     activeStage === 2 
                       ? isDirect ? "bg-amber-500 ring-4 ring-amber-100" : "bg-purple-600 ring-4 ring-purple-100" 
                       : isDirect ? "bg-amber-500" : "bg-purple-500"
                   }`}>
                     {isDirect ? <Zap className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
                   </div>
-                  <div className="min-w-0">
+                  <Badge className={`text-[11px] font-bold w-[68px] justify-center py-0.5 mt-0.5 flex-shrink-0 ${
+                    isDirect 
+                      ? "bg-amber-100 text-amber-800 border-amber-200" 
+                      : "bg-purple-100 text-purple-800 border-purple-200"
+                  }`}>
+                    Stage 2
+                  </Badge>
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <Badge className={`text-[11px] font-bold px-2 py-0 ${
-                        isDirect 
-                          ? "bg-amber-100 text-amber-800 border-amber-200" 
-                          : "bg-purple-100 text-purple-800 border-purple-200"
-                      }`}>
-                        Stage 2
-                      </Badge>
-                      <h4 className="text-sm font-bold text-slate-900 truncate">
-                        Routing Decision: {isDirect ? "Direct Route (Bypassed KServe)" : "KServe AI Voice Qualified"}
+                      <h4 className="text-sm font-bold text-slate-900">
+                        Routing Decision: {isDirect ? "Direct Route (Bypassed KServe)" : "KServe AI Voice"}
                       </h4>
                       {isDirect ? (
-                        <Badge className="bg-amber-500 text-white text-[10px] font-bold">
+                        <Badge className="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold">
                           ⚡ Skipped AI Calling
                         </Badge>
                       ) : (
                         getKserveStatusBadge(lead.kserveStatus, lead.kserveRoute)
                       )}
                     </div>
-                    <p className="text-xs text-slate-500 truncate mt-0.5">
-                      Routing TAT Delay: <strong className="text-slate-700">{tatBufferToAssign}</strong> · {isDirect ? "Directly forwarded to sales dialer" : `KServe Agent: ${lead.kserveAgentName || "Bot"}`}
+                    <p className="text-xs text-slate-500 truncate mt-1">
+                      Routing TAT Delay: <strong className="text-slate-800">{tatBufferToAssign}</strong> · {isDirect ? "Directly forwarded to sales dialer" : `KServe Agent: ${lead.kserveAgentName || "KServe AI Bot"}${lead.kserveDisposition ? ` · Outcome: ${lead.kserveDisposition}` : ""}`}
                     </p>
                   </div>
                 </div>
@@ -894,28 +983,62 @@ function TimelineModal({ lead, onClose }: { lead: LeadJourney; onClose: () => vo
               {/* Header (Clickable) */}
               <div 
                 onClick={() => toggleStage(3)}
-                className="p-3.5 sm:p-4 flex items-center justify-between gap-3 cursor-pointer select-none hover:bg-slate-50/80 transition-colors"
+                className={`p-3.5 sm:p-4 flex items-center justify-between gap-3 cursor-pointer select-none transition-colors ${
+                  isDeleted ? "bg-rose-50/40 hover:bg-rose-50/70" : "hover:bg-slate-50/80"
+                }`}
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white flex-shrink-0 font-bold text-xs shadow-xs ${
-                    activeStage === 3 ? "bg-indigo-600 ring-4 ring-indigo-100" : "bg-indigo-500"
+                <div className="flex items-start gap-3 min-w-0 flex-1">
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-white flex-shrink-0 font-bold text-xs shadow-xs ${
+                    isDeleted
+                      ? "bg-rose-600"
+                      : activeStage === 3
+                      ? "bg-indigo-600 ring-4 ring-indigo-100"
+                      : "bg-indigo-500"
                   }`}>
-                    <User className="h-4 w-4" />
+                    {isDeleted ? <XCircle className="h-4 w-4" /> : isKserveOnly ? <Bot className="h-4 w-4" /> : <User className="h-4 w-4" />}
                   </div>
-                  <div className="min-w-0">
+                  <Badge className={`text-[11px] font-bold w-[68px] justify-center py-0.5 mt-0.5 flex-shrink-0 ${
+                    isDeleted
+                      ? "bg-rose-100 text-rose-800 border-rose-200"
+                      : "bg-indigo-100 text-indigo-800 border-indigo-200"
+                  }`}>
+                    Stage 3
+                  </Badge>
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <Badge className="bg-indigo-100 text-indigo-800 border-indigo-200 text-[11px] font-bold px-2 py-0">
-                        Stage 3
-                      </Badge>
-                      <h4 className="text-sm font-bold text-slate-900 truncate">
-                        Sales Assignment
+                      <h4 className="text-sm font-bold text-slate-900">
+                        {isDeleted
+                          ? "Data Backup - Deleted (Journey Ended)"
+                          : isKserveOnly
+                          ? "KServe AI Routing (Awaiting Sales Handoff)"
+                          : "Sales Assignment"}
                       </h4>
-                      <Badge variant="outline" className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border-indigo-200">
-                        👤 {lead.assignedTo || "Unassigned"}
+                      <Badge
+                        variant="outline"
+                        className={`text-[10px] font-bold ${
+                          isDeleted
+                            ? "text-rose-700 bg-rose-50 border-rose-200"
+                            : isKserveOnly
+                            ? "text-purple-700 bg-purple-50 border-purple-200"
+                            : "text-indigo-700 bg-indigo-50 border-indigo-200"
+                        }`}
+                      >
+                        {isDeleted ? "✕ Deleted" : isKserveOnly ? "🤖 KServe (AI Voice)" : `👤 ${lead.assignedTo || "Unassigned"}`}
                       </Badge>
+                      <span className="text-slate-300">|</span>
+                      <span className="text-xs text-slate-600 inline-flex items-center gap-1 font-medium">
+                        <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                        {formatDate(lead.assignedDate)}
+                      </span>
                     </div>
-                    <p className="text-xs text-slate-500 truncate mt-0.5">
-                      Assigned On: <strong className="text-slate-700">{formatDate(lead.assignedDate)}</strong> · 1st Call TAT: <strong className="text-slate-700">{tatAssignToFirstCall}</strong>
+                    <p className="text-xs text-slate-500 truncate mt-1">
+                      {isDeleted ? (
+                        <>Delete Reason: <strong className="text-rose-700">{lead.assignReason || "No actionable enquiry details"}</strong></>
+                      ) : isKserveOnly ? (
+                        <>Sent to KServe: <strong className="text-purple-700">{formatDate(lead.assignedDate)}</strong> · Not yet transferred to a Sales Person</>
+                      ) : (
+                        <>Assigned On: <strong className="text-slate-800">{formatDate(lead.assignedDate)}</strong> · 1st Call TAT: <strong className="text-slate-800">{tatAssignToFirstCall}</strong></>
+                      )}
                     </p>
                   </div>
                 </div>
@@ -965,9 +1088,11 @@ function TimelineModal({ lead, onClose }: { lead: LeadJourney; onClose: () => vo
                       <span className="font-bold text-amber-700">{tatAssignToFirstCall}</span>
                     </div>
                     {lead.assignReason && (
-                      <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-xs sm:col-span-2 lg:col-span-3">
-                        <span className="text-slate-400 font-medium block mb-0.5">Assignment Reason / Policy:</span>
-                        <p className="font-medium text-slate-700 leading-relaxed">{lead.assignReason}</p>
+                      <div className={`p-3 rounded-lg border shadow-xs sm:col-span-2 lg:col-span-3 ${isDeleted ? "bg-rose-50/70 border-rose-200" : "bg-white border-slate-200"}`}>
+                        <span className={`font-semibold block mb-0.5 ${isDeleted ? "text-rose-700" : "text-slate-400"}`}>
+                          {isDeleted ? "Reason for Deletion (Data Backup - Deleted):" : "Assignment Reason / Policy:"}
+                        </span>
+                        <p className={`font-medium leading-relaxed ${isDeleted ? "text-rose-900" : "text-slate-700"}`}>{lead.assignReason}</p>
                       </div>
                     )}
                   </div>
@@ -996,31 +1121,51 @@ function TimelineModal({ lead, onClose }: { lead: LeadJourney; onClose: () => vo
               {/* Header (Clickable) */}
               <div 
                 onClick={() => toggleStage(4)}
-                className="p-3.5 sm:p-4 flex items-center justify-between gap-3 cursor-pointer select-none hover:bg-slate-50/80 transition-colors"
+                className={`p-3.5 sm:p-4 flex items-center justify-between gap-3 cursor-pointer select-none transition-colors ${
+                  isDeleted
+                    ? "bg-slate-50/70 opacity-65"
+                    : currentStageNumber === 4
+                    ? "bg-amber-50/50 hover:bg-amber-50/80"
+                    : "hover:bg-slate-50/80"
+                }`}
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white flex-shrink-0 font-bold text-xs shadow-xs ${
-                    activeStage === 4 ? "bg-amber-600 ring-4 ring-amber-100" : "bg-amber-500"
+                <div className="flex items-start gap-3 min-w-0 flex-1">
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-white flex-shrink-0 font-bold text-xs shadow-xs ${
+                    isDeleted ? "bg-slate-400" : activeStage === 4 ? "bg-amber-600 ring-4 ring-amber-100" : "bg-amber-500"
                   }`}>
                     <PhoneCall className="h-4 w-4" />
                   </div>
-                  <div className="min-w-0">
+                  <Badge className={`text-[11px] font-bold w-[68px] justify-center py-0.5 mt-0.5 flex-shrink-0 ${
+                    isDeleted ? "bg-slate-100 text-slate-600 border-slate-200" : "bg-amber-100 text-amber-800 border-amber-200"
+                  }`}>
+                    Stage 4
+                  </Badge>
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-[11px] font-bold px-2 py-0">
-                        Stage 4
-                      </Badge>
-                      <h4 className="text-sm font-bold text-slate-900 truncate">
+                      <h4 className="text-sm font-bold text-slate-900">
                         Sales Follow-up Active Hub
                       </h4>
-                      <Badge className="bg-amber-500 text-white text-[10px] font-bold">
-                        📞 {totalCallCount} Calls Dialed
-                      </Badge>
-                      <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-[10px] font-semibold">
-                        {lastCall?.disposition || lead.latestDisposition || "In Follow-up"}
-                      </Badge>
+                      {isDeleted ? (
+                        <Badge variant="outline" className="text-[10px] font-bold bg-slate-100 text-slate-500 border-slate-200">
+                          Ended at Stage 3
+                        </Badge>
+                      ) : (
+                        <>
+                          <Badge className="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold">
+                            📞 {totalCallCount} Calls Dialed
+                          </Badge>
+                          <Badge className="bg-purple-100 text-purple-800 border border-purple-200 text-[10px] font-semibold">
+                            {lastCall?.disposition || lead.latestDisposition || "In Follow-up"}
+                          </Badge>
+                        </>
+                      )}
                     </div>
-                    <p className="text-xs text-slate-500 truncate mt-0.5">
-                      Currently With: <strong className="text-slate-700">{currentOwner}</strong> · Delay Since Last Call: <strong className="text-rose-700">{timeSinceLastCall}</strong> · Last Contact: {lastCall ? formatDate(lastCall.callDate) : "Pending"}
+                    <p className="text-xs text-slate-500 truncate mt-1">
+                      {isDeleted ? (
+                        <>Lead was deleted at Stage 3 (Data Backup - Deleted) — no follow-up calls required.</>
+                      ) : (
+                        <>Currently With: <strong className="text-slate-800">{currentOwner}</strong> · Delay Since Last Call: <strong className="text-rose-700">{timeSinceLastCall}</strong> · Last Contact: {lastCall ? formatDate(lastCall.callDate) : "Pending"}</>
+                      )}
                     </p>
                   </div>
                 </div>
@@ -1276,11 +1421,15 @@ function TimelineModal({ lead, onClose }: { lead: LeadJourney; onClose: () => vo
               {/* Header (Clickable) */}
               <div 
                 onClick={() => toggleStage(5)}
-                className="p-3.5 sm:p-4 flex items-center justify-between gap-3 cursor-pointer select-none hover:bg-slate-50/80 transition-colors"
+                className={`p-3.5 sm:p-4 flex items-center justify-between gap-3 cursor-pointer select-none transition-colors ${
+                  isDeleted ? "bg-slate-50/70 opacity-65" : "hover:bg-slate-50/80"
+                }`}
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white flex-shrink-0 font-bold text-xs shadow-xs ${
-                    activeStage === 5
+                <div className="flex items-start gap-3 min-w-0 flex-1">
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-white flex-shrink-0 font-bold text-xs shadow-xs ${
+                    isDeleted
+                      ? "bg-slate-400"
+                      : activeStage === 5
                       ? isClosed && lead.finalStatus?.toLowerCase().includes("convert")
                         ? "bg-emerald-600 ring-4 ring-emerald-100"
                         : "bg-slate-700 ring-4 ring-slate-100"
@@ -1290,16 +1439,18 @@ function TimelineModal({ lead, onClose }: { lead: LeadJourney; onClose: () => vo
                   }`}>
                     <TrendingUp className="h-4 w-4" />
                   </div>
-                  <div className="min-w-0">
+                  <Badge className={`text-[11px] font-bold w-[68px] justify-center py-0.5 mt-0.5 flex-shrink-0 ${
+                    isDeleted ? "bg-slate-100 text-slate-600 border-slate-200" : "bg-emerald-100 text-emerald-800 border-emerald-200"
+                  }`}>
+                    Stage 5
+                  </Badge>
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 text-[11px] font-bold px-2 py-0">
-                        Stage 5
-                      </Badge>
-                      <h4 className="text-sm font-bold text-slate-900 truncate">
-                        {isClosed ? "Final Closing & Journey Outcome" : "Current Closing Status"}
+                      <h4 className="text-sm font-bold text-slate-900">
+                        {isDeleted ? "Closing Stage (Ended at Stage 3)" : isClosed ? "Final Closing & Journey Outcome" : "Current Closing Status"}
                       </h4>
-                      <Badge className={`text-[10px] font-bold px-2 py-0 ${getFinalStatusColor(lead.finalStatus)}`}>
-                        {lead.finalStatus || "Follow-up In Progress"}
+                      <Badge className={`text-[10px] font-bold px-2 py-0.5 ${isDeleted ? "bg-rose-100 text-rose-700 border-rose-200" : getFinalStatusColor(lead.finalStatus)}`}>
+                        {isDeleted ? "Data Backup - Deleted" : lead.finalStatus || "Follow-up In Progress"}
                       </Badge>
                       {lead.conversionAmount && lead.conversionAmount > 0 && (
                         <Badge className="bg-emerald-600 text-white text-[10px] font-extrabold">
@@ -1307,8 +1458,8 @@ function TimelineModal({ lead, onClose }: { lead: LeadJourney; onClose: () => vo
                         </Badge>
                       )}
                     </div>
-                    <p className="text-xs text-slate-500 truncate mt-0.5">
-                      Total Pipeline TAT: <strong className="text-slate-800">{totalJourneyTat}</strong> · {lead.convertedDate ? `Closed on: ${formatDate(lead.convertedDate)}` : "Pending final outcome"}
+                    <p className="text-xs text-slate-500 truncate mt-1">
+                      Total Pipeline TAT: <strong className="text-slate-800">{totalJourneyTat}</strong> · {isDeleted ? "Journey terminated at Stage 3" : lead.convertedDate ? `Closed on: ${formatDate(lead.convertedDate)}` : "Pending final outcome"}
                     </p>
                   </div>
                 </div>
@@ -1842,11 +1993,11 @@ export default function LeadSearchPage() {
 
   const renderSortIcon = (field: SortField) => {
     if (sortField !== field) {
-      return <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-70 group-hover/th:opacity-100 transition-opacity flex-shrink-0" />
+      return <ArrowUpDown className="h-3 w-3 text-white/55 group-hover/th:text-white transition-colors flex-shrink-0" />
     }
     return sortDir === "asc"
-      ? <ArrowUp className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
-      : <ArrowDown className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
+      ? <ArrowUp className="h-3.5 w-3.5 text-amber-300 flex-shrink-0" />
+      : <ArrowDown className="h-3.5 w-3.5 text-amber-300 flex-shrink-0" />
   }
 
   if (isLoading) {
@@ -2260,11 +2411,11 @@ export default function LeadSearchPage() {
               <div className="relative w-full max-h-[68vh] overflow-auto journey-scroll">
                 <table className="w-full caption-bottom text-sm border-separate border-spacing-0">
                   <thead>
-                    <tr className="bg-[#f0f6ff] text-slate-700">
+                    <tr className="bg-[#231649] text-white">
                       {/* Frozen Col 1: Lead ID */}
                       <th
                         onClick={() => handleSort("leadId")}
-                        className="group/th sticky top-0 left-0 z-30 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-r border-blue-100 cursor-pointer select-none hover:bg-[#e3eeff] transition-colors w-[155px] min-w-[155px] max-w-[155px]"
+                        className="group/th sticky top-0 left-0 z-30 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-r border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors w-[155px] min-w-[155px] max-w-[155px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>Lead ID</span>
@@ -2274,7 +2425,7 @@ export default function LeadSearchPage() {
                       {/* Frozen Col 2: Client (Name, Mobile, Email) */}
                       <th
                         onClick={() => handleSort("clientName")}
-                        className="group/th sticky top-0 left-[155px] z-30 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-r border-blue-200/80 shadow-[3px_0_6px_-2px_rgba(15,23,42,0.1)] cursor-pointer select-none hover:bg-[#e3eeff] transition-colors w-[240px] min-w-[240px] max-w-[260px]"
+                        className="group/th sticky top-0 left-[155px] z-30 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-r border-[#432c84] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.28)] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors w-[240px] min-w-[240px] max-w-[260px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>Client (Name · Mobile · Email)</span>
@@ -2284,7 +2435,7 @@ export default function LeadSearchPage() {
                       {/* Col 3: Company */}
                       <th
                         onClick={() => handleSort("company")}
-                        className="group/th sticky top-0 z-20 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-blue-100 cursor-pointer select-none hover:bg-[#e3eeff] transition-colors min-w-[110px]"
+                        className="group/th sticky top-0 z-20 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[110px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>Company</span>
@@ -2294,17 +2445,17 @@ export default function LeadSearchPage() {
                       {/* Col 4: Datasource */}
                       <th
                         onClick={() => handleSort("dataSource")}
-                        className="group/th sticky top-0 z-20 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-blue-100 cursor-pointer select-none hover:bg-[#e3eeff] transition-colors min-w-[190px]"
+                        className="group/th sticky top-0 z-20 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[190px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>Datasource</span>
                           {renderSortIcon("dataSource")}
                         </div>
                       </th>
-                      {/* Col 5: Enquiry Date & Time (NEW) */}
+                      {/* Col 5: Enquiry Date & Time */}
                       <th
                         onClick={() => handleSort("enquiryDate")}
-                        className="group/th sticky top-0 z-20 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-blue-100 cursor-pointer select-none hover:bg-[#e3eeff] transition-colors min-w-[160px]"
+                        className="group/th sticky top-0 z-20 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[160px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>Enquiry Date &amp; Time</span>
@@ -2314,7 +2465,7 @@ export default function LeadSearchPage() {
                       {/* Col 6: Buffer Arrival */}
                       <th
                         onClick={() => handleSort("bufferArrival")}
-                        className="group/th sticky top-0 z-20 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-blue-100 cursor-pointer select-none hover:bg-[#e3eeff] transition-colors min-w-[155px]"
+                        className="group/th sticky top-0 z-20 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[155px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>Buffer Arrival</span>
@@ -2324,7 +2475,7 @@ export default function LeadSearchPage() {
                       {/* Col 7: KServe Status */}
                       <th
                         onClick={() => handleSort("kserveStatus")}
-                        className="group/th sticky top-0 z-20 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-blue-100 cursor-pointer select-none hover:bg-[#e3eeff] transition-colors min-w-[140px]"
+                        className="group/th sticky top-0 z-20 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[140px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>KServe Status</span>
@@ -2334,7 +2485,7 @@ export default function LeadSearchPage() {
                       {/* Col 8: Assigned To */}
                       <th
                         onClick={() => handleSort("assignedTo")}
-                        className="group/th sticky top-0 z-20 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-blue-100 cursor-pointer select-none hover:bg-[#e3eeff] transition-colors min-w-[135px]"
+                        className="group/th sticky top-0 z-20 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[135px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>Assigned To</span>
@@ -2344,27 +2495,27 @@ export default function LeadSearchPage() {
                       {/* Col 9: Follow-ups */}
                       <th
                         onClick={() => handleSort("totalFollowups")}
-                        className="group/th sticky top-0 z-20 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-blue-100 cursor-pointer select-none hover:bg-[#e3eeff] transition-colors min-w-[130px]"
+                        className="group/th sticky top-0 z-20 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[130px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>Follow-ups</span>
                           {renderSortIcon("totalFollowups")}
                         </div>
                       </th>
-                      {/* Col 10: TAT (NEW) */}
+                      {/* Col 10: TAT */}
                       <th
                         onClick={() => handleSort("tatMinutes")}
-                        className="group/th sticky top-0 z-20 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-blue-100 cursor-pointer select-none hover:bg-[#e3eeff] transition-colors min-w-[115px]"
+                        className="group/th sticky top-0 z-20 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[115px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>TAT</span>
                           {renderSortIcon("tatMinutes")}
                         </div>
                       </th>
-                      {/* Col 11: Lead Status (NEW: Converted / Cold / Followup / New) */}
+                      {/* Col 11: Lead Status */}
                       <th
                         onClick={() => handleSort("leadStatus")}
-                        className="group/th sticky top-0 z-20 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-blue-100 cursor-pointer select-none hover:bg-[#e3eeff] transition-colors min-w-[125px]"
+                        className="group/th sticky top-0 z-20 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[125px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>Lead Status</span>
@@ -2374,17 +2525,17 @@ export default function LeadSearchPage() {
                       {/* Col 12: Final Status */}
                       <th
                         onClick={() => handleSort("finalStatus")}
-                        className="group/th sticky top-0 z-20 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-blue-100 cursor-pointer select-none hover:bg-[#e3eeff] transition-colors min-w-[165px]"
+                        className="group/th sticky top-0 z-20 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[165px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>Final Status</span>
                           {renderSortIcon("finalStatus")}
                         </div>
                       </th>
-                      {/* Col 13: Sales Person (NEW — Right of Final Status) */}
+                      {/* Col 13: Sales Person */}
                       <th
                         onClick={() => handleSort("salesPerson")}
-                        className="group/th sticky top-0 z-20 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-blue-100 cursor-pointer select-none hover:bg-[#e3eeff] transition-colors min-w-[145px]"
+                        className="group/th sticky top-0 z-20 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[145px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>Sales Person</span>
@@ -2392,7 +2543,7 @@ export default function LeadSearchPage() {
                         </div>
                       </th>
                       {/* Col 14: Actions */}
-                      <th className="sticky top-0 z-20 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-blue-100 min-w-[135px]">
+                      <th className="sticky top-0 z-20 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] min-w-[135px]">
                         Actions
                       </th>
                     </tr>
@@ -2515,14 +2666,20 @@ export default function LeadSearchPage() {
                         </td>
                         {/* Cell 13: Sales Person (NEW — Right of Final Status) */}
                         <td className="px-3 py-2.5 border-b border-slate-200/80 text-xs text-slate-700 whitespace-nowrap">
-                          <div className="flex items-center gap-1.5">
-                            <User className="h-3.5 w-3.5 text-indigo-400 flex-shrink-0" />
-                            <span className="font-semibold text-slate-800">
-                              {lead.salesPerson || lead.currentHolder || lead.assignedTo || "—"}
-                            </span>
-                          </div>
-                          {lead.salesPerson && lead.assignedTo && lead.salesPerson !== lead.assignedTo && (
-                            <p className="text-[10px] text-slate-400 pl-5">Orig: {lead.assignedTo}</p>
+                          {lead.salesPerson ? (
+                            <>
+                              <div className="flex items-center gap-1.5">
+                                <User className="h-3.5 w-3.5 text-indigo-400 flex-shrink-0" />
+                                <span className="font-semibold text-slate-800">
+                                  {lead.salesPerson}
+                                </span>
+                              </div>
+                              {lead.assignedTo && lead.salesPerson !== lead.assignedTo && (
+                                <p className="text-[10px] text-slate-400 pl-5">Orig: {lead.assignedTo}</p>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-xs text-slate-400 font-medium">—</span>
                           )}
                         </td>
                         {/* Cell 14: Actions (Colored View Journey Button) */}

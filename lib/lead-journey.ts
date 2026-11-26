@@ -94,13 +94,18 @@ const JOURNEY_SELECT = `
     mb.Mobile,
     mb.Email_Id,
     COALESCE(mb.Date_Time, mb.Timestamp, mb.actual_time) AS enquiry_date,
-    COALESCE(mb.actual_time, mb.Timestamp, mb.Date_Time) AS buffer_arrival,
+    COALESCE(mb.Timestamp, mb.Date_Time, mb.actual_time) AS buffer_arrival,
+    mb.actual_time          AS buffer_actual_time,
     mb.Data_Source,
     mb.Verified_Source,
     sbn.Assign_To_MR_Main   AS assigned_to,
+    sbn.gpt_Extraction_Status AS gpt_extraction_time,
     COALESCE(sbn.Timestamp_2, sbn.Sent_status) AS assigned_date,
     sbn.Sent_status         AS sent_status,
     sbn.Reason_why_assign_Or_Delete AS assign_reason,
+    sbn.Duplicate           AS duplicate_flag,
+    sbn.Lead_Outcome        AS lead_outcome,
+    sbn.Summary_of_Conversation AS conversation_summary,
     sbn.Sheet_Name          AS sheet_name,
     sbn.KAPPL_KTAHV,
     sbn.Lead_Relates_to_which_company,
@@ -216,14 +221,15 @@ async function loadBulkEnrichment(pool: any, leadIds: string[], mobiles: string[
   const validMobiles = [...new Set(mobiles.map(m => String(m || '').trim()).filter(Boolean))]
 
   const queries: Promise<any>[] = [
-    // 1. KServe (ai_voice_leads_received)
+    // 1. KServe (ai_voice_leads_received) — match both lead_id and initial_id (KServe appends -T... suffix to lead_id)
     pool.query(
-      `SELECT lead_id, calculated_qualification_status, assigned_mr, final_call_status, date_time,
+      `SELECT lead_id, initial_id, calculated_qualification_status, assigned_mr, next_assigned_to,
+              final_call_status, date_time, call_status, call_end_reason, followup_status,
               call_outcome, final_lead_outcome, lead_status
          FROM ai_voice_leads_received
-        WHERE lead_id IN (?)
+        WHERE lead_id IN (?) OR initial_id IN (?)
         ORDER BY id DESC`,
-      [validLeadIds]
+      [validLeadIds, validLeadIds]
     ).catch((err: any) => {
       console.warn('[lead-journey] KServe bulk lookup error:', err?.message || err)
       return [[]]
@@ -292,11 +298,14 @@ async function loadBulkEnrichment(pool: any, leadIds: string[], mobiles: string[
 
   const [kRows, fmsIdRows, fmsMobRows, actRows, fmsCounts, actCounts] = await Promise.all(queries)
 
-  // Populate KServe (newest row per lead wins)
+  // Populate KServe (newest row per lead wins — index by both lead_id and initial_id)
   for (const r of (kRows[0] || [])) {
-    const k = String(r.lead_id)
-    if (!kserve.has(k)) kserve.set(k, r)
-    recordFirstCall(k, r.date_time)
+    const k = String(r.lead_id || '').trim()
+    const initId = String(r.initial_id || '').trim()
+    if (k && !kserve.has(k)) kserve.set(k, r)
+    if (initId && !kserve.has(initId)) kserve.set(initId, r)
+    if (k) recordFirstCall(k, r.date_time)
+    if (initId) recordFirstCall(initId, r.date_time)
   }
 
   // Populate FMS Latest (newest row per lead_id wins)
@@ -464,8 +473,31 @@ async function toJourneys(pool: any, rows: any[], withFollowups: boolean) {
     const fms = fmsLatest.get(leadId) || (mobile ? fmsLatest.get(mobile) : null)
     const act = actLatest.get(leadId)
 
-    const isDirectRoute = !k?.calculated_qualification_status && !k?.assigned_mr && !k?.date_time && !k?.final_call_status
+    const rawAssignedTo = safeStr(row.assigned_to).trim()
+    const rawAssignReason = safeStr(row.assign_reason).trim()
+    const isDeletedLead = /data\s*backup.*delete|deleted/i.test(rawAssignedTo)
+    const isKserveAssigned = rawAssignedTo.toLowerCase() === 'kserve'
+    const isSentToKserve =
+      Boolean(k?.calculated_qualification_status || k?.assigned_mr || k?.date_time || k?.final_call_status || k?.call_status || k?.final_lead_outcome) ||
+      isKserveAssigned ||
+      rawAssignReason.toLowerCase().includes('sent to kserve')
+    const isDirectRoute = !isSentToKserve
     const routingType = isDirectRoute ? 'Direct Route (Bypassed KServe)' : 'KServe Route'
+
+    // Resolve real assign/delete reason (never show generic "Sent on AppSheet" for Data Backup - Deleted)
+    let assignReason = rawAssignReason
+    if (isDeletedLead && (!assignReason || assignReason.toLowerCase() === 'sent on appsheet')) {
+      const parts: string[] = []
+      const dup = safeStr(row.duplicate_flag).trim()
+      const outcome = safeStr(row.lead_outcome).trim()
+      const summary = safeStr(row.conversation_summary).trim()
+      if (dup) parts.push(`Duplicate: ${dup}`)
+      if (outcome && outcome.toLowerCase() !== 'callback required') parts.push(outcome)
+      if (summary) parts.push(summary)
+      assignReason = parts.length > 0
+        ? parts.join(' — ')
+        : 'Deleted in Buffer (No actionable enquiry details)'
+    }
 
     const lastFu = followups.length > 0 ? followups[followups.length - 1] : null
 
@@ -503,7 +535,8 @@ async function toJourneys(pool: any, rows: any[], withFollowups: boolean) {
     // 2. Dialer converted / sales status (Order_Sales_Saved_Staus, Lead_Conversion)
     // 3. KServe received status (final_call_status, calculated_qualification_status, final_lead_outcome, call_outcome)
     // 4. App Sheet staging status (Enquiry_Status_Last, staging_status)
-    // 5. Blank if new lead with no communication
+    // 5. Deleted status if Data Backup - Deleted
+    // 6. Blank if new lead with no communication
     let finalStatus = ''
     if (latestCallDisp) {
       finalStatus = latestCallDisp
@@ -513,29 +546,57 @@ async function toJourneys(pool: any, rows: any[], withFollowups: boolean) {
       finalStatus = safeStr(k.final_call_status || k.calculated_qualification_status || k.final_lead_outcome || k.call_outcome)
     } else if (row.Enquiry_Status_Last || row.staging_status) {
       finalStatus = safeStr(row.Enquiry_Status_Last || row.staging_status)
+    } else if (isDeletedLead) {
+      finalStatus = 'Data Backup - Deleted'
     }
 
-    const currentHolder = latestCallAgent || safeStr(row.assigned_to) || safeStr(k?.assigned_mr)
+    const kserveNextAssigned = safeStr(k?.next_assigned_to).trim()
+    const humanSalesPerson = latestCallAgent || (isKserveAssigned ? kserveNextAssigned : (isDeletedLead ? '' : rawAssignedTo))
+    const currentHolder = isDeletedLead
+      ? 'Data Backup - Deleted'
+      : humanSalesPerson || (isSentToKserve ? 'KServe AI' : '')
     const latestDisposition = latestCallDisp || finalStatus
     const conversionAmount = safeFloat(row.Converted_Amount || fms?.Conversion_Amount)
     const totalFollowups = Math.max(callTotals.get(leadId) || 0, followups.length)
     const enquiryDate = safeDate(row.enquiry_date || row.buffer_arrival)
     const bufferArrival = safeDate(row.buffer_arrival)
-    const assignedDate = safeDate(row.assigned_date || row.sent_status)
+
+    // True assignment timestamp: prefer gpt_Extraction_Status (real datetime) -> buffer_actual_time -> non-midnight assigned_date
+    const gptTime = safeDate(row.gpt_extraction_time)
+    const actualTime = safeDate(row.buffer_actual_time)
+    const rawAssignedDt = safeDate(row.assigned_date || row.sent_status)
+    const isMidnightIst = (iso: string) => iso.endsWith('T18:30:00.000Z') || iso.endsWith('T00:00:00.000Z')
+    let assignedDate = ''
+    if (rawAssignedTo || kserveNextAssigned) {
+      if (gptTime) {
+        assignedDate = gptTime
+      } else if (actualTime && (!bufferArrival || new Date(actualTime).getTime() >= new Date(bufferArrival).getTime())) {
+        assignedDate = actualTime
+      } else if (rawAssignedDt && !isMidnightIst(rawAssignedDt)) {
+        assignedDate = rawAssignedDt
+      } else {
+        assignedDate = actualTime || rawAssignedDt
+      }
+    }
+
     const convertedDate = safeDate(row.converted_date)
     const firstCallIso =
       (followups.length > 0 ? followups[0].callDate : '') ||
       firstCallDates.get(leadId) ||
       (mobile ? firstCallDates.get(mobile) || '' : '')
     const { tatMinutes, tatLabel, tatStage } = computeLeadTat(enquiryDate || bufferArrival, firstCallIso, assignedDate)
-    const leadStatus = deriveLeadStatus({
-      finalStatus,
-      conversionAmount,
-      convertedDate,
-      totalFollowups,
-      kserveStatus: safeStr(k?.calculated_qualification_status),
-    })
-    const salesPerson = latestCallAgent || safeStr(row.assigned_to) || safeStr(k?.assigned_mr)
+    const kserveStatus = safeStr(k?.calculated_qualification_status) || (isSentToKserve ? 'Sent to KServe' : '')
+    const leadStatus = isDeletedLead
+      ? 'Cold'
+      : deriveLeadStatus({
+          finalStatus,
+          conversionAmount,
+          convertedDate,
+          totalFollowups,
+          kserveStatus,
+        })
+    const salesPerson = humanSalesPerson
+    const assignedToDisplay = isKserveAssigned && !kserveNextAssigned ? 'KServe (AI Voice)' : (kserveNextAssigned || rawAssignedTo)
 
     results.push({
       leadId,
@@ -551,18 +612,20 @@ async function toJourneys(pool: any, rows: any[], withFollowups: boolean) {
       category: safeStr(row.Lead_Category),
       company: normalizeCompany(row.Lead_Relates_to_which_company, row.KAPPL_KTAHV),
       companyRaw: safeStr(row.Lead_Relates_to_which_company || row.KAPPL_KTAHV),
-      assignedTo: safeStr(row.assigned_to),
+      assignedTo: assignedToDisplay,
       salesPerson,
       currentHolder,
       assignedDate,
-      assignReason: safeStr(row.assign_reason),
+      assignReason,
+      isDeleted: isDeletedLead,
+      isKserveOnly: isKserveAssigned && !humanSalesPerson,
       isDirectRoute,
       routingType,
-      kserveStatus: safeStr(k?.calculated_qualification_status),
+      kserveStatus,
       kserveRoute: routingType,
       kserveAgentName: safeStr(k?.assigned_mr),
-      kserveDisposition: safeStr(k?.final_call_status),
-      qualificationStatus: safeStr(k?.calculated_qualification_status),
+      kserveDisposition: safeStr(k?.final_call_status || k?.final_lead_outcome || k?.call_end_reason),
+      qualificationStatus: kserveStatus,
       stagingDate: safeDate(k?.date_time),
       finalStatus,
       leadStatus,
@@ -586,7 +649,7 @@ export async function fetchLeadJourney(pool: any, q: string) {
   let params: any[]
   if (qtype === 'phone') { where = 'mb.Mobile IN (?)'; params = [phoneVariants(q)] }
   else if (qtype === 'email') { where = 'mb.Email_Id = ?'; params = [q] }
-  else if (qtype === 'leadId') { where = 'mb.lead_id = ?'; params = [q] }
+  else if (qtype === 'leadId') { where = '(mb.lead_id = ? OR mb.lead_id LIKE ?)'; params = [q, `${q}%`] }
   else { where = 'mb.Name_of_Client LIKE ?'; params = [`%${q}%`] }
 
   const [rows]: any = await pool.query(
