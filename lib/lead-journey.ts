@@ -85,12 +85,15 @@ const COMPANY_SQL_EXPR = `
   END
 `
 
+const DATASOURCE_SQL_EXPR = `COALESCE(NULLIF(TRIM(mb.Verified_Source), ''), NULLIF(TRIM(mb.Data_Source), ''))`
+
 const JOURNEY_SELECT = `
   SELECT
     mb.lead_id,
     mb.Name_of_Client,
     mb.Mobile,
     mb.Email_Id,
+    COALESCE(mb.Date_Time, mb.Timestamp, mb.actual_time) AS enquiry_date,
     COALESCE(mb.actual_time, mb.Timestamp, mb.Date_Time) AS buffer_arrival,
     mb.Data_Source,
     mb.Verified_Source,
@@ -116,6 +119,78 @@ interface BulkLeadEnrichment {
   fmsLatest: Map<string, any>
   actLatest: Map<string, any>
   callTotals: Map<string, number>
+  firstCallDates: Map<string, string>
+}
+
+export function deriveLeadStatus(params: {
+  finalStatus: string
+  conversionAmount?: number
+  convertedDate?: string
+  totalFollowups: number
+  kserveStatus?: string
+}): 'Converted' | 'Cold' | 'Followup' | 'New' {
+  const fs = (params.finalStatus || '').toLowerCase()
+  const ks = (params.kserveStatus || '').toLowerCase()
+  if (
+    (params.conversionAmount && params.conversionAmount > 0) ||
+    Boolean(params.convertedDate) ||
+    /convert|order|book|paid|won|sale|confirm|enrolled|admission/.test(fs)
+  ) {
+    return 'Converted'
+  }
+  if (
+    /not interested|cold|lost|invalid|junk|wrong|spam|dnd|duplicate|cancel|disqualif|not qualified|irrelevant|dead|closed lost|fake/.test(fs) ||
+    /not qualified|disqualif|junk|invalid|spam|cold/.test(ks)
+  ) {
+    return 'Cold'
+  }
+  if (params.totalFollowups > 0 || Boolean(fs.trim())) {
+    return 'Followup'
+  }
+  return 'New'
+}
+
+function formatTatDuration(diffMinutes: number): string {
+  const m = Math.max(0, Math.round(diffMinutes))
+  if (m < 1) return '<1m'
+  if (m < 60) return `${m}m`
+  const h = Math.floor(m / 60)
+  const remM = m % 60
+  if (h < 24) return remM > 0 ? `${h}h ${remM}m` : `${h}h`
+  const d = Math.floor(h / 24)
+  const remH = h % 24
+  return remH > 0 ? `${d}d ${remH}h` : `${d}d`
+}
+
+function computeLeadTat(
+  startIso: string,
+  firstCallIso: string,
+  assignedIso: string
+): { tatMinutes: number | null; tatLabel: string; tatStage: '1st Call' | 'Assigned' | 'Waiting' | '' } {
+  if (!startIso) return { tatMinutes: null, tatLabel: '—', tatStage: '' }
+  const startMs = new Date(startIso).getTime()
+  if (isNaN(startMs)) return { tatMinutes: null, tatLabel: '—', tatStage: '' }
+
+  if (firstCallIso) {
+    const callMs = new Date(firstCallIso).getTime()
+    if (!isNaN(callMs) && callMs >= startMs) {
+      const mins = (callMs - startMs) / 60000
+      return { tatMinutes: Math.round(mins), tatLabel: formatTatDuration(mins), tatStage: '1st Call' }
+    }
+  }
+  if (assignedIso) {
+    const asgMs = new Date(assignedIso).getTime()
+    if (!isNaN(asgMs) && asgMs >= startMs) {
+      const mins = (asgMs - startMs) / 60000
+      return { tatMinutes: Math.round(mins), tatLabel: formatTatDuration(mins), tatStage: 'Assigned' }
+    }
+  }
+  const nowMs = Date.now()
+  if (nowMs >= startMs) {
+    const mins = (nowMs - startMs) / 60000
+    return { tatMinutes: Math.round(mins), tatLabel: formatTatDuration(mins), tatStage: 'Waiting' }
+  }
+  return { tatMinutes: 0, tatLabel: '<1m', tatStage: 'Waiting' }
 }
 
 async function loadBulkEnrichment(pool: any, leadIds: string[], mobiles: string[]): Promise<BulkLeadEnrichment> {
@@ -123,8 +198,19 @@ async function loadBulkEnrichment(pool: any, leadIds: string[], mobiles: string[
   const fmsLatest = new Map<string, any>()
   const actLatest = new Map<string, any>()
   const callTotals = new Map<string, number>()
+  const firstCallDates = new Map<string, string>()
 
-  if (!leadIds.length) return { kserve, fmsLatest, actLatest, callTotals }
+  if (!leadIds.length) return { kserve, fmsLatest, actLatest, callTotals, firstCallDates }
+
+  const recordFirstCall = (key: string, rawDate: any) => {
+    if (!key) return
+    const iso = safeDate(rawDate)
+    if (!iso) return
+    const existing = firstCallDates.get(key)
+    if (!existing || new Date(iso).getTime() < new Date(existing).getTime()) {
+      firstCallDates.set(key, iso)
+    }
+  }
 
   const validLeadIds = [...new Set(leadIds.map(id => String(id).trim()).filter(Boolean))]
   const validMobiles = [...new Set(mobiles.map(m => String(m || '').trim()).filter(Boolean))]
@@ -210,12 +296,14 @@ async function loadBulkEnrichment(pool: any, leadIds: string[], mobiles: string[
   for (const r of (kRows[0] || [])) {
     const k = String(r.lead_id)
     if (!kserve.has(k)) kserve.set(k, r)
+    recordFirstCall(k, r.date_time)
   }
 
   // Populate FMS Latest (newest row per lead_id wins)
   for (const r of (fmsIdRows[0] || [])) {
     const k = String(r.lead_id)
     if (!fmsLatest.has(k)) fmsLatest.set(k, r)
+    recordFirstCall(k, r.callDate)
   }
 
   // Then by Mobile if not already present
@@ -224,12 +312,15 @@ async function loadBulkEnrichment(pool: any, leadIds: string[], mobiles: string[
     const idKey = String(r.lead_id || '')
     if (mobKey && !fmsLatest.has(mobKey)) fmsLatest.set(mobKey, r)
     if (idKey && !fmsLatest.has(idKey)) fmsLatest.set(idKey, r)
+    if (mobKey) recordFirstCall(mobKey, r.callDate)
+    if (idKey) recordFirstCall(idKey, r.callDate)
   }
 
   // Populate Activity Latest
   for (const r of (actRows[0] || [])) {
     const k = String(r.lead_id)
     if (!actLatest.has(k)) actLatest.set(k, r)
+    recordFirstCall(k, r.callDate)
   }
 
   // Aggregate call counts
@@ -242,7 +333,7 @@ async function loadBulkEnrichment(pool: any, leadIds: string[], mobiles: string[
     callTotals.set(k, Math.max(callTotals.get(k) || 0, Number(r.total || 0)))
   }
 
-  return { kserve, fmsLatest, actLatest, callTotals }
+  return { kserve, fmsLatest, actLatest, callTotals, firstCallDates }
 }
 
 async function loadFollowups(pool: any, leadId: string, mobile = '') {
@@ -360,7 +451,7 @@ function newestPerLead(rows: any[]) {
 async function toJourneys(pool: any, rows: any[], withFollowups: boolean) {
   const leadIds = rows.map(r => String(r.lead_id))
   const mobiles = rows.map(r => String(r.Mobile || ''))
-  const { kserve, fmsLatest, actLatest, callTotals } = await loadBulkEnrichment(pool, leadIds, mobiles)
+  const { kserve, fmsLatest, actLatest, callTotals, firstCallDates } = await loadBulkEnrichment(pool, leadIds, mobiles)
 
   const results = []
   for (const row of rows) {
@@ -428,6 +519,23 @@ async function toJourneys(pool: any, rows: any[], withFollowups: boolean) {
     const latestDisposition = latestCallDisp || finalStatus
     const conversionAmount = safeFloat(row.Converted_Amount || fms?.Conversion_Amount)
     const totalFollowups = Math.max(callTotals.get(leadId) || 0, followups.length)
+    const enquiryDate = safeDate(row.enquiry_date || row.buffer_arrival)
+    const bufferArrival = safeDate(row.buffer_arrival)
+    const assignedDate = safeDate(row.assigned_date || row.sent_status)
+    const convertedDate = safeDate(row.converted_date)
+    const firstCallIso =
+      (followups.length > 0 ? followups[0].callDate : '') ||
+      firstCallDates.get(leadId) ||
+      (mobile ? firstCallDates.get(mobile) || '' : '')
+    const { tatMinutes, tatLabel, tatStage } = computeLeadTat(enquiryDate || bufferArrival, firstCallIso, assignedDate)
+    const leadStatus = deriveLeadStatus({
+      finalStatus,
+      conversionAmount,
+      convertedDate,
+      totalFollowups,
+      kserveStatus: safeStr(k?.calculated_qualification_status),
+    })
+    const salesPerson = latestCallAgent || safeStr(row.assigned_to) || safeStr(k?.assigned_mr)
 
     results.push({
       leadId,
@@ -435,7 +543,8 @@ async function toJourneys(pool: any, rows: any[], withFollowups: boolean) {
       mobile,
       altMobile: altMobile && altMobile !== mobile ? altMobile : '',
       email: safeStr(row.Email_Id),
-      bufferArrival: safeDate(row.buffer_arrival),
+      enquiryDate,
+      bufferArrival,
       dataSource: safeStr(row.Data_Source),
       verifiedSource: safeStr(row.Verified_Source),
       leadSource: safeStr(row.Verified_Source || row.Data_Source),
@@ -443,8 +552,9 @@ async function toJourneys(pool: any, rows: any[], withFollowups: boolean) {
       company: normalizeCompany(row.Lead_Relates_to_which_company, row.KAPPL_KTAHV),
       companyRaw: safeStr(row.Lead_Relates_to_which_company || row.KAPPL_KTAHV),
       assignedTo: safeStr(row.assigned_to),
+      salesPerson,
       currentHolder,
-      assignedDate: safeDate(row.assigned_date || row.sent_status),
+      assignedDate,
       assignReason: safeStr(row.assign_reason),
       isDirectRoute,
       routingType,
@@ -455,9 +565,13 @@ async function toJourneys(pool: any, rows: any[], withFollowups: boolean) {
       qualificationStatus: safeStr(k?.calculated_qualification_status),
       stagingDate: safeDate(k?.date_time),
       finalStatus,
+      leadStatus,
       latestDisposition,
+      tatMinutes,
+      tatLabel,
+      tatStage,
       conversionAmount,
-      convertedDate: safeDate(row.converted_date),
+      convertedDate,
       lastFollowupDate: latestCallDate || (k?.date_time ? safeDate(k.date_time) : ''),
       totalFollowups,
       followups,
@@ -497,6 +611,7 @@ export interface DateFilterOptions {
   startDate?: string
   endDate?: string
   company?: string
+  datasource?: string
   page?: number
   limit?: number
 }
@@ -637,10 +752,16 @@ async function fetchPeriodCounts(
   pool: any,
   whereSql: string,
   params: any[],
-  companyCode: string
+  companyCode: string,
+  datasourceFilter: string
 ): Promise<{ totalLeads: number; assignedLeads: number; contactedLeads: number; convertedLeads: number }> {
   const companyFilterSql = companyCode !== 'ALL' ? ` AND (${COMPANY_SQL_EXPR}) = ?` : ''
-  const queryParams = companyCode !== 'ALL' ? [...params, companyCode] : params
+  const dsFilterSql = datasourceFilter !== 'ALL' ? ` AND (${DATASOURCE_SQL_EXPR}) = ?` : ''
+  const queryParams = [
+    ...params,
+    ...(companyCode !== 'ALL' ? [companyCode] : []),
+    ...(datasourceFilter !== 'ALL' ? [datasourceFilter] : []),
+  ]
   try {
     const [rows]: any = await pool.query(
       `SELECT
@@ -661,7 +782,7 @@ async function fetchPeriodCounts(
           THEN mb.lead_id END) AS convertedLeads
        FROM master_buffer mb
        LEFT JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id
-       WHERE ${whereSql}${companyFilterSql}`,
+       WHERE ${whereSql}${companyFilterSql}${dsFilterSql}`,
       queryParams
     )
     const r = rows[0] || {}
@@ -682,32 +803,54 @@ export async function fetchLeadsByDateRange(pool: any, options: DateFilterOption
   const limit = Math.min(200, Math.max(10, Number(options.limit) || 50))
   const offset = (page - 1) * limit
   const companyCode = normalizeCompanyFilter(options.company)
+  const rawDs = (options.datasource || '').trim()
+  const datasourceFilter = !rawDs || rawDs.toUpperCase() === 'ALL' ? 'ALL' : rawDs
 
   const { whereSql, params } = buildDateWhereClause(options)
   const prev = buildPreviousDateWhereClause(options)
 
   const companyJoinSql = companyCode !== 'ALL' ? 'INNER JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id' : ''
   const companyWhereSql = companyCode !== 'ALL' ? ` AND (${COMPANY_SQL_EXPR}) = ?` : ''
-  const listParams = companyCode !== 'ALL' ? [...params, companyCode] : params
+  const dsWhereSql = datasourceFilter !== 'ALL' ? ` AND (${DATASOURCE_SQL_EXPR}) = ?` : ''
 
-  const [currentCounts, prevCounts, idQueryRes] = await Promise.all([
-    fetchPeriodCounts(pool, whereSql, params, companyCode),
-    fetchPeriodCounts(pool, prev.whereSql, prev.params, companyCode),
+  const scopeParams = [...params, ...(companyCode !== 'ALL' ? [companyCode] : [])]
+  const listParams = [...scopeParams, ...(datasourceFilter !== 'ALL' ? [datasourceFilter] : [])]
+
+  const [currentCounts, prevCounts, idQueryRes, dsOptionsRes] = await Promise.all([
+    fetchPeriodCounts(pool, whereSql, params, companyCode, datasourceFilter),
+    fetchPeriodCounts(pool, prev.whereSql, prev.params, companyCode, datasourceFilter),
     pool.query(
       `SELECT DISTINCT mb.lead_id, COALESCE(mb.actual_time, mb.Timestamp, mb.Date_Time) AS sort_dt
          FROM master_buffer mb
          ${companyJoinSql}
-        WHERE ${whereSql}${companyWhereSql}
+        WHERE ${whereSql}${companyWhereSql}${dsWhereSql}
         ORDER BY sort_dt DESC
         LIMIT ? OFFSET ?`,
       [...listParams, limit, offset]
     ),
+    pool.query(
+      `SELECT ${DATASOURCE_SQL_EXPR} AS src, COUNT(DISTINCT mb.lead_id) AS cnt
+         FROM master_buffer mb
+         ${companyJoinSql}
+        WHERE ${whereSql}${companyWhereSql}
+        GROUP BY src
+        HAVING src IS NOT NULL AND src != ''
+        ORDER BY cnt DESC
+        LIMIT 50`,
+      scopeParams
+    ).catch((err: any) => {
+      console.warn('[lead-journey] datasource options error:', err?.message || err)
+      return [[]]
+    }),
   ])
 
   const total = currentCounts.totalLeads
   const idRows: any[] = idQueryRes[0] || []
   const ids = idRows.map((r: any) => String(r.lead_id))
   const results = ids.length > 0 ? await fetchBulkLeadJourneys(pool, ids) : []
+  const availableDatasources: string[] = (dsOptionsRes[0] || [])
+    .map((r: any) => safeStr(r.src).trim())
+    .filter(Boolean)
 
   const kpi: LeadKpiSummary = {
     comparisonLabel: prev.comparisonLabel,
@@ -728,6 +871,8 @@ export async function fetchLeadsByDateRange(pool: any, options: DateFilterOption
     limit,
     totalPages: Math.ceil(total / limit) || 1,
     company: companyCode,
+    datasource: datasourceFilter,
+    availableDatasources,
     kpi,
   }
 }

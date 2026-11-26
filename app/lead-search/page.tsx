@@ -84,6 +84,7 @@ interface LeadJourney {
   mobile: string
   altMobile: string
   email: string
+  enquiryDate?: string
   bufferArrival: string
   dataSource?: string
   verifiedSource?: string
@@ -92,6 +93,7 @@ interface LeadJourney {
   company: string
   companyRaw?: string
   assignedTo: string
+  salesPerson?: string
   currentHolder?: string
   assignedDate?: string
   assignReason?: string
@@ -104,7 +106,11 @@ interface LeadJourney {
   qualificationStatus: string
   stagingDate: string
   finalStatus: string
+  leadStatus?: "Converted" | "Cold" | "Followup" | "New"
   latestDisposition?: string
+  tatMinutes?: number | null
+  tatLabel?: string
+  tatStage?: "1st Call" | "Assigned" | "Waiting" | ""
   conversionAmount?: number
   convertedDate?: string
   lastFollowupDate: string
@@ -141,11 +147,15 @@ type SortField =
   | "clientName"
   | "company"
   | "dataSource"
+  | "enquiryDate"
   | "bufferArrival"
   | "kserveStatus"
   | "assignedTo"
   | "totalFollowups"
+  | "tatMinutes"
+  | "leadStatus"
   | "finalStatus"
+  | "salesPerson"
 type SortDir = "asc" | "desc"
 
 function getCompanyBadgeStyle(company?: string) {
@@ -155,6 +165,32 @@ function getCompanyBadgeStyle(company?: string) {
   if (c === "VILLARAAG" || c === "VILARAAG") return "bg-purple-50 text-purple-700 border-purple-200"
   if (c === "KAC") return "bg-amber-50 text-amber-800 border-amber-200"
   return "bg-slate-50 text-slate-600 border-slate-200"
+}
+
+function getLeadStatusBadgeStyle(status?: string) {
+  switch (status) {
+    case "Converted":
+      return "bg-emerald-100 text-emerald-800 border-emerald-200 font-bold"
+    case "Followup":
+      return "bg-blue-50 text-blue-700 border-blue-200 font-semibold"
+    case "Cold":
+      return "bg-rose-50 text-rose-700 border-rose-200 font-semibold"
+    case "New":
+      return "bg-amber-50 text-amber-800 border-amber-200 font-semibold"
+    default:
+      return "bg-slate-50 text-slate-600 border-slate-200"
+  }
+}
+
+function getTatBadgeStyle(mins?: number | null, stage?: string) {
+  if (mins === null || mins === undefined) return "bg-slate-50 text-slate-500 border-slate-200"
+  if (stage === "Waiting") {
+    if (mins >= 120) return "bg-rose-50 text-rose-700 border-rose-200"
+    return "bg-amber-50 text-amber-800 border-amber-200"
+  }
+  if (mins <= 30) return "bg-emerald-50 text-emerald-700 border-emerald-200"
+  if (mins <= 240) return "bg-blue-50 text-blue-700 border-blue-200"
+  return "bg-amber-50 text-amber-800 border-amber-200"
 }
 
 function formatDate(iso?: string | null) {
@@ -1514,9 +1550,11 @@ export default function LeadSearchPage() {
   const [isBulkMode, setIsBulkMode] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Date Filter, Company Filter, KPI, Sort & Pagination state
+  // Date Filter, Company Filter, Datasource Filter, KPI, Sort & Pagination state
   const [datePreset, setDatePreset] = useState<"today" | "yesterday" | "last7days" | "thisMonth" | "lastMonth" | "custom">("today")
   const [companyFilter, setCompanyFilter] = useState<CompanyFilter>("ALL")
+  const [datasourceFilter, setDatasourceFilter] = useState<string>("ALL")
+  const [availableDatasources, setAvailableDatasources] = useState<string[]>([])
   const [kpiSummary, setKpiSummary] = useState<LeadKpiSummary | null>(null)
   const [sortField, setSortField] = useState<SortField>("bufferArrival")
   const [sortDir, setSortDir] = useState<SortDir>("desc")
@@ -1539,14 +1577,16 @@ export default function LeadSearchPage() {
     limit: number = pageSize,
     customStart: string = startDate,
     customEnd: string = endDate,
-    company: CompanyFilter = companyFilter
+    company: CompanyFilter = companyFilter,
+    datasource: string = datasourceFilter
   ) => {
     setIsLoadingDate(true)
     setSearchError("")
     setDatePreset(preset)
     setCompanyFilter(company)
+    setDatasourceFilter(datasource)
     try {
-      let url = `/api/lead-journey?preset=${preset}&page=${page}&limit=${limit}&company=${encodeURIComponent(company)}`
+      let url = `/api/lead-journey?preset=${preset}&page=${page}&limit=${limit}&company=${encodeURIComponent(company)}&datasource=${encodeURIComponent(datasource)}`
       if (preset === "custom" && customStart && customEnd) {
         url += `&startDate=${encodeURIComponent(customStart)}&endDate=${encodeURIComponent(customEnd)}`
       }
@@ -1558,6 +1598,9 @@ export default function LeadSearchPage() {
         setTotalPages(data.totalPages ?? Math.max(1, Math.ceil((data.totalCount ?? data.results.length) / limit)))
         setCurrentPage(page)
         setKpiSummary(data.kpi ?? null)
+        if (Array.isArray(data.availableDatasources)) {
+          setAvailableDatasources(data.availableDatasources)
+        }
         setIsDefaultView(true)
       } else {
         throw new Error(data.error || "Failed to load leads")
@@ -1573,7 +1616,7 @@ export default function LeadSearchPage() {
   // Load current date's leads automatically on initial page load
   useEffect(() => {
     if (!isLoading && user && hasPermission("leads.view")) {
-      loadDateLeads("today", 1, pageSize, "", "", "ALL")
+      loadDateLeads("today", 1, pageSize, "", "", "ALL", "ALL")
     }
   }, [isLoading, user, hasPermission])
 
@@ -1582,17 +1625,25 @@ export default function LeadSearchPage() {
     if (preset !== "custom") {
       setSearchQuery("")
       setBulkText("")
-      loadDateLeads(preset, 1, pageSize, startDate, endDate, companyFilter)
+      loadDateLeads(preset, 1, pageSize, startDate, endDate, companyFilter, datasourceFilter)
     }
   }
 
   const handleCompanyChange = (company: CompanyFilter) => {
     setCompanyFilter(company)
     if (isDefaultView) {
-      loadDateLeads(datePreset, 1, pageSize, startDate, endDate, company)
+      loadDateLeads(datePreset, 1, pageSize, startDate, endDate, company, datasourceFilter)
     } else if (searchQuery.trim()) {
-      // Re-run single search with selected company filter
-      handleSearchWithCompany(searchQuery.trim(), company)
+      handleSearchWithFilters(searchQuery.trim(), company, datasourceFilter)
+    }
+  }
+
+  const handleDatasourceChange = (datasource: string) => {
+    setDatasourceFilter(datasource)
+    if (isDefaultView) {
+      loadDateLeads(datePreset, 1, pageSize, startDate, endDate, companyFilter, datasource)
+    } else if (searchQuery.trim()) {
+      handleSearchWithFilters(searchQuery.trim(), companyFilter, datasource)
     }
   }
 
@@ -1600,13 +1651,13 @@ export default function LeadSearchPage() {
     if (!startDate || !endDate) return
     setSearchQuery("")
     setBulkText("")
-    loadDateLeads("custom", 1, pageSize, startDate, endDate, companyFilter)
+    loadDateLeads("custom", 1, pageSize, startDate, endDate, companyFilter, datasourceFilter)
   }
 
   const handlePageSizeChange = (newSize: number) => {
     setPageSize(newSize)
     if (isDefaultView) {
-      loadDateLeads(datePreset, 1, newSize, startDate, endDate, companyFilter)
+      loadDateLeads(datePreset, 1, newSize, startDate, endDate, companyFilter, datasourceFilter)
     } else {
       setCurrentPage(1)
       setTotalPages(Math.max(1, Math.ceil(totalCount / newSize)))
@@ -1616,7 +1667,7 @@ export default function LeadSearchPage() {
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > totalPages) return
     if (isDefaultView) {
-      loadDateLeads(datePreset, newPage, pageSize, startDate, endDate, companyFilter)
+      loadDateLeads(datePreset, newPage, pageSize, startDate, endDate, companyFilter, datasourceFilter)
     } else {
       setCurrentPage(newPage)
     }
@@ -1627,7 +1678,7 @@ export default function LeadSearchPage() {
       setSortDir(prev => (prev === "asc" ? "desc" : "asc"))
     } else {
       setSortField(field)
-      setSortDir(field === "bufferArrival" || field === "totalFollowups" ? "desc" : "asc")
+      setSortDir(field === "bufferArrival" || field === "enquiryDate" || field === "totalFollowups" || field === "tatMinutes" ? "desc" : "asc")
     }
   }
 
@@ -1647,6 +1698,11 @@ export default function LeadSearchPage() {
           return (a.company || "").localeCompare(b.company || "") * dir
         case "dataSource":
           return (a.dataSource || a.leadSource || "").localeCompare(b.dataSource || b.leadSource || "") * dir
+        case "enquiryDate": {
+          const ta = a.enquiryDate || a.bufferArrival ? new Date(a.enquiryDate || a.bufferArrival).getTime() : 0
+          const tb = b.enquiryDate || b.bufferArrival ? new Date(b.enquiryDate || b.bufferArrival).getTime() : 0
+          return (ta - tb) * dir
+        }
         case "bufferArrival": {
           const ta = a.bufferArrival ? new Date(a.bufferArrival).getTime() : 0
           const tb = b.bufferArrival ? new Date(b.bufferArrival).getTime() : 0
@@ -1655,11 +1711,17 @@ export default function LeadSearchPage() {
         case "kserveStatus":
           return (a.kserveStatus || a.kserveRoute || "").localeCompare(b.kserveStatus || b.kserveRoute || "") * dir
         case "assignedTo":
-          return (a.currentHolder || a.assignedTo || "").localeCompare(b.currentHolder || b.assignedTo || "") * dir
+          return (a.assignedTo || "").localeCompare(b.assignedTo || "") * dir
         case "totalFollowups":
           return ((a.totalFollowups || 0) - (b.totalFollowups || 0)) * dir
+        case "tatMinutes":
+          return ((a.tatMinutes ?? -1) - (b.tatMinutes ?? -1)) * dir
+        case "leadStatus":
+          return (a.leadStatus || "").localeCompare(b.leadStatus || "") * dir
         case "finalStatus":
           return (a.finalStatus || "").localeCompare(b.finalStatus || "") * dir
+        case "salesPerson":
+          return (a.salesPerson || a.currentHolder || a.assignedTo || "").localeCompare(b.salesPerson || b.currentHolder || b.assignedTo || "") * dir
         default:
           return 0
       }
@@ -1667,7 +1729,11 @@ export default function LeadSearchPage() {
     return base
   }, [results, isDefaultView, currentPage, pageSize, sortField, sortDir])
 
-  async function handleSearchWithCompany(queryStr: string, company: CompanyFilter = companyFilter) {
+  async function handleSearchWithFilters(
+    queryStr: string,
+    company: CompanyFilter = companyFilter,
+    datasource: string = datasourceFilter
+  ) {
     if (!queryStr) return
     setIsSearching(true)
     setSearchError("")
@@ -1675,7 +1741,9 @@ export default function LeadSearchPage() {
     setKpiSummary(null)
     setResults([])
     try {
-      const res = await fetch(`/api/lead-journey?q=${encodeURIComponent(queryStr)}&company=${encodeURIComponent(company)}`)
+      const res = await fetch(
+        `/api/lead-journey?q=${encodeURIComponent(queryStr)}&company=${encodeURIComponent(company)}&datasource=${encodeURIComponent(datasource)}`
+      )
       const data = await res.json()
       if (!data.success) throw new Error(data.error || "Search failed")
       const list = data.results || []
@@ -1693,7 +1761,7 @@ export default function LeadSearchPage() {
   async function handleSearch(e?: React.FormEvent) {
     e?.preventDefault()
     if (!searchQuery.trim()) return
-    await handleSearchWithCompany(searchQuery.trim(), companyFilter)
+    await handleSearchWithFilters(searchQuery.trim(), companyFilter, datasourceFilter)
   }
 
   async function handleBulkSearch() {
@@ -1753,13 +1821,16 @@ export default function LeadSearchPage() {
 
   function exportCSV() {
     if (results.length === 0) return
-    const headers = ["Lead ID", "Client Name", "Mobile", "Email", "Company", "Datasource", "Verified Source", "Buffer Arrival", "Assigned To", "KServe Status", "Total Followups", "Last Followup", "Final Status", "Conversion Amount"]
+    const headers = ["Lead ID", "Client Name", "Mobile", "Email", "Company", "Datasource", "Verified Source", "Enquiry Date & Time", "Buffer Arrival", "KServe Status", "Assigned To", "Follow-ups", "Last Followup", "TAT", "Lead Status", "Final Status", "Sales Person", "Conversion Amount"]
     const rows = results.map(r => [
       r.leadId, r.clientName, r.mobile, r.email,
       r.company, r.dataSource || r.leadSource, r.verifiedSource || "",
-      r.bufferArrival, r.assignedTo,
-      r.kserveStatus || "Direct Route", r.totalFollowups, r.lastFollowupDate,
-      r.finalStatus, r.conversionAmount ?? ""
+      r.enquiryDate || r.bufferArrival, r.bufferArrival,
+      r.kserveStatus || "Direct Route", r.assignedTo,
+      r.totalFollowups, r.lastFollowupDate,
+      r.tatLabel || "", r.leadStatus || "",
+      r.finalStatus, r.salesPerson || r.currentHolder || r.assignedTo || "",
+      r.conversionAmount ?? ""
     ])
     const csv = [headers, ...rows].map(row => row.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n")
     const blob = new Blob([csv], { type: "text/csv" })
@@ -1950,46 +2021,82 @@ export default function LeadSearchPage() {
                 </div>
               </div>
 
-              {/* Company Filter Row */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
-                <div className="flex flex-wrap items-center gap-1.5 bg-slate-100/80 p-1 rounded-lg border border-slate-200">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 px-2 flex items-center gap-1">
-                    <Building2 className="h-3.5 w-3.5 text-slate-400" /> Company:
-                  </span>
-                  {(
-                    [
-                      { key: "ALL", label: "All Companies", activeClass: "bg-slate-800 text-white" },
-                      { key: "KAPPL", label: "KAPPL", activeClass: "bg-blue-600 text-white" },
-                      { key: "KTAHV", label: "KTAHV", activeClass: "bg-emerald-600 text-white" },
-                      { key: "VILLARAAG", label: "VILLARAAG", activeClass: "bg-purple-600 text-white" },
-                      { key: "KAC", label: "KAC", activeClass: "bg-amber-600 text-white" },
-                    ] as const
-                  ).map(c => {
-                    const isActive = companyFilter === c.key
-                    return (
-                      <button
-                        key={c.key}
-                        type="button"
-                        onClick={() => handleCompanyChange(c.key)}
-                        disabled={isLoadingDate || isSearching}
-                        className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1 ${
-                          isActive
-                            ? `${c.activeClass} shadow-xs font-bold`
-                            : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-900"
-                        } ${isLoadingDate ? "cursor-wait opacity-80" : ""}`}
-                      >
-                        <span>{c.label}</span>
-                      </button>
-                    )
-                  })}
+              {/* Company & Datasource Filter Row */}
+              <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2 border-t border-slate-100">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {/* Company Filter Pills */}
+                  <div className="flex flex-wrap items-center gap-1.5 bg-slate-100/80 p-1 rounded-lg border border-slate-200">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 px-2 flex items-center gap-1">
+                      <Building2 className="h-3.5 w-3.5 text-slate-400" /> Company:
+                    </span>
+                    {(
+                      [
+                        { key: "ALL", label: "All Companies", activeClass: "bg-slate-800 text-white" },
+                        { key: "KAPPL", label: "KAPPL", activeClass: "bg-blue-600 text-white" },
+                        { key: "KTAHV", label: "KTAHV", activeClass: "bg-emerald-600 text-white" },
+                        { key: "VILLARAAG", label: "VILLARAAG", activeClass: "bg-purple-600 text-white" },
+                        { key: "KAC", label: "KAC", activeClass: "bg-amber-600 text-white" },
+                      ] as const
+                    ).map(c => {
+                      const isActive = companyFilter === c.key
+                      return (
+                        <button
+                          key={c.key}
+                          type="button"
+                          onClick={() => handleCompanyChange(c.key)}
+                          disabled={isLoadingDate || isSearching}
+                          className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1 ${
+                            isActive
+                              ? `${c.activeClass} shadow-xs font-bold`
+                              : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-900"
+                          } ${isLoadingDate ? "cursor-wait opacity-80" : ""}`}
+                        >
+                          <span>{c.label}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {/* Datasource Filter (Beside Company Filter) */}
+                  <div className="flex items-center gap-1.5 bg-slate-100/80 p-1 rounded-lg border border-slate-200">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 pl-2 pr-1 flex items-center gap-1">
+                      <Database className="h-3.5 w-3.5 text-slate-400" /> Datasource:
+                    </span>
+                    <select
+                      aria-label="Filter by Datasource"
+                      value={datasourceFilter}
+                      onChange={e => handleDatasourceChange(e.target.value)}
+                      disabled={isLoadingDate || isSearching}
+                      className="h-7 max-w-[230px] rounded-md border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer disabled:opacity-60"
+                    >
+                      <option value="ALL">All Datasources</option>
+                      {availableDatasources.map(src => (
+                        <option key={src} value={src}>
+                          {src}
+                        </option>
+                      ))}
+                      {datasourceFilter !== "ALL" && !availableDatasources.includes(datasourceFilter) && (
+                        <option value={datasourceFilter}>{datasourceFilter}</option>
+                      )}
+                    </select>
+                  </div>
                 </div>
-                {companyFilter !== "ALL" && (
+
+                {(companyFilter !== "ALL" || datasourceFilter !== "ALL") && (
                   <button
                     type="button"
-                    onClick={() => handleCompanyChange("ALL")}
+                    onClick={() => {
+                      setCompanyFilter("ALL")
+                      setDatasourceFilter("ALL")
+                      if (isDefaultView) {
+                        loadDateLeads(datePreset, 1, pageSize, startDate, endDate, "ALL", "ALL")
+                      } else if (searchQuery.trim()) {
+                        handleSearchWithFilters(searchQuery.trim(), "ALL", "ALL")
+                      }
+                    }}
                     className="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline"
                   >
-                    Clear Company Filter
+                    Clear Filters
                   </button>
                 )}
               </div>
@@ -2128,7 +2235,7 @@ export default function LeadSearchPage() {
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      onClick={() => loadDateLeads(datePreset, currentPage, pageSize, startDate, endDate, companyFilter)} 
+                      onClick={() => loadDateLeads(datePreset, currentPage, pageSize, startDate, endDate, companyFilter, datasourceFilter)} 
                       disabled={isLoadingDate}
                     >
                       <RefreshCcw className={`h-4 w-4 mr-2 ${isLoadingDate ? "animate-spin" : ""}`} /> Refresh
@@ -2141,23 +2248,23 @@ export default function LeadSearchPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0 relative min-h-[220px]">
-              {/* Visual Loading Overlay when switching dates, company or pages */}
+              {/* Visual Loading Overlay when switching dates, company, datasource or pages */}
               {isLoadingDate && (
                 <div className="absolute inset-0 bg-white/75 backdrop-blur-[1px] z-40 flex flex-col items-center justify-center gap-2">
                   <RefreshCcw className="h-8 w-8 animate-spin text-blue-600" />
                   <p className="text-xs font-bold text-slate-700 tracking-wide uppercase">
-                    Loading {getPresetDisplayName(datePreset)} {companyFilter !== "ALL" ? `(${companyFilter}) ` : ""}leads...
+                    Loading {getPresetDisplayName(datePreset)} {companyFilter !== "ALL" ? `(${companyFilter}) ` : ""}{datasourceFilter !== "ALL" ? `· ${datasourceFilter} ` : ""}leads...
                   </p>
                 </div>
               )}
               <div className="relative w-full max-h-[68vh] overflow-auto journey-scroll">
                 <table className="w-full caption-bottom text-sm border-separate border-spacing-0">
                   <thead>
-                    <tr className="bg-slate-100 text-slate-700">
+                    <tr className="bg-[#f0f6ff] text-slate-700">
                       {/* Frozen Col 1: Lead ID */}
                       <th
                         onClick={() => handleSort("leadId")}
-                        className="group/th sticky top-0 left-0 z-30 bg-slate-100 px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-r border-slate-200 cursor-pointer select-none hover:bg-slate-200/70 transition-colors w-[155px] min-w-[155px] max-w-[155px]"
+                        className="group/th sticky top-0 left-0 z-30 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-r border-blue-100 cursor-pointer select-none hover:bg-[#e3eeff] transition-colors w-[155px] min-w-[155px] max-w-[155px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>Lead ID</span>
@@ -2167,7 +2274,7 @@ export default function LeadSearchPage() {
                       {/* Frozen Col 2: Client (Name, Mobile, Email) */}
                       <th
                         onClick={() => handleSort("clientName")}
-                        className="group/th sticky top-0 left-[155px] z-30 bg-slate-100 px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-r border-slate-300 shadow-[3px_0_6px_-2px_rgba(15,23,42,0.12)] cursor-pointer select-none hover:bg-slate-200/70 transition-colors w-[240px] min-w-[240px] max-w-[260px]"
+                        className="group/th sticky top-0 left-[155px] z-30 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-r border-blue-200/80 shadow-[3px_0_6px_-2px_rgba(15,23,42,0.1)] cursor-pointer select-none hover:bg-[#e3eeff] transition-colors w-[240px] min-w-[240px] max-w-[260px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>Client (Name · Mobile · Email)</span>
@@ -2177,75 +2284,115 @@ export default function LeadSearchPage() {
                       {/* Col 3: Company */}
                       <th
                         onClick={() => handleSort("company")}
-                        className="group/th sticky top-0 z-20 bg-slate-100 px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-slate-200 cursor-pointer select-none hover:bg-slate-200/70 transition-colors min-w-[115px]"
+                        className="group/th sticky top-0 z-20 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-blue-100 cursor-pointer select-none hover:bg-[#e3eeff] transition-colors min-w-[110px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>Company</span>
                           {renderSortIcon("company")}
                         </div>
                       </th>
-                      {/* Col 4: Datasource (NEW) */}
+                      {/* Col 4: Datasource */}
                       <th
                         onClick={() => handleSort("dataSource")}
-                        className="group/th sticky top-0 z-20 bg-slate-100 px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-slate-200 cursor-pointer select-none hover:bg-slate-200/70 transition-colors min-w-[190px]"
+                        className="group/th sticky top-0 z-20 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-blue-100 cursor-pointer select-none hover:bg-[#e3eeff] transition-colors min-w-[190px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>Datasource</span>
                           {renderSortIcon("dataSource")}
                         </div>
                       </th>
-                      {/* Col 5: Buffer Arrival */}
+                      {/* Col 5: Enquiry Date & Time (NEW) */}
+                      <th
+                        onClick={() => handleSort("enquiryDate")}
+                        className="group/th sticky top-0 z-20 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-blue-100 cursor-pointer select-none hover:bg-[#e3eeff] transition-colors min-w-[160px]"
+                      >
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span>Enquiry Date &amp; Time</span>
+                          {renderSortIcon("enquiryDate")}
+                        </div>
+                      </th>
+                      {/* Col 6: Buffer Arrival */}
                       <th
                         onClick={() => handleSort("bufferArrival")}
-                        className="group/th sticky top-0 z-20 bg-slate-100 px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-slate-200 cursor-pointer select-none hover:bg-slate-200/70 transition-colors min-w-[155px]"
+                        className="group/th sticky top-0 z-20 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-blue-100 cursor-pointer select-none hover:bg-[#e3eeff] transition-colors min-w-[155px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>Buffer Arrival</span>
                           {renderSortIcon("bufferArrival")}
                         </div>
                       </th>
-                      {/* Col 6: KServe Status */}
+                      {/* Col 7: KServe Status */}
                       <th
                         onClick={() => handleSort("kserveStatus")}
-                        className="group/th sticky top-0 z-20 bg-slate-100 px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-slate-200 cursor-pointer select-none hover:bg-slate-200/70 transition-colors min-w-[140px]"
+                        className="group/th sticky top-0 z-20 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-blue-100 cursor-pointer select-none hover:bg-[#e3eeff] transition-colors min-w-[140px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>KServe Status</span>
                           {renderSortIcon("kserveStatus")}
                         </div>
                       </th>
-                      {/* Col 7: Assigned To */}
+                      {/* Col 8: Assigned To */}
                       <th
                         onClick={() => handleSort("assignedTo")}
-                        className="group/th sticky top-0 z-20 bg-slate-100 px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-slate-200 cursor-pointer select-none hover:bg-slate-200/70 transition-colors min-w-[140px]"
+                        className="group/th sticky top-0 z-20 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-blue-100 cursor-pointer select-none hover:bg-[#e3eeff] transition-colors min-w-[135px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>Assigned To</span>
                           {renderSortIcon("assignedTo")}
                         </div>
                       </th>
-                      {/* Col 8: Follow-ups */}
+                      {/* Col 9: Follow-ups */}
                       <th
                         onClick={() => handleSort("totalFollowups")}
-                        className="group/th sticky top-0 z-20 bg-slate-100 px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-slate-200 cursor-pointer select-none hover:bg-slate-200/70 transition-colors min-w-[130px]"
+                        className="group/th sticky top-0 z-20 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-blue-100 cursor-pointer select-none hover:bg-[#e3eeff] transition-colors min-w-[130px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>Follow-ups</span>
                           {renderSortIcon("totalFollowups")}
                         </div>
                       </th>
-                      {/* Col 9: Final Status */}
+                      {/* Col 10: TAT (NEW) */}
+                      <th
+                        onClick={() => handleSort("tatMinutes")}
+                        className="group/th sticky top-0 z-20 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-blue-100 cursor-pointer select-none hover:bg-[#e3eeff] transition-colors min-w-[115px]"
+                      >
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span>TAT</span>
+                          {renderSortIcon("tatMinutes")}
+                        </div>
+                      </th>
+                      {/* Col 11: Lead Status (NEW: Converted / Cold / Followup / New) */}
+                      <th
+                        onClick={() => handleSort("leadStatus")}
+                        className="group/th sticky top-0 z-20 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-blue-100 cursor-pointer select-none hover:bg-[#e3eeff] transition-colors min-w-[125px]"
+                      >
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span>Lead Status</span>
+                          {renderSortIcon("leadStatus")}
+                        </div>
+                      </th>
+                      {/* Col 12: Final Status */}
                       <th
                         onClick={() => handleSort("finalStatus")}
-                        className="group/th sticky top-0 z-20 bg-slate-100 px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-slate-200 cursor-pointer select-none hover:bg-slate-200/70 transition-colors min-w-[165px]"
+                        className="group/th sticky top-0 z-20 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-blue-100 cursor-pointer select-none hover:bg-[#e3eeff] transition-colors min-w-[165px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>Final Status</span>
                           {renderSortIcon("finalStatus")}
                         </div>
                       </th>
-                      {/* Col 10: Actions */}
-                      <th className="sticky top-0 z-20 bg-slate-100 px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-slate-200 min-w-[135px]">
+                      {/* Col 13: Sales Person (NEW — Right of Final Status) */}
+                      <th
+                        onClick={() => handleSort("salesPerson")}
+                        className="group/th sticky top-0 z-20 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-blue-100 cursor-pointer select-none hover:bg-[#e3eeff] transition-colors min-w-[145px]"
+                      >
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span>Sales Person</span>
+                          {renderSortIcon("salesPerson")}
+                        </div>
+                      </th>
+                      {/* Col 14: Actions */}
+                      <th className="sticky top-0 z-20 bg-[#f0f6ff] px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-blue-100 min-w-[135px]">
                         Actions
                       </th>
                     </tr>
@@ -2278,7 +2425,7 @@ export default function LeadSearchPage() {
                             )}
                           </div>
                         </td>
-                        {/* Cell 3: Company (Separate Column) */}
+                        {/* Cell 3: Company */}
                         <td className="px-3 py-2.5 border-b border-slate-200/80 whitespace-nowrap">
                           {lead.company ? (
                             <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold border ${getCompanyBadgeStyle(lead.company)}`}>
@@ -2288,7 +2435,7 @@ export default function LeadSearchPage() {
                             <span className="text-xs text-slate-400">—</span>
                           )}
                         </td>
-                        {/* Cell 4: Datasource (NEW) */}
+                        {/* Cell 4: Datasource */}
                         <td className="px-3 py-2.5 border-b border-slate-200/80 max-w-[230px]">
                           <div className="space-y-1 min-w-0">
                             <p
@@ -2305,22 +2452,23 @@ export default function LeadSearchPage() {
                             )}
                           </div>
                         </td>
-                        {/* Cell 5: Buffer Arrival */}
+                        {/* Cell 5: Enquiry Date & Time (NEW) */}
+                        <td className="px-3 py-2.5 border-b border-slate-200/80 text-xs text-slate-700 font-medium whitespace-nowrap">
+                          {formatDate(lead.enquiryDate || lead.bufferArrival)}
+                        </td>
+                        {/* Cell 6: Buffer Arrival */}
                         <td className="px-3 py-2.5 border-b border-slate-200/80 text-xs text-slate-500 whitespace-nowrap">
                           {formatDate(lead.bufferArrival)}
                         </td>
-                        {/* Cell 6: KServe Status */}
+                        {/* Cell 7: KServe Status */}
                         <td className="px-3 py-2.5 border-b border-slate-200/80 whitespace-nowrap">
                           {getKserveStatusBadge(lead.kserveStatus, lead.kserveRoute)}
                         </td>
-                        {/* Cell 7: Assigned To */}
+                        {/* Cell 8: Assigned To */}
                         <td className="px-3 py-2.5 border-b border-slate-200/80 text-xs text-slate-700 whitespace-nowrap">
-                          <p className="font-medium text-slate-800">{lead.currentHolder || lead.assignedTo || "—"}</p>
-                          {lead.currentHolder && lead.assignedTo && lead.currentHolder !== lead.assignedTo && (
-                            <p className="text-[10px] text-slate-400">Orig: {lead.assignedTo}</p>
-                          )}
+                          <p className="font-medium text-slate-800">{lead.assignedTo || "—"}</p>
                         </td>
-                        {/* Cell 8: Follow-ups */}
+                        {/* Cell 9: Follow-ups */}
                         <td className="px-3 py-2.5 border-b border-slate-200/80 whitespace-nowrap">
                           <div className="flex items-center gap-1.5">
                             <PhoneCall className="h-3.5 w-3.5 text-slate-400" />
@@ -2330,7 +2478,27 @@ export default function LeadSearchPage() {
                             <p className="text-[11px] text-slate-500 mt-0.5">{formatDate(lead.lastFollowupDate)}</p>
                           )}
                         </td>
-                        {/* Cell 9: Final Status */}
+                        {/* Cell 10: TAT (NEW) */}
+                        <td className="px-3 py-2.5 border-b border-slate-200/80 whitespace-nowrap">
+                          <div className="flex flex-col items-start gap-0.5">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold border ${getTatBadgeStyle(lead.tatMinutes, lead.tatStage)}`}>
+                              <Clock className="h-3 w-3" />
+                              {lead.tatLabel || "—"}
+                            </span>
+                            {lead.tatStage && (
+                              <span className="text-[10px] text-slate-400 font-medium pl-0.5">
+                                {lead.tatStage}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        {/* Cell 11: Lead Status (NEW: Converted / Cold / Followup / New) */}
+                        <td className="px-3 py-2.5 border-b border-slate-200/80 whitespace-nowrap">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] border ${getLeadStatusBadgeStyle(lead.leadStatus)}`}>
+                            {lead.leadStatus || "New"}
+                          </span>
+                        </td>
+                        {/* Cell 12: Final Status */}
                         <td className="px-3 py-2.5 border-b border-slate-200/80">
                           {lead.finalStatus ? (
                             <span className={`text-xs px-2.5 py-1 rounded-full border inline-block whitespace-nowrap ${getFinalStatusColor(lead.finalStatus)}`}>
@@ -2345,7 +2513,19 @@ export default function LeadSearchPage() {
                             </p>
                           )}
                         </td>
-                        {/* Cell 10: Actions (Colored View Journey Button) */}
+                        {/* Cell 13: Sales Person (NEW — Right of Final Status) */}
+                        <td className="px-3 py-2.5 border-b border-slate-200/80 text-xs text-slate-700 whitespace-nowrap">
+                          <div className="flex items-center gap-1.5">
+                            <User className="h-3.5 w-3.5 text-indigo-400 flex-shrink-0" />
+                            <span className="font-semibold text-slate-800">
+                              {lead.salesPerson || lead.currentHolder || lead.assignedTo || "—"}
+                            </span>
+                          </div>
+                          {lead.salesPerson && lead.assignedTo && lead.salesPerson !== lead.assignedTo && (
+                            <p className="text-[10px] text-slate-400 pl-5">Orig: {lead.assignedTo}</p>
+                          )}
+                        </td>
+                        {/* Cell 14: Actions (Colored View Journey Button) */}
                         <td className="px-3 py-2.5 border-b border-slate-200/80 whitespace-nowrap">
                           <Button
                             size="sm"

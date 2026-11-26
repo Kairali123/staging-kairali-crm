@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate') || ''
     const endDate = searchParams.get('endDate') || ''
     const company = searchParams.get('company') || 'ALL'
+    const datasource = searchParams.get('datasource') || 'ALL'
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1)
     const limit = Math.min(200, Math.max(10, parseInt(searchParams.get('limit') || '50', 10) || 50))
 
@@ -33,9 +34,16 @@ export async function GET(request: NextRequest) {
       const rawResults = await fetchLeadJourney(pool, q)
       const normalizedCo = company.trim().toUpperCase()
       const targetCo = normalizedCo === 'KATAHV' ? 'KTAHV' : normalizedCo
-      const results = targetCo && targetCo !== 'ALL'
+      const targetDs = datasource.trim()
+      let results = targetCo && targetCo !== 'ALL'
         ? rawResults.filter((r: any) => (r.company || '').toUpperCase() === targetCo)
         : rawResults
+      if (targetDs && targetDs.toUpperCase() !== 'ALL') {
+        results = results.filter((r: any) => {
+          const src = (r.verifiedSource || r.dataSource || r.leadSource || '').trim()
+          return src === targetDs || (r.dataSource || '').trim() === targetDs
+        })
+      }
       return NextResponse.json({ 
         success: true, 
         results, 
@@ -45,6 +53,7 @@ export async function GET(request: NextRequest) {
         limit: results.length || 50,
         totalPages: 1,
         company: targetCo || 'ALL',
+        datasource: targetDs || 'ALL',
         query: q 
       })
     }
@@ -55,6 +64,7 @@ export async function GET(request: NextRequest) {
       startDate,
       endDate,
       company,
+      datasource,
       page,
       limit,
     })
@@ -69,6 +79,8 @@ export async function GET(request: NextRequest) {
       totalPages: dateData.totalPages,
       datePreset: preset || 'today',
       company: dateData.company,
+      datasource: dateData.datasource,
+      availableDatasources: dateData.availableDatasources,
       kpi: dateData.kpi,
       startDate,
       endDate,
