@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useMemo } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { useAuth } from "@/hooks/use-auth"
 import { useRouter } from "next/navigation"
@@ -9,14 +9,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import {
   Dialog,
   DialogContent,
@@ -36,15 +28,24 @@ import {
   PhoneCall,
   User,
   TrendingUp,
+  TrendingDown,
   AlertCircle,
   FileText,
   RefreshCcw,
   Bot,
   Zap,
   ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   Activity,
   Sparkles,
   Phone,
+  Mail,
+  Building2,
+  Database,
+  Users,
+  UserCheck,
+  Hourglass,
   Volume2,
   Calendar,
   ShieldCheck,
@@ -84,9 +85,12 @@ interface LeadJourney {
   altMobile: string
   email: string
   bufferArrival: string
+  dataSource?: string
+  verifiedSource?: string
   leadSource: string
   category: string
   company: string
+  companyRaw?: string
   assignedTo: string
   currentHolder?: string
   assignedDate?: string
@@ -113,6 +117,44 @@ interface LeadJourney {
     reason: string
     severity: "high" | "medium" | "low"
   }
+}
+
+interface KpiMetric {
+  current: number
+  previous: number
+  delta: number
+  pctChange: number
+}
+
+interface LeadKpiSummary {
+  comparisonLabel: string
+  totalLeads: KpiMetric
+  assignedLeads: KpiMetric
+  contactedLeads: KpiMetric
+  untouchedLeads: KpiMetric
+  convertedLeads: KpiMetric
+}
+
+type CompanyFilter = "ALL" | "KAPPL" | "KTAHV" | "VILLARAAG" | "KAC"
+type SortField =
+  | "leadId"
+  | "clientName"
+  | "company"
+  | "dataSource"
+  | "bufferArrival"
+  | "kserveStatus"
+  | "assignedTo"
+  | "totalFollowups"
+  | "finalStatus"
+type SortDir = "asc" | "desc"
+
+function getCompanyBadgeStyle(company?: string) {
+  const c = (company || "").trim().toUpperCase()
+  if (c === "KAPPL") return "bg-blue-50 text-blue-700 border-blue-200"
+  if (c === "KTAHV" || c === "KATAHV") return "bg-emerald-50 text-emerald-700 border-emerald-200"
+  if (c === "VILLARAAG" || c === "VILARAAG") return "bg-purple-50 text-purple-700 border-purple-200"
+  if (c === "KAC") return "bg-amber-50 text-amber-800 border-amber-200"
+  return "bg-slate-50 text-slate-600 border-slate-200"
 }
 
 function formatDate(iso?: string | null) {
@@ -1319,6 +1361,144 @@ function getPresetDisplayName(preset: string): string {
   }
 }
 
+function AnimatedNumber({ value }: { value: number }) {
+  const [display, setDisplay] = useState(value)
+  const prevRef = useRef(value)
+
+  useEffect(() => {
+    const startVal = prevRef.current
+    const endVal = value
+    if (startVal === endVal) {
+      setDisplay(endVal)
+      return
+    }
+    let rafId = 0
+    const duration = 450
+    const startTime = performance.now()
+    const step = (now: number) => {
+      const progress = Math.min(1, (now - startTime) / duration)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      setDisplay(Math.round(startVal + (endVal - startVal) * eased))
+      if (progress < 1) {
+        rafId = requestAnimationFrame(step)
+      } else {
+        prevRef.current = endVal
+      }
+    }
+    rafId = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(rafId)
+  }, [value])
+
+  return <>{display.toLocaleString("en-IN")}</>
+}
+
+function HeaderKpiCard({
+  title,
+  metric,
+  comparisonLabel,
+  icon,
+  accent,
+  invertTrend = false,
+  subLabel,
+  loading = false,
+  delayMs = 0,
+}: {
+  title: string
+  metric?: KpiMetric
+  comparisonLabel?: string
+  icon: React.ReactNode
+  accent: "blue" | "indigo" | "emerald" | "amber"
+  invertTrend?: boolean
+  subLabel?: string
+  loading?: boolean
+  delayMs?: number
+}) {
+  const styles = {
+    blue: {
+      card: "from-blue-50/90 via-white to-white border-blue-200/80 hover:border-blue-300",
+      iconBg: "bg-blue-600 text-white shadow-blue-200",
+      bar: "bg-blue-500",
+    },
+    indigo: {
+      card: "from-indigo-50/90 via-white to-white border-indigo-200/80 hover:border-indigo-300",
+      iconBg: "bg-indigo-600 text-white shadow-indigo-200",
+      bar: "bg-indigo-500",
+    },
+    emerald: {
+      card: "from-emerald-50/90 via-white to-white border-emerald-200/80 hover:border-emerald-300",
+      iconBg: "bg-emerald-600 text-white shadow-emerald-200",
+      bar: "bg-emerald-500",
+    },
+    amber: {
+      card: "from-amber-50/90 via-white to-white border-amber-200/80 hover:border-amber-300",
+      iconBg: "bg-amber-500 text-white shadow-amber-200",
+      bar: "bg-amber-500",
+    },
+  }[accent]
+
+  const current = metric?.current ?? 0
+  const previous = metric?.previous ?? 0
+  const pct = metric?.pctChange ?? 0
+  const isUp = pct > 0
+  const isDown = pct < 0
+  const isGood = invertTrend ? isDown : isUp
+  const isBad = invertTrend ? isUp : isDown
+
+  return (
+    <div
+      style={{ animationDelay: `${delayMs}ms` }}
+      className={`group relative overflow-hidden rounded-xl border bg-gradient-to-br ${styles.card} px-3.5 py-2.5 shadow-xs hover:shadow-md transition-all duration-300 hover:-translate-y-0.5 animate-kpi-in`}
+    >
+      <div className={`absolute top-0 left-0 right-0 h-0.5 ${styles.bar} opacity-75`} />
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 truncate">
+            {title}
+          </p>
+          <div className="flex items-baseline gap-2 mt-0.5">
+            {loading && !metric ? (
+              <div className="h-6 w-16 rounded bg-slate-200 animate-pulse" />
+            ) : (
+              <span className="text-xl font-extrabold text-slate-900 tabular-nums tracking-tight">
+                <AnimatedNumber value={current} />
+              </span>
+            )}
+            {subLabel && (
+              <span className="text-[11px] font-semibold text-slate-500">
+                {subLabel}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className={`p-2 rounded-lg shadow-sm ${styles.iconBg} flex-shrink-0 transition-transform duration-300 group-hover:scale-110`}>
+          {icon}
+        </div>
+      </div>
+
+      <div className="mt-2 pt-1.5 border-t border-slate-100/90 flex items-center justify-between gap-1.5 text-[11px]">
+        <span
+          className={`inline-flex items-center gap-0.5 font-bold px-1.5 py-0.5 rounded-full ${
+            pct === 0
+              ? "bg-slate-100 text-slate-600"
+              : isGood
+              ? "bg-emerald-100 text-emerald-700"
+              : isBad
+              ? "bg-rose-100 text-rose-700"
+              : "bg-slate-100 text-slate-600"
+          }`}
+        >
+          {isUp && <TrendingUp className="h-3 w-3" />}
+          {isDown && <TrendingDown className="h-3 w-3" />}
+          {pct > 0 ? `+${pct}%` : `${pct}%`}
+        </span>
+        <span className="text-slate-400 font-medium truncate" title={`Previous: ${previous.toLocaleString("en-IN")}`}>
+          {comparisonLabel || "vs Prev"}: <strong className="text-slate-600">{previous.toLocaleString("en-IN")}</strong>
+        </span>
+      </div>
+    </div>
+  )
+}
+
 export default function LeadSearchPage() {
   const { user, isLoading, hasPermission } = useAuth()
   const router = useRouter()
@@ -1334,8 +1514,12 @@ export default function LeadSearchPage() {
   const [isBulkMode, setIsBulkMode] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Date Filter & Pagination state
+  // Date Filter, Company Filter, KPI, Sort & Pagination state
   const [datePreset, setDatePreset] = useState<"today" | "yesterday" | "last7days" | "thisMonth" | "lastMonth" | "custom">("today")
+  const [companyFilter, setCompanyFilter] = useState<CompanyFilter>("ALL")
+  const [kpiSummary, setKpiSummary] = useState<LeadKpiSummary | null>(null)
+  const [sortField, setSortField] = useState<SortField>("bufferArrival")
+  const [sortDir, setSortDir] = useState<SortDir>("desc")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
@@ -1354,13 +1538,15 @@ export default function LeadSearchPage() {
     page: number = 1,
     limit: number = pageSize,
     customStart: string = startDate,
-    customEnd: string = endDate
+    customEnd: string = endDate,
+    company: CompanyFilter = companyFilter
   ) => {
     setIsLoadingDate(true)
     setSearchError("")
     setDatePreset(preset)
+    setCompanyFilter(company)
     try {
-      let url = `/api/lead-journey?preset=${preset}&page=${page}&limit=${limit}`
+      let url = `/api/lead-journey?preset=${preset}&page=${page}&limit=${limit}&company=${encodeURIComponent(company)}`
       if (preset === "custom" && customStart && customEnd) {
         url += `&startDate=${encodeURIComponent(customStart)}&endDate=${encodeURIComponent(customEnd)}`
       }
@@ -1371,6 +1557,7 @@ export default function LeadSearchPage() {
         setTotalCount(data.totalCount ?? data.count ?? data.results.length)
         setTotalPages(data.totalPages ?? Math.max(1, Math.ceil((data.totalCount ?? data.results.length) / limit)))
         setCurrentPage(page)
+        setKpiSummary(data.kpi ?? null)
         setIsDefaultView(true)
       } else {
         throw new Error(data.error || "Failed to load leads")
@@ -1386,7 +1573,7 @@ export default function LeadSearchPage() {
   // Load current date's leads automatically on initial page load
   useEffect(() => {
     if (!isLoading && user && hasPermission("leads.view")) {
-      loadDateLeads("today", 1, pageSize)
+      loadDateLeads("today", 1, pageSize, "", "", "ALL")
     }
   }, [isLoading, user, hasPermission])
 
@@ -1395,7 +1582,17 @@ export default function LeadSearchPage() {
     if (preset !== "custom") {
       setSearchQuery("")
       setBulkText("")
-      loadDateLeads(preset, 1, pageSize)
+      loadDateLeads(preset, 1, pageSize, startDate, endDate, companyFilter)
+    }
+  }
+
+  const handleCompanyChange = (company: CompanyFilter) => {
+    setCompanyFilter(company)
+    if (isDefaultView) {
+      loadDateLeads(datePreset, 1, pageSize, startDate, endDate, company)
+    } else if (searchQuery.trim()) {
+      // Re-run single search with selected company filter
+      handleSearchWithCompany(searchQuery.trim(), company)
     }
   }
 
@@ -1403,13 +1600,13 @@ export default function LeadSearchPage() {
     if (!startDate || !endDate) return
     setSearchQuery("")
     setBulkText("")
-    loadDateLeads("custom", 1, pageSize, startDate, endDate)
+    loadDateLeads("custom", 1, pageSize, startDate, endDate, companyFilter)
   }
 
   const handlePageSizeChange = (newSize: number) => {
     setPageSize(newSize)
     if (isDefaultView) {
-      loadDateLeads(datePreset, 1, newSize, startDate, endDate)
+      loadDateLeads(datePreset, 1, newSize, startDate, endDate, companyFilter)
     } else {
       setCurrentPage(1)
       setTotalPages(Math.max(1, Math.ceil(totalCount / newSize)))
@@ -1419,21 +1616,66 @@ export default function LeadSearchPage() {
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > totalPages) return
     if (isDefaultView) {
-      loadDateLeads(datePreset, newPage, pageSize, startDate, endDate)
+      loadDateLeads(datePreset, newPage, pageSize, startDate, endDate, companyFilter)
     } else {
       setCurrentPage(newPage)
     }
   }
 
-  async function handleSearch(e?: React.FormEvent) {
-    e?.preventDefault()
-    if (!searchQuery.trim()) return
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir(prev => (prev === "asc" ? "desc" : "asc"))
+    } else {
+      setSortField(field)
+      setSortDir(field === "bufferArrival" || field === "totalFollowups" ? "desc" : "asc")
+    }
+  }
+
+  const displayedResults = useMemo(() => {
+    const base = isDefaultView
+      ? [...results]
+      : results.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+
+    const dir = sortDir === "asc" ? 1 : -1
+    base.sort((a, b) => {
+      switch (sortField) {
+        case "leadId":
+          return (a.leadId || "").localeCompare(b.leadId || "") * dir
+        case "clientName":
+          return (a.clientName || a.mobile || "").localeCompare(b.clientName || b.mobile || "") * dir
+        case "company":
+          return (a.company || "").localeCompare(b.company || "") * dir
+        case "dataSource":
+          return (a.dataSource || a.leadSource || "").localeCompare(b.dataSource || b.leadSource || "") * dir
+        case "bufferArrival": {
+          const ta = a.bufferArrival ? new Date(a.bufferArrival).getTime() : 0
+          const tb = b.bufferArrival ? new Date(b.bufferArrival).getTime() : 0
+          return (ta - tb) * dir
+        }
+        case "kserveStatus":
+          return (a.kserveStatus || a.kserveRoute || "").localeCompare(b.kserveStatus || b.kserveRoute || "") * dir
+        case "assignedTo":
+          return (a.currentHolder || a.assignedTo || "").localeCompare(b.currentHolder || b.assignedTo || "") * dir
+        case "totalFollowups":
+          return ((a.totalFollowups || 0) - (b.totalFollowups || 0)) * dir
+        case "finalStatus":
+          return (a.finalStatus || "").localeCompare(b.finalStatus || "") * dir
+        default:
+          return 0
+      }
+    })
+    return base
+  }, [results, isDefaultView, currentPage, pageSize, sortField, sortDir])
+
+  async function handleSearchWithCompany(queryStr: string, company: CompanyFilter = companyFilter) {
+    if (!queryStr) return
     setIsSearching(true)
     setSearchError("")
     setIsDefaultView(false)
+    setKpiSummary(null)
     setResults([])
     try {
-      const res = await fetch(`/api/lead-journey?q=${encodeURIComponent(searchQuery.trim())}`)
+      const res = await fetch(`/api/lead-journey?q=${encodeURIComponent(queryStr)}&company=${encodeURIComponent(company)}`)
       const data = await res.json()
       if (!data.success) throw new Error(data.error || "Search failed")
       const list = data.results || []
@@ -1446,6 +1688,12 @@ export default function LeadSearchPage() {
     } finally {
       setIsSearching(false)
     }
+  }
+
+  async function handleSearch(e?: React.FormEvent) {
+    e?.preventDefault()
+    if (!searchQuery.trim()) return
+    await handleSearchWithCompany(searchQuery.trim(), companyFilter)
   }
 
   async function handleBulkSearch() {
@@ -1505,19 +1753,29 @@ export default function LeadSearchPage() {
 
   function exportCSV() {
     if (results.length === 0) return
-    const headers = ["Lead ID", "Client Name", "Mobile", "Email", "Buffer Arrival", "Source", "Company", "Assigned To", "KServe Status", "Total Followups", "Last Followup", "Final Status", "Conversion Amount"]
+    const headers = ["Lead ID", "Client Name", "Mobile", "Email", "Company", "Datasource", "Verified Source", "Buffer Arrival", "Assigned To", "KServe Status", "Total Followups", "Last Followup", "Final Status", "Conversion Amount"]
     const rows = results.map(r => [
       r.leadId, r.clientName, r.mobile, r.email,
-      r.bufferArrival, r.leadSource, r.company, r.assignedTo,
+      r.company, r.dataSource || r.leadSource, r.verifiedSource || "",
+      r.bufferArrival, r.assignedTo,
       r.kserveStatus || "Direct Route", r.totalFollowups, r.lastFollowupDate,
       r.finalStatus, r.conversionAmount ?? ""
     ])
-    const csv = [headers, ...rows].map(row => row.map(v => `"${v}"`).join(",")).join("\n")
+    const csv = [headers, ...rows].map(row => row.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n")
     const blob = new Blob([csv], { type: "text/csv" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url; a.download = `lead-search-${Date.now()}.csv`; a.click()
     URL.revokeObjectURL(url)
+  }
+
+  const renderSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-70 group-hover/th:opacity-100 transition-opacity flex-shrink-0" />
+    }
+    return sortDir === "asc"
+      ? <ArrowUp className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
+      : <ArrowDown className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
   }
 
   if (isLoading) {
@@ -1530,32 +1788,92 @@ export default function LeadSearchPage() {
     )
   }
 
+  const totalKpiCurrent = kpiSummary?.totalLeads.current ?? totalCount
+  const assignedPct = totalKpiCurrent > 0 && kpiSummary ? Math.round((kpiSummary.assignedLeads.current / totalKpiCurrent) * 100) : 0
+  const contactedPct = totalKpiCurrent > 0 && kpiSummary ? Math.round((kpiSummary.contactedLeads.current / totalKpiCurrent) * 100) : 0
+  const untouchedPct = totalKpiCurrent > 0 && kpiSummary ? Math.round((kpiSummary.untouchedLeads.current / totalKpiCurrent) * 100) : 0
+
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Lead Search Dashboard</h1>
-          <p className="text-sm text-slate-500 mt-1">Track full lead lifecycle — from buffer arrival to final outcome</p>
+      <div className="space-y-4">
+        {/* Header + Compact Animated KPI Summary */}
+        <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Lead Search Dashboard</h1>
+              {companyFilter !== "ALL" && (
+                <Badge variant="outline" className={`text-xs font-bold px-2.5 py-0.5 ${getCompanyBadgeStyle(companyFilter)}`}>
+                  <Building2 className="h-3 w-3 mr-1" /> {companyFilter}
+                </Badge>
+              )}
+            </div>
+            <p className="text-sm text-slate-500 mt-0.5">Track full lead lifecycle — from buffer arrival to final outcome</p>
+          </div>
+
+          {/* Search Mode Tabs */}
+          <div className="flex gap-2">
+            <Button
+              variant={!isBulkMode ? "default" : "outline"}
+              size="sm"
+              onClick={() => setIsBulkMode(false)}
+            >
+              <Search className="h-4 w-4 mr-2" /> Single Search
+            </Button>
+            <Button
+              variant={isBulkMode ? "default" : "outline"}
+              size="sm"
+              onClick={() => setIsBulkMode(true)}
+            >
+              <Upload className="h-4 w-4 mr-2" /> Bulk / CSV Upload
+            </Button>
+          </div>
         </div>
 
-        {/* Search Mode Tabs */}
-        <div className="flex gap-2">
-          <Button
-            variant={!isBulkMode ? "default" : "outline"}
-            size="sm"
-            onClick={() => setIsBulkMode(false)}
-          >
-            <Search className="h-4 w-4 mr-2" /> Single Search
-          </Button>
-          <Button
-            variant={isBulkMode ? "default" : "outline"}
-            size="sm"
-            onClick={() => setIsBulkMode(true)}
-          >
-            <Upload className="h-4 w-4 mr-2" /> Bulk / CSV Upload
-          </Button>
-        </div>
+        {/* Compact Animated Header KPI Strip with Previous Period Comparison */}
+        {isDefaultView && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <HeaderKpiCard
+              title="Total Leads"
+              metric={kpiSummary?.totalLeads}
+              comparisonLabel={kpiSummary?.comparisonLabel}
+              icon={<Users className="h-4 w-4" />}
+              accent="blue"
+              loading={isLoadingDate}
+              delayMs={0}
+            />
+            <HeaderKpiCard
+              title="Assigned / Routed"
+              metric={kpiSummary?.assignedLeads}
+              comparisonLabel={kpiSummary?.comparisonLabel}
+              subLabel={kpiSummary ? `${assignedPct}%` : undefined}
+              icon={<UserCheck className="h-4 w-4" />}
+              accent="indigo"
+              loading={isLoadingDate}
+              delayMs={60}
+            />
+            <HeaderKpiCard
+              title="Contacted / Follow-up"
+              metric={kpiSummary?.contactedLeads}
+              comparisonLabel={kpiSummary?.comparisonLabel}
+              subLabel={kpiSummary ? `${contactedPct}%` : undefined}
+              icon={<PhoneCall className="h-4 w-4" />}
+              accent="emerald"
+              loading={isLoadingDate}
+              delayMs={120}
+            />
+            <HeaderKpiCard
+              title="Pending / Untouched"
+              metric={kpiSummary?.untouchedLeads}
+              comparisonLabel={kpiSummary?.comparisonLabel}
+              subLabel={kpiSummary ? `${untouchedPct}%` : undefined}
+              icon={<Hourglass className="h-4 w-4" />}
+              accent="amber"
+              invertTrend
+              loading={isLoadingDate}
+              delayMs={180}
+            />
+          </div>
+        )}
 
         {/* Search Panel + Date Range Filter Row */}
         {!isBulkMode ? (
@@ -1630,6 +1948,50 @@ export default function LeadSearchPage() {
                     )
                   })}
                 </div>
+              </div>
+
+              {/* Company Filter Row */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                <div className="flex flex-wrap items-center gap-1.5 bg-slate-100/80 p-1 rounded-lg border border-slate-200">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 px-2 flex items-center gap-1">
+                    <Building2 className="h-3.5 w-3.5 text-slate-400" /> Company:
+                  </span>
+                  {(
+                    [
+                      { key: "ALL", label: "All Companies", activeClass: "bg-slate-800 text-white" },
+                      { key: "KAPPL", label: "KAPPL", activeClass: "bg-blue-600 text-white" },
+                      { key: "KTAHV", label: "KTAHV", activeClass: "bg-emerald-600 text-white" },
+                      { key: "VILLARAAG", label: "VILLARAAG", activeClass: "bg-purple-600 text-white" },
+                      { key: "KAC", label: "KAC", activeClass: "bg-amber-600 text-white" },
+                    ] as const
+                  ).map(c => {
+                    const isActive = companyFilter === c.key
+                    return (
+                      <button
+                        key={c.key}
+                        type="button"
+                        onClick={() => handleCompanyChange(c.key)}
+                        disabled={isLoadingDate || isSearching}
+                        className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1 ${
+                          isActive
+                            ? `${c.activeClass} shadow-xs font-bold`
+                            : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-900"
+                        } ${isLoadingDate ? "cursor-wait opacity-80" : ""}`}
+                      >
+                        <span>{c.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+                {companyFilter !== "ALL" && (
+                  <button
+                    type="button"
+                    onClick={() => handleCompanyChange("ALL")}
+                    className="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline"
+                  >
+                    Clear Company Filter
+                  </button>
+                )}
               </div>
 
               {/* Custom Date Pickers (Shown when Custom is selected) */}
@@ -1766,7 +2128,7 @@ export default function LeadSearchPage() {
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      onClick={() => loadDateLeads(datePreset, currentPage, pageSize, startDate, endDate)} 
+                      onClick={() => loadDateLeads(datePreset, currentPage, pageSize, startDate, endDate, companyFilter)} 
                       disabled={isLoadingDate}
                     >
                       <RefreshCcw className={`h-4 w-4 mr-2 ${isLoadingDate ? "animate-spin" : ""}`} /> Refresh
@@ -1779,50 +2141,187 @@ export default function LeadSearchPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0 relative min-h-[220px]">
-              {/* Visual Loading Overlay when switching dates or pages */}
+              {/* Visual Loading Overlay when switching dates, company or pages */}
               {isLoadingDate && (
-                <div className="absolute inset-0 bg-white/75 backdrop-blur-[1px] z-30 flex flex-col items-center justify-center gap-2">
+                <div className="absolute inset-0 bg-white/75 backdrop-blur-[1px] z-40 flex flex-col items-center justify-center gap-2">
                   <RefreshCcw className="h-8 w-8 animate-spin text-blue-600" />
                   <p className="text-xs font-bold text-slate-700 tracking-wide uppercase">
-                    Loading {getPresetDisplayName(datePreset)} leads...
+                    Loading {getPresetDisplayName(datePreset)} {companyFilter !== "ALL" ? `(${companyFilter}) ` : ""}leads...
                   </p>
                 </div>
               )}
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-slate-50">
-                      <TableHead className="text-xs font-bold">Lead ID</TableHead>
-                      <TableHead className="text-xs font-bold">Client</TableHead>
-                      <TableHead className="text-xs font-bold">Mobile</TableHead>
-                      <TableHead className="text-xs font-bold">Buffer Arrival</TableHead>
-                      <TableHead className="text-xs font-bold">KServe Status</TableHead>
-                      <TableHead className="text-xs font-bold">Assigned To</TableHead>
-                      <TableHead className="text-xs font-bold">Follow-ups</TableHead>
-                      <TableHead className="text-xs font-bold">Final Status</TableHead>
-                      <TableHead className="text-xs font-bold">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(isDefaultView ? results : results.slice((currentPage - 1) * pageSize, currentPage * pageSize)).map((lead, i) => (
-                      <TableRow key={lead.leadId || i} className="hover:bg-slate-50 text-sm">
-                        <TableCell className="font-mono text-xs max-w-[140px] truncate" title={lead.leadId}>
+              <div className="relative w-full max-h-[68vh] overflow-auto journey-scroll">
+                <table className="w-full caption-bottom text-sm border-separate border-spacing-0">
+                  <thead>
+                    <tr className="bg-slate-100 text-slate-700">
+                      {/* Frozen Col 1: Lead ID */}
+                      <th
+                        onClick={() => handleSort("leadId")}
+                        className="group/th sticky top-0 left-0 z-30 bg-slate-100 px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-r border-slate-200 cursor-pointer select-none hover:bg-slate-200/70 transition-colors w-[155px] min-w-[155px] max-w-[155px]"
+                      >
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span>Lead ID</span>
+                          {renderSortIcon("leadId")}
+                        </div>
+                      </th>
+                      {/* Frozen Col 2: Client (Name, Mobile, Email) */}
+                      <th
+                        onClick={() => handleSort("clientName")}
+                        className="group/th sticky top-0 left-[155px] z-30 bg-slate-100 px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-r border-slate-300 shadow-[3px_0_6px_-2px_rgba(15,23,42,0.12)] cursor-pointer select-none hover:bg-slate-200/70 transition-colors w-[240px] min-w-[240px] max-w-[260px]"
+                      >
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span>Client (Name · Mobile · Email)</span>
+                          {renderSortIcon("clientName")}
+                        </div>
+                      </th>
+                      {/* Col 3: Company */}
+                      <th
+                        onClick={() => handleSort("company")}
+                        className="group/th sticky top-0 z-20 bg-slate-100 px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-slate-200 cursor-pointer select-none hover:bg-slate-200/70 transition-colors min-w-[115px]"
+                      >
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span>Company</span>
+                          {renderSortIcon("company")}
+                        </div>
+                      </th>
+                      {/* Col 4: Datasource (NEW) */}
+                      <th
+                        onClick={() => handleSort("dataSource")}
+                        className="group/th sticky top-0 z-20 bg-slate-100 px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-slate-200 cursor-pointer select-none hover:bg-slate-200/70 transition-colors min-w-[190px]"
+                      >
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span>Datasource</span>
+                          {renderSortIcon("dataSource")}
+                        </div>
+                      </th>
+                      {/* Col 5: Buffer Arrival */}
+                      <th
+                        onClick={() => handleSort("bufferArrival")}
+                        className="group/th sticky top-0 z-20 bg-slate-100 px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-slate-200 cursor-pointer select-none hover:bg-slate-200/70 transition-colors min-w-[155px]"
+                      >
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span>Buffer Arrival</span>
+                          {renderSortIcon("bufferArrival")}
+                        </div>
+                      </th>
+                      {/* Col 6: KServe Status */}
+                      <th
+                        onClick={() => handleSort("kserveStatus")}
+                        className="group/th sticky top-0 z-20 bg-slate-100 px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-slate-200 cursor-pointer select-none hover:bg-slate-200/70 transition-colors min-w-[140px]"
+                      >
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span>KServe Status</span>
+                          {renderSortIcon("kserveStatus")}
+                        </div>
+                      </th>
+                      {/* Col 7: Assigned To */}
+                      <th
+                        onClick={() => handleSort("assignedTo")}
+                        className="group/th sticky top-0 z-20 bg-slate-100 px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-slate-200 cursor-pointer select-none hover:bg-slate-200/70 transition-colors min-w-[140px]"
+                      >
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span>Assigned To</span>
+                          {renderSortIcon("assignedTo")}
+                        </div>
+                      </th>
+                      {/* Col 8: Follow-ups */}
+                      <th
+                        onClick={() => handleSort("totalFollowups")}
+                        className="group/th sticky top-0 z-20 bg-slate-100 px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-slate-200 cursor-pointer select-none hover:bg-slate-200/70 transition-colors min-w-[130px]"
+                      >
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span>Follow-ups</span>
+                          {renderSortIcon("totalFollowups")}
+                        </div>
+                      </th>
+                      {/* Col 9: Final Status */}
+                      <th
+                        onClick={() => handleSort("finalStatus")}
+                        className="group/th sticky top-0 z-20 bg-slate-100 px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-slate-200 cursor-pointer select-none hover:bg-slate-200/70 transition-colors min-w-[165px]"
+                      >
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span>Final Status</span>
+                          {renderSortIcon("finalStatus")}
+                        </div>
+                      </th>
+                      {/* Col 10: Actions */}
+                      <th className="sticky top-0 z-20 bg-slate-100 px-3 py-2.5 text-left text-xs font-bold whitespace-nowrap border-b border-slate-200 min-w-[135px]">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayedResults.map((lead, i) => (
+                      <tr key={lead.leadId || i} className="group bg-white hover:bg-blue-50/40 text-sm transition-colors">
+                        {/* Frozen Cell 1: Lead ID */}
+                        <td
+                          className="sticky left-0 z-10 bg-white group-hover:bg-blue-50/40 px-3 py-2.5 font-mono text-xs text-slate-700 border-b border-r border-slate-200/80 w-[155px] min-w-[155px] max-w-[155px] truncate transition-colors"
+                          title={lead.leadId}
+                        >
                           {lead.leadId || "—"}
-                        </TableCell>
-                        <TableCell>
-                          <p className="font-medium text-slate-800 truncate max-w-[120px]">{lead.clientName || "—"}</p>
-                          <p className="text-xs text-slate-400">{lead.company || ""}</p>
-                        </TableCell>
-                        <TableCell className="text-xs text-slate-600">{lead.mobile || "—"}</TableCell>
-                        <TableCell className="text-xs text-slate-500">{formatDate(lead.bufferArrival)}</TableCell>
-                        <TableCell>{getKserveStatusBadge(lead.kserveStatus, lead.kserveRoute)}</TableCell>
-                        <TableCell className="text-xs text-slate-700">
+                        </td>
+                        {/* Frozen Cell 2: Client Name + Mobile + Email */}
+                        <td className="sticky left-[155px] z-10 bg-white group-hover:bg-blue-50/40 px-3 py-2.5 border-b border-r border-slate-300/80 shadow-[3px_0_6px_-2px_rgba(15,23,42,0.08)] w-[240px] min-w-[240px] max-w-[260px] transition-colors">
+                          <div className="space-y-0.5 min-w-0">
+                            <p className="font-semibold text-slate-900 text-xs truncate" title={lead.clientName || ""}>
+                              {lead.clientName || "—"}
+                            </p>
+                            <div className="flex items-center gap-1 text-[11px] text-slate-600">
+                              <Phone className="h-3 w-3 text-slate-400 flex-shrink-0" />
+                              <span className="font-medium truncate">{lead.mobile || "—"}</span>
+                            </div>
+                            {lead.email && (
+                              <div className="flex items-center gap-1 text-[11px] text-slate-500">
+                                <Mail className="h-3 w-3 text-slate-400 flex-shrink-0" />
+                                <span className="truncate" title={lead.email}>{lead.email}</span>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        {/* Cell 3: Company (Separate Column) */}
+                        <td className="px-3 py-2.5 border-b border-slate-200/80 whitespace-nowrap">
+                          {lead.company ? (
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold border ${getCompanyBadgeStyle(lead.company)}`}>
+                              {lead.company}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-400">—</span>
+                          )}
+                        </td>
+                        {/* Cell 4: Datasource (NEW) */}
+                        <td className="px-3 py-2.5 border-b border-slate-200/80 max-w-[230px]">
+                          <div className="space-y-1 min-w-0">
+                            <p
+                              className="text-xs text-slate-700 font-medium truncate"
+                              title={lead.dataSource || lead.leadSource || ""}
+                            >
+                              {lead.dataSource || lead.leadSource || "—"}
+                            </p>
+                            {lead.verifiedSource && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 text-[10px] font-semibold">
+                                <Database className="h-2.5 w-2.5 text-slate-400" />
+                                {lead.verifiedSource}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        {/* Cell 5: Buffer Arrival */}
+                        <td className="px-3 py-2.5 border-b border-slate-200/80 text-xs text-slate-500 whitespace-nowrap">
+                          {formatDate(lead.bufferArrival)}
+                        </td>
+                        {/* Cell 6: KServe Status */}
+                        <td className="px-3 py-2.5 border-b border-slate-200/80 whitespace-nowrap">
+                          {getKserveStatusBadge(lead.kserveStatus, lead.kserveRoute)}
+                        </td>
+                        {/* Cell 7: Assigned To */}
+                        <td className="px-3 py-2.5 border-b border-slate-200/80 text-xs text-slate-700 whitespace-nowrap">
                           <p className="font-medium text-slate-800">{lead.currentHolder || lead.assignedTo || "—"}</p>
                           {lead.currentHolder && lead.assignedTo && lead.currentHolder !== lead.assignedTo && (
                             <p className="text-[10px] text-slate-400">Orig: {lead.assignedTo}</p>
                           )}
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        {/* Cell 8: Follow-ups */}
+                        <td className="px-3 py-2.5 border-b border-slate-200/80 whitespace-nowrap">
                           <div className="flex items-center gap-1.5">
                             <PhoneCall className="h-3.5 w-3.5 text-slate-400" />
                             <span className="text-xs font-bold text-slate-800">{lead.totalFollowups}</span>
@@ -1830,10 +2329,11 @@ export default function LeadSearchPage() {
                           {lead.lastFollowupDate && (
                             <p className="text-[11px] text-slate-500 mt-0.5">{formatDate(lead.lastFollowupDate)}</p>
                           )}
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        {/* Cell 9: Final Status */}
+                        <td className="px-3 py-2.5 border-b border-slate-200/80">
                           {lead.finalStatus ? (
-                            <span className={`text-xs px-2.5 py-1 rounded-full border inline-block ${getFinalStatusColor(lead.finalStatus)}`}>
+                            <span className={`text-xs px-2.5 py-1 rounded-full border inline-block whitespace-nowrap ${getFinalStatusColor(lead.finalStatus)}`}>
                               {lead.finalStatus}
                             </span>
                           ) : (
@@ -1844,21 +2344,21 @@ export default function LeadSearchPage() {
                               ₹{lead.conversionAmount.toLocaleString("en-IN")}
                             </p>
                           )}
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        {/* Cell 10: Actions (Colored View Journey Button) */}
+                        <td className="px-3 py-2.5 border-b border-slate-200/80 whitespace-nowrap">
                           <Button
                             size="sm"
-                            variant="outline"
-                            className="text-xs h-7"
+                            className="text-xs h-7 px-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white border-0 shadow-xs hover:shadow-md transition-all font-semibold"
                             onClick={() => handleViewJourney(lead)}
                           >
-                            <Eye className="h-3 w-3 mr-1" /> View Journey
+                            <Eye className="h-3.5 w-3.5 mr-1.5" /> View Journey
                           </Button>
-                        </TableCell>
-                      </TableRow>
+                        </td>
+                      </tr>
                     ))}
-                  </TableBody>
-                </Table>
+                  </tbody>
+                </table>
               </div>
 
               {/* Table Footer with Record Count, 50/100/200 Select & Paging Navigation */}

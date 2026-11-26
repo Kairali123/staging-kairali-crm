@@ -216,6 +216,21 @@
   animation: pulseSoft 2s ease-in-out infinite;
 }
 
+@keyframes kpiFadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-kpi-in {
+  animation: kpiFadeSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 /* Smooth thin scrollbar for the journey popup body */
 .journey-scroll {
   scrollbar-width: thin;

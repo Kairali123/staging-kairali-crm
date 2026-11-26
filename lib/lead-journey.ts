@@ -42,6 +42,49 @@ export function phoneVariants(q: string): string[] {
   return [...new Set([digits, digits.length > 10 ? digits.slice(-10) : ''].filter(Boolean))]
 }
 
+export function normalizeCompany(relatesTo?: string | null, kapplKtahv?: string | null): string {
+  const r = (relatesTo || '').trim().toLowerCase()
+  if (r === 'villaraag' || r === 'villa raag' || r.includes('villaraag') || r.includes('villa raag')) return 'VILLARAAG'
+  if (r.includes('ayurvedic center') || r.includes('ayurvedic centre') || r === 'kac') return 'KAC'
+  if (r.includes('healing village') || r === 'ktahv' || r === 'katahv') return 'KTAHV'
+  if (r.includes('ayurvedic products') || r === 'kappl') return 'KAPPL'
+  const k = (kapplKtahv || '').trim().toUpperCase()
+  if (k === 'KTAHV' || k === 'KATAHV') return 'KTAHV'
+  if (k === 'VILLARAAG' || k === 'VILARAAG') return 'VILLARAAG'
+  if (k === 'KAC') return 'KAC'
+  if (k === 'KAPPL') return 'KAPPL'
+  return (relatesTo || kapplKtahv || '').trim()
+}
+
+export function normalizeCompanyFilter(raw?: string | null): string {
+  const v = (raw || '').trim().toUpperCase()
+  if (!v || v === 'ALL') return 'ALL'
+  if (v === 'KATAHV' || v === 'KTAHV') return 'KTAHV'
+  if (v === 'VILARAAG' || v === 'VILLARAAG') return 'VILLARAAG'
+  if (v === 'KAPPL') return 'KAPPL'
+  if (v === 'KAC') return 'KAC'
+  return 'ALL'
+}
+
+const COMPANY_SQL_EXPR = `
+  CASE
+    WHEN LOWER(TRIM(COALESCE(sbn.Lead_Relates_to_which_company, ''))) LIKE '%villa%raag%'
+      OR LOWER(TRIM(COALESCE(sbn.Lead_Relates_to_which_company, ''))) = 'villaraag' THEN 'VILLARAAG'
+    WHEN LOWER(TRIM(COALESCE(sbn.Lead_Relates_to_which_company, ''))) LIKE '%ayurvedic center%'
+      OR LOWER(TRIM(COALESCE(sbn.Lead_Relates_to_which_company, ''))) LIKE '%ayurvedic centre%'
+      OR LOWER(TRIM(COALESCE(sbn.Lead_Relates_to_which_company, ''))) = 'kac' THEN 'KAC'
+    WHEN LOWER(TRIM(COALESCE(sbn.Lead_Relates_to_which_company, ''))) LIKE '%healing village%'
+      OR LOWER(TRIM(COALESCE(sbn.Lead_Relates_to_which_company, ''))) IN ('ktahv', 'katahv') THEN 'KTAHV'
+    WHEN LOWER(TRIM(COALESCE(sbn.Lead_Relates_to_which_company, ''))) LIKE '%ayurvedic products%'
+      OR LOWER(TRIM(COALESCE(sbn.Lead_Relates_to_which_company, ''))) = 'kappl' THEN 'KAPPL'
+    WHEN UPPER(TRIM(COALESCE(sbn.KAPPL_KTAHV, ''))) IN ('KTAHV', 'KATAHV') THEN 'KTAHV'
+    WHEN UPPER(TRIM(COALESCE(sbn.KAPPL_KTAHV, ''))) IN ('VILLARAAG', 'VILARAAG') THEN 'VILLARAAG'
+    WHEN UPPER(TRIM(COALESCE(sbn.KAPPL_KTAHV, ''))) = 'KAC' THEN 'KAC'
+    WHEN UPPER(TRIM(COALESCE(sbn.KAPPL_KTAHV, ''))) = 'KAPPL' THEN 'KAPPL'
+    ELSE ''
+  END
+`
+
 const JOURNEY_SELECT = `
   SELECT
     mb.lead_id,
@@ -393,9 +436,12 @@ async function toJourneys(pool: any, rows: any[], withFollowups: boolean) {
       altMobile: altMobile && altMobile !== mobile ? altMobile : '',
       email: safeStr(row.Email_Id),
       bufferArrival: safeDate(row.buffer_arrival),
+      dataSource: safeStr(row.Data_Source),
+      verifiedSource: safeStr(row.Verified_Source),
       leadSource: safeStr(row.Verified_Source || row.Data_Source),
       category: safeStr(row.Lead_Category),
-      company: safeStr(row.KAPPL_KTAHV || row.Lead_Relates_to_which_company),
+      company: normalizeCompany(row.Lead_Relates_to_which_company, row.KAPPL_KTAHV),
+      companyRaw: safeStr(row.Lead_Relates_to_which_company || row.KAPPL_KTAHV),
       assignedTo: safeStr(row.assigned_to),
       currentHolder,
       assignedDate: safeDate(row.assigned_date || row.sent_status),
@@ -450,8 +496,31 @@ export interface DateFilterOptions {
   preset?: 'today' | 'yesterday' | 'last7days' | 'thisMonth' | 'lastMonth' | 'custom'
   startDate?: string
   endDate?: string
+  company?: string
   page?: number
   limit?: number
+}
+
+export interface KpiMetric {
+  current: number
+  previous: number
+  delta: number
+  pctChange: number
+}
+
+export interface LeadKpiSummary {
+  comparisonLabel: string
+  totalLeads: KpiMetric
+  assignedLeads: KpiMetric
+  contactedLeads: KpiMetric
+  untouchedLeads: KpiMetric
+  convertedLeads: KpiMetric
+}
+
+function addDaysYmd(ymd: string, deltaDays: number): string {
+  const [y, m, d] = ymd.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d + deltaDays))
+  return dt.toISOString().slice(0, 10)
 }
 
 function getIstDates() {
@@ -459,18 +528,16 @@ function getIstDates() {
   const toIstYmd = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
   
   const today = toIstYmd(now)
-  
-  const yDate = new Date(now)
-  yDate.setDate(yDate.getDate() - 1)
-  const yesterday = toIstYmd(yDate)
-
-  const d7 = new Date(now)
-  d7.setDate(d7.getDate() - 7)
-  const last7DaysStart = toIstYmd(d7)
+  const yesterday = addDaysYmd(today, -1)
+  const dayBeforeYesterday = addDaysYmd(today, -2)
+  const last7DaysStart = addDaysYmd(today, -6)
+  const prev7DaysEnd = addDaysYmd(last7DaysStart, -1)
+  const prev7DaysStart = addDaysYmd(prev7DaysEnd, -6)
 
   const thisMonthStart = today.slice(0, 7) + '-01'
 
   const parts = today.split('-')
+  const curDay = parseInt(parts[2], 10)
   let lmYear = parseInt(parts[0], 10)
   let lmMonth = parseInt(parts[1], 10) - 1
   if (lmMonth === 0) { lmMonth = 12; lmYear -= 1 }
@@ -478,8 +545,30 @@ function getIstDates() {
   const lastMonthStart = `${lmYear}-${lmMonthStr}-01`
   const lastDayOfLm = new Date(lmYear, lmMonth, 0).getDate()
   const lastMonthEnd = `${lmYear}-${lmMonthStr}-${String(lastDayOfLm).padStart(2, '0')}`
+  const lastMonthSameDay = `${lmYear}-${lmMonthStr}-${String(Math.min(curDay, lastDayOfLm)).padStart(2, '0')}`
 
-  return { today, yesterday, last7DaysStart, thisMonthStart, lastMonthStart, lastMonthEnd }
+  let pmYear = lmYear
+  let pmMonth = lmMonth - 1
+  if (pmMonth === 0) { pmMonth = 12; pmYear -= 1 }
+  const pmMonthStr = String(pmMonth).padStart(2, '0')
+  const prevMonthStart = `${pmYear}-${pmMonthStr}-01`
+  const lastDayOfPm = new Date(pmYear, pmMonth, 0).getDate()
+  const prevMonthEnd = `${pmYear}-${pmMonthStr}-${String(lastDayOfPm).padStart(2, '0')}`
+
+  return {
+    today,
+    yesterday,
+    dayBeforeYesterday,
+    last7DaysStart,
+    prev7DaysStart,
+    prev7DaysEnd,
+    thisMonthStart,
+    lastMonthStart,
+    lastMonthEnd,
+    lastMonthSameDay,
+    prevMonthStart,
+    prevMonthEnd,
+  }
 }
 
 export function buildDateWhereClause(options: DateFilterOptions): { whereSql: string; params: any[] } {
@@ -488,44 +577,103 @@ export function buildDateWhereClause(options: DateFilterOptions): { whereSql: st
   const { today, yesterday, last7DaysStart, thisMonthStart, lastMonthStart, lastMonthEnd } = getIstDates()
 
   if (preset === 'yesterday') {
-    return {
-      whereSql: `${timeExpr} = ?`,
-      params: [yesterday]
-    }
+    return { whereSql: `${timeExpr} = ?`, params: [yesterday] }
   }
-
   if (preset === 'last7days') {
-    return {
-      whereSql: `${timeExpr} BETWEEN ? AND ?`,
-      params: [last7DaysStart, today]
-    }
+    return { whereSql: `${timeExpr} BETWEEN ? AND ?`, params: [last7DaysStart, today] }
   }
-
   if (preset === 'thisMonth') {
-    return {
-      whereSql: `${timeExpr} BETWEEN ? AND ?`,
-      params: [thisMonthStart, today]
-    }
+    return { whereSql: `${timeExpr} BETWEEN ? AND ?`, params: [thisMonthStart, today] }
   }
-
   if (preset === 'lastMonth') {
-    return {
-      whereSql: `${timeExpr} BETWEEN ? AND ?`,
-      params: [lastMonthStart, lastMonthEnd]
-    }
+    return { whereSql: `${timeExpr} BETWEEN ? AND ?`, params: [lastMonthStart, lastMonthEnd] }
   }
-
   if (preset === 'custom' && options.startDate && options.endDate) {
-    return {
-      whereSql: `${timeExpr} BETWEEN ? AND ?`,
-      params: [options.startDate, options.endDate]
-    }
+    return { whereSql: `${timeExpr} BETWEEN ? AND ?`, params: [options.startDate, options.endDate] }
   }
+  return { whereSql: `${timeExpr} = ?`, params: [today] }
+}
 
-  // Default: today
-  return {
-    whereSql: `${timeExpr} = ?`,
-    params: [today]
+export function buildPreviousDateWhereClause(options: DateFilterOptions): { whereSql: string; params: any[]; comparisonLabel: string } {
+  const preset = options.preset || 'today'
+  const timeExpr = "DATE(CONVERT_TZ(COALESCE(mb.actual_time, mb.Timestamp, mb.Date_Time), '+00:00', '+05:30'))"
+  const d = getIstDates()
+
+  if (preset === 'yesterday') {
+    return { whereSql: `${timeExpr} = ?`, params: [d.dayBeforeYesterday], comparisonLabel: 'vs Day Before' }
+  }
+  if (preset === 'last7days') {
+    return { whereSql: `${timeExpr} BETWEEN ? AND ?`, params: [d.prev7DaysStart, d.prev7DaysEnd], comparisonLabel: 'vs Prev 7 Days' }
+  }
+  if (preset === 'thisMonth') {
+    return { whereSql: `${timeExpr} BETWEEN ? AND ?`, params: [d.lastMonthStart, d.lastMonthSameDay], comparisonLabel: 'vs Last Month (MTD)' }
+  }
+  if (preset === 'lastMonth') {
+    return { whereSql: `${timeExpr} BETWEEN ? AND ?`, params: [d.prevMonthStart, d.prevMonthEnd], comparisonLabel: 'vs Prior Month' }
+  }
+  if (preset === 'custom' && options.startDate && options.endDate) {
+    const s = new Date(options.startDate + 'T00:00:00Z').getTime()
+    const e = new Date(options.endDate + 'T00:00:00Z').getTime()
+    const spanDays = Math.max(0, Math.round((e - s) / 86400000))
+    const prevEnd = addDaysYmd(options.startDate, -1)
+    const prevStart = addDaysYmd(prevEnd, -spanDays)
+    return { whereSql: `${timeExpr} BETWEEN ? AND ?`, params: [prevStart, prevEnd], comparisonLabel: 'vs Prev Period' }
+  }
+  return { whereSql: `${timeExpr} = ?`, params: [d.yesterday], comparisonLabel: 'vs Yesterday' }
+}
+
+function makeKpiMetric(current: number, previous: number): KpiMetric {
+  const delta = current - previous
+  let pctChange = 0
+  if (previous > 0) {
+    pctChange = Math.round(((current - previous) / previous) * 1000) / 10
+  } else if (current > 0) {
+    pctChange = 100
+  }
+  return { current, previous, delta, pctChange }
+}
+
+async function fetchPeriodCounts(
+  pool: any,
+  whereSql: string,
+  params: any[],
+  companyCode: string
+): Promise<{ totalLeads: number; assignedLeads: number; contactedLeads: number; convertedLeads: number }> {
+  const companyFilterSql = companyCode !== 'ALL' ? ` AND (${COMPANY_SQL_EXPR}) = ?` : ''
+  const queryParams = companyCode !== 'ALL' ? [...params, companyCode] : params
+  try {
+    const [rows]: any = await pool.query(
+      `SELECT
+        COUNT(DISTINCT mb.lead_id) AS totalLeads,
+        COUNT(DISTINCT CASE WHEN COALESCE(sbn.Assign_To_MR_Main, '') != '' THEN mb.lead_id END) AS assignedLeads,
+        COUNT(DISTINCT CASE
+          WHEN COALESCE(sbn.Enquiry_Status_Last, '') != ''
+            OR COALESCE(sbn.status, '') != ''
+            OR EXISTS (SELECT 1 FROM lead_fms f WHERE f.lead_id = (mb.lead_id COLLATE utf8mb4_unicode_ci) LIMIT 1)
+            OR EXISTS (SELECT 1 FROM followup_activity fa WHERE fa.lead_id = mb.lead_id LIMIT 1)
+          THEN mb.lead_id END) AS contactedLeads,
+        COUNT(DISTINCT CASE
+          WHEN COALESCE(sbn.Converted_Amount, 0) > 0
+            OR COALESCE(sbn.Converted_Date, '') != ''
+            OR LOWER(COALESCE(sbn.Enquiry_Status_Last, '')) LIKE '%convert%'
+            OR LOWER(COALESCE(sbn.Enquiry_Status_Last, '')) LIKE '%order%'
+            OR LOWER(COALESCE(sbn.Enquiry_Status_Last, '')) LIKE '%book%'
+          THEN mb.lead_id END) AS convertedLeads
+       FROM master_buffer mb
+       LEFT JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id
+       WHERE ${whereSql}${companyFilterSql}`,
+      queryParams
+    )
+    const r = rows[0] || {}
+    return {
+      totalLeads: Number(r.totalLeads || 0),
+      assignedLeads: Number(r.assignedLeads || 0),
+      contactedLeads: Number(r.contactedLeads || 0),
+      convertedLeads: Number(r.convertedLeads || 0),
+    }
+  } catch (err: any) {
+    console.warn('[lead-journey] KPI count error:', err?.message || err)
+    return { totalLeads: 0, assignedLeads: 0, contactedLeads: 0, convertedLeads: 0 }
   }
 }
 
@@ -533,30 +681,45 @@ export async function fetchLeadsByDateRange(pool: any, options: DateFilterOption
   const page = Math.max(1, Number(options.page) || 1)
   const limit = Math.min(200, Math.max(10, Number(options.limit) || 50))
   const offset = (page - 1) * limit
+  const companyCode = normalizeCompanyFilter(options.company)
 
   const { whereSql, params } = buildDateWhereClause(options)
+  const prev = buildPreviousDateWhereClause(options)
 
-  const [cntRows]: any = await pool.query(
-    `SELECT COUNT(*) as total FROM master_buffer mb WHERE ${whereSql}`,
-    params
-  )
-  const total = Number(cntRows[0]?.total || 0)
+  const companyJoinSql = companyCode !== 'ALL' ? 'INNER JOIN staging_buffer_new sbn ON sbn.Lead_id = mb.lead_id' : ''
+  const companyWhereSql = companyCode !== 'ALL' ? ` AND (${COMPANY_SQL_EXPR}) = ?` : ''
+  const listParams = companyCode !== 'ALL' ? [...params, companyCode] : params
 
-  let idRows: any[] = []
-  if (total > 0) {
-    const [rows]: any = await pool.query(
-      `SELECT mb.lead_id 
-         FROM master_buffer mb 
-        WHERE ${whereSql} 
-        ORDER BY COALESCE(mb.actual_time, mb.Timestamp, mb.Date_Time) DESC 
+  const [currentCounts, prevCounts, idQueryRes] = await Promise.all([
+    fetchPeriodCounts(pool, whereSql, params, companyCode),
+    fetchPeriodCounts(pool, prev.whereSql, prev.params, companyCode),
+    pool.query(
+      `SELECT DISTINCT mb.lead_id, COALESCE(mb.actual_time, mb.Timestamp, mb.Date_Time) AS sort_dt
+         FROM master_buffer mb
+         ${companyJoinSql}
+        WHERE ${whereSql}${companyWhereSql}
+        ORDER BY sort_dt DESC
         LIMIT ? OFFSET ?`,
-      [...params, limit, offset]
-    )
-    idRows = rows
-  }
+      [...listParams, limit, offset]
+    ),
+  ])
 
+  const total = currentCounts.totalLeads
+  const idRows: any[] = idQueryRes[0] || []
   const ids = idRows.map((r: any) => String(r.lead_id))
   const results = ids.length > 0 ? await fetchBulkLeadJourneys(pool, ids) : []
+
+  const kpi: LeadKpiSummary = {
+    comparisonLabel: prev.comparisonLabel,
+    totalLeads: makeKpiMetric(currentCounts.totalLeads, prevCounts.totalLeads),
+    assignedLeads: makeKpiMetric(currentCounts.assignedLeads, prevCounts.assignedLeads),
+    contactedLeads: makeKpiMetric(currentCounts.contactedLeads, prevCounts.contactedLeads),
+    untouchedLeads: makeKpiMetric(
+      Math.max(0, currentCounts.totalLeads - currentCounts.contactedLeads),
+      Math.max(0, prevCounts.totalLeads - prevCounts.contactedLeads)
+    ),
+    convertedLeads: makeKpiMetric(currentCounts.convertedLeads, prevCounts.convertedLeads),
+  }
 
   return {
     results,
@@ -564,6 +727,8 @@ export async function fetchLeadsByDateRange(pool: any, options: DateFilterOption
     page,
     limit,
     totalPages: Math.ceil(total / limit) || 1,
+    company: companyCode,
+    kpi,
   }
 }
 
