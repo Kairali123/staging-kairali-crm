@@ -56,6 +56,7 @@ export const PERMISSION_MODULE_COLUMNS = [
   'good_lead_leakage',
   'marketing_daily_report',
   'daily_sales_alert',
+  'dialshree_lead_lost',
 ] as const
 
 /**
