@@ -277,7 +277,7 @@ function getKserveStatusBadge(kserveStatus: string, kserveRoute: string) {
   return <Badge className="text-xs bg-blue-100 text-blue-700 border-blue-200">KServe: {kserveStatus || kserveRoute}</Badge>
 }
 
-function TimelineModal({ lead, onClose }: { lead: LeadJourney; onClose: () => void }) {
+function TimelineModal({ lead, onClose, onViewEnquiry }: { lead: LeadJourney; onClose: () => void; onViewEnquiry?: () => void }) {
   // Compute key TATs
   const tatBufferToAssign = calculateTat(lead.bufferArrival, lead.assignedDate)
   const tatBufferToStaging = calculateTat(lead.bufferArrival, lead.stagingDate)
@@ -389,15 +389,28 @@ function TimelineModal({ lead, onClose }: { lead: LeadJourney; onClose: () => vo
               </p>
             </div>
 
-            {/* Custom Close Button */}
-            <button
-              onClick={onClose}
-              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0"
-              title="Close modal (Esc)"
-              aria-label="Close"
-            >
-              <X className="h-5 w-5" />
-            </button>
+            {/* View Enquiry + Close Buttons */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {onViewEnquiry && (
+                <button
+                  type="button"
+                  onClick={onViewEnquiry}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/35 text-emerald-200 border border-emerald-400/40 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                  title="View full incoming enquiry details"
+                >
+                  <FileText className="h-3.5 w-3.5 text-emerald-300" />
+                  <span>View Enquiry</span>
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                title="Close modal (Esc)"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
           </div>
 
           {/* Issue 2: Connected Journey Lifecycle Pipeline */}
@@ -1686,6 +1699,326 @@ function HeaderKpiCard({
   )
 }
 
+function parseEnquiryNotes(rawNotes?: string): {
+  cleanNotes: string
+  extractedFields: Record<string, string>
+} {
+  if (!rawNotes) return { cleanNotes: "", extractedFields: {} }
+  const trimmed = rawNotes.trim()
+  if (!trimmed.startsWith("{")) {
+    return { cleanNotes: trimmed, extractedFields: {} }
+  }
+  try {
+    let parsed: any = JSON.parse(trimmed)
+    if (typeof parsed.notes_by_kairali === "string" && parsed.notes_by_kairali.trim().startsWith("{")) {
+      try {
+        parsed = JSON.parse(parsed.notes_by_kairali)
+      } catch {
+        // keep outer parsed
+      }
+    }
+    const cleanNotes = typeof parsed.notes === "string" ? parsed.notes : ""
+    const extractedFields: Record<string, string> = {}
+    if (parsed.aiExtractionDetails && typeof parsed.aiExtractionDetails === "object") {
+      for (const [k, v] of Object.entries(parsed.aiExtractionDetails)) {
+        if (v !== null && v !== undefined && String(v).trim() !== "") {
+          extractedFields[k] = String(v).trim()
+        }
+      }
+    }
+    for (const [k, v] of Object.entries(parsed)) {
+      if (k === "notes" || k === "aiExtractionDetails" || k === "notes_by_kairali") continue
+      if (v !== null && v !== undefined && typeof v !== "object" && String(v).trim() !== "") {
+        extractedFields[k] = String(v).trim()
+      }
+    }
+    return { cleanNotes: cleanNotes || trimmed, extractedFields }
+  } catch {
+    return { cleanNotes: trimmed, extractedFields: {} }
+  }
+}
+
+function EnquiryFieldItem({ label, value, mono = false }: { label: string; value?: string | null; mono?: boolean }) {
+  return (
+    <div className="bg-white rounded-lg border border-slate-200/90 p-3 shadow-2xs">
+      <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block mb-0.5">
+        {label}
+      </span>
+      <p className={`text-xs font-bold text-slate-800 break-words ${mono ? "font-mono" : ""}`}>
+        {value && String(value).trim() !== "" ? value : "—"}
+      </p>
+    </div>
+  )
+}
+
+function EnquiryDetailsModal({ lead, onClose }: { lead: LeadJourney; onClose: () => void }) {
+  const [detail, setDetail] = useState<Record<string, string> | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    setError("")
+    fetch(`/api/enquiry/${encodeURIComponent(lead.leadId)}`, { cache: "no-store" })
+      .then(r => r.json())
+      .then(res => {
+        if (!active) return
+        if (res.success && res.data?.[0]) {
+          setDetail(res.data[0])
+        } else {
+          setError(res.message || "Could not load full enquiry record")
+        }
+      })
+      .catch(err => {
+        if (!active) return
+        setError(err?.message || "Failed to fetch enquiry details")
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [lead.leadId])
+
+  const parsedNotes = useMemo(() => parseEnquiryNotes(detail?.Notes), [detail?.Notes])
+
+  const clientName = detail?.Name_of_Client || detail?.Name_of_User || lead.clientName || "—"
+  const mobile = detail?.Mobile || lead.mobile || "—"
+  const altPhone = detail?.Phone_Number_of_User && detail.Phone_Number_of_User !== mobile ? detail.Phone_Number_of_User : lead.altMobile || ""
+  const email = detail?.Email_Id || detail?.Email_of_User || lead.email || "—"
+  const company = lead.company || detail?.KAPPL_KTAHV || "—"
+  const companyFull = detail?.Lead_Relates_to_which_company || lead.companyRaw || ""
+  const enquiryTime = detail?.Enquiry_Date_Time || lead.enquiryDate || lead.bufferArrival
+  const bufferArrival = detail?.Buffer_Arrival || lead.bufferArrival
+  const ivrUrl = detail?.IVR_URL || ""
+  const isHttpAudio = /^https?:\/\//i.test(ivrUrl)
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent
+        showCloseButton={false}
+        className="w-[95vw] max-w-4xl sm:max-w-4xl max-h-[90vh] flex flex-col p-0 rounded-2xl shadow-2xl border border-slate-700 bg-white overflow-hidden"
+      >
+        {/* Header */}
+        <div className="flex-shrink-0 bg-gradient-to-r from-[#130b2e] via-[#1c1142] to-[#231649] text-white p-4 sm:p-5 border-b border-white/10">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1.5 min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge className="bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 text-xs font-bold px-2.5 py-0.5 flex items-center gap-1">
+                  <FileText className="h-3.5 w-3.5 text-emerald-300" /> Incoming Lead Enquiry Details
+                </Badge>
+                {company && company !== "—" && (
+                  <Badge className="bg-indigo-500/25 text-indigo-100 border border-indigo-400/40 text-xs font-bold px-2.5 py-0.5">
+                    {company}
+                  </Badge>
+                )}
+                {detail?.Intent && (
+                  <Badge className="bg-amber-500/25 text-amber-200 border border-amber-400/40 text-xs font-bold px-2.5 py-0.5">
+                    Intent: {detail.Intent}
+                  </Badge>
+                )}
+              </div>
+              <h3 className="text-lg sm:text-xl font-black text-white truncate">
+                {clientName !== "—" ? clientName : `Lead ${lead.leadId}`}
+              </h3>
+              <p className="text-xs text-slate-200 flex items-center gap-2 flex-wrap">
+                <span><strong className="text-white">ID:</strong> {lead.leadId}</span>
+                <span className="text-slate-400">|</span>
+                <span><strong className="text-white">Mobile:</strong> {mobile}</span>
+                {email && email !== "—" && (
+                  <>
+                    <span className="text-slate-400">|</span>
+                    <span><strong className="text-white">Email:</strong> {email}</span>
+                  </>
+                )}
+                {detail?.Country && (
+                  <>
+                    <span className="text-slate-400">|</span>
+                    <span><strong className="text-white">Country:</strong> {detail.Country}</span>
+                  </>
+                )}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0"
+              aria-label="Close"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Scrollable Body */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 bg-slate-50/80 journey-scroll">
+          {loading && (
+            <div className="flex items-center justify-center py-10 gap-2.5 text-slate-600">
+              <RefreshCcw className="h-5 w-5 animate-spin text-indigo-600" />
+              <span className="text-xs font-bold uppercase tracking-wider">Loading complete incoming enquiry record...</span>
+            </div>
+          )}
+
+          {error && !loading && (
+            <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0" />
+              <span>{error} (Showing available lead summary below)</span>
+            </div>
+          )}
+
+          {/* 1. Primary Incoming Enquiry Message / Subject / Summary / Audio */}
+          <div className="rounded-xl border border-indigo-200/80 bg-gradient-to-br from-indigo-50/60 via-white to-white p-4 shadow-xs space-y-3">
+            <h4 className="text-xs font-extrabold uppercase tracking-wider text-indigo-900 flex items-center gap-1.5">
+              <Sparkles className="h-4 w-4 text-indigo-600" /> What Came In On This Enquiry (Message &amp; Content)
+            </h4>
+
+            {detail?.Subjects && (
+              <div className="bg-white rounded-lg border border-slate-200 p-3">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block mb-0.5">
+                  Enquiry Subject / Heading
+                </span>
+                <p className="text-sm font-bold text-slate-900">{detail.Subjects}</p>
+              </div>
+            )}
+
+            <div className="bg-white rounded-lg border border-slate-200 p-3.5">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block mb-1">
+                Customer Enquiry / Raw Notes
+              </span>
+              <p className="text-xs sm:text-sm text-slate-800 whitespace-pre-wrap leading-relaxed font-medium">
+                {parsedNotes.cleanNotes || detail?.Summary_of_Conversation || "No text message / notes captured on this enquiry."}
+              </p>
+            </div>
+
+            {detail?.Summary_of_Conversation && detail.Summary_of_Conversation !== parsedNotes.cleanNotes && (
+              <div className="bg-emerald-50/60 rounded-lg border border-emerald-200/80 p-3.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800 block mb-1">
+                  AI Summary of Conversation / Requirement
+                </span>
+                <p className="text-xs sm:text-sm text-emerald-950 leading-relaxed font-medium">
+                  {detail.Summary_of_Conversation}
+                </p>
+              </div>
+            )}
+
+            {detail?.Transcription && (
+              <div className="bg-slate-50 rounded-lg border border-slate-200 p-3.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                  Call / Voice Transcription
+                </span>
+                <p className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">
+                  {detail.Transcription}
+                </p>
+              </div>
+            )}
+
+            {ivrUrl && (
+              <div className="bg-white rounded-lg border border-indigo-200 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Volume2 className="h-4 w-4 text-indigo-600 flex-shrink-0" />
+                  <span className="text-xs font-bold text-slate-800">IVR / Incoming Voice Recording</span>
+                </div>
+                {isHttpAudio ? (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <audio controls preload="none" className="h-8 max-w-[260px]" src={ivrUrl} />
+                    <a
+                      href={ivrUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-800 underline"
+                    >
+                      Open Link ↗
+                    </a>
+                  </div>
+                ) : (
+                  <span className="text-xs font-mono text-slate-600 break-all">{ivrUrl}</span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 2. Client & Timestamp Details */}
+          <div>
+            <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-600 mb-2.5 flex items-center gap-1.5">
+              <User className="h-3.5 w-3.5 text-slate-500" /> Client &amp; Arrival Details
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              <EnquiryFieldItem label="Client Name" value={clientName} />
+              <EnquiryFieldItem label="Primary Mobile" value={mobile} mono />
+              {altPhone && <EnquiryFieldItem label="Alternate Phone" value={altPhone} mono />}
+              <EnquiryFieldItem label="Email ID" value={email} />
+              <EnquiryFieldItem label="Country" value={detail?.Country} />
+              <EnquiryFieldItem label="Enquiry Date & Time" value={formatDate(enquiryTime)} />
+              <EnquiryFieldItem label="Buffer Arrival Time" value={formatDate(bufferArrival)} />
+            </div>
+          </div>
+
+          {/* 3. Source, Website & Campaign Tracking */}
+          <div>
+            <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-600 mb-2.5 flex items-center gap-1.5">
+              <Database className="h-3.5 w-3.5 text-slate-500" /> Source, Website &amp; Campaign Details
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              <EnquiryFieldItem label="Company Code" value={company} />
+              <EnquiryFieldItem label="Lead Relates To Company" value={companyFull} />
+              <EnquiryFieldItem label="Verified Source" value={detail?.Verified_Source || lead.verifiedSource} />
+              <EnquiryFieldItem label="Raw Datasource" value={detail?.Data_Source || lead.dataSource || lead.leadSource} />
+              <EnquiryFieldItem label="Website Name" value={detail?.WebSite_Name} />
+              <EnquiryFieldItem label="UTM Campaign Name" value={detail?.UTM_Campaign_Name} />
+              <EnquiryFieldItem label="UTM Adgroup Name" value={detail?.UTM_Adgroup_Name} />
+              <EnquiryFieldItem label="Buffer Sheet Name" value={detail?.Sheet_Name} />
+            </div>
+          </div>
+
+          {/* 4. Qualification & AI Extracted Fields */}
+          <div>
+            <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-600 mb-2.5 flex items-center gap-1.5">
+              <Tag className="h-3.5 w-3.5 text-slate-500" /> Qualification &amp; Lead Classification
+            </h4>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+              <EnquiryFieldItem label="Lead Intent" value={detail?.Intent || parsedNotes.extractedFields.leadIntent} />
+              <EnquiryFieldItem label="Priority" value={detail?.Priority || parsedNotes.extractedFields.prority || parsedNotes.extractedFields.priority} />
+              <EnquiryFieldItem label="Urgency" value={detail?.Urgency_YES_NO || parsedNotes.extractedFields.urgency} />
+              <EnquiryFieldItem label="Lead Category" value={detail?.Lead_Category || lead.category || parsedNotes.extractedFields.leadCategory} />
+              <EnquiryFieldItem label="NBD / CRR Type" value={detail?.NBD_CRR || parsedNotes.extractedFields.leadType} />
+              <EnquiryFieldItem label="Lead Outcome" value={detail?.Lead_Outcome || parsedNotes.extractedFields.lead_outcome} />
+              <EnquiryFieldItem label="Preferred Contact" value={detail?.Preferred_Way_to_Contact || parsedNotes.extractedFields.preffered_way_to_interact} />
+              <EnquiryFieldItem label="Preferred Contact Time" value={detail?.Contact_Time || parsedNotes.extractedFields.contact_Time} />
+              {detail?.Duplicate && <EnquiryFieldItem label="Duplicate Flag" value={detail.Duplicate} />}
+            </div>
+          </div>
+
+          {/* 5. Routing & Buffer Processing */}
+          <div>
+            <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-600 mb-2.5 flex items-center gap-1.5">
+              <ShieldCheck className="h-3.5 w-3.5 text-slate-500" /> Buffer Routing &amp; Processing Metadata
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              <EnquiryFieldItem label="Buffer Assigned To" value={detail?.Assign_To_MR_Main || lead.assignedTo} />
+              <EnquiryFieldItem label="AI Extraction Time" value={detail?.gpt_Extraction_Status ? formatDate(detail.gpt_Extraction_Status) : "—"} />
+              <EnquiryFieldItem label="Last Enquiry Status" value={detail?.Enquiry_Status_Last || lead.finalStatus} />
+              {detail?.Order_Taken_By && <EnquiryFieldItem label="Order Taken By" value={detail.Order_Taken_By} />}
+              {detail?.Converted_Amount && <EnquiryFieldItem label="Converted Amount" value={`₹${detail.Converted_Amount}`} />}
+              {(detail?.Reason_why_assign_Or_Delete || lead.assignReason) && (
+                <div className="sm:col-span-2 lg:col-span-3 bg-white rounded-lg border border-slate-200 p-3">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block mb-0.5">
+                    Assignment / Routing / Delete Reason
+                  </span>
+                  <p className="text-xs font-semibold text-slate-800 leading-relaxed">
+                    {lead.assignReason || detail?.Reason_why_assign_Or_Delete}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export default function LeadSearchPage() {
   const { user, isLoading, hasPermission } = useAuth()
   const router = useRouter()
@@ -1697,6 +2030,7 @@ export default function LeadSearchPage() {
   const [isDefaultView, setIsDefaultView] = useState(true)
   const [searchError, setSearchError] = useState("")
   const [selectedLead, setSelectedLead] = useState<LeadJourney | null>(null)
+  const [enquiryLead, setEnquiryLead] = useState<LeadJourney | null>(null)
   const [bulkText, setBulkText] = useState("")
   const [isBulkMode, setIsBulkMode] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -2543,7 +2877,7 @@ export default function LeadSearchPage() {
                         </div>
                       </th>
                       {/* Col 14: Actions */}
-                      <th className="sticky top-0 z-30 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] min-w-[135px]">
+                      <th className="sticky top-0 z-30 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] min-w-[245px]">
                         Actions
                       </th>
                     </tr>
@@ -2684,15 +3018,25 @@ export default function LeadSearchPage() {
                             <span className="text-xs text-slate-400 font-medium">—</span>
                           )}
                         </td>
-                        {/* Cell 14: Actions */}
+                        {/* Cell 14: Actions (View Enquiry + View Journey) */}
                         <td className="px-3 py-2.5 border-b border-slate-200/80 whitespace-nowrap bg-white group-hover:bg-[#f2f6ff] transition-colors">
-                          <Button
-                            size="sm"
-                            className="text-xs h-7 px-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white border-0 shadow-xs hover:shadow-md transition-all font-semibold"
-                            onClick={() => handleViewJourney(lead)}
-                          >
-                            <Eye className="h-3.5 w-3.5 mr-1.5" /> View Journey
-                          </Button>
+                          <div className="flex items-center gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-7 px-2.5 border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-semibold shadow-2xs transition-all"
+                              onClick={() => setEnquiryLead(lead)}
+                            >
+                              <FileText className="h-3.5 w-3.5 mr-1 text-emerald-600" /> View Enquiry
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="text-xs h-7 px-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white border-0 shadow-xs hover:shadow-md transition-all font-semibold"
+                              onClick={() => handleViewJourney(lead)}
+                            >
+                              <Eye className="h-3.5 w-3.5 mr-1.5" /> View Journey
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -2822,7 +3166,19 @@ export default function LeadSearchPage() {
 
         {/* Journey Modal */}
         {selectedLead && (
-          <TimelineModal lead={selectedLead} onClose={() => setSelectedLead(null)} />
+          <TimelineModal
+            lead={selectedLead}
+            onClose={() => setSelectedLead(null)}
+            onViewEnquiry={() => setEnquiryLead(selectedLead)}
+          />
+        )}
+
+        {/* Incoming Lead Enquiry Full Details Modal */}
+        {enquiryLead && (
+          <EnquiryDetailsModal
+            lead={enquiryLead}
+            onClose={() => setEnquiryLead(null)}
+          />
         )}
       </div>
     </DashboardLayout>
