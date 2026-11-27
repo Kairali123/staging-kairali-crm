@@ -99,6 +99,7 @@ interface LeadJourney {
   assignReason?: string
   isDeleted?: boolean
   isKserveOnly?: boolean
+  isKserveNotQualified?: boolean
   isDirectRoute?: boolean
   routingType?: string
   kserveStatus: string
@@ -244,7 +245,17 @@ function getFinalStatusColor(status: string) {
   if (s.includes("meet") || s.includes("visit") || s.includes("pitch")) {
     return "bg-purple-100 text-purple-800 border-purple-300 font-semibold"
   }
-  if (s.includes("cold") || s.includes("lost") || s.includes("not interest") || s.includes("junk") || s.includes("wrong")) {
+  if (
+    s.includes("cold") ||
+    s.includes("lost") ||
+    s.includes("not interest") ||
+    s.includes("junk") ||
+    s.includes("wrong") ||
+    s.includes("non-qualified") ||
+    s.includes("not qualified") ||
+    s.includes("disqualif") ||
+    s.includes("did not enquire")
+  ) {
     return "bg-red-100 text-red-800 border-red-300"
   }
   if (s.includes("follow") || s.includes("future") || s.includes("interest") || s.includes("call back") || s.includes("callback")) {
@@ -278,59 +289,110 @@ function getKserveStatusBadge(kserveStatus: string, kserveRoute: string) {
 }
 
 function TimelineModal({ lead, onClose, onViewEnquiry }: { lead: LeadJourney; onClose: () => void; onViewEnquiry?: () => void }) {
+  const isDirect = lead.isDirectRoute ?? (!lead.stagingDate && !lead.kserveAgentName && !lead.kserveStatus)
+  const isDeleted = Boolean(lead.isDeleted) || /data\s*backup.*delete|deleted/i.test(lead.assignedTo || "")
+  const isKserveOnly = Boolean(lead.isKserveOnly)
+  const isKserveNotQualified =
+    !isDeleted &&
+    (Boolean(lead.isKserveNotQualified) ||
+      (!isDirect &&
+        /\b(non|not)\b|un-?qualified|disqualified|rejected/i.test(lead.kserveStatus || "") &&
+        (!lead.assignedTo || lead.assignedTo.toLowerCase() === "kserve")))
+
   // Compute key TATs
   const tatBufferToAssign = calculateTat(lead.bufferArrival, lead.assignedDate)
-  const tatBufferToStaging = calculateTat(lead.bufferArrival, lead.stagingDate)
-  const tatStagingToAssign = calculateTat(lead.stagingDate, lead.assignedDate)
-  
-  const firstCall = lead.followups?.[0]
-  const lastCall = lead.followups?.[lead.followups.length - 1]
-  
+  const tatBufferToStaging = calculateTat(lead.bufferArrival, lead.stagingDate || lead.assignedDate)
+
+  const firstCall = !isDeleted && !isKserveNotQualified ? lead.followups?.[0] : undefined
+  const lastCall = !isDeleted && !isKserveNotQualified ? lead.followups?.[lead.followups.length - 1] : undefined
+
   const tatAssignToFirstCall = calculateTat(
     lead.assignedDate || lead.bufferArrival,
     firstCall?.callDate
   )
-  const tatLastCallToOutcome = calculateTat(
-    lastCall?.callDate || lead.assignedDate,
-    lead.convertedDate
-  )
-  const totalJourneyTat = calculateTat(
-    lead.bufferArrival,
-    lead.convertedDate || lastCall?.callDate || lead.assignedDate
-  )
 
-  const isDirect = lead.isDirectRoute ?? (!lead.stagingDate && !lead.kserveAgentName && !lead.kserveStatus)
-  const isDeleted = Boolean(lead.isDeleted) || /data\s*backup.*delete|deleted/i.test(lead.assignedTo || "")
-  const isKserveOnly = Boolean(lead.isKserveOnly)
+  // Determine Lifecycle Stage: 1: Coming -> 2: Routed (or KServe Not Qualified End) -> 3: Assigned (or Deleted End) -> 4: Follow-up Active -> 5: Closed
+  const isClosed =
+    !isDeleted &&
+    !isKserveNotQualified &&
+    Boolean(
+      lead.finalStatus?.toLowerCase().includes("convert") ||
+      lead.finalStatus?.toLowerCase().includes("cold") ||
+      lead.finalStatus?.toLowerCase().includes("lost") ||
+      lead.finalStatus?.toLowerCase().includes("not interest") ||
+      lead.convertedDate
+    )
+
+  // Issue 7: Stage 4 Last Call -> Final Outcome Delay (always computed for every lead in Stage 4)
+  const nowIso = new Date().toISOString()
+  let tatLastCallToOutcome = "—"
+  if (
+    lead.convertedDate &&
+    lastCall?.callDate &&
+    new Date(lead.convertedDate).getTime() >= new Date(lastCall.callDate).getTime()
+  ) {
+    tatLastCallToOutcome = calculateTat(lastCall.callDate, lead.convertedDate)
+  } else if (isClosed) {
+    if (lead.convertedDate) {
+      tatLastCallToOutcome = calculateTat(lastCall?.callDate || lead.assignedDate || lead.bufferArrival, lead.convertedDate)
+    } else if (lead.followups.length > 1 && firstCall?.callDate && lastCall?.callDate) {
+      tatLastCallToOutcome = calculateTat(firstCall.callDate, lastCall.callDate)
+    } else if (lastCall?.callDate) {
+      tatLastCallToOutcome = calculateTat(lead.assignedDate || lead.bufferArrival, lastCall.callDate)
+    } else {
+      tatLastCallToOutcome = calculateTat(lead.bufferArrival, lead.assignedDate || nowIso)
+    }
+  } else {
+    if (lastCall?.callDate) {
+      tatLastCallToOutcome = calculateTat(lastCall.callDate, nowIso)
+    } else {
+      tatLastCallToOutcome = calculateTat(lead.assignedDate || lead.bufferArrival, nowIso)
+    }
+  }
+
+  const totalJourneyTat = isKserveNotQualified
+    ? calculateTat(lead.bufferArrival, lead.stagingDate || lead.assignedDate)
+    : isDeleted
+    ? calculateTat(lead.bufferArrival, lead.assignedDate)
+    : calculateTat(lead.bufferArrival, lead.convertedDate || lastCall?.callDate || lead.assignedDate)
 
   // Current Ownership
   const currentOwner = isDeleted
     ? "Data Backup - Deleted"
+    : isKserveNotQualified
+    ? "KServe (Not Qualified)"
     : lead.currentHolder || lastCall?.agentName || lead.assignedTo || "Unassigned"
   const currentOwnerId = lastCall?.agentId || ""
-  const totalCallCount = Math.max(lead.totalFollowups, lead.followups.length)
+  const totalCallCount = isDeleted || isKserveNotQualified ? 0 : Math.max(lead.totalFollowups, lead.followups.length)
 
   // Time elapsed since last call
-  const timeSinceLastCall = lastCall?.callDate ? calculateTat(lastCall.callDate, new Date().toISOString()) : "—"
+  const timeSinceLastCall = lastCall?.callDate ? calculateTat(lastCall.callDate, nowIso) : "—"
 
-  // Determine Lifecycle Stage: 1: Coming -> 2: Routed -> 3: Assigned (or Deleted End) -> 4: Follow-up Active -> 5: Closed
-  const isClosed = !isDeleted && Boolean(
-    lead.finalStatus?.toLowerCase().includes("convert") ||
-    lead.finalStatus?.toLowerCase().includes("cold") ||
-    lead.finalStatus?.toLowerCase().includes("lost") ||
-    lead.convertedDate
-  )
-  const isFollowupActive = !isDeleted && totalCallCount > 0 && !isClosed
-  const isAssigned = !isDeleted && !isKserveOnly && Boolean(lead.assignedTo) && totalCallCount === 0 && !isClosed
-  const isRouting = !isDeleted && (isKserveOnly || (!lead.assignedTo && Boolean(lead.bufferArrival))) && !isClosed
+  const isFollowupActive = !isDeleted && !isKserveNotQualified && totalCallCount > 0 && !isClosed
+  const isAssigned = !isDeleted && !isKserveNotQualified && !isKserveOnly && Boolean(lead.assignedTo) && totalCallCount === 0 && !isClosed
+  const isRouting = !isDeleted && !isKserveNotQualified && (isKserveOnly || (!lead.assignedTo && Boolean(lead.bufferArrival))) && !isClosed
 
   // Current stage number for progress bar
-  const currentStageNumber = isDeleted ? 3 : isClosed ? 5 : isFollowupActive ? 4 : isAssigned ? 3 : isRouting ? 2 : 1
+  const currentStageNumber = isKserveNotQualified
+    ? 2
+    : isDeleted
+    ? 3
+    : isClosed
+    ? 5
+    : isFollowupActive
+    ? 4
+    : isAssigned
+    ? 3
+    : isRouting
+    ? 2
+    : 1
 
   // Accordion state: by default null = all stages minimized!
   const [activeStage, setActiveStage] = useState<number | null>(null)
 
   const toggleStage = (stageNum: number) => {
+    if (isKserveNotQualified && stageNum > 2) return
+    if (isDeleted && stageNum > 3) return
     setActiveStage(prev => (prev === stageNum ? null : stageNum))
   }
 
@@ -354,6 +416,10 @@ function TimelineModal({ lead, onClose, onViewEnquiry }: { lead: LeadJourney; on
                   <Badge className="bg-rose-500/20 text-rose-200 border border-rose-400/50 text-xs px-2.5 py-0.5 flex items-center gap-1.5 shadow-sm">
                     <XCircle className="h-3.5 w-3.5 text-rose-300" /> Data Backup - Deleted (Ended at Stage 3)
                   </Badge>
+                ) : isKserveNotQualified ? (
+                  <Badge className="bg-rose-500/20 text-rose-200 border border-rose-400/50 text-xs px-2.5 py-0.5 flex items-center gap-1.5 shadow-sm">
+                    <XCircle className="h-3.5 w-3.5 text-rose-300" /> KServe Not Qualified (Ended at Stage 2)
+                  </Badge>
                 ) : isDirect ? (
                   <Badge className="bg-amber-500/20 text-amber-300 border border-amber-400/40 text-xs px-2.5 py-0.5 flex items-center gap-1.5 shadow-sm">
                     <Zap className="h-3.5 w-3.5 fill-amber-400 text-amber-400" /> Direct Route (Bypassed KServe)
@@ -363,7 +429,7 @@ function TimelineModal({ lead, onClose, onViewEnquiry }: { lead: LeadJourney; on
                     <Bot className="h-3.5 w-3.5 text-purple-300" /> {isKserveOnly ? "KServe AI Voice Queue" : "KServe Voice Qualified"}
                   </Badge>
                 )}
-                {lead.finalStatus && !isDeleted && (
+                {lead.finalStatus && !isDeleted && !isKserveNotQualified && (
                   <Badge className={`text-xs font-bold px-2.5 py-0.5 ${getFinalStatusColor(lead.finalStatus)}`}>
                     {lead.finalStatus}
                   </Badge>
@@ -419,9 +485,11 @@ function TimelineModal({ lead, onClose, onViewEnquiry }: { lead: LeadJourney; on
               <span className="font-bold text-white tracking-wide text-xs flex items-center gap-1.5">
                 <Activity className="h-4 w-4 text-indigo-300" /> Journey Lifecycle Pipeline
               </span>
-              <span className={`text-xs font-bold ${isDeleted ? "text-rose-300" : "text-amber-300"}`}>
+              <span className={`text-xs font-bold ${isDeleted || isKserveNotQualified ? "text-rose-300" : "text-amber-300"}`}>
                 Current:{" "}
-                {isDeleted
+                {isKserveNotQualified
+                  ? "Stage 2 · Ended (KServe Not Qualified)"
+                  : isDeleted
                   ? "Stage 3 · Ended (Data Backup - Deleted)"
                   : isClosed
                   ? "Stage 5 · Closed"
@@ -435,7 +503,7 @@ function TimelineModal({ lead, onClose, onViewEnquiry }: { lead: LeadJourney; on
               </span>
             </div>
 
-            {/* Connected 5-Stage Pipeline Boxes with Horizontal Connector Lines */}
+            {/* Connected Pipeline Boxes with Horizontal Connector Lines (Stops at Stage 2 for KServe Not Qualified, Stage 3 for Deleted) */}
             <div className="flex items-center overflow-x-auto pb-1 journey-scroll">
               {/* Step 1 */}
               <div
@@ -458,13 +526,15 @@ function TimelineModal({ lead, onClose, onViewEnquiry }: { lead: LeadJourney; on
               </div>
 
               {/* Connector 1 -> 2 */}
-              <div className={`h-[2px] w-4 sm:w-6 flex-shrink-0 ${currentStageNumber >= 2 ? "bg-purple-400/80" : "bg-white/20"}`} />
+              <div className={`h-[2px] w-4 sm:w-6 flex-shrink-0 ${isKserveNotQualified ? "bg-rose-400/80" : currentStageNumber >= 2 ? "bg-purple-400/80" : "bg-white/20"}`} />
 
               {/* Step 2 */}
               <div
                 onClick={() => toggleStage(2)}
                 className={`flex-1 min-w-[140px] px-3 py-2.5 rounded-xl text-center transition-all cursor-pointer select-none hover:brightness-110 active:scale-[0.98] ${
-                  activeStage === 2
+                  isKserveNotQualified
+                    ? "bg-rose-950/90 border-2 border-rose-400 text-white shadow-[0_0_16px_rgba(251,113,133,0.45)]"
+                    : activeStage === 2
                     ? "bg-purple-700/85 border-2 border-purple-300 text-white shadow-[0_0_16px_rgba(192,132,252,0.5)]"
                     : currentStageNumber === 2 && isKserveOnly
                     ? "bg-purple-900/90 border-2 border-purple-400 text-white shadow-[0_0_16px_rgba(192,132,252,0.45)]"
@@ -474,112 +544,120 @@ function TimelineModal({ lead, onClose, onViewEnquiry }: { lead: LeadJourney; on
                 }`}
               >
                 <div className="flex items-center justify-center gap-1.5">
-                  {currentStageNumber === 2 && isKserveOnly ? (
+                  {isKserveNotQualified ? (
+                    <XCircle className="h-4 w-4 text-rose-300 flex-shrink-0" />
+                  ) : currentStageNumber === 2 && isKserveOnly ? (
                     <span className="h-3.5 w-3.5 rounded-full border-2 border-purple-300 flex items-center justify-center flex-shrink-0">
                       <span className="h-1.5 w-1.5 rounded-full bg-purple-300 animate-pulse" />
                     </span>
                   ) : (
                     <CheckCircle2 className="h-4 w-4 text-purple-300 flex-shrink-0" />
                   )}
-                  <span className="font-bold text-xs">2. Routed</span>
+                  <span className="font-bold text-xs">{isKserveNotQualified ? "2. Not Qualified (End)" : "2. Routed"}</span>
                 </div>
                 <span className="text-[11px] text-slate-300 block truncate mt-0.5">
-                  {isDirect ? "Direct Bypass" : "KServe AI"}
+                  {isKserveNotQualified ? "KServe Ended" : isDirect ? "Direct Bypass" : "KServe AI"}
                 </span>
               </div>
 
-              {/* Connector 2 -> 3 */}
-              <div className={`h-[2px] w-4 sm:w-6 flex-shrink-0 ${isDeleted ? "bg-rose-400/80" : currentStageNumber >= 3 ? "bg-indigo-400/80" : "bg-white/20"}`} />
+              {/* Stage 3 ONLY appears when NOT KServe Not Qualified */}
+              {!isKserveNotQualified && (
+                <>
+                  {/* Connector 2 -> 3 */}
+                  <div className={`h-[2px] w-4 sm:w-6 flex-shrink-0 ${isDeleted ? "bg-rose-400/80" : currentStageNumber >= 3 ? "bg-indigo-400/80" : "bg-white/20"}`} />
 
-              {/* Step 3 */}
-              <div
-                onClick={() => toggleStage(3)}
-                className={`flex-1 min-w-[140px] px-3 py-2.5 rounded-xl text-center transition-all cursor-pointer select-none hover:brightness-110 active:scale-[0.98] ${
-                  isDeleted
-                    ? "bg-rose-950/90 border-2 border-rose-400 text-white shadow-[0_0_16px_rgba(251,113,133,0.45)]"
-                    : activeStage === 3
-                    ? "bg-indigo-600/85 border-2 border-indigo-300 text-white shadow-[0_0_16px_rgba(129,140,248,0.45)]"
-                    : currentStageNumber >= 3
-                    ? "bg-[#221d52]/90 border border-indigo-400/60 text-white"
-                    : "bg-white/5 border border-white/15 text-slate-400"
-                }`}
-              >
-                <div className="flex items-center justify-center gap-1.5">
-                  {isDeleted ? (
-                    <XCircle className="h-4 w-4 text-rose-300 flex-shrink-0" />
-                  ) : currentStageNumber >= 3 ? (
-                    <CheckCircle2 className="h-4 w-4 text-indigo-300 flex-shrink-0" />
-                  ) : (
-                    <span className="h-3.5 w-3.5 rounded-full border-2 border-slate-400 flex-shrink-0" />
-                  )}
-                  <span className="font-bold text-xs">{isDeleted ? "3. Deleted (End)" : "3. Assigned"}</span>
-                </div>
-                <span className="text-[11px] text-slate-300 block truncate mt-0.5">
-                  {isDeleted ? "Data Backup" : isKserveOnly ? "Pending KServe" : lead.assignedTo || "Pending"}
-                </span>
-              </div>
-
-              {/* Connector 3 -> 4 */}
-              <div className={`h-[2px] w-4 sm:w-6 flex-shrink-0 ${!isDeleted && currentStageNumber >= 4 ? "bg-amber-400/90" : "bg-white/20"}`} />
-
-              {/* Step 4 */}
-              <div
-                onClick={() => toggleStage(4)}
-                className={`flex-1 min-w-[140px] px-3 py-2.5 rounded-xl text-center transition-all cursor-pointer select-none hover:brightness-110 active:scale-[0.98] ${
-                  isDeleted
-                    ? "bg-white/[0.03] border border-white/10 text-slate-500 opacity-50"
-                    : activeStage === 4 || currentStageNumber === 4
-                    ? "bg-gradient-to-b from-amber-700/70 to-amber-950/85 border-2 border-amber-400 text-white shadow-[0_0_18px_rgba(251,191,36,0.45)]"
-                    : currentStageNumber > 4
-                    ? "bg-amber-950/60 border border-amber-400/50 text-amber-100"
-                    : "bg-white/5 border border-white/15 text-slate-400"
-                }`}
-              >
-                <div className="flex items-center justify-center gap-1.5">
-                  {!isDeleted && currentStageNumber === 4 ? (
-                    <span className="h-4 w-4 rounded-full border-2 border-amber-300 flex items-center justify-center flex-shrink-0">
-                      <span className="h-2 w-2 rounded-full bg-amber-300" />
+                  {/* Step 3 */}
+                  <div
+                    onClick={() => toggleStage(3)}
+                    className={`flex-1 min-w-[140px] px-3 py-2.5 rounded-xl text-center transition-all cursor-pointer select-none hover:brightness-110 active:scale-[0.98] ${
+                      isDeleted
+                        ? "bg-rose-950/90 border-2 border-rose-400 text-white shadow-[0_0_16px_rgba(251,113,133,0.45)]"
+                        : activeStage === 3
+                        ? "bg-indigo-600/85 border-2 border-indigo-300 text-white shadow-[0_0_16px_rgba(129,140,248,0.45)]"
+                        : currentStageNumber >= 3
+                        ? "bg-[#221d52]/90 border border-indigo-400/60 text-white"
+                        : "bg-white/5 border border-white/15 text-slate-400"
+                    }`}
+                  >
+                    <div className="flex items-center justify-center gap-1.5">
+                      {isDeleted ? (
+                        <XCircle className="h-4 w-4 text-rose-300 flex-shrink-0" />
+                      ) : currentStageNumber >= 3 ? (
+                        <CheckCircle2 className="h-4 w-4 text-indigo-300 flex-shrink-0" />
+                      ) : (
+                        <span className="h-3.5 w-3.5 rounded-full border-2 border-slate-400 flex-shrink-0" />
+                      )}
+                      <span className="font-bold text-xs">{isDeleted ? "3. Deleted (End)" : "3. Assigned"}</span>
+                    </div>
+                    <span className="text-[11px] text-slate-300 block truncate mt-0.5">
+                      {isDeleted ? "Data Backup - Deleted" : lead.assignedTo || "Pending"}
                     </span>
-                  ) : !isDeleted && currentStageNumber > 4 ? (
-                    <CheckCircle2 className="h-4 w-4 text-amber-300 flex-shrink-0" />
-                  ) : (
-                    <span className="h-3.5 w-3.5 rounded-full border-2 border-slate-400/70 flex-shrink-0" />
-                  )}
-                  <span className="font-bold text-xs">4. Follow-up</span>
-                </div>
-                <span className="text-[11px] text-slate-300 block truncate mt-0.5">
-                  {isDeleted ? "Skipped" : `${totalCallCount} Calls Dialed`}
-                </span>
-              </div>
+                  </div>
+                </>
+              )}
 
-              {/* Connector 4 -> 5 */}
-              <div className={`h-[2px] w-4 sm:w-6 flex-shrink-0 ${!isDeleted && isClosed ? "bg-emerald-400/90" : "bg-white/20"}`} />
+              {/* Stages 4 & 5 ONLY appear when NOT KServe Not Qualified AND NOT Data Backup - Deleted */}
+              {!isKserveNotQualified && !isDeleted && (
+                <>
+                  {/* Connector 3 -> 4 */}
+                  <div className={`h-[2px] w-4 sm:w-6 flex-shrink-0 ${currentStageNumber >= 4 ? "bg-amber-400/90" : "bg-white/20"}`} />
 
-              {/* Step 5 */}
-              <div
-                onClick={() => toggleStage(5)}
-                className={`flex-1 min-w-[140px] px-3 py-2.5 rounded-xl text-center transition-all cursor-pointer select-none hover:brightness-110 active:scale-[0.98] ${
-                  isDeleted
-                    ? "bg-white/[0.03] border border-white/10 text-slate-500 opacity-50"
-                    : activeStage === 5
-                    ? "bg-emerald-600/80 border-2 border-emerald-300 text-white shadow-[0_0_16px_rgba(52,211,153,0.45)]"
-                    : isClosed
-                    ? "bg-emerald-950/90 border-2 border-emerald-400 text-emerald-100 shadow-[0_0_16px_rgba(52,211,153,0.35)]"
-                    : "bg-white/5 border border-white/15 text-slate-300"
-                }`}
-              >
-                <div className="flex items-center justify-center gap-1.5">
-                  {!isDeleted && isClosed ? (
-                    <CheckCircle2 className="h-4 w-4 text-emerald-300 flex-shrink-0" />
-                  ) : (
-                    <span className="h-3.5 w-3.5 rounded-full border-2 border-indigo-300/60 flex-shrink-0" />
-                  )}
-                  <span className="font-bold text-xs">5. Closing</span>
-                </div>
-                <span className="text-[11px] text-slate-300 block truncate mt-0.5">
-                  {isDeleted ? "Ended at Stage 3" : isClosed ? lead.finalStatus : "In Progress"}
-                </span>
-              </div>
+                  {/* Step 4 */}
+                  <div
+                    onClick={() => toggleStage(4)}
+                    className={`flex-1 min-w-[140px] px-3 py-2.5 rounded-xl text-center transition-all cursor-pointer select-none hover:brightness-110 active:scale-[0.98] ${
+                      activeStage === 4 || currentStageNumber === 4
+                        ? "bg-gradient-to-b from-amber-700/70 to-amber-950/85 border-2 border-amber-400 text-white shadow-[0_0_18px_rgba(251,191,36,0.45)]"
+                        : currentStageNumber > 4
+                        ? "bg-amber-950/60 border border-amber-400/50 text-amber-100"
+                        : "bg-white/5 border border-white/15 text-slate-400"
+                    }`}
+                  >
+                    <div className="flex items-center justify-center gap-1.5">
+                      {currentStageNumber === 4 ? (
+                        <span className="h-4 w-4 rounded-full border-2 border-amber-300 flex items-center justify-center flex-shrink-0">
+                          <span className="h-2 w-2 rounded-full bg-amber-300" />
+                        </span>
+                      ) : currentStageNumber > 4 ? (
+                        <CheckCircle2 className="h-4 w-4 text-amber-300 flex-shrink-0" />
+                      ) : (
+                        <span className="h-3.5 w-3.5 rounded-full border-2 border-slate-400/70 flex-shrink-0" />
+                      )}
+                      <span className="font-bold text-xs">4. Follow-up</span>
+                    </div>
+                    <span className="text-[11px] text-slate-300 block truncate mt-0.5">
+                      {`${totalCallCount} Calls Dialed`}
+                    </span>
+                  </div>
+
+                  {/* Connector 4 -> 5 */}
+                  <div className={`h-[2px] w-4 sm:w-6 flex-shrink-0 ${isClosed ? "bg-emerald-400/90" : "bg-white/20"}`} />
+
+                  {/* Step 5 */}
+                  <div
+                    onClick={() => toggleStage(5)}
+                    className={`flex-1 min-w-[140px] px-3 py-2.5 rounded-xl text-center transition-all cursor-pointer select-none hover:brightness-110 active:scale-[0.98] ${
+                      activeStage === 5
+                        ? "bg-emerald-600/80 border-2 border-emerald-300 text-white shadow-[0_0_16px_rgba(52,211,153,0.45)]"
+                        : isClosed
+                        ? "bg-emerald-950/90 border-2 border-emerald-400 text-emerald-100 shadow-[0_0_16px_rgba(52,211,153,0.35)]"
+                        : "bg-white/5 border border-white/15 text-slate-300"
+                    }`}
+                  >
+                    <div className="flex items-center justify-center gap-1.5">
+                      {isClosed ? (
+                        <CheckCircle2 className="h-4 w-4 text-emerald-300 flex-shrink-0" />
+                      ) : (
+                        <span className="h-3.5 w-3.5 rounded-full border-2 border-indigo-300/60 flex-shrink-0" />
+                      )}
+                      <span className="font-bold text-xs">5. Closing</span>
+                    </div>
+                    <span className="text-[11px] text-slate-300 block truncate mt-0.5">
+                      {isClosed ? lead.finalStatus : "In Progress"}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -624,8 +702,10 @@ function TimelineModal({ lead, onClose, onViewEnquiry }: { lead: LeadJourney; on
               </span>
               <span className="text-xs text-slate-200 truncate">
                 Final Outcome:{" "}
-                <strong className={`text-sm font-extrabold ml-0.5 ${isDeleted ? "text-rose-300" : "text-emerald-300"}`}>
-                  {lead.finalStatus || (isKserveOnly ? "KServe Pending" : "Follow-up Open")}
+                <strong className={`text-sm font-extrabold ml-0.5 ${isDeleted || isKserveNotQualified ? "text-rose-300" : "text-emerald-300"}`}>
+                  {isKserveNotQualified
+                    ? "Not Qualified (Ended at Stage 2)"
+                    : lead.finalStatus || (isKserveOnly ? "KServe Pending" : "Follow-up Open")}
                 </strong>
               </span>
             </div>
@@ -803,24 +883,32 @@ function TimelineModal({ lead, onClose, onViewEnquiry }: { lead: LeadJourney; on
             {/* ========================================================= */}
             <div className={`rounded-xl border transition-all duration-200 overflow-hidden shadow-xs ${
               activeStage === 2
-                ? "bg-white border-amber-400 ring-2 ring-amber-100 shadow-md"
+                ? isKserveNotQualified
+                  ? "bg-white border-rose-400 ring-2 ring-rose-100 shadow-md"
+                  : "bg-white border-amber-400 ring-2 ring-amber-100 shadow-md"
                 : "bg-white border-slate-200 hover:border-slate-300"
             }`}>
               {/* Header (Clickable) */}
               <div 
                 onClick={() => toggleStage(2)}
-                className="p-3.5 sm:p-4 flex items-center justify-between gap-3 cursor-pointer select-none hover:bg-slate-50/80 transition-colors"
+                className={`p-3.5 sm:p-4 flex items-center justify-between gap-3 cursor-pointer select-none transition-colors ${
+                  isKserveNotQualified ? "bg-rose-50/40 hover:bg-rose-50/70" : "hover:bg-slate-50/80"
+                }`}
               >
                 <div className="flex items-start gap-3 min-w-0 flex-1">
                   <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-white flex-shrink-0 font-bold text-xs shadow-xs ${
-                    activeStage === 2 
+                    isKserveNotQualified
+                      ? "bg-rose-600"
+                      : activeStage === 2 
                       ? isDirect ? "bg-amber-500 ring-4 ring-amber-100" : "bg-purple-600 ring-4 ring-purple-100" 
                       : isDirect ? "bg-amber-500" : "bg-purple-500"
                   }`}>
-                    {isDirect ? <Zap className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                    {isKserveNotQualified ? <XCircle className="h-4 w-4" /> : isDirect ? <Zap className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
                   </div>
                   <Badge className={`text-[11px] font-bold w-[68px] justify-center py-0.5 mt-0.5 flex-shrink-0 ${
-                    isDirect 
+                    isKserveNotQualified
+                      ? "bg-rose-100 text-rose-800 border-rose-200"
+                      : isDirect 
                       ? "bg-amber-100 text-amber-800 border-amber-200" 
                       : "bg-purple-100 text-purple-800 border-purple-200"
                   }`}>
@@ -829,7 +917,9 @@ function TimelineModal({ lead, onClose, onViewEnquiry }: { lead: LeadJourney; on
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="text-sm font-bold text-slate-900">
-                        Routing Decision: {isDirect ? "Direct Route (Bypassed KServe)" : "KServe AI Voice"}
+                        {isKserveNotQualified
+                          ? "KServe AI Voice — Not Qualified (Journey Ended)"
+                          : `Routing Decision: ${isDirect ? "Direct Route (Bypassed KServe)" : "KServe AI Voice"}`}
                       </h4>
                       {isDirect ? (
                         <Badge className="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold">
@@ -974,20 +1064,28 @@ function TimelineModal({ lead, onClose, onViewEnquiry }: { lead: LeadJourney; on
                     </div>
                   )}
 
-                  {/* Delay to Sales Assignment */}
+                  {/* Delay to Sales Assignment (or Journey End notice for KServe Not Qualified) */}
                   <div className="flex items-center justify-center pt-1">
-                    <span className="text-xs font-bold text-indigo-800 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-xs">
-                      <Clock className="h-3.5 w-3.5 text-indigo-600" />
-                      Delay to Sales Assignment: <strong className="text-indigo-950 underline">{tatBufferToAssign}</strong>
-                    </span>
+                    {isKserveNotQualified ? (
+                      <span className="text-xs font-bold text-rose-800 bg-rose-50 border border-rose-200 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-xs">
+                        <XCircle className="h-3.5 w-3.5 text-rose-600" />
+                        KServe Marked Not Qualified — Journey Ended at Stage 2
+                      </span>
+                    ) : (
+                      <span className="text-xs font-bold text-indigo-800 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-xs">
+                        <Clock className="h-3.5 w-3.5 text-indigo-600" />
+                        Delay to Sales Assignment: <strong className="text-indigo-950 underline">{tatBufferToAssign}</strong>
+                      </span>
+                    )}
                   </div>
                 </div>
               )}
             </div>
 
             {/* ========================================================= */}
-            {/* STAGE 3: SALES ASSIGNMENT                                */}
+            {/* STAGE 3: SALES ASSIGNMENT (Hidden when KServe Not Qual.)  */}
             {/* ========================================================= */}
+            {!isKserveNotQualified && (
             <div className={`rounded-xl border transition-all duration-200 overflow-hidden shadow-xs ${
               activeStage === 3
                 ? "bg-white border-indigo-400 ring-2 ring-indigo-100 shadow-md"
@@ -1036,7 +1134,7 @@ function TimelineModal({ lead, onClose, onViewEnquiry }: { lead: LeadJourney; on
                             : "text-indigo-700 bg-indigo-50 border-indigo-200"
                         }`}
                       >
-                        {isDeleted ? "✕ Deleted" : isKserveOnly ? "🤖 KServe (AI Voice)" : `👤 ${lead.assignedTo || "Unassigned"}`}
+                        {isDeleted ? "✕ Deleted" : isKserveOnly ? `🤖 ${lead.assignedTo || "KServe"}` : `👤 ${lead.assignedTo || "Unassigned"}`}
                       </Badge>
                       <span className="text-slate-300">|</span>
                       <span className="text-xs text-slate-600 inline-flex items-center gap-1 font-medium">
@@ -1111,21 +1209,31 @@ function TimelineModal({ lead, onClose, onViewEnquiry }: { lead: LeadJourney; on
                   </div>
 
                   {/* Delay to 1st Call connector */}
-                  {firstCall && (
+                  {isDeleted ? (
+                    <div className="flex items-center justify-center pt-1">
+                      <span className="text-xs font-bold text-rose-800 bg-rose-50 border border-rose-200 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-xs">
+                        <XCircle className="h-3.5 w-3.5 text-rose-600" />
+                        Data Backup - Deleted — Journey Ended at Stage 3
+                      </span>
+                    </div>
+                  ) : firstCall ? (
                     <div className="flex items-center justify-center pt-1">
                       <span className="text-xs font-bold text-amber-900 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-xs">
                         <Clock className="h-3.5 w-3.5 text-amber-600" />
                         Assignment → 1st Follow-up Call Delay: <strong className="text-amber-950 underline">{tatAssignToFirstCall}</strong>
                       </span>
                     </div>
-                  )}
+                  ) : null}
                 </div>
               )}
             </div>
+            )}
 
             {/* ========================================================= */}
-            {/* STAGE 4: SALES FOLLOW-UP ACTIVE HUB                      */}
+            {/* STAGES 4 & 5: ONLY WHEN NOT DELETED & NOT KSERVE NOT QUAL */}
             {/* ========================================================= */}
+            {!isKserveNotQualified && !isDeleted && (
+            <>
             <div className={`rounded-xl border transition-all duration-200 overflow-hidden shadow-xs ${
               activeStage === 4
                 ? "bg-white border-amber-400 ring-2 ring-amber-100 shadow-md"
@@ -1177,7 +1285,7 @@ function TimelineModal({ lead, onClose, onViewEnquiry }: { lead: LeadJourney; on
                       {isDeleted ? (
                         <>Lead was deleted at Stage 3 (Data Backup - Deleted) — no follow-up calls required.</>
                       ) : (
-                        <>Currently With: <strong className="text-slate-800">{currentOwner}</strong> · Delay Since Last Call: <strong className="text-rose-700">{timeSinceLastCall}</strong> · Last Contact: {lastCall ? formatDate(lastCall.callDate) : "Pending"}</>
+                        <>Currently With: <strong className="text-slate-800">{currentOwner}</strong> · Last Call → Final Outcome Delay: <strong className="text-emerald-700">{tatLastCallToOutcome}</strong> · Last Contact: {lastCall ? formatDate(lastCall.callDate) : "Pending"}</>
                       )}
                     </p>
                   </div>
@@ -1408,15 +1516,13 @@ function TimelineModal({ lead, onClose, onViewEnquiry }: { lead: LeadJourney; on
                     </div>
                   )}
 
-                  {/* Delay to Final Outcome */}
-                  {lead.finalStatus && (
-                    <div className="flex items-center justify-center pt-2">
-                      <span className="text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-xs">
-                        <Clock className="h-3.5 w-3.5 text-emerald-600" />
-                        Last Call → Final Outcome Delay: <strong className="text-emerald-950 underline">{tatLastCallToOutcome}</strong>
-                      </span>
-                    </div>
-                  )}
+                  {/* Issue 7: Delay to Final Outcome (Always shown for every lead in Stage 4) */}
+                  <div className="flex items-center justify-center pt-2">
+                    <span className="text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-xs">
+                      <Clock className="h-3.5 w-3.5 text-emerald-600" />
+                      Last Call → Final Outcome Delay: <strong className="text-emerald-950 underline">{tatLastCallToOutcome}</strong>
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
@@ -1542,6 +1648,8 @@ function TimelineModal({ lead, onClose, onViewEnquiry }: { lead: LeadJourney; on
                 </div>
               )}
             </div>
+            </>
+            )}
           </div>
         </div>
       </DialogContent>

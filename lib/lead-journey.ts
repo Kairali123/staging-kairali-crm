@@ -30,9 +30,17 @@ export type QueryType = 'phone' | 'email' | 'leadId' | 'name'
 // Lead ids look like VR_1766928619862-132, KT_…, or -0R3GB44P2: one token with a digit, "_" or "-".
 export function detectQueryType(q: string): QueryType {
   const trimmed = q.trim()
-  if (trimmed.includes('@')) return 'email'
-  if (/^\+?[\d\s-]{7,20}$/.test(trimmed) && trimmed.replace(/\D/g, '').length >= 7) return 'phone'
-  if (/^[\w-]{4,}$/.test(trimmed) && /[\d_-]/.test(trimmed)) return 'leadId'
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return 'email'
+  if (/^\+?[\d\s-]{7,20}$/.test(trimmed) && trimmed.replace(/\D/g, '').length >= 7 && !/^\d{8}\s+\d{6}-\d+/.test(trimmed)) {
+    return 'phone'
+  }
+  if (
+    /^wamid\./i.test(trimmed) ||
+    /^\d{6,8}\s+\d{4,6}-\d+/.test(trimmed) ||
+    (/^[\w./@=-]{4,}$/.test(trimmed) && /[\d_./=-]/.test(trimmed))
+  ) {
+    return 'leadId'
+  }
   return 'name'
 }
 
@@ -99,6 +107,7 @@ const JOURNEY_SELECT = `
     mb.Data_Source,
     mb.Verified_Source,
     sbn.Assign_To_MR_Main   AS assigned_to,
+    sbn.Timestamp_2         AS timestamp_2,
     sbn.gpt_Extraction_Status AS gpt_extraction_time,
     COALESCE(sbn.Timestamp_2, sbn.Sent_status) AS assigned_date,
     sbn.Sent_status         AS sent_status,
@@ -204,7 +213,8 @@ export function resolveDialshreeAgent(
   doer?: any,
   agentId?: any,
   assignAgentName?: any,
-  transferTo?: any
+  transferTo?: any,
+  sheetName?: any
 ): string {
   const d = safeStr(doer).trim()
   if (d && !isCampaignOrQueueName(d)) return d
@@ -218,6 +228,9 @@ export function resolveDialshreeAgent(
 
   const a = safeStr(assignAgentName).trim()
   if (a && !isCampaignOrQueueName(a)) return a
+
+  const sh = safeStr(sheetName).trim()
+  if (sh && !isCampaignOrQueueName(sh)) return sh
 
   return ''
 }
@@ -255,8 +268,8 @@ export function deriveLeadStatus(params: {
     return 'Converted'
   }
   if (
-    /not interested|cold|lost|invalid|junk|wrong|spam|dnd|duplicate|cancel|disqualif|not qualified|irrelevant|dead|closed lost|fake/.test(fs) ||
-    /not qualified|disqualif|junk|invalid|spam|cold/.test(ks)
+    /not interested|cold|lost|invalid|junk|wrong|spam|dnd|duplicate|cancel|disqualif|non-?qualified|not qualified|did not enquire|irrelevant|dead|closed lost|fake/.test(fs) ||
+    /\b(non|not)\s*-?\s*qualified\b|disqualif|junk|invalid|spam|cold/.test(ks)
   ) {
     return 'Cold'
   }
@@ -309,11 +322,30 @@ function computeLeadTat(
   return { tatMinutes: 0, tatLabel: '<1m', tatStage: 'Waiting' }
 }
 
-function stripKserveSuffix(id: string): string {
-  return String(id || '').trim().replace(/-T[0-9a-f]{16,}$/i, '')
+function stripSalesFollowupSuffix(id: string): string {
+  let s = String(id || '').trim()
+  let prev = ''
+  while (s && s !== prev) {
+    prev = s
+    s = s
+      .replace(/@\d+$/i, '')
+      .replace(/\/\d+$/i, '')
+      .replace(/-DC-[\w-]+$/i, '')
+  }
+  return s
 }
 
-async function loadBulkEnrichment(pool: any, leadIds: string[], mobiles: string[]): Promise<BulkLeadEnrichment> {
+function buildLeadIdWithFollowupsWhere(ids: string[]): { clause: string; params: any[] } {
+  const parts: string[] = ['lead_id IN (?)']
+  const params: any[] = [ids]
+  for (const id of ids) {
+    parts.push('lead_id LIKE ?', 'lead_id LIKE ?', 'lead_id LIKE ?')
+    params.push(`${id}/%`, `${id}-DC-%`, `${id}@%`)
+  }
+  return { clause: parts.join(' OR '), params }
+}
+
+async function loadBulkEnrichment(pool: any, leadIds: string[]): Promise<BulkLeadEnrichment> {
   const kserve = new Map<string, any>()
   const fmsConnected = new Map<string, any>()
   const fmsLatest = new Map<string, any>()
@@ -337,22 +369,14 @@ async function loadBulkEnrichment(pool: any, leadIds: string[], mobiles: string[
   }
 
   const validLeadIds = [...new Set(leadIds.map(id => String(id).trim()).filter(Boolean))]
-  const mobileVariantSet = new Set<string>()
-  for (const m of mobiles) {
-    const raw = String(m || '').trim()
-    if (raw) mobileVariantSet.add(raw)
-    const m10 = normalizeMobile10(raw)
-    if (m10) {
-      mobileVariantSet.add(m10)
-      mobileVariantSet.add(`91${m10}`)
-      mobileVariantSet.add(`+91${m10}`)
-    }
+  const chunks: string[][] = []
+  for (let i = 0; i < validLeadIds.length; i += 40) {
+    chunks.push(validLeadIds.slice(i, i + 40))
   }
-  const validMobiles = [...mobileVariantSet]
 
-  const queries: Promise<any>[] = [
-    // 1. KServe (ai_voice_leads_received) — match both lead_id and initial_id
-    pool.query(
+  // 1. KServe (ai_voice_leads_received) — match both lead_id and initial_id
+  const kservePromise = pool
+    .query(
       `SELECT lead_id, initial_id, calculated_qualification_status, assigned_mr, next_assigned_to,
               final_call_status, date_time, call_status, call_end_reason, followup_status,
               call_outcome, final_lead_outcome, lead_status
@@ -360,112 +384,108 @@ async function loadBulkEnrichment(pool: any, leadIds: string[], mobiles: string[
         WHERE lead_id IN (?) OR initial_id IN (?)
         ORDER BY id DESC`,
       [validLeadIds, validLeadIds]
-    ).catch((err: any) => {
+    )
+    .catch((err: any) => {
       console.warn('[lead-journey] KServe bulk lookup error:', err?.message || err)
       return [[]]
-    }),
-
-    // 2. DialShree Received (lead_fms) by lead_id (uses idx_lead_id) — select doer & agent_Id!
-    pool.query(
-      `SELECT lead_id, Mobile, Full_Disposition, doer, agent_Id, Transfer_To, Assign_To_MR_Main_Agent_Name,
-              COALESCE(actual_time, Timestamp, Date_Time, created_at) AS callDate,
-              Order_Sales_Saved_Staus, Lead_Conversion, Conversion_Amount, Call_Notes
-         FROM lead_fms
-        WHERE lead_id IN (?) AND Full_Disposition IS NOT NULL AND Full_Disposition != ''
-        ORDER BY sl_no DESC`,
-      [validLeadIds]
-    ).catch((err: any) => {
-      console.warn('[lead-journey] lead_fms lead_id bulk lookup error:', err?.message || err)
-      return [[]]
-    }),
-
-    // 3. DialShree Received (lead_fms) by Mobile (uses idx_mobile — catches +91 / bare-10 / -T suffixed leads)
-    validMobiles.length ? pool.query(
-      `SELECT lead_id, Mobile, Full_Disposition, doer, agent_Id, Transfer_To, Assign_To_MR_Main_Agent_Name,
-              COALESCE(actual_time, Timestamp, Date_Time, created_at) AS callDate,
-              Order_Sales_Saved_Staus, Lead_Conversion, Conversion_Amount, Call_Notes
-         FROM lead_fms
-        WHERE Mobile IN (?) AND Full_Disposition IS NOT NULL AND Full_Disposition != ''
-        ORDER BY sl_no DESC`,
-      [validMobiles]
-    ).catch((err: any) => {
-      console.warn('[lead-journey] lead_fms mobile bulk lookup error:', err?.message || err)
-      return [[]]
-    }) : Promise.resolve([[]]),
-
-    // 4. App Sheet Activity (followup_activity) — select doer & agent_Id!
-    pool.query(
-      `SELECT lead_id, Full_Disposition, doer, agent_Id, Transfer_To, Assign_To_MR_Main_Agent_Name,
-              COALESCE(latest_called_at, created_at, planned_date) AS callDate,
-              Call_Notes
-         FROM followup_activity
-        WHERE lead_id IN (?) AND Full_Disposition IS NOT NULL AND Full_Disposition != ''
-        ORDER BY sl_no DESC`,
-      [validLeadIds]
-    ).catch((err: any) => {
-      console.warn('[lead-journey] followup_activity bulk lookup error:', err?.message || err)
-      return [[]]
-    }),
-
-    // 5. Total call counts from lead_fms (by lead_id)
-    pool.query(
-      `SELECT lead_id, COUNT(*) AS total FROM lead_fms WHERE lead_id IN (?) GROUP BY lead_id`,
-      [validLeadIds]
-    ).catch((err: any) => {
-      console.warn('[lead-journey] lead_fms count error:', err?.message || err)
-      return [[]]
-    }),
-
-    // 6. Total call counts from lead_fms (by Mobile)
-    validMobiles.length ? pool.query(
-      `SELECT Mobile, COUNT(*) AS total FROM lead_fms WHERE Mobile IN (?) GROUP BY Mobile`,
-      [validMobiles]
-    ).catch((err: any) => {
-      console.warn('[lead-journey] lead_fms mobile count error:', err?.message || err)
-      return [[]]
-    }) : Promise.resolve([[]]),
-
-    // 7. Total call counts from followup_activity
-    pool.query(
-      `SELECT lead_id, COUNT(*) AS total FROM followup_activity WHERE lead_id IN (?) GROUP BY lead_id`,
-      [validLeadIds]
-    ).catch((err: any) => {
-      console.warn('[lead-journey] followup_activity count error:', err?.message || err)
-      return [[]]
     })
-  ]
 
-  const [kRows, fmsIdRows, fmsMobRows, actRows, fmsCounts, fmsMobCounts, actCounts] = await Promise.all(queries)
+  // 2. DialShree Received + Sales Person Main/FollowUp (lead_fms) strictly by lead_id (+ /1, -DC-, @ suffixes)
+  const fmsPromises = chunks.map(chunk => {
+    const { clause, params } = buildLeadIdWithFollowupsWhere(chunk)
+    return pool
+      .query(
+        `SELECT sl_no, timeIdKey, lead_id, sheet_name, from_sheet, Full_Disposition, doer, agent_Id,
+                Transfer_To, Assign_To_MR_Main_Agent_Name, call_Count,
+                COALESCE(
+                  actual_time,
+                  CASE WHEN TIME(Timestamp) = '00:00:00' THEN NULL ELSE Timestamp END,
+                  created_at,
+                  Timestamp,
+                  Date_Time
+                ) AS callDate,
+                Order_Sales_Saved_Staus, Lead_Conversion, Conversion_Amount, Call_Notes
+           FROM lead_fms
+          WHERE (${clause})
+          ORDER BY sl_no DESC`,
+        params
+      )
+      .catch((err: any) => {
+        console.warn('[lead-journey] lead_fms lead_id bulk lookup error:', err?.message || err)
+        return [[]]
+      })
+  })
+
+  // 3. App Sheet Activity (followup_activity) strictly by lead_id (+ /1, -DC-, @ suffixes)
+  const actPromises = chunks.map(chunk => {
+    const { clause, params } = buildLeadIdWithFollowupsWhere(chunk)
+    return pool
+      .query(
+        `SELECT sl_no, timeIdKey, lead_id, sheet_name, Full_Disposition, doer, agent_Id,
+                Transfer_To, Assign_To_MR_Main_Agent_Name, call_Count,
+                COALESCE(latest_called_at, created_at, planned_date) AS callDate,
+                Call_Notes
+           FROM followup_activity
+          WHERE (${clause})
+          ORDER BY sl_no DESC`,
+        params
+      )
+      .catch((err: any) => {
+        console.warn('[lead-journey] followup_activity bulk lookup error:', err?.message || err)
+        return [[]]
+      })
+  })
+
+  const [kRows, fmsChunkResults, actChunkResults] = await Promise.all([
+    kservePromise,
+    Promise.all(fmsPromises),
+    Promise.all(actPromises),
+  ])
 
   // Populate KServe (newest row per lead wins — index by both lead_id and initial_id)
-  for (const r of (kRows[0] || [])) {
+  for (const r of kRows[0] || []) {
     const k = String(r.lead_id || '').trim()
     const initId = String(r.initial_id || '').trim()
     if (k && !kserve.has(k)) kserve.set(k, r)
     if (initId && !kserve.has(initId)) kserve.set(initId, r)
-    if (k) recordFirstCall(k, r.date_time)
-    if (initId) recordFirstCall(initId, r.date_time)
   }
 
-  const indexFmsRow = (r: any) => {
-    const realAgent = resolveDialshreeAgent(r.doer, r.agent_Id, r.Assign_To_MR_Main_Agent_Name, r.Transfer_To)
-    const connected = isConnectedDisposition(r.Full_Disposition)
-    const enriched = { ...r, realAgent, isConnected: connected }
+  // Merge all fms rows sorted by sl_no DESC and track unique call records per base lead_id
+  const allFmsRows: any[] = fmsChunkResults.flatMap((res: any) => res[0] || [])
+  allFmsRows.sort((a, b) => Number(b.sl_no || 0) - Number(a.sl_no || 0))
 
-    const keys = new Set<string>()
-    const rawId = String(r.lead_id || '').trim()
-    if (rawId) {
-      keys.add(rawId)
-      const baseId = stripKserveSuffix(rawId)
-      if (baseId) keys.add(baseId)
+  const seenFmsSl = new Set<number>()
+  const seenCallKeysPerLead = new Map<string, Set<string>>()
+
+  const addCallRecordForLead = (baseId: string, dedupKey: string) => {
+    if (!baseId) return
+    let set = seenCallKeysPerLead.get(baseId)
+    if (!set) {
+      set = new Set<string>()
+      seenCallKeysPerLead.set(baseId, set)
     }
-    const rawMob = String(r.Mobile || '').trim()
-    if (rawMob) keys.add(rawMob)
-    const m10 = normalizeMobile10(rawMob)
-    if (m10) keys.add(m10)
+    set.add(dedupKey)
+    callTotals.set(baseId, set.size)
+  }
 
-    for (const k of keys) {
-      if (!fmsLatest.has(k)) fmsLatest.set(k, enriched)
+  for (const r of allFmsRows) {
+    const sl = Number(r.sl_no || 0)
+    if (sl && seenFmsSl.has(sl)) continue
+    if (sl) seenFmsSl.add(sl)
+
+    const rawId = String(r.lead_id || '').trim()
+    const baseId = stripSalesFollowupSuffix(rawId)
+    const targetKeys = [...new Set([rawId, baseId].filter(Boolean))]
+
+    const realAgent = resolveDialshreeAgent(r.doer, r.agent_Id, r.Assign_To_MR_Main_Agent_Name, r.Transfer_To, r.sheet_name)
+    const disp = safeStr(r.Full_Disposition).trim()
+    const connected = isConnectedDisposition(disp)
+    const enriched = { ...r, realAgent, isConnected: connected }
+    const dedupKey = safeStr(r.timeIdKey).trim() || `fms:${sl || `${r.callDate}|${disp}`}`
+
+    for (const k of targetKeys) {
+      addCallRecordForLead(k, dedupKey)
+      if (disp && !fmsLatest.has(k)) fmsLatest.set(k, enriched)
       if (connected && realAgent && !fmsConnected.has(k)) {
         fmsConnected.set(k, enriched)
       }
@@ -473,63 +493,131 @@ async function loadBulkEnrichment(pool: any, leadIds: string[], mobiles: string[
     }
   }
 
-  for (const r of (fmsIdRows[0] || [])) indexFmsRow(r)
-  for (const r of (fmsMobRows[0] || [])) indexFmsRow(r)
+  // Populate Activity Latest & Connected (deduplicated against lead_fms by timeIdKey)
+  const allActRows: any[] = actChunkResults.flatMap((res: any) => res[0] || [])
+  allActRows.sort((a, b) => Number(b.sl_no || 0) - Number(a.sl_no || 0))
+  const seenActSl = new Set<number>()
 
-  // Populate Activity Latest & Connected
-  for (const r of (actRows[0] || [])) {
-    const k = String(r.lead_id || '').trim()
-    if (!k) continue
-    const realAgent = resolveDialshreeAgent(r.doer, r.agent_Id, r.Assign_To_MR_Main_Agent_Name, r.Transfer_To)
-    const connected = isConnectedDisposition(r.Full_Disposition)
+  for (const r of allActRows) {
+    const sl = Number(r.sl_no || 0)
+    if (sl && seenActSl.has(sl)) continue
+    if (sl) seenActSl.add(sl)
+
+    const rawId = String(r.lead_id || '').trim()
+    const baseId = stripSalesFollowupSuffix(rawId)
+    const targetKeys = [...new Set([rawId, baseId].filter(Boolean))]
+
+    const realAgent = resolveDialshreeAgent(r.doer, r.agent_Id, r.Assign_To_MR_Main_Agent_Name, r.Transfer_To, r.sheet_name)
+    const disp = safeStr(r.Full_Disposition).trim()
+    const connected = isConnectedDisposition(disp)
     const enriched = { ...r, realAgent, isConnected: connected }
-    if (!actLatest.has(k)) actLatest.set(k, enriched)
-    if (connected && realAgent && !actConnected.has(k)) actConnected.set(k, enriched)
-    recordFirstCall(k, r.callDate)
-  }
+    const dedupKey = safeStr(r.timeIdKey).trim() || `act:${sl || `${r.callDate}|${disp}`}`
 
-  // Aggregate call counts (by lead_id and normalized 10-digit mobile)
-  for (const r of (fmsCounts[0] || [])) {
-    const k = String(r.lead_id || '').trim()
-    if (k) callTotals.set(k, (callTotals.get(k) || 0) + Number(r.total || 0))
-  }
-  for (const r of (fmsMobCounts[0] || [])) {
-    const rawMob = String(r.Mobile || '').trim()
-    const m10 = normalizeMobile10(rawMob)
-    const cnt = Number(r.total || 0)
-    if (rawMob) callTotals.set(rawMob, Math.max(callTotals.get(rawMob) || 0, cnt))
-    if (m10) callTotals.set(m10, Math.max(callTotals.get(m10) || 0, cnt))
-  }
-  for (const r of (actCounts[0] || [])) {
-    const k = String(r.lead_id || '').trim()
-    if (k) callTotals.set(k, Math.max(callTotals.get(k) || 0, Number(r.total || 0)))
+    for (const k of targetKeys) {
+      addCallRecordForLead(k, dedupKey)
+      if (disp && !actLatest.has(k)) actLatest.set(k, enriched)
+      if (connected && realAgent && !actConnected.has(k)) actConnected.set(k, enriched)
+      recordFirstCall(k, r.callDate)
+    }
   }
 
   return { kserve, fmsConnected, fmsLatest, actConnected, actLatest, callTotals, firstCallDates }
 }
 
-async function loadFollowups(pool: any, leadId: string, mobile = '') {
+async function loadFollowups(pool: any, leadId: string) {
   const items: any[] = []
+  const seenTimeIdKeys = new Set<string>()
+
+  // 1. Check lead_fms (DialShree Received + Sales Person Main & FollowUp sheets) strictly for this lead_id
+  try {
+    const [fmsRows]: any = await pool.query(
+      `SELECT sl_no, timeIdKey, lead_id, from_sheet,
+              COALESCE(
+                actual_time,
+                CASE WHEN TIME(Timestamp) = '00:00:00' THEN NULL ELSE Timestamp END,
+                created_at,
+                Timestamp,
+                Date_Time
+              ) AS call_dt,
+              planned_date, doer,
+              Assign_To_MR_Main_Agent_Name AS agent_name, agent_Id, Full_Disposition, Call_Notes, Remarks_History,
+              call_Count, sheet_name, Transfer_To, Call_Type, HangUp_Reason, latest_recording_url,
+              call_recording_duration, lead_priority, lead_category
+         FROM lead_fms
+        WHERE lead_id = ?
+           OR lead_id LIKE CONCAT(?, '/%')
+           OR lead_id LIKE CONCAT(?, '-DC-%')
+           OR lead_id LIKE CONCAT(?, '@%')
+        ORDER BY sl_no ASC
+        LIMIT 200`,
+      [leadId, leadId, leadId, leadId]
+    )
+    const seenSl = new Set<number>()
+    for (const f of fmsRows || []) {
+      const sl = Number(f.sl_no || 0)
+      if (sl && seenSl.has(sl)) continue
+      if (sl) seenSl.add(sl)
+
+      const tKey = safeStr(f.timeIdKey).trim()
+      if (tKey) seenTimeIdKeys.add(tKey)
+
+      const callDate = safeDate(f.call_dt)
+      const realAgent = resolveDialshreeAgent(f.doer, f.agent_Id, f.agent_name, f.Transfer_To, f.sheet_name)
+      const isSalesSheet = f.from_sheet === 'Main' || f.from_sheet === 'FollowUp'
+      items.push({
+        callDate,
+        agentName: realAgent || safeStr(f.agent_name || f.sheet_name),
+        realAgent,
+        agentId: safeStr(f.agent_Id),
+        disposition: safeStr(f.Full_Disposition),
+        callNotes: safeStr(f.Call_Notes || f.Remarks_History),
+        callCount: f.call_Count ? Number(f.call_Count) : undefined,
+        callType: safeStr(f.Call_Type) || (isSalesSheet ? `Sales ${f.from_sheet}` : ''),
+        hangupReason: safeStr(f.HangUp_Reason),
+        recordingUrl: safeStr(f.latest_recording_url),
+        duration: safeStr(f.call_recording_duration),
+        priority: safeStr(f.lead_priority),
+        plannedDate: safeDate(f.planned_date),
+        transferTo: safeStr(f.Transfer_To),
+        source: isSalesSheet ? `Sales FMS (${safeStr(f.sheet_name || f.from_sheet)})` : 'DialShree Received',
+      })
+    }
+  } catch (err) {
+    console.warn('[lead-journey] lead_fms lookup skipped:', err instanceof Error ? err.message : err)
+  }
+
+  // 2. Check followup_activity strictly for this lead_id (only add rows not already in lead_fms by timeIdKey)
   try {
     const [rows]: any = await pool.query(
-      `SELECT latest_called_at, created_at, planned_date, doer,
+      `SELECT sl_no, timeIdKey, latest_called_at, created_at, planned_date, doer,
               Assign_To_MR_Main_Agent_Name AS agent_name, agent_Id, Full_Disposition, Call_Notes, Remarks_History,
               call_Count, sheet_name, Transfer_To, Call_Type, HangUp_Reason, latest_recording_url,
               call_recording_duration, lead_priority
          FROM followup_activity
         WHERE lead_id = ?
-        ORDER BY sl_no DESC
-        LIMIT 50`,
-      [leadId]
+           OR lead_id LIKE CONCAT(?, '/%')
+           OR lead_id LIKE CONCAT(?, '-DC-%')
+           OR lead_id LIKE CONCAT(?, '@%')
+        ORDER BY sl_no ASC
+        LIMIT 200`,
+      [leadId, leadId, leadId, leadId]
     )
-    for (const fu of rows) {
-      const realAgent = resolveDialshreeAgent(fu.doer, fu.agent_Id, fu.agent_name, fu.Transfer_To)
+    for (const fu of rows || []) {
+      const tKey = safeStr(fu.timeIdKey).trim()
+      if (tKey && seenTimeIdKeys.has(tKey)) continue
+      if (tKey) seenTimeIdKeys.add(tKey)
+
+      const callDate = safeDate(fu.latest_called_at || fu.created_at || fu.planned_date)
+      const disp = safeStr(fu.Full_Disposition)
+      if (!tKey && items.some(it => it.callDate === callDate && it.disposition === disp)) continue
+
+      const realAgent = resolveDialshreeAgent(fu.doer, fu.agent_Id, fu.agent_name, fu.Transfer_To, fu.sheet_name)
       items.push({
-        callDate: safeDate(fu.latest_called_at || fu.created_at || fu.planned_date),
+        callDate,
         agentName: realAgent || safeStr(fu.agent_name || fu.sheet_name),
         realAgent,
         agentId: safeStr(fu.agent_Id),
-        disposition: safeStr(fu.Full_Disposition),
+        disposition: disp,
         callNotes: safeStr(fu.Call_Notes || fu.Remarks_History),
         callCount: fu.call_Count ? Number(fu.call_Count) : undefined,
         callType: safeStr(fu.Call_Type),
@@ -539,74 +627,11 @@ async function loadFollowups(pool: any, leadId: string, mobile = '') {
         priority: safeStr(fu.lead_priority),
         plannedDate: safeDate(fu.planned_date),
         transferTo: safeStr(fu.Transfer_To),
-        source: 'activity',
+        source: 'Followup Activity',
       })
     }
   } catch (err) {
     console.warn('[lead-journey] followup_activity lookup skipped:', err instanceof Error ? err.message : err)
-  }
-
-  // Check lead_fms (DialShree Received) table for calling records
-  try {
-    const mobVariants = mobile ? phoneVariants(mobile) : []
-    const queries = [
-      pool.query(
-        `SELECT actual_time, Date_Time, Timestamp, created_at, planned_date, doer,
-                Assign_To_MR_Main_Agent_Name AS agent_name, agent_Id, Full_Disposition, Call_Notes, Remarks_History,
-                call_Count, sheet_name, Transfer_To, Call_Type, HangUp_Reason, latest_recording_url,
-                call_recording_duration, lead_priority, lead_category
-           FROM lead_fms
-          WHERE lead_id = ? OR lead_id LIKE ?
-          ORDER BY sl_no DESC
-          LIMIT 50`,
-        [leadId, `${leadId}-T%`]
-      )
-    ]
-    if (mobVariants.length) {
-      queries.push(
-        pool.query(
-          `SELECT actual_time, Date_Time, Timestamp, created_at, planned_date, doer,
-                  Assign_To_MR_Main_Agent_Name AS agent_name, agent_Id, Full_Disposition, Call_Notes, Remarks_History,
-                  call_Count, sheet_name, Transfer_To, Call_Type, HangUp_Reason, latest_recording_url,
-                  call_recording_duration, lead_priority, lead_category
-             FROM lead_fms
-            WHERE Mobile IN (?)
-            ORDER BY sl_no DESC
-            LIMIT 50`,
-          [mobVariants]
-        )
-      )
-    }
-
-    const fmsResults = await Promise.all(queries)
-    for (const res of fmsResults) {
-      const fmsRows: any[] = res[0] || []
-      for (const f of fmsRows) {
-        const callDate = safeDate(f.actual_time || f.Timestamp || f.Date_Time || f.created_at)
-        if (!items.some(it => it.callDate === callDate && it.disposition === safeStr(f.Full_Disposition))) {
-          const realAgent = resolveDialshreeAgent(f.doer, f.agent_Id, f.agent_name, f.Transfer_To)
-          items.push({
-            callDate,
-            agentName: realAgent || safeStr(f.agent_name || f.sheet_name),
-            realAgent,
-            agentId: safeStr(f.agent_Id),
-            disposition: safeStr(f.Full_Disposition),
-            callNotes: safeStr(f.Call_Notes || f.Remarks_History),
-            callCount: f.call_Count ? Number(f.call_Count) : undefined,
-            callType: safeStr(f.Call_Type),
-            hangupReason: safeStr(f.HangUp_Reason),
-            recordingUrl: safeStr(f.latest_recording_url),
-            duration: safeStr(f.call_recording_duration),
-            priority: safeStr(f.lead_priority),
-            plannedDate: safeDate(f.planned_date),
-            transferTo: safeStr(f.Transfer_To),
-            source: 'lead_fms',
-          })
-        }
-      }
-    }
-  } catch (err) {
-    console.warn('[lead-journey] lead_fms lookup skipped:', err instanceof Error ? err.message : err)
   }
 
   // Sort ascending by callDate so chronological order is clear (Call #1 -> Call #2 -> Call #3)
@@ -627,30 +652,16 @@ function newestPerLead(rows: any[]) {
 
 async function toJourneys(pool: any, rows: any[], withFollowups: boolean) {
   const leadIds = rows.map(r => String(r.lead_id))
-  const mobiles = rows.map(r => String(r.Mobile || ''))
   const { kserve, fmsConnected, fmsLatest, actConnected, actLatest, callTotals, firstCallDates } =
-    await loadBulkEnrichment(pool, leadIds, mobiles)
+    await loadBulkEnrichment(pool, leadIds)
 
   const results = []
   for (const row of rows) {
     const leadId = safeStr(row.lead_id)
     const mobile = safeStr(row.Mobile)
-    const mob10 = normalizeMobile10(mobile)
     const altMobile = safeStr(row.Phone_Number_of_User)
-    const followups = withFollowups ? await loadFollowups(pool, leadId, mobile) : []
 
     const k = kserve.get(leadId)
-    const connFms =
-      fmsConnected.get(leadId) ||
-      (mob10 ? fmsConnected.get(mob10) : null) ||
-      (mobile ? fmsConnected.get(mobile) : null)
-    const fms =
-      fmsLatest.get(leadId) ||
-      (mob10 ? fmsLatest.get(mob10) : null) ||
-      (mobile ? fmsLatest.get(mobile) : null)
-    const connAct = actConnected.get(leadId)
-    const act = actLatest.get(leadId)
-
     const rawAssignedTo = safeStr(row.assigned_to).trim()
     const rawAssignReason = safeStr(row.assign_reason).trim()
     const isDeletedLead = /data\s*backup.*delete|deleted/i.test(rawAssignedTo)
@@ -661,6 +672,22 @@ async function toJourneys(pool: any, rows: any[], withFollowups: boolean) {
       rawAssignReason.toLowerCase().includes('sent to kserve')
     const isDirectRoute = !isSentToKserve
     const routingType = isDirectRoute ? 'Direct Route (Bypassed KServe)' : 'KServe Route'
+    const kserveStatus = safeStr(k?.calculated_qualification_status) || (isSentToKserve ? 'Sent to KServe' : '')
+    const isKserveNotQualified =
+      !isDeletedLead &&
+      !isDirectRoute &&
+      /\b(non|not)\b|un-?qualified|disqualified|rejected/i.test(kserveStatus) &&
+      (!rawAssignedTo || isKserveAssigned)
+
+    const followups =
+      withFollowups && !isDeletedLead && !isKserveNotQualified
+        ? await loadFollowups(pool, leadId)
+        : []
+
+    const connFms = isDeletedLead || isKserveNotQualified ? null : fmsConnected.get(leadId)
+    const fms = isDeletedLead || isKserveNotQualified ? null : fmsLatest.get(leadId)
+    const connAct = isDeletedLead || isKserveNotQualified ? null : actConnected.get(leadId)
+    const act = isDeletedLead || isKserveNotQualified ? null : actLatest.get(leadId)
 
     // Resolve real assign/delete reason (never show generic "Sent on AppSheet" for Data Backup - Deleted)
     let assignReason = rawAssignReason
@@ -683,7 +710,7 @@ async function toJourneys(pool: any, rows: any[], withFollowups: boolean) {
       ? [...followups].reverse().find(fu => isConnectedDisposition(fu.disposition) && fu.realAgent)
       : null
 
-    // Determine latest call date, actual sales person (from DialShree Received `doer` / connected call), and disposition
+    // Determine latest call date, actual sales person (from DialShree Received `doer` / Sales FMS sheet), and disposition
     let latestCallDate = lastFu?.callDate || ''
     let actualDialerAgent = ''
     let latestCallDisp = ''
@@ -693,7 +720,6 @@ async function toJourneys(pool: any, rows: any[], withFollowups: boolean) {
       latestCallDisp = lastConnectedFu.disposition || ''
       latestCallDate = lastFu?.callDate || lastConnectedFu.callDate || ''
     } else if (connFms) {
-      // Connected call in DialShree Received (lead_fms): use exact sales person & exact disposition they entered!
       actualDialerAgent = safeStr(connFms.realAgent)
       latestCallDisp = safeStr(connFms.Full_Disposition)
       latestCallDate = safeDate(fms?.callDate || connFms.callDate)
@@ -727,16 +753,13 @@ async function toJourneys(pool: any, rows: any[], withFollowups: boolean) {
       latestCallDisp = safeStr(act.Full_Disposition)
     }
 
-    // Determine finalStatus hierarchy:
-    // 1. Connected DialShree / AppSheet disposition (what the sales person entered!)
-    // 2. Latest DialShree / AppSheet attempt disposition
-    // 3. Dialer converted / sales status (Order_Sales_Saved_Staus, Lead_Conversion)
-    // 4. KServe received status
-    // 5. App Sheet staging status
-    // 6. Deleted status if Data Backup - Deleted
-    // 7. Blank if untouched new lead
+    // Determine finalStatus hierarchy
     let finalStatus = ''
-    if (latestCallDisp) {
+    if (isDeletedLead) {
+      finalStatus = 'Data Backup - Deleted'
+    } else if (isKserveNotQualified) {
+      finalStatus = safeStr(k?.calculated_qualification_status || 'Not Qualified')
+    } else if (latestCallDisp) {
       finalStatus = latestCallDisp
     } else if (fms?.Order_Sales_Saved_Staus || fms?.Lead_Conversion) {
       finalStatus = safeStr(fms.Order_Sales_Saved_Staus || fms.Lead_Conversion)
@@ -744,61 +767,61 @@ async function toJourneys(pool: any, rows: any[], withFollowups: boolean) {
       finalStatus = safeStr(k.final_call_status || k.calculated_qualification_status || k.final_lead_outcome || k.call_outcome)
     } else if (row.Enquiry_Status_Last || row.staging_status) {
       finalStatus = safeStr(row.Enquiry_Status_Last || row.staging_status)
-    } else if (isDeletedLead) {
-      finalStatus = 'Data Backup - Deleted'
     }
 
     const kserveNextAssigned = safeStr(k?.next_assigned_to).trim()
     const directHumanAssignee =
       !isDeletedLead && !isKserveAssigned && !isCampaignOrQueueName(rawAssignedTo)
         ? rawAssignedTo
-        : !isCampaignOrQueueName(kserveNextAssigned)
+        : !isDeletedLead && !isKserveNotQualified && !isKserveAssigned && !isCampaignOrQueueName(kserveNextAssigned)
         ? kserveNextAssigned
         : ''
 
     // Actual Sales Person: ONLY a real human agent (never KAPPL, AHV, VILLARAAG NBD SALES, KServe, etc.)
-    const humanSalesPerson = actualDialerAgent || directHumanAssignee
+    const humanSalesPerson = isDeletedLead || isKserveNotQualified ? '' : (actualDialerAgent || directHumanAssignee)
     const currentHolder = isDeletedLead
       ? 'Data Backup - Deleted'
-      : humanSalesPerson || kserveNextAssigned || (isSentToKserve && isKserveAssigned ? 'KServe AI' : rawAssignedTo)
+      : isKserveNotQualified
+      ? 'KServe (Not Qualified)'
+      : humanSalesPerson || rawAssignedTo || kserveNextAssigned
     const latestDisposition = latestCallDisp || finalStatus
     const conversionAmount = safeFloat(row.Converted_Amount || connFms?.Conversion_Amount || fms?.Conversion_Amount)
-    const totalFollowups = Math.max(
-      callTotals.get(leadId) || 0,
-      mob10 ? callTotals.get(mob10) || 0 : 0,
-      mobile ? callTotals.get(mobile) || 0 : 0,
-      followups.length
-    )
+    const totalFollowups =
+      isDeletedLead || isKserveNotQualified
+        ? 0
+        : Math.max(callTotals.get(leadId) || 0, followups.length)
     const enquiryDate = safeDate(row.enquiry_date || row.buffer_arrival)
     const bufferArrival = safeDate(row.buffer_arrival)
 
-    // True assignment timestamp
+    // True assignment timestamp from staging_buffer_new.Timestamp_2 (Issues 1 & 5)
+    const ts2 = safeDate(row.timestamp_2)
     const gptTime = safeDate(row.gpt_extraction_time)
-    const actualTime = safeDate(row.buffer_actual_time)
-    const rawAssignedDt = safeDate(row.assigned_date || row.sent_status)
+    const sentStatusDt = safeDate(row.sent_status)
     const isMidnightIst = (iso: string) => iso.endsWith('T18:30:00.000Z') || iso.endsWith('T00:00:00.000Z')
     let assignedDate = ''
-    if (rawAssignedTo || kserveNextAssigned) {
+    if (ts2 && !isMidnightIst(ts2)) {
+      assignedDate = ts2
+    } else if (ts2 && (!bufferArrival || new Date(ts2).getTime() >= new Date(bufferArrival).getTime())) {
+      assignedDate = ts2
+    } else if (rawAssignedTo || kserveNextAssigned) {
       if (gptTime) {
         assignedDate = gptTime
-      } else if (actualTime && (!bufferArrival || new Date(actualTime).getTime() >= new Date(bufferArrival).getTime())) {
-        assignedDate = actualTime
-      } else if (rawAssignedDt && !isMidnightIst(rawAssignedDt)) {
-        assignedDate = rawAssignedDt
+      } else if (sentStatusDt && !isMidnightIst(sentStatusDt)) {
+        assignedDate = sentStatusDt
       } else {
-        assignedDate = actualTime || rawAssignedDt
+        assignedDate = ts2 || sentStatusDt
       }
     }
 
     const convertedDate = safeDate(row.converted_date)
     const firstCallIso =
-      (followups.length > 0 ? followups[0].callDate : '') ||
-      firstCallDates.get(leadId) ||
-      (mob10 ? firstCallDates.get(mob10) || '' : '') ||
-      (mobile ? firstCallDates.get(mobile) || '' : '')
-    const { tatMinutes, tatLabel, tatStage } = computeLeadTat(enquiryDate || bufferArrival, firstCallIso, assignedDate)
-    const kserveStatus = safeStr(k?.calculated_qualification_status) || (isSentToKserve ? 'Sent to KServe' : '')
-    const leadStatus = isDeletedLead
+      isDeletedLead || isKserveNotQualified
+        ? ''
+        : (followups.length > 0 ? followups[0].callDate : '') ||
+          firstCallDates.get(leadId) ||
+          (isKserveAssigned && k?.date_time ? safeDate(k.date_time) : '')
+    const { tatMinutes, tatLabel, tatStage } = computeLeadTat(bufferArrival || enquiryDate, firstCallIso, assignedDate)
+    const leadStatus = isDeletedLead || isKserveNotQualified
       ? 'Cold'
       : deriveLeadStatus({
           finalStatus,
@@ -808,7 +831,8 @@ async function toJourneys(pool: any, rows: any[], withFollowups: boolean) {
           kserveStatus,
         })
     const salesPerson = humanSalesPerson
-    const assignedToDisplay = isKserveAssigned && !kserveNextAssigned ? 'KServe (AI Voice)' : (kserveNextAssigned || rawAssignedTo)
+    // Issue 2: Assigned To must always reflect where this exact lead is sent in staging_buffer_new.Assign_To_MR_Main
+    const assignedToDisplay = rawAssignedTo
 
     results.push({
       leadId,
@@ -831,6 +855,7 @@ async function toJourneys(pool: any, rows: any[], withFollowups: boolean) {
       assignReason,
       isDeleted: isDeletedLead,
       isKserveOnly: isKserveAssigned && !humanSalesPerson,
+      isKserveNotQualified,
       isDirectRoute,
       routingType,
       kserveStatus,
@@ -847,7 +872,10 @@ async function toJourneys(pool: any, rows: any[], withFollowups: boolean) {
       tatStage,
       conversionAmount,
       convertedDate,
-      lastFollowupDate: latestCallDate || (k?.date_time ? safeDate(k.date_time) : ''),
+      lastFollowupDate:
+        isDeletedLead || isKserveNotQualified
+          ? ''
+          : latestCallDate || (isKserveAssigned && k?.date_time ? safeDate(k.date_time) : ''),
       totalFollowups,
       followups,
     })
@@ -862,7 +890,7 @@ export async function fetchLeadJourney(pool: any, q: string) {
   if (qtype === 'phone') { where = 'mb.Mobile IN (?)'; params = [phoneVariants(q)] }
   else if (qtype === 'email') { where = 'mb.Email_Id = ?'; params = [q] }
   else if (qtype === 'leadId') { where = '(mb.lead_id = ? OR mb.lead_id LIKE ?)'; params = [q, `${q}%`] }
-  else { where = 'mb.Name_of_Client LIKE ?'; params = [`%${q}%`] }
+  else { where = '(mb.Name_of_Client LIKE ? OR mb.lead_id = ?)'; params = [`%${q}%`, q] }
 
   const [rows]: any = await pool.query(
     `${JOURNEY_SELECT} WHERE ${where} ORDER BY mb.Date_Time DESC, sbn.sl_no DESC LIMIT 100`,
