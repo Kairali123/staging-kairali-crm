@@ -150,7 +150,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (pathname.startsWith("/doctor-consultation")) setDoctorConsultationExpanded(true)
     if (pathname.startsWith("/sales") || pathname.startsWith("/sales-calling")) setSalesExpanded(true)
     if (pathname.startsWith("/voicecall") && pathname !== "/voicecall/kserve-lead-lost") setVoiceCallExpanded(true)
-    if (pathname.startsWith("/dialShree") || pathname.startsWith("/dialshree")) setDialShreeExpanded(true)
+    if ((pathname.startsWith("/dialShree") || pathname.startsWith("/dialshree")) && pathname !== "/dialShree/lead-lost") setDialShreeExpanded(true)
     if (pathname.startsWith("/meetings")) setMeetingsExpanded(true)
     if (pathname.startsWith("/new-order-fms")) setKapplNewOrderExpanded(true)
     if (pathname.startsWith("/crr-fms") || pathname.startsWith("/ktahv-crr-process-report-alert")) setCrrFmsExpanded(true)
@@ -159,7 +159,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       pathname.startsWith("/morning-lead-allocation") ||
       pathname.startsWith("/lead-search") ||
       pathname.startsWith("/good-lead-leakage") ||
-      pathname === "/voicecall/kserve-lead-lost"
+      pathname === "/voicecall/kserve-lead-lost" ||
+      pathname === "/dialShree/lead-lost"
     ) {
       setLeadManagementExpanded(true)
     }
@@ -246,6 +247,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "Lead Search Dashboard", href: "/lead-search", icon: Search, permission: "lead_search.view" },
     { name: "Good Lead Leakage", href: "/good-lead-leakage", icon: Search, permission: "good_lead_leakage.view" },
     { name: "K-Serve Lead Lost", href: "/voicecall/kserve-lead-lost", icon: PhoneCall, permission: "voicecall_kserve_lead_lost.view" },
+    { name: "DialShree Lead Lost", href: "/dialShree/lead-lost", icon: PhoneCall, permission: "dialshree_lead_lost.view" },
     { name: "Lead Lost Monitor", href: "/lead-lost-monitor", icon: AlertTriangle, permission: "lead_lost_monitor.view" },
   ]
   const kapplNewOrderSubMenu = [
@@ -452,12 +454,16 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     )
   }
 
+  const hasDialShreeLeadLostPermission = () =>
+    isSuperAdmin || Boolean(user?.permissions?.includes("dialshree_lead_lost.view"))
+
   const hasLeadManagementPermission = () => {
     return (
       hasLeadsAssignPermission() ||
       hasLeadSearchPermission() ||
       hasGoodLeadLeakagePermission() ||
-      hasKserveLeadLostPermission()
+      hasKserveLeadLostPermission() ||
+      hasDialShreeLeadLostPermission()
     )
   }
 
@@ -520,6 +526,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (hasLeadSearchPermission()) searchableItems.push({ name: "Lead Search Dashboard", href: "/lead-search", description: "Lead Search Dashboard", icon: Search })
     if (hasGoodLeadLeakagePermission()) searchableItems.push({ name: "Good Lead Leakage", href: "/good-lead-leakage", description: "Good lead leakage report", icon: Search })
     if (hasKserveLeadLostPermission()) searchableItems.push({ name: "K-Serve Lead Lost", href: "/voicecall/kserve-lead-lost", description: "K-Serve lead lost tracker", icon: PhoneCall })
+    if (hasDialShreeLeadLostPermission()) searchableItems.push({ name: "DialShree Lead Lost", href: "/dialShree/lead-lost", description: "DialShree lead lost tracker", icon: PhoneCall })
   }
   if (hasClientDatabasePermission() || hasClientDatabaseUploadPermission()) {
     if (hasClientDatabasePermission()) searchableItems.push({ name: "Client Database", href: "/client-database", description: "Client Database records", icon: Database })
@@ -657,11 +664,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       const isLeadSearchRoute = pathname.startsWith("/lead-search")
       const isGoodLeadLeakageRoute = pathname.startsWith("/good-lead-leakage")
       const isKserveLeadLostRoute = pathname === "/voicecall/kserve-lead-lost"
+      const isDialShreeLeadLostRoute = pathname === "/dialShree/lead-lost"
       const isActive = (hasLeadsAssignPermission() && isLeadsAssignRoute) ||
                        (hasLeadsAssignPermission() && isMorningAllocationRoute) ||
                        (hasLeadSearchPermission() && isLeadSearchRoute) ||
                        (hasGoodLeadLeakagePermission() && isGoodLeadLeakageRoute) ||
-                       (hasKserveLeadLostPermission() && isKserveLeadLostRoute)
+                       (hasKserveLeadLostPermission() && isKserveLeadLostRoute) ||
+                       (hasDialShreeLeadLostPermission() && isDialShreeLeadLostRoute)
 
       const visibleSubMenu = leadManagementSubMenu.filter((subItem) => {
         if (subItem.href === "/leads/assign") return hasLeadsAssignPermission()
@@ -669,6 +678,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         if (subItem.href === "/lead-search") return hasLeadSearchPermission()
         if (subItem.href === "/good-lead-leakage") return hasGoodLeadLeakagePermission()
         if (subItem.href === "/voicecall/kserve-lead-lost") return hasKserveLeadLostPermission()
+        if (subItem.href === "/dialShree/lead-lost") return hasDialShreeLeadLostPermission()
         return hasPermission(subItem.permission) || hasPermission("all")
       })
       if (visibleSubMenu.length === 0) return null
@@ -819,7 +829,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         { name: "Received", href: "/dialShree/received", icon: Phone, permission: "dialshree_received.view" },
         { name: "Sent", href: "/dialShree/sent", icon: Phone, permission: "dialshree_sent.view" },
       ]
-      const isActive = pathname.startsWith("/dialShree") || pathname.startsWith("/dialshree")
+      const isActive = (pathname.startsWith("/dialShree") || pathname.startsWith("/dialshree")) && pathname !== "/dialShree/lead-lost"
       return (
         <div key={item.name}>
           <button

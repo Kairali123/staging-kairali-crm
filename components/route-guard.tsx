@@ -74,6 +74,7 @@ const pagePermissions: Record<string, string> = {
   '/voicecall/data/sent': 'ai_voice_sent.view',
   '/dialShree/received': 'dialshree_received.view',
   '/dialShree/sent': 'dialshree_sent.view',
+  '/dialShree/lead-lost': 'dialshree_lead_lost.view',
   '/dialShree/summary': 'dialshree_menu.view',
   '/voicecall/summary': 'ai_voice_summary.view',
   '/meetings': 'meetings.view',
@@ -182,6 +183,12 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
         router.replace('/access-denied')
         return
       }
+      return
+    }
+
+    // DialShree Lead Lost: everyone except super admin needs the explicit view permission; the "all" permission does not grant it.
+    if (cleanPath.toLowerCase() === '/dialshree/lead-lost') {
+      if (!isSuperAdmin && !user?.permissions?.includes('dialshree_lead_lost.view')) router.replace('/access-denied')
       return
     }
 

@@ -2234,6 +2234,13 @@ export const PAGE_PERMISSIONS_MODULES: PagePermissionModule[] = [
     actions: ["view", "viewAll", "edit", "viewSelf"],
     description: "Track unmatched and lost leads sent to KServe AI voice",
   },
+  {
+    key: "dialshree_lead_lost",
+    label: "DialShree Lead Lost Tracker",
+    category: "AI Voice & DialShree",
+    actions: ["view", "viewAll"],
+    description: "Track unmatched and lost leads sent to DialShree",
+  },
 
   // 5. Marketing & PPC Analytics
   {
