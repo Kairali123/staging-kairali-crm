@@ -1972,15 +1972,15 @@ export default function LeadSearchPage() {
 
   function exportCSV() {
     if (results.length === 0) return
-    const headers = ["Lead ID", "Client Name", "Mobile", "Email", "Company", "Datasource", "Verified Source", "Enquiry Date & Time", "Buffer Arrival", "KServe Status", "Assigned To", "Follow-ups", "Last Followup", "TAT", "Lead Status", "Final Status", "Sales Person", "Conversion Amount"]
+    const headers = ["Lead ID", "Client Name", "Mobile", "Email", "Company", "Datasource", "Verified Source", "Enquiry Date & Time", "Buffer Arrival", "TAT", "KServe Status", "Assigned To", "Follow-ups", "Last Followup", "Lead Status", "Final Status", "Sales Person", "Conversion Amount"]
     const rows = results.map(r => [
       r.leadId, r.clientName, r.mobile, r.email,
       r.company, r.dataSource || r.leadSource, r.verifiedSource || "",
-      r.enquiryDate || r.bufferArrival, r.bufferArrival,
+      r.enquiryDate || r.bufferArrival, r.bufferArrival, r.tatLabel || "",
       r.kserveStatus || "Direct Route", r.assignedTo,
       r.totalFollowups, r.lastFollowupDate,
-      r.tatLabel || "", r.leadStatus || "",
-      r.finalStatus, r.salesPerson || r.currentHolder || r.assignedTo || "",
+      r.leadStatus || "",
+      r.finalStatus, r.salesPerson || "",
       r.conversionAmount ?? ""
     ])
     const csv = [headers, ...rows].map(row => row.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n")
@@ -2412,30 +2412,30 @@ export default function LeadSearchPage() {
                 <table className="w-full caption-bottom text-sm border-separate border-spacing-0">
                   <thead>
                     <tr className="bg-[#231649] text-white">
-                      {/* Frozen Col 1: Lead ID */}
+                      {/* Frozen Col 1: Lead ID (locked exact 160px) */}
                       <th
                         onClick={() => handleSort("leadId")}
-                        className="group/th sticky top-0 left-0 z-30 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-r border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors w-[155px] min-w-[155px] max-w-[155px]"
+                        className="group/th sticky top-0 left-0 z-40 bg-[#231649] p-0 text-left text-xs font-bold text-white whitespace-nowrap border-b border-r border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors w-[160px] min-w-[160px] max-w-[160px] overflow-hidden"
                       >
-                        <div className="flex items-center justify-between gap-1.5">
-                          <span>Lead ID</span>
+                        <div className="w-[160px] max-w-[160px] px-3 py-3 flex items-center justify-between gap-1.5 overflow-hidden">
+                          <span className="truncate">Lead ID</span>
                           {renderSortIcon("leadId")}
                         </div>
                       </th>
-                      {/* Frozen Col 2: Client (Name, Mobile, Email) */}
+                      {/* Frozen Col 2: Client (Name, Mobile, Email — locked exact 260px at left-160px) */}
                       <th
                         onClick={() => handleSort("clientName")}
-                        className="group/th sticky top-0 left-[155px] z-30 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-r border-[#432c84] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.28)] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors w-[240px] min-w-[240px] max-w-[260px]"
+                        className="group/th sticky top-0 left-[160px] z-40 bg-[#231649] p-0 text-left text-xs font-bold text-white whitespace-nowrap border-b border-r border-[#432c84] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.32)] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors w-[260px] min-w-[260px] max-w-[260px] overflow-hidden"
                       >
-                        <div className="flex items-center justify-between gap-1.5">
-                          <span>Client (Name · Mobile · Email)</span>
+                        <div className="w-[260px] max-w-[260px] px-3 py-3 flex items-center justify-between gap-1.5 overflow-hidden">
+                          <span className="truncate">Client (Name · Mobile · Email)</span>
                           {renderSortIcon("clientName")}
                         </div>
                       </th>
                       {/* Col 3: Company */}
                       <th
                         onClick={() => handleSort("company")}
-                        className="group/th sticky top-0 z-20 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[110px]"
+                        className="group/th sticky top-0 z-30 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[110px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>Company</span>
@@ -2445,7 +2445,7 @@ export default function LeadSearchPage() {
                       {/* Col 4: Datasource */}
                       <th
                         onClick={() => handleSort("dataSource")}
-                        className="group/th sticky top-0 z-20 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[190px]"
+                        className="group/th sticky top-0 z-30 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[190px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>Datasource</span>
@@ -2455,7 +2455,7 @@ export default function LeadSearchPage() {
                       {/* Col 5: Enquiry Date & Time */}
                       <th
                         onClick={() => handleSort("enquiryDate")}
-                        className="group/th sticky top-0 z-20 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[160px]"
+                        className="group/th sticky top-0 z-30 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[160px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>Enquiry Date &amp; Time</span>
@@ -2465,57 +2465,57 @@ export default function LeadSearchPage() {
                       {/* Col 6: Buffer Arrival */}
                       <th
                         onClick={() => handleSort("bufferArrival")}
-                        className="group/th sticky top-0 z-20 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[155px]"
+                        className="group/th sticky top-0 z-30 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[155px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>Buffer Arrival</span>
                           {renderSortIcon("bufferArrival")}
                         </div>
                       </th>
-                      {/* Col 7: KServe Status */}
-                      <th
-                        onClick={() => handleSort("kserveStatus")}
-                        className="group/th sticky top-0 z-20 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[140px]"
-                      >
-                        <div className="flex items-center justify-between gap-1.5">
-                          <span>KServe Status</span>
-                          {renderSortIcon("kserveStatus")}
-                        </div>
-                      </th>
-                      {/* Col 8: Assigned To */}
-                      <th
-                        onClick={() => handleSort("assignedTo")}
-                        className="group/th sticky top-0 z-20 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[135px]"
-                      >
-                        <div className="flex items-center justify-between gap-1.5">
-                          <span>Assigned To</span>
-                          {renderSortIcon("assignedTo")}
-                        </div>
-                      </th>
-                      {/* Col 9: Follow-ups */}
-                      <th
-                        onClick={() => handleSort("totalFollowups")}
-                        className="group/th sticky top-0 z-20 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[130px]"
-                      >
-                        <div className="flex items-center justify-between gap-1.5">
-                          <span>Follow-ups</span>
-                          {renderSortIcon("totalFollowups")}
-                        </div>
-                      </th>
-                      {/* Col 10: TAT */}
+                      {/* Col 7: TAT (Moved right of Buffer Arrival) */}
                       <th
                         onClick={() => handleSort("tatMinutes")}
-                        className="group/th sticky top-0 z-20 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[115px]"
+                        className="group/th sticky top-0 z-30 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[115px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>TAT</span>
                           {renderSortIcon("tatMinutes")}
                         </div>
                       </th>
+                      {/* Col 8: KServe Status */}
+                      <th
+                        onClick={() => handleSort("kserveStatus")}
+                        className="group/th sticky top-0 z-30 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[140px]"
+                      >
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span>KServe Status</span>
+                          {renderSortIcon("kserveStatus")}
+                        </div>
+                      </th>
+                      {/* Col 9: Assigned To */}
+                      <th
+                        onClick={() => handleSort("assignedTo")}
+                        className="group/th sticky top-0 z-30 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[135px]"
+                      >
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span>Assigned To</span>
+                          {renderSortIcon("assignedTo")}
+                        </div>
+                      </th>
+                      {/* Col 10: Follow-ups */}
+                      <th
+                        onClick={() => handleSort("totalFollowups")}
+                        className="group/th sticky top-0 z-30 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[130px]"
+                      >
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span>Follow-ups</span>
+                          {renderSortIcon("totalFollowups")}
+                        </div>
+                      </th>
                       {/* Col 11: Lead Status */}
                       <th
                         onClick={() => handleSort("leadStatus")}
-                        className="group/th sticky top-0 z-20 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[125px]"
+                        className="group/th sticky top-0 z-30 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[125px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>Lead Status</span>
@@ -2525,7 +2525,7 @@ export default function LeadSearchPage() {
                       {/* Col 12: Final Status */}
                       <th
                         onClick={() => handleSort("finalStatus")}
-                        className="group/th sticky top-0 z-20 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[165px]"
+                        className="group/th sticky top-0 z-30 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[165px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>Final Status</span>
@@ -2535,7 +2535,7 @@ export default function LeadSearchPage() {
                       {/* Col 13: Sales Person */}
                       <th
                         onClick={() => handleSort("salesPerson")}
-                        className="group/th sticky top-0 z-20 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[145px]"
+                        className="group/th sticky top-0 z-30 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] cursor-pointer select-none hover:bg-[#2f1e61] transition-colors min-w-[155px]"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <span>Sales Person</span>
@@ -2543,33 +2543,35 @@ export default function LeadSearchPage() {
                         </div>
                       </th>
                       {/* Col 14: Actions */}
-                      <th className="sticky top-0 z-20 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] min-w-[135px]">
+                      <th className="sticky top-0 z-30 bg-[#231649] px-3 py-3 text-left text-xs font-bold text-white whitespace-nowrap border-b border-[#37246e] min-w-[135px]">
                         Actions
                       </th>
                     </tr>
                   </thead>
                   <tbody>
                     {displayedResults.map((lead, i) => (
-                      <tr key={lead.leadId || i} className="group bg-white hover:bg-blue-50/40 text-sm transition-colors">
-                        {/* Frozen Cell 1: Lead ID */}
+                      <tr key={lead.leadId || i} className="group bg-white hover:bg-[#f2f6ff] text-sm transition-colors">
+                        {/* Frozen Cell 1: Lead ID (100% opaque solid background + exact 160px inner clipping wrapper) */}
                         <td
-                          className="sticky left-0 z-10 bg-white group-hover:bg-blue-50/40 px-3 py-2.5 font-mono text-xs text-slate-700 border-b border-r border-slate-200/80 w-[155px] min-w-[155px] max-w-[155px] truncate transition-colors"
+                          className="sticky left-0 z-20 bg-white group-hover:bg-[#f2f6ff] p-0 border-b border-r border-slate-200 w-[160px] min-w-[160px] max-w-[160px] overflow-hidden transition-colors"
                           title={lead.leadId}
                         >
-                          {lead.leadId || "—"}
+                          <div className="w-[160px] max-w-[160px] px-3 py-2.5 font-mono text-xs text-slate-700 overflow-hidden text-ellipsis whitespace-nowrap">
+                            {lead.leadId || "—"}
+                          </div>
                         </td>
-                        {/* Frozen Cell 2: Client Name + Mobile + Email */}
-                        <td className="sticky left-[155px] z-10 bg-white group-hover:bg-blue-50/40 px-3 py-2.5 border-b border-r border-slate-300/80 shadow-[3px_0_6px_-2px_rgba(15,23,42,0.08)] w-[240px] min-w-[240px] max-w-[260px] transition-colors">
-                          <div className="space-y-0.5 min-w-0">
+                        {/* Frozen Cell 2: Client Name + Mobile + Email (100% opaque solid background + exact 260px inner clipping wrapper) */}
+                        <td className="sticky left-[160px] z-20 bg-white group-hover:bg-[#f2f6ff] p-0 border-b border-r border-slate-300 shadow-[4px_0_8px_-2px_rgba(15,23,42,0.12)] w-[260px] min-w-[260px] max-w-[260px] overflow-hidden transition-colors">
+                          <div className="w-[260px] max-w-[260px] px-3 py-2.5 space-y-0.5 overflow-hidden">
                             <p className="font-semibold text-slate-900 text-xs truncate" title={lead.clientName || ""}>
                               {lead.clientName || "—"}
                             </p>
-                            <div className="flex items-center gap-1 text-[11px] text-slate-600">
+                            <div className="flex items-center gap-1 text-[11px] text-slate-600 overflow-hidden">
                               <Phone className="h-3 w-3 text-slate-400 flex-shrink-0" />
                               <span className="font-medium truncate">{lead.mobile || "—"}</span>
                             </div>
                             {lead.email && (
-                              <div className="flex items-center gap-1 text-[11px] text-slate-500">
+                              <div className="flex items-center gap-1 text-[11px] text-slate-500 overflow-hidden">
                                 <Mail className="h-3 w-3 text-slate-400 flex-shrink-0" />
                                 <span className="truncate" title={lead.email}>{lead.email}</span>
                               </div>
@@ -2577,7 +2579,7 @@ export default function LeadSearchPage() {
                           </div>
                         </td>
                         {/* Cell 3: Company */}
-                        <td className="px-3 py-2.5 border-b border-slate-200/80 whitespace-nowrap">
+                        <td className="px-3 py-2.5 border-b border-slate-200/80 whitespace-nowrap bg-white group-hover:bg-[#f2f6ff] transition-colors">
                           {lead.company ? (
                             <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold border ${getCompanyBadgeStyle(lead.company)}`}>
                               {lead.company}
@@ -2587,7 +2589,7 @@ export default function LeadSearchPage() {
                           )}
                         </td>
                         {/* Cell 4: Datasource */}
-                        <td className="px-3 py-2.5 border-b border-slate-200/80 max-w-[230px]">
+                        <td className="px-3 py-2.5 border-b border-slate-200/80 max-w-[230px] bg-white group-hover:bg-[#f2f6ff] transition-colors">
                           <div className="space-y-1 min-w-0">
                             <p
                               className="text-xs text-slate-700 font-medium truncate"
@@ -2603,34 +2605,16 @@ export default function LeadSearchPage() {
                             )}
                           </div>
                         </td>
-                        {/* Cell 5: Enquiry Date & Time (NEW) */}
-                        <td className="px-3 py-2.5 border-b border-slate-200/80 text-xs text-slate-700 font-medium whitespace-nowrap">
+                        {/* Cell 5: Enquiry Date & Time */}
+                        <td className="px-3 py-2.5 border-b border-slate-200/80 text-xs text-slate-700 font-medium whitespace-nowrap bg-white group-hover:bg-[#f2f6ff] transition-colors">
                           {formatDate(lead.enquiryDate || lead.bufferArrival)}
                         </td>
                         {/* Cell 6: Buffer Arrival */}
-                        <td className="px-3 py-2.5 border-b border-slate-200/80 text-xs text-slate-500 whitespace-nowrap">
+                        <td className="px-3 py-2.5 border-b border-slate-200/80 text-xs text-slate-500 whitespace-nowrap bg-white group-hover:bg-[#f2f6ff] transition-colors">
                           {formatDate(lead.bufferArrival)}
                         </td>
-                        {/* Cell 7: KServe Status */}
-                        <td className="px-3 py-2.5 border-b border-slate-200/80 whitespace-nowrap">
-                          {getKserveStatusBadge(lead.kserveStatus, lead.kserveRoute)}
-                        </td>
-                        {/* Cell 8: Assigned To */}
-                        <td className="px-3 py-2.5 border-b border-slate-200/80 text-xs text-slate-700 whitespace-nowrap">
-                          <p className="font-medium text-slate-800">{lead.assignedTo || "—"}</p>
-                        </td>
-                        {/* Cell 9: Follow-ups */}
-                        <td className="px-3 py-2.5 border-b border-slate-200/80 whitespace-nowrap">
-                          <div className="flex items-center gap-1.5">
-                            <PhoneCall className="h-3.5 w-3.5 text-slate-400" />
-                            <span className="text-xs font-bold text-slate-800">{lead.totalFollowups}</span>
-                          </div>
-                          {lead.lastFollowupDate && (
-                            <p className="text-[11px] text-slate-500 mt-0.5">{formatDate(lead.lastFollowupDate)}</p>
-                          )}
-                        </td>
-                        {/* Cell 10: TAT (NEW) */}
-                        <td className="px-3 py-2.5 border-b border-slate-200/80 whitespace-nowrap">
+                        {/* Cell 7: TAT (Moved right of Buffer Arrival) */}
+                        <td className="px-3 py-2.5 border-b border-slate-200/80 whitespace-nowrap bg-white group-hover:bg-[#f2f6ff] transition-colors">
                           <div className="flex flex-col items-start gap-0.5">
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold border ${getTatBadgeStyle(lead.tatMinutes, lead.tatStage)}`}>
                               <Clock className="h-3 w-3" />
@@ -2643,14 +2627,32 @@ export default function LeadSearchPage() {
                             )}
                           </div>
                         </td>
-                        {/* Cell 11: Lead Status (NEW: Converted / Cold / Followup / New) */}
-                        <td className="px-3 py-2.5 border-b border-slate-200/80 whitespace-nowrap">
+                        {/* Cell 8: KServe Status */}
+                        <td className="px-3 py-2.5 border-b border-slate-200/80 whitespace-nowrap bg-white group-hover:bg-[#f2f6ff] transition-colors">
+                          {getKserveStatusBadge(lead.kserveStatus, lead.kserveRoute)}
+                        </td>
+                        {/* Cell 9: Assigned To */}
+                        <td className="px-3 py-2.5 border-b border-slate-200/80 text-xs text-slate-700 whitespace-nowrap bg-white group-hover:bg-[#f2f6ff] transition-colors">
+                          <p className="font-medium text-slate-800">{lead.assignedTo || "—"}</p>
+                        </td>
+                        {/* Cell 10: Follow-ups */}
+                        <td className="px-3 py-2.5 border-b border-slate-200/80 whitespace-nowrap bg-white group-hover:bg-[#f2f6ff] transition-colors">
+                          <div className="flex items-center gap-1.5">
+                            <PhoneCall className="h-3.5 w-3.5 text-slate-400" />
+                            <span className="text-xs font-bold text-slate-800">{lead.totalFollowups}</span>
+                          </div>
+                          {lead.lastFollowupDate && (
+                            <p className="text-[11px] text-slate-500 mt-0.5">{formatDate(lead.lastFollowupDate)}</p>
+                          )}
+                        </td>
+                        {/* Cell 11: Lead Status */}
+                        <td className="px-3 py-2.5 border-b border-slate-200/80 whitespace-nowrap bg-white group-hover:bg-[#f2f6ff] transition-colors">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] border ${getLeadStatusBadgeStyle(lead.leadStatus)}`}>
                             {lead.leadStatus || "New"}
                           </span>
                         </td>
                         {/* Cell 12: Final Status */}
-                        <td className="px-3 py-2.5 border-b border-slate-200/80">
+                        <td className="px-3 py-2.5 border-b border-slate-200/80 bg-white group-hover:bg-[#f2f6ff] transition-colors">
                           {lead.finalStatus ? (
                             <span className={`text-xs px-2.5 py-1 rounded-full border inline-block whitespace-nowrap ${getFinalStatusColor(lead.finalStatus)}`}>
                               {lead.finalStatus}
@@ -2664,26 +2666,26 @@ export default function LeadSearchPage() {
                             </p>
                           )}
                         </td>
-                        {/* Cell 13: Sales Person (NEW — Right of Final Status) */}
-                        <td className="px-3 py-2.5 border-b border-slate-200/80 text-xs text-slate-700 whitespace-nowrap">
+                        {/* Cell 13: Sales Person (Actual connected DialShree person — never campaign bucket) */}
+                        <td className="px-3 py-2.5 border-b border-slate-200/80 text-xs text-slate-700 whitespace-nowrap bg-white group-hover:bg-[#f2f6ff] transition-colors">
                           {lead.salesPerson ? (
                             <>
                               <div className="flex items-center gap-1.5">
-                                <User className="h-3.5 w-3.5 text-indigo-400 flex-shrink-0" />
-                                <span className="font-semibold text-slate-800">
+                                <User className="h-3.5 w-3.5 text-indigo-500 flex-shrink-0" />
+                                <span className="font-bold text-slate-900">
                                   {lead.salesPerson}
                                 </span>
                               </div>
                               {lead.assignedTo && lead.salesPerson !== lead.assignedTo && (
-                                <p className="text-[10px] text-slate-400 pl-5">Orig: {lead.assignedTo}</p>
+                                <p className="text-[10px] text-slate-400 pl-5">Queue: {lead.assignedTo}</p>
                               )}
                             </>
                           ) : (
                             <span className="text-xs text-slate-400 font-medium">—</span>
                           )}
                         </td>
-                        {/* Cell 14: Actions (Colored View Journey Button) */}
-                        <td className="px-3 py-2.5 border-b border-slate-200/80 whitespace-nowrap">
+                        {/* Cell 14: Actions */}
+                        <td className="px-3 py-2.5 border-b border-slate-200/80 whitespace-nowrap bg-white group-hover:bg-[#f2f6ff] transition-colors">
                           <Button
                             size="sm"
                             className="text-xs h-7 px-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white border-0 shadow-xs hover:shadow-md transition-all font-semibold"
