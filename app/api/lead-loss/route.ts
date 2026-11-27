@@ -51,6 +51,8 @@ const COMPANY_CONFIG: CompanyConfig[] = [
       // Email Parser leads for VillaRaag (Unit column filtered for VillaRaag; 9 cases on 14-Oct)
       // Exclude "healing village" because LIKE '%villa%' would otherwise catch KTAHV rows
       { source: "Others", table: "email_parser_info_mails", dateCol: "received_at", mobileCol: "s3_extract_phone", leadIdCol: "reference_gmail_message_id", nameCol: "s3_extract_name", emailCol: "s3_extract_email", sourceFilter: "(s4_route_business_unit LIKE '%villa raag%' OR s4_route_business_unit LIKE '%villaraag%' OR s4_route_business_unit = 'Villa Raag') AND s4_route_business_unit NOT LIKE '%healing village%' AND s4_route_business_unit NOT LIKE '%ktahv%'" },
+      // B2B Card Scan AI Agent leads matched to staging_buffer_new for VillaRaag
+      { source: "Others", table: "b2b_nbd_crr_followup_ktahv_card_scan_ai_agent", dateCol: "Received_At", mobileCol: "Phone_Number", leadIdCol: "Enquiry_ID", nameCol: "Contact Person", emailCol: "Email", sourceFilter: "EXISTS (SELECT 1 FROM staging_buffer_new sbn WHERE sbn.Lead_id = b2b_nbd_crr_followup_ktahv_card_scan_ai_agent.Enquiry_ID COLLATE utf8mb4_general_ci AND (sbn.Lead_Relates_to_which_company LIKE '%villa%' OR sbn.Lead_Relates_to_which_company LIKE '%raag%') AND sbn.Lead_Relates_to_which_company NOT LIKE '%healing village%' AND sbn.Lead_Relates_to_which_company NOT LIKE '%ktahv%')" },
     ],
   },
   {
@@ -68,6 +70,8 @@ const COMPANY_CONFIG: CompanyConfig[] = [
       { source: "Others", table: "bulk_whatsapp_reply_enquiry_generation", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "source_id", nameCol: "client_name", emailCol: "email_id", sourceFilter: "website_name LIKE '%KTAHV%' OR website_name LIKE '%healing village%' OR new_category LIKE '%AHV%' OR new_category LIKE '%healing village%' OR remarks LIKE '%healing village%' OR source_id IN ('wamid.HBgMOTE2Mzk0NDM5MzY1FQIAEhggQUNGMjAyNjU0NTAzMEI3MkVERDEyRjc4RTBFMTk2MzUA', 'wamid.HBgMOTE5NDUwNTA5Mjg5FQIAEhggQTVDOTA4QTJFNTk3NkVENEZEM0E1QkUyRDkwM0Q1RTMA')" },
       // Others: Email Parser (2 leads on 14-Oct: 1a13b68ea0b00852, 1a13b66dca848813) -> total 4 leads
       { source: "Others", table: "email_parser_info_mails", dateCol: "received_at", mobileCol: "s3_extract_phone", leadIdCol: "reference_gmail_message_id", nameCol: "s3_extract_name", emailCol: "s3_extract_email", sourceFilter: "s4_route_business_unit LIKE '%healing village%' OR s4_route_business_unit LIKE '%ktahv%'" },
+      // B2B Card Scan AI Agent leads matched to staging_buffer_new for KTAHV
+      { source: "Others", table: "b2b_nbd_crr_followup_ktahv_card_scan_ai_agent", dateCol: "Received_At", mobileCol: "Phone_Number", leadIdCol: "Enquiry_ID", nameCol: "Contact Person", emailCol: "Email", sourceFilter: "EXISTS (SELECT 1 FROM staging_buffer_new sbn WHERE sbn.Lead_id = b2b_nbd_crr_followup_ktahv_card_scan_ai_agent.Enquiry_ID COLLATE utf8mb4_general_ci AND (sbn.Lead_Relates_to_which_company LIKE '%healing village%' OR sbn.Lead_Relates_to_which_company LIKE '%ktahv%'))" },
       // Priyasharma AI: Column W (Timestamp); Column O (Healing Village + Ayurvedic Centers); Column AO (SRC)
       // Filter by timestamp column only (stored in IST; do NOT convert TZ).
       // Healing Village + Ayurvedic Centers both = KTAHV. SRC: Widget or Iframe=AI-Web, Instagram=AI-Instagram, API or WhatsApp=AI-WhatsApp, Messenger=AI-Facebook.
@@ -90,6 +94,8 @@ const COMPANY_CONFIG: CompanyConfig[] = [
       { source: "Others", table: "bulk_whatsapp_reply_enquiry_generation", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "source_id", nameCol: "client_name", emailCol: "email_id", sourceFilter: "(website_name LIKE '%product%' OR new_category LIKE '%kappl%' OR (website_name IS NULL AND (new_category IS NULL OR new_category = 'Data Backup - Deleted'))) AND source_id NOT IN ('wamid.HBgMOTE2Mzk0NDM5MzY1FQIAEhggQUNGMjAyNjU0NTAzMEI3MkVERDEyRjc4RTBFMTk2MzUA', 'wamid.HBgMOTE5NDUwNTA5Mjg5FQIAEhggQTVDOTA4QTJFNTk3NkVENEZEM0E1QkUyRDkwM0Q1RTMA') AND (new_category NOT LIKE '%AHV%' OR new_category IS NULL)" },
       // Email Parser leads for KAPL Other source (Unit = Kairali Ayurvedic Products; 8 cases on 14-Oct)
       { source: "Others", table: "email_parser_info_mails", dateCol: "received_at", mobileCol: "s3_extract_phone", leadIdCol: "reference_gmail_message_id", nameCol: "s3_extract_name", emailCol: "s3_extract_email", sourceFilter: "s4_route_business_unit LIKE '%product%' OR s4_route_business_unit LIKE '%kapl%' OR s4_route_business_unit LIKE '%kappl%'" },
+      // B2B Card Scan AI Agent leads matched to staging_buffer_new for KAPL
+      { source: "Others", table: "b2b_nbd_crr_followup_ktahv_card_scan_ai_agent", dateCol: "Received_At", mobileCol: "Phone_Number", leadIdCol: "Enquiry_ID", nameCol: "Contact Person", emailCol: "Email", sourceFilter: "EXISTS (SELECT 1 FROM staging_buffer_new sbn WHERE sbn.Lead_id = b2b_nbd_crr_followup_ktahv_card_scan_ai_agent.Enquiry_ID COLLATE utf8mb4_general_ci AND (sbn.Lead_Relates_to_which_company LIKE '%product%' OR sbn.Lead_Relates_to_which_company LIKE '%kapl%' OR sbn.Lead_Relates_to_which_company LIKE '%kappl%'))" },
       // Priyasharma AI: Column W (Timestamp); Column O (Training Institute + Products); Column AO (SRC)
       // Filter by timestamp column only (stored in IST; do NOT convert TZ).
       // Training Institute + Ayurvedic Products both = KAPL. SRC: Widget or Iframe=AI-Web, Instagram=AI-Instagram, API or WhatsApp=AI-WhatsApp, Messenger=AI-Facebook.
@@ -114,7 +120,9 @@ const COMPANY_CONFIG: CompanyConfig[] = [
     bufferMatch: ["kairali ayurvedic treatment", "kac", "centres", "centers", "katc", "treatment", "center", "centre"],
     sources: [
       { source: "IVR", table: "ivr_lead_api_knowrality", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "lead_id", nameCol: "name_of_client", emailCol: "email_id", sourceFilter: "lead_relates_to_which_company LIKE '%center%' OR lead_relates_to_which_company LIKE '%centre%' OR company_by_extension LIKE '%center%' OR company_by_extension LIKE '%centre%' OR company_by_extension LIKE '%kac%'" },
-      { source: "Others", table: "bulk_whatsapp_reply_enquiry_generation", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "source_id", nameCol: "client_name", emailCol: "email_id", sourceFilter: "website_name LIKE '%center%' OR website_name LIKE '%centre%'" }
+      { source: "Others", table: "bulk_whatsapp_reply_enquiry_generation", dateCol: "date_time", mobileCol: "mobile", leadIdCol: "source_id", nameCol: "client_name", emailCol: "email_id", sourceFilter: "website_name LIKE '%center%' OR website_name LIKE '%centre%'" },
+      // B2B Card Scan AI Agent leads matched to staging_buffer_new for KATC
+      { source: "Others", table: "b2b_nbd_crr_followup_ktahv_card_scan_ai_agent", dateCol: "Received_At", mobileCol: "Phone_Number", leadIdCol: "Enquiry_ID", nameCol: "Contact Person", emailCol: "Email", sourceFilter: "EXISTS (SELECT 1 FROM staging_buffer_new sbn WHERE sbn.Lead_id = b2b_nbd_crr_followup_ktahv_card_scan_ai_agent.Enquiry_ID COLLATE utf8mb4_general_ci AND (sbn.Lead_Relates_to_which_company LIKE '%center%' OR sbn.Lead_Relates_to_which_company LIKE '%centre%' OR sbn.Lead_Relates_to_which_company LIKE '%treatment%' OR sbn.Lead_Relates_to_which_company LIKE '%kac%' OR sbn.Lead_Relates_to_which_company LIKE '%katc%'))" }
     ]
   }
 ];
@@ -306,7 +314,7 @@ function bufferMatchesSource(cfgSource: string, verifiedSource: string, dataSour
   if (vNorm) {
     if (cNorm === vNorm) return true;
     if (cNorm.includes("website") && (vNorm.includes("siteexitpopup") || vNorm.includes("website"))) return true;
-    if (cNorm.includes("other") && (vNorm.includes("emailparser") || vNorm.includes("other"))) return true;
+    if (cNorm.includes("other") && (vNorm.includes("emailparser") || vNorm.includes("other") || vNorm.includes("b2b") || vNorm.includes("cardscan") || vNorm.includes("outreach"))) return true;
     // Google rule: for KTAHV, Website and Site Exit Pop-Up leads count under Google
     if (cNorm === "google" && isKtahv && (vNorm.includes("website") || vNorm.includes("siteexitpopup"))) return true;
     // Google rule: for VillaRaag, Website leads count under Google
@@ -316,7 +324,7 @@ function bufferMatchesSource(cfgSource: string, verifiedSource: string, dataSour
   if (dataSource) {
     const dLower = dataSource.toLowerCase();
     if (cNorm === "ivr" && (dLower.includes("ivr") || dLower.includes("kserve"))) return true;
-    if (cNorm.includes("other") && dLower.includes("email parser")) return true;
+    if (cNorm.includes("other") && (dLower.includes("email parser") || dLower.includes("b2b") || dLower.includes("outreach") || dLower.includes("card scan"))) return true;
     if (cNorm === "google" && dLower.includes("ppc enquiry")) return true;
     if (cNorm.includes("website") && (dLower.includes("website") || dLower.includes("contact us") || dLower.includes("online consultation") || dLower.includes("abandoned cart"))) return true;
     // Google rule (no Verified_Source): for KTAHV, website/contact us/online consultation data sources count under Google
