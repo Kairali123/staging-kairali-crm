@@ -160,6 +160,15 @@ export async function buildEmail(t:Trigger,at:number){
    })
    html=messages[0]?.html||''
   }
+  else if(t.reportId==='ai-chat-weekly-report'){
+   reportTitle='AI Chat Weekly Consolidated Report'
+   reportSlug='AI-Chat-Weekly-Consolidated-Report'
+   const appUrl=process.env.NEXT_PUBLIC_APP_URL||'https://staging-kairali-crm.vercel.app'
+   const {loadAiChatReportData,renderAiChatWeeklyEmailHtml}=await import('@/lib/ai-chat-reports')
+   const reportData=await loadAiChatReportData({endDate:date,days:7,company:t.company,recordLimitPerBot:20})
+   hasData=reportData.totals.allChatsCombined>0||reportData.totals.totalConversions>0
+   html=renderAiChatWeeklyEmailHtml(reportData,{appUrl,includeDetails:t.reportDetail!=='Summary only'})
+  }
   else{
    throw new Error(`Unhandled email trigger report template: "${t.reportId}"`)
   }
@@ -169,7 +178,7 @@ export async function buildEmail(t:Trigger,at:number){
    html=html.includes('<!--email-intro-->')?html.replace('<!--email-intro-->',()=>p(t.intro)).replace('<!--email-closing-->',()=>p(t.closing)):html.replace(/(<body[^>]*>)/,'$1'+p(t.intro)).replace('</body>',p(t.closing)+'</body>')
   }
   // booking-pi-review-alert and kserve-lead-lost-alert and sales-call-audit skip JPEG rendering — they use inline HTML tables
-  if(t.reportId!=='client-assigned-doctor-report'&&t.reportId!=='trigger-health-digest'&&t.reportId!=='sales-call-audit'&&t.reportId!=='kserve-lead-lost-alert'&&t.reportId!=='kserve-daily-call-audit-feedback-alert'&&t.reportId!=='booking-pi-review-alert'&&t.reportId!=='ktahv-daily-sales-report'&&t.reportId!=='riya-sharma-ai-report'&&t.reportId!=='website-enquiry-alert'){
+  if(t.reportId!=='client-assigned-doctor-report'&&t.reportId!=='trigger-health-digest'&&t.reportId!=='sales-call-audit'&&t.reportId!=='kserve-lead-lost-alert'&&t.reportId!=='kserve-daily-call-audit-feedback-alert'&&t.reportId!=='booking-pi-review-alert'&&t.reportId!=='ktahv-daily-sales-report'&&t.reportId!=='riya-sharma-ai-report'&&t.reportId!=='website-enquiry-alert'&&t.reportId!=='ai-chat-weekly-report'){
    try{
     const {renderJPEG}=await import('@/lib/whatsapp-triggers/render')
     if(typeof renderJPEG==='function'){

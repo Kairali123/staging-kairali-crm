@@ -66,6 +66,7 @@ import {
   Clock,
   Clock3,
   MessageSquare,
+  Bot,
   Map,
   Ticket,
 } from "lucide-react"
@@ -212,6 +213,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "Settings", icon: Settings, superAdminOnly: true },
     { name: "User Management", href: "/users", icon: UserCog, superAdminOnly: true },
     { name: "Marketing Reports", icon: TrendingUp, permission: "marketing.view" },
+    { name: "AI Chat Reports", href: "/ai-chat-reports", icon: Bot, permission: "marketing.view" },
     { name: "Email Marketing", icon: Mail, permission: "email_marketing.view" },
     { name: "Guest Experience", icon: Star, permission: "guest_experience.view" },
     { name: "Doctor Consultation", icon: Stethoscope, permission: "doctor.consultation.view" },
@@ -276,6 +278,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const marketingSubMenu = [
     { name: "Marketing Daily Report", href: "/marketing-daily-report", icon: Search, permission: "marketing_daily_report.view", description: "Marketing daily report" },
+    { name: "AI Chat Reports", href: "/ai-chat-reports", icon: Bot, permission: "marketing.view", description: "Consolidated SQL chat, enquiry & conversion report across all 5 AI bots" },
     { name: "Google PPC Reports", href: "/marketing/google-ppc", icon: Search, description: "Google PPC ads reports", permission: "marketing_google_report.view" },
     { name: "Facebook PPC Reports", href: "/marketing/facebook-ppc", icon: Search, description: "Facebook PPC ads reports", permission: "marketing_facebook_report.view" },
     { name: "Google Adword Reports", href: "/google-adword-reports", icon: Search, description: "Google Ads campaign expense data", permission: "google_adword_report.view" },
@@ -283,6 +286,17 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   ]
 
   const isMarketingItemVisible = (item: (typeof marketingSubMenu)[number]) => {
+    if (item.href === "/ai-chat-reports") {
+      return (
+        isSuperAdmin ||
+        user?.permissions?.includes("all") ||
+        user?.role === "admin" ||
+        hasPermission("marketing.view") ||
+        hasPermission("marketing_daily_report.view") ||
+        hasPermission("riya_sharma.view") ||
+        hasPermission("sales_report.view")
+      )
+    }
     if ("superAdminOnly" in item && item.superAdminOnly) return isSuperAdmin
     if ("permission" in item && typeof item.permission === "string") return hasPermission(item.permission)
     return true
@@ -467,9 +481,23 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     )
   }
 
+  const hasAiChatReportsPermission = () => {
+    if (isSuperAdmin || user?.permissions?.includes("all") || user?.role === "admin") return true
+    return (
+      hasPermission("marketing.view") ||
+      hasPermission("marketing_daily_report.view") ||
+      hasPermission("riya_sharma.view") ||
+      hasPermission("sales_report.view") ||
+      hasPermission("leads.view")
+    )
+  }
+
   const filteredNavigation = navigation.filter((item: any) => {
     if (item.superAdminOnly) {
       return isSuperAdmin
+    }
+    if (item.name === "AI Chat Reports") {
+      return hasAiChatReportsPermission()
     }
     if (item.name === "Sales Reports") {
       return isSuperAdmin || user?.permissions?.includes("all") || salesReportsSubMenu.some(isSalesItemVisible)

@@ -223,6 +223,7 @@ const protectedRoutes = [
   // handlers now enforce session and owner/admin checks.
   '/meet',
   '/riya-sharma',
+  '/ai-chat-reports',
 ]
 
 const SECURITY_HEADERS: readonly [string, string][] = [

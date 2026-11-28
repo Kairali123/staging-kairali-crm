@@ -200,6 +200,17 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
       return
     }
 
+    if (cleanPath === '/ai-chat-reports') {
+      const canViewAiChat =
+        hasPermission('marketing.view') ||
+        hasPermission('marketing_daily_report.view') ||
+        hasPermission('riya_sharma.view') ||
+        hasPermission('sales_report.view') ||
+        hasPermission('leads.view')
+      if (!canViewAiChat) router.replace('/access-denied')
+      return
+    }
+
     // If route is restricted, redirect to access-denied unless user has the permission
     if (isRestricted(pathname)) {
       const requiredPermission = pagePermissions[pathname]

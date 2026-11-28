@@ -10,6 +10,7 @@ import { emailReportTemplates, canonicalTemplateName } from '@/lib/email-report-
 import { seedDoctorAssignmentDraft } from '@/lib/email-triggers/doctor-assignment-default'
 import { seedTriggerHealthDraft } from '@/lib/email-triggers/trigger-health-default'
 import { seedKserveFeedbackTrigger, KSERVE_FEEDBACK_REPORT_ID } from '@/lib/email-triggers/kserve-feedback-default'
+import { seedAiChatWeeklyTrigger, AI_CHAT_WEEKLY_REPORT_ID } from '@/lib/email-triggers/ai-chat-weekly-default'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -374,6 +375,9 @@ export async function GET(req: NextRequest) {
     }
     if (!state.triggers.some(t => t.reportId === KSERVE_FEEDBACK_REPORT_ID) && !state.seedSuppressed?.includes(KSERVE_FEEDBACK_REPORT_ID) && state.triggers.length < 100) {
       state = await transaction(s => { seedKserveFeedbackTrigger(s); return s })
+    }
+    if (!state.triggers.some(t => t.reportId === AI_CHAT_WEEKLY_REPORT_ID) && !state.seedSuppressed?.includes(AI_CHAT_WEEKLY_REPORT_ID) && state.triggers.length < 100) {
+      state = await transaction(s => { seedAiChatWeeklyTrigger(s); return s })
     }
     if (!process.env.VERCEL) {
       try {

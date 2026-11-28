@@ -3,6 +3,8 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { timingSafeEqual } from 'node:crypto'
 import { dispatchDue } from '@/lib/email-triggers/dispatch'
+import { readState, transaction } from '@/lib/email-triggers/store'
+import { seedAiChatWeeklyTrigger, AI_CHAT_WEEKLY_REPORT_ID } from '@/lib/email-triggers/ai-chat-weekly-default'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -45,6 +47,10 @@ async function handleRequest(req: NextRequest) {
   }
 
   try {
+    const curState = await readState()
+    if (!curState.triggers.some(t => t.reportId === AI_CHAT_WEEKLY_REPORT_ID) && !curState.seedSuppressed?.includes(AI_CHAT_WEEKLY_REPORT_ID) && curState.triggers.length < 100) {
+      await transaction(s => { seedAiChatWeeklyTrigger(s); return s })
+    }
     const result = await dispatchDue()
     return NextResponse.json(result, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {

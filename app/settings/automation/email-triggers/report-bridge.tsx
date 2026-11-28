@@ -144,6 +144,10 @@ export default function EmailConfigBridge({ document: documentHtml }: { document
           const response = await fetch('/api/website-enquiry-alert-preview?' + new URLSearchParams({ company: scope, date: message.date }), { signal: current.signal, cache: 'no-store' })
           html = await response.text()
           if (!response.ok) throw new Error('Website enquiry preview unavailable')
+        } else if (id === 'ai-chat-weekly-report') {
+          const response = await fetch('/api/ai-chat-reports/preview?' + new URLSearchParams({ company: scope, date: message.date, details: message.details || 'Full report' }), { signal: current.signal, cache: 'no-store' })
+          html = await response.text()
+          if (!response.ok) throw new Error('AI Chat Weekly Report preview unavailable')
         } else {
           const response = await fetch('/api/marketing-daily-report?' + new URLSearchParams({ date: message.date }), { signal: current.signal, cache: 'no-store' })
           const data = await response.json()

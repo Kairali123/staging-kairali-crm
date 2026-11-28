@@ -112,3 +112,25 @@ test('partial delivery does not mark source and pauses trigger',()=>withRunner(a
 test('source write failure after acceptance pauses without sending again',()=>withRunner(async({store,runner,now})=>{
  let sends=0;const io={build:async()=>({subject:'s',html:'h',hasData:true,afterAccepted:async()=>{throw Error('Source unavailable')}}),send:async()=>{sends++;return {accepted:1,rejected:0}}};await runner.dispatchDue(now,io);await runner.dispatchDue(now+86400000,io);assert.equal(sends,1);assert.equal((await store.readState()).triggers[0].status,'Paused');assert.equal((await store.readState()).runs[0].status,'Unknown');
 }));
+test('ai-chat-weekly-report trigger auto-seeds active weekly Monday 09:00 IST schedule and stays suppressed after delete',()=>{
+ const {seedAiChatWeeklyTrigger}=env.load('lib/email-triggers/ai-chat-weekly-default.ts');
+ const schema=env.load('lib/email-triggers/schema.ts').triggerSchema;
+ const {removeTrigger}=env.load('lib/email-triggers/delete.ts');
+ const s={version:1,triggers:[],runs:[]};
+ assert.equal(seedAiChatWeeklyTrigger(s,new Date('2026-11-28T05:30:00Z')),true);
+ const t=s.triggers[0];
+ assert.equal(t.reportId,'ai-chat-weekly-report');
+ assert.equal(t.name,'AI Chat Weekly Consolidated Report · Scheduled email');
+ assert.equal(t.frequency,'Weekly');
+ assert.equal(t.weekday,'Monday');
+ assert.equal(t.time,'09:00');
+ assert.equal(t.status,'Active');
+ assert.equal(t.to,'director@kairali.com');
+ assert.ok(t.cc.includes('sysadmin@kairali.com'));
+ assert.equal(schema.safeParse(t).success,true);
+ // Next Monday after Saturday 2026-11-28 is Monday 2026-11-30 09:00 IST (03:30 UTC)
+ assert.equal(t.nextRun,'2026-11-30T03:30:00.000Z');
+ assert.equal(seedAiChatWeeklyTrigger(s),false);
+ removeTrigger(s,t.id,t.revision);
+ assert.equal(seedAiChatWeeklyTrigger(s),false);
+});
