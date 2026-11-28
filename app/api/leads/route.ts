@@ -373,7 +373,7 @@ export async function GET(req: NextRequest) {
                     verifiedSource: safeStr(row.Verified_Source),
                     ivrUrl: safeStr(row.IVR_URL || row.ivrurl || row.ivr_url || ""),
                     callRecordingUrl: safeStr(row.callRecordingUrl || row.call_recording_url || ""),
-                    tat: calculateTAT([row.gpt_Extraction_Status, row.Sent_status, row.Timestamp_2], row.Date_Time)
+                    tat: calculateTAT(row.Timestamp_2, row.Date_Time)
                 })
             }
 

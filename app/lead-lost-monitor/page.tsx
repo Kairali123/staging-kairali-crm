@@ -420,16 +420,22 @@ const gapRecords = (records: LeadRecord[], key: GapKey) => key === "gap1"
   : key === "gap2"
     ? records.filter(x => x.inMedium && !x.inBuffer)
     : records.filter(x => x.inBuffer && !x.inCrm);
-const auditClass = (lead: LeadRecord) => lead.lateTransfer || lead.masterCrmState === "Late Transfer"
+const isTransferToKtahv = (lead: LeadRecord) => {
+  const ev = `${lead.currentStatus ?? ""} ${lead.reason ?? ""} ${lead.transferStatus ?? ""}`.toLowerCase();
+  return ev.includes("transfer to ktahv");
+};
+const auditClass = (lead: LeadRecord) => isTransferToKtahv(lead) || lead.lateTransfer || lead.masterCrmState === "Late Transfer"
   ? "transient"
   : lead.expectedDuplicateGap || lead.validDuplicate || Boolean(lead.original) || hasDeleteProof(lead)
     ? "deleted"
     : "unexplained";
-const auditReasonLabel = (lead: LeadRecord) => auditClass(lead) === "transient"
-  ? "Late Transfer"
-  : auditClass(lead) === "deleted"
-    ? deletedReason(lead).label
-    : lostReasonStatus(lead).label;
+const auditReasonLabel = (lead: LeadRecord) => isTransferToKtahv(lead)
+  ? "Transfer to KTAHV"
+  : auditClass(lead) === "transient"
+    ? "Late Transfer"
+    : auditClass(lead) === "deleted"
+      ? deletedReason(lead).label
+      : lostReasonStatus(lead).label;
 
 const totalRows = (items: TrackerRow[]) => items.reduce((a, r) => ({
   direct: a.direct + r.direct,

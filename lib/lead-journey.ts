@@ -300,18 +300,19 @@ function computeLeadTat(
   const startMs = new Date(startIso).getTime()
   if (isNaN(startMs)) return { tatMinutes: null, tatLabel: '—', tatStage: '' }
 
-  if (firstCallIso) {
-    const callMs = new Date(firstCallIso).getTime()
-    if (!isNaN(callMs) && callMs >= startMs) {
-      const mins = (callMs - startMs) / 60000
-      return { tatMinutes: Math.round(mins), tatLabel: formatTatDuration(mins), tatStage: '1st Call' }
-    }
-  }
+  // Issue 3: TAT = staging_buffer_new.Timestamp_2 − master_buffer.Date_Time
   if (assignedIso) {
     const asgMs = new Date(assignedIso).getTime()
     if (!isNaN(asgMs) && asgMs >= startMs) {
       const mins = (asgMs - startMs) / 60000
       return { tatMinutes: Math.round(mins), tatLabel: formatTatDuration(mins), tatStage: 'Assigned' }
+    }
+  }
+  if (firstCallIso) {
+    const callMs = new Date(firstCallIso).getTime()
+    if (!isNaN(callMs) && callMs >= startMs) {
+      const mins = (callMs - startMs) / 60000
+      return { tatMinutes: Math.round(mins), tatLabel: formatTatDuration(mins), tatStage: '1st Call' }
     }
   }
   const nowMs = Date.now()

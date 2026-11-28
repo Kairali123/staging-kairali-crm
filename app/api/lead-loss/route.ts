@@ -938,6 +938,8 @@ interface DirectEntry {
   deletedMobiles: string[];
   deletedReasons: Record<string, string>;
   deletedStatuses: Record<string, string>;
+  /** Issue 1: IVR leads with non-blank website_name and data_source = 'IVR API - Phone' exempt from 24h phone duplicate rule */
+  ivrExemptLeadIds?: Set<string>;
 }
 
 async function queryDirectTable(
@@ -954,11 +956,13 @@ async function queryDirectTable(
       ? "dialer_sheet_sent_status"
       : null;
   const sentStatusSel = sentStatusCol ? `, \`${sentStatusCol}\` AS sent_status_raw` : "";
+  const isIvr = cfg.table === "ivr_lead_api_knowrality";
+  const ivrColsSel = isIvr ? ", `website_name`, `data_source`" : "";
   const sql = `
     SELECT DATE(${dateExpr}) AS dt,
            ${dateExpr}     AS arrival_time,
            \`${cfg.leadIdCol}\`     AS lead_id,
-           \`${cfg.mobileCol}\`     AS mobile${sentStatusSel}
+           \`${cfg.mobileCol}\`     AS mobile${sentStatusSel}${ivrColsSel}
     FROM \`${cfg.table}\`
     WHERE ${dateExpr} >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
       AND ${dateExpr} <= DATE_ADD(CURDATE(), INTERVAL 1 DAY)
@@ -975,6 +979,7 @@ async function queryDirectTable(
     deletedMobiles: string[];
     deletedReasons: Record<string, string>;
     deletedStatuses: Record<string, string>;
+    ivrExemptLeadIds: Set<string>;
   }> = {};
   for (const r of rows as any[]) {
     const dt = rowDate(r.dt);
@@ -986,6 +991,7 @@ async function queryDirectTable(
       deletedMobiles: [],
       deletedReasons: {},
       deletedStatuses: {},
+      ivrExemptLeadIds: new Set<string>(),
     };
     const lid = String(r.lead_id ?? "");
     const mob = normMobile(r.mobile);
@@ -993,6 +999,14 @@ async function queryDirectTable(
     byDate[dt].leadIds.push(lid);
     byDate[dt].mobiles.push(mob);
     byDate[dt].timestamps.push(t);
+
+    if (isIvr) {
+      const wName = r.website_name ? String(r.website_name).trim() : "";
+      const dSrc = r.data_source ? String(r.data_source).trim() : "";
+      if (wName !== "" && dSrc === "IVR API - Phone") {
+        byDate[dt].ivrExemptLeadIds.add(lid);
+      }
+    }
 
     // Track Gap 1 deletions / un-transferred leads:
     // 1) Chatbase AI sources: sent_status starts with 'Transfer to Delete' or blank if blankSentStatusAsGap1
@@ -1044,11 +1058,17 @@ interface UnifiedBufferData {
     sBySourceDate: Record<string, Set<string>>;
     kvBySourceLeadId: Record<string, Set<string>>;
     sBySourceLeadId: Record<string, Set<string>>;
+    assigneeBySourceLeadId: Record<string, Map<string, string>>;
+    assigneeBySourceMobile: Record<string, Map<string, string>>;
     assignTimeById: Map<string, number>;
     assignTimeByMobile: Map<string, number>;
   }>;
   companyBufferMaps: Map<string, Map<string, Array<{ leadId: string; time: number; dateStr: string; verifiedSource?: string; dataSource?: string }>>>;
   globalBufferMap: Map<string, Array<{ leadId: string; time: number; dateStr: string; verifiedSource?: string; dataSource?: string }>>;
+  tatSecById: Map<string, number>;
+  tatSecByMobile: Map<string, number>;
+  ivrTransferredToKtahvIds: Set<string>;
+  ivrTransferredLeads: Map<string, Array<{ leadId: string; mobile?: string; dateStr: string; date_time?: any; timestamp_2?: any; assignee: string; hasSbn: boolean; tatSec?: number | null }>>;
 }
 
 async function queryUnifiedBuffer(
@@ -1059,11 +1079,13 @@ async function queryUnifiedBuffer(
   const [rows]: any[] = await pool.query(
     `SELECT DATE(COALESCE(mb.Date_Time, mb.actual_time, mb.Timestamp)) AS dt,
             COALESCE(mb.Date_Time, mb.actual_time, mb.Timestamp) AS arrival_time,
+            mb.Date_Time AS mb_date_time,
             COALESCE(NULLIF(TRIM(mb.Mobile), ''), NULLIF(TRIM(sbn.Phone_Number_of_User), '')) AS Mobile,
             mb.lead_id,
             sbn.Lead_id AS sbn_lead_id,
             COALESCE(sbn.Lead_Relates_to_which_company, sbn.KAPPL_KTAHV, mb.WebSite_Name, '') AS Lead_Relates_to_which_company,
             sbn.Assign_To_MR_Main,
+            sbn.Timestamp_2,
             COALESCE(mb.actual_time, sbn.gpt_Extraction_Status, sbn.Timestamp_2, sbn.Sent_status) AS assign_time,
             COALESCE(TRIM(mb.Verified_Source), '') AS Verified_Source,
             mb.Data_Source
@@ -1099,6 +1121,10 @@ async function queryUnifiedBuffer(
 
   const companyBufferMaps = new Map<string, Map<string, Array<{ leadId: string; time: number; dateStr: string; verifiedSource?: string; dataSource?: string }>>>();
   const globalBufferMap = new Map<string, Array<{ leadId: string; time: number; dateStr: string; verifiedSource?: string; dataSource?: string }>>();
+  const tatSecById = new Map<string, number>();
+  const tatSecByMobile = new Map<string, number>();
+  const ivrTransferredToKtahvIds = new Set<string>();
+  const ivrTransferredLeads = new Map<string, Array<{ leadId: string; mobile?: string; dateStr: string; date_time?: any; timestamp_2?: any; assignee: string; hasSbn: boolean; tatSec?: number | null }>>();
 
   for (const co of configs) {
     companyData.set(co.companyKey, {
@@ -1143,6 +1169,48 @@ async function queryUnifiedBuffer(
     if (m) {
       if (!globalBufferMap.has(m)) globalBufferMap.set(m, []);
       globalBufferMap.get(m)!.push({ leadId: lid, time: arrivalT, dateStr: dt, mobile: m, verifiedSource: vSrc, dataSource: dSrc } as any);
+    }
+
+    // Issue 3: TAT = staging_buffer_new.Timestamp_2 − master_buffer.Date_Time (lead ID wise)
+    let leadTatSec: number | null = null;
+    const rawMbTime = r.mb_date_time || r.arrival_time;
+    if (rawMbTime && r.Timestamp_2) {
+      const dtParsed = parseDateRobust(rawMbTime);
+      const t2Parsed = parseDateRobust(r.Timestamp_2);
+      if (dtParsed && t2Parsed) {
+        const msDiff = t2Parsed.getTime() - dtParsed.getTime();
+        if (msDiff >= 0) {
+          leadTatSec = Math.floor(msDiff / 1000);
+        }
+      }
+    }
+    if (leadTatSec !== null) {
+      if (lid) {
+        tatSecById.set(lid, leadTatSec);
+        const cleanLid = lid.replace(/^(fb_ahv-|fb_vr-|fb-|ktahv-|vr_|vr-|kappl-|kapl-|ahv-|kapl_|client-|re_visit-|ds-|kg-)/i, "");
+        if (cleanLid) tatSecById.set(cleanLid, leadTatSec);
+      }
+      if (m) tatSecByMobile.set(m, leadTatSec);
+    }
+
+    // Issue 2: IVR leads transferred to KTAHV in staging_buffer_new
+    const isIvr = vSrc === "IVR" || dSrc.toLowerCase().includes("ivr");
+    const relatesKtahv = relates.includes("healing village") || relates.includes("ktahv");
+    if (isIvr && relatesKtahv && lid) {
+      ivrTransferredToKtahvIds.add(lid);
+      const cleanLid = lid.replace(/^(fb_ahv-|fb_vr-|fb-|ktahv-|vr_|vr-|kappl-|kapl-|ahv-|kapl_|client-|re_visit-|ds-|kg-)/i, "");
+      if (cleanLid) ivrTransferredToKtahvIds.add(cleanLid);
+      if (!ivrTransferredLeads.has(dt)) ivrTransferredLeads.set(dt, []);
+      ivrTransferredLeads.get(dt)!.push({
+        leadId: lid,
+        mobile: r.Mobile,
+        dateStr: dt,
+        date_time: r.mb_date_time || r.arrival_time,
+        timestamp_2: r.Timestamp_2,
+        assignee,
+        hasSbn,
+        tatSec: leadTatSec,
+      });
     }
 
     // Parsed assignment timestamp
@@ -1281,7 +1349,7 @@ async function queryUnifiedBuffer(
     }
   }
 
-  return { companyData, companyBufferMaps, globalBufferMap };
+  return { companyData, companyBufferMaps, globalBufferMap, tatSecById, tatSecByMobile, ivrTransferredToKtahvIds, ivrTransferredLeads };
 }
 
 function parseDateRobust(val: any): Date | null {
@@ -1321,6 +1389,15 @@ function parseDateRobust(val: any): Date | null {
   }
 }
 
+function formatHHMMSS(sec?: number | null): string {
+  if (sec === undefined || sec === null || isNaN(Number(sec)) || Number(sec) <= 0) return "—";
+  const total = Math.round(Number(sec));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = Math.floor(total % 60);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
 // ─── Build lost records for popup ────────────────────────────────────────────
 
 function buildLostRecords(
@@ -1329,7 +1406,7 @@ function buildLostRecords(
   directTimestamps: number[],
   bufSet: Set<string>,
   crmSet: Set<string>,
-  globalBufferMap: Map<string, Array<{ leadId: string; time: number; dateStr: string }>>,
+  globalBufferMap: Map<string, Array<{ leadId: string; time: number; dateStr: string; mobile?: string; verifiedSource?: string; dataSource?: string }>>,
   source: string,
   date: string,
   company: string,
@@ -1337,15 +1414,25 @@ function buildLostRecords(
   crmLeadIdSet?: Set<string>,
   deletedIdSet?: Set<string>,
   deletedReasons?: Record<string, string>,
-  deletedStatuses?: Record<string, string>
+  deletedStatuses?: Record<string, string>,
+  ivrExemptLeadIds?: Set<string>,
+  ivrTransferredToKtahvIds?: Set<string>,
+  tatSecById?: Map<string, number>,
+  tatSecByMobile?: Map<string, number>
 ): any[] {
   const records: any[] = [];
   const seen24h = new Map<string, string>();
+  const isIvr = source.toLowerCase() === "ivr";
 
   directMobiles.forEach((mobile, i) => {
     const leadId = directLeadIds[i] ?? `${source}_${i}`;
     const norm = normMobile(mobile);
     const t = directTimestamps?.[i] ?? new Date(date).getTime();
+
+    const cleanLid = leadId.replace(/^(fb_ahv-|fb_vr-|fb-|ktahv-|vr_|vr-|kappl-|kapl-|ahv-|kapl_|client-|re_visit-|ds-|kg-)/i, "");
+    const leadTatSec = (leadId ? tatSecById?.get(leadId) : null) ?? (cleanLid ? tatSecById?.get(cleanLid) : null) ?? (norm ? tatSecByMobile?.get(norm) : null) ?? null;
+    const leadTatMin = leadTatSec !== null && leadTatSec !== undefined ? Math.round(leadTatSec / 60) : 0;
+    const leadTatStr = formatHHMMSS(leadTatSec);
 
     // Gap 1 check: lead marked Transfer to Delete or blank Dialer Sent Status
     if (deletedIdSet?.has(leadId)) {
@@ -1365,8 +1452,8 @@ function buildLostRecords(
         bufferStatus: "Never forwarded",
         crmStatus: "N/A",
         assignee: "",
-        tatMin: 0,
-        tat: "—",
+        tatMin: leadTatMin,
+        tat: leadTatStr,
         isDuplicate: false,
         validDuplicate: false,
         expectedDuplicateGap: false,
@@ -1386,13 +1473,60 @@ function buildLostRecords(
       return;
     }
 
+    // Issue 2: IVR leads transferred from KAPL to KTAHV
+    const isTransferredToKtahv = isIvr && (
+      (leadId && ivrTransferredToKtahvIds?.has(leadId)) ||
+      (cleanLid && ivrTransferredToKtahvIds?.has(cleanLid)) ||
+      (norm && ivrTransferredToKtahvIds?.has(norm))
+    );
+    if (isTransferredToKtahv && (company.includes("Product") || company.includes("KAPL") || company.includes("KAPPL"))) {
+      records.push({
+        id: leadId,
+        name: "",
+        phone: mobile || "—",
+        date,
+        company,
+        source,
+        generatedAt: date,
+        timestamp: date,
+        transferTimestamp: date,
+        bufferTimestamp: date,
+        currentStatus: "Transfer to KTAHV",
+        transferStatus: "Transferred to KTAHV",
+        bufferStatus: "In Buffer (KTAHV)",
+        crmStatus: "In CRM (KTAHV)",
+        assignee: "KTAHV",
+        tatMin: leadTatMin,
+        tat: leadTatStr,
+        isDuplicate: false,
+        validDuplicate: false,
+        expectedDuplicateGap: true,
+        lateTransfer: false,
+        inMedium: true,
+        toBuffer: true,
+        inBuffer: false,
+        inCrm: false,
+        assigned: false,
+        directMediumLost: false,
+        mediumBufferLost: false,
+        masterCrmLost: false,
+        stage: "buffer",
+        status: "Transferred",
+        reason: "Transfer to KTAHV",
+      });
+      return;
+    }
+
+    // Issue 1: IVR exemption from 24h phone duplicate rule
+    const isIvrExempt = isIvr && Boolean(leadId && ivrExemptLeadIds?.has(leadId));
+
     if (!norm) {
       records.push({
         id: leadId, name: "", phone: mobile || "—", date, company, source,
         generatedAt: date, timestamp: date, transferTimestamp: "", bufferTimestamp: "",
         currentStatus: "Filtered (No Mobile / Incomplete)", transferStatus: "Filtered",
         bufferStatus: "Filtered", crmStatus: "Filtered",
-        assignee: "", tatMin: 0, tat: "—",
+        assignee: "", tatMin: leadTatMin, tat: leadTatStr,
         isDuplicate: true, validDuplicate: true, expectedDuplicateGap: true,
         inMedium: true, toBuffer: false, inBuffer: false, inCrm: false, assigned: false,
         mediumBufferLost: true,
@@ -1404,8 +1538,8 @@ function buildLostRecords(
 
     const inBufById = Boolean(leadId && bufLeadIdSet?.has(leadId));
     const inBuf = (norm ? bufSet.has(norm) : false) || inBufById;
-    const isDirectDupe = Boolean(norm && seen24h.has(norm));
-    if (norm && !seen24h.has(norm)) seen24h.set(norm, leadId);
+    const isDirectDupe = isIvrExempt ? false : Boolean(norm && seen24h.has(norm));
+    if (norm && !seen24h.has(norm) && !isIvrExempt) seen24h.set(norm, leadId);
 
     const bufs = norm ? (globalBufferMap.get(norm) || []) : [];
     const matchingBufRow = norm ? (
@@ -1417,9 +1551,9 @@ function buildLostRecords(
     const isSourceMatch = Boolean(matchingBufRow && bufferMatchesSource(source, (matchingBufRow as any).verifiedSource, (matchingBufRow as any).dataSource, company));
     const isSameDay = Boolean(matchingBufRow && matchingBufRow.dateStr === date && isSourceMatch);
     const isLeadMatch = Boolean(matchingBufRow && matchingBufRow.leadId && isSameLeadId(leadId, matchingBufRow.leadId));
-    const isDifferentLead = Boolean(!inBufById && matchingBufRow && matchingBufRow.leadId && (!isSameDay || !isSourceMatch) && !isLeadMatch);
+    const isDifferentLead = isIvrExempt ? false : Boolean(!inBufById && matchingBufRow && matchingBufRow.leadId && (!isSameDay || !isSourceMatch) && !isLeadMatch);
 
-    const prior24Match = (!inBuf && norm) ? bufs.find(b => {
+    const prior24Match = (!inBuf && norm && !isIvrExempt) ? bufs.find(b => {
       const diffHours = (t - b.time) / (3600 * 1000);
       // Buffer arrived 0-24h BEFORE this direct lead = intentional 24h duplicate filter
       return diffHours >= 0 && diffHours <= 24;
@@ -1432,7 +1566,7 @@ function buildLostRecords(
           generatedAt: date, timestamp: date, transferTimestamp: "", bufferTimestamp: "",
           currentStatus: "Filtered (Same-day Duplicate)", transferStatus: "Filtered",
           bufferStatus: "Filtered", crmStatus: "Filtered",
-          assignee: "", tatMin: 0, tat: "—",
+          assignee: "", tatMin: leadTatMin, tat: leadTatStr,
           isDuplicate: true, validDuplicate: true, expectedDuplicateGap: true,
           inMedium: true, toBuffer: false, inBuffer: false, inCrm: false, assigned: false,
           mediumBufferLost: true,
@@ -1447,12 +1581,25 @@ function buildLostRecords(
             generatedAt: date, timestamp: date, transferTimestamp: date, bufferTimestamp: date,
             currentStatus: "Lost", transferStatus: "Transferred",
             bufferStatus: "In Buffer", crmStatus: "Not in CRM",
-            assignee: "", tatMin: 0, tat: "—",
+            assignee: "", tatMin: leadTatMin, tat: leadTatStr,
             isDuplicate: false, inMedium: true, toBuffer: true,
             inBuffer: true, inCrm: false, assigned: false,
             masterCrmLost: true,
             stage: "buffer", status: "Lost",
             reason: "Lead found in Buffer but missing from CRM (Gap 3: Buffer→CRM)",
+          });
+        } else {
+          records.push({
+            id: leadId, name: "", phone: mobile, date, company, source,
+            generatedAt: date, timestamp: date, transferTimestamp: date, bufferTimestamp: date,
+            currentStatus: "In CRM", transferStatus: "Transferred",
+            bufferStatus: "In Buffer", crmStatus: "In CRM",
+            assignee: "", tatMin: leadTatMin, tat: leadTatStr,
+            isDuplicate: false, inMedium: true, toBuffer: true,
+            inBuffer: true, inCrm: true, assigned: true,
+            masterCrmLost: false, mediumBufferLost: false,
+            stage: "crm", status: "Resolved",
+            reason: "Resolved: Lead transferred to Buffer and reconciled in CRM",
           });
         }
       }
@@ -1462,7 +1609,7 @@ function buildLostRecords(
         generatedAt: date, timestamp: date, transferTimestamp: "", bufferTimestamp: "",
         currentStatus: "Filtered (24h Duplicate)", transferStatus: "Filtered",
         bufferStatus: "Filtered (24h Buffer)", crmStatus: "Filtered",
-        assignee: "", tatMin: 0, tat: "—",
+        assignee: "", tatMin: leadTatMin, tat: leadTatStr,
         isDuplicate: true, validDuplicate: true, expectedDuplicateGap: true,
         inMedium: true, toBuffer: false, inBuffer: false, inCrm: false, assigned: false,
         mediumBufferLost: true,
@@ -1475,7 +1622,7 @@ function buildLostRecords(
         generatedAt: date, timestamp: date, transferTimestamp: "", bufferTimestamp: "",
         currentStatus: "Filtered (24h Duplicate)", transferStatus: "Filtered",
         bufferStatus: "Filtered (24h Buffer)", crmStatus: "Filtered",
-        assignee: "", tatMin: 0, tat: "—",
+        assignee: "", tatMin: leadTatMin, tat: leadTatStr,
         isDuplicate: true, validDuplicate: true, expectedDuplicateGap: true,
         inMedium: true, toBuffer: false, inBuffer: false, inCrm: false, assigned: false,
         mediumBufferLost: true,
@@ -1488,7 +1635,7 @@ function buildLostRecords(
         generatedAt: date, timestamp: date, transferTimestamp: "", bufferTimestamp: "",
         currentStatus: "Filtered (Same-day Duplicate)", transferStatus: "Filtered",
         bufferStatus: "Filtered", crmStatus: "Filtered",
-        assignee: "", tatMin: 0, tat: "—",
+        assignee: "", tatMin: leadTatMin, tat: leadTatStr,
         isDuplicate: true, validDuplicate: true, expectedDuplicateGap: true,
         inMedium: true, toBuffer: false, inBuffer: false, inCrm: false, assigned: false,
         mediumBufferLost: true,
@@ -1509,7 +1656,7 @@ function buildLostRecords(
           generatedAt: date, timestamp: date, transferTimestamp: "", bufferTimestamp: "",
           currentStatus: "Late Transfer (Next-day Buffer)", transferStatus: "Delayed",
           bufferStatus: `In Buffer (${lateMatch.dateStr})`, crmStatus: "Filtered",
-          assignee: "", tatMin: 0, tat: "—",
+          assignee: "", tatMin: leadTatMin, tat: leadTatStr,
           isDuplicate: false, validDuplicate: false, expectedDuplicateGap: false,
           lateTransfer: true,
           inMedium: true, toBuffer: false, inBuffer: false, inCrm: false, assigned: false,
@@ -1523,7 +1670,7 @@ function buildLostRecords(
           generatedAt: date, timestamp: date, transferTimestamp: "", bufferTimestamp: "",
           currentStatus: "Lost", transferStatus: "Not transferred",
           bufferStatus: "Not in buffer", crmStatus: "N/A",
-          assignee: "", tatMin: 0, tat: "—",
+          assignee: "", tatMin: leadTatMin, tat: leadTatStr,
           isDuplicate: false, inMedium: true, toBuffer: false,
           inBuffer: false, inCrm: false, assigned: false,
           mediumBufferLost: true,
@@ -1550,7 +1697,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
 
   function getBufferMap(dtStr: string, companyMatch: string[] = [], source: string = "", company: string = ""): Promise<{ sameDayMap: Map<string, any>; sameDayGlobalMap: Map<string, any>; bufferList: any[] }> {
     const cacheKey = `${dtStr}__${companyMatch.join(",")}__${source}__${company}`;
-    if (bufferCache[cacheKey]) return bufferCache[cacheKey];
+    if (cacheKey in bufferCache) return bufferCache[cacheKey];
     bufferCache[cacheKey] = (async () => {
       let bufRows: any[] = [];
       try {
@@ -1558,8 +1705,10 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
           `SELECT mb.lead_id,
                   COALESCE(NULLIF(TRIM(mb.Mobile), ''), NULLIF(TRIM(sbn.Phone_Number_of_User), '')) AS Mobile,
                   COALESCE(mb.Date_Time, mb.actual_time, mb.Timestamp) AS Date_Time,
+                  mb.Date_Time AS mb_date_time,
                   sbn.Assign_To_MR_Main,
                   sbn.Sent_status,
+                  sbn.Timestamp_2,
                   COALESCE(sbn.Lead_Relates_to_which_company, sbn.KAPPL_KTAHV, mb.WebSite_Name, '') AS Lead_Relates_to_which_company,
                   COALESCE(TRIM(mb.Verified_Source), '') AS Verified_Source,
                   mb.Data_Source
@@ -1576,8 +1725,10 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
             `SELECT mb.lead_id,
                     COALESCE(NULLIF(TRIM(mb.Mobile), ''), NULLIF(TRIM(sbn.Phone_Number_of_User), '')) AS Mobile,
                     COALESCE(mb.Date_Time, mb.actual_time, mb.Timestamp) AS Date_Time,
+                    mb.Date_Time AS mb_date_time,
                     sbn.Assign_To_MR_Main,
                     sbn.Sent_status,
+                    sbn.Timestamp_2,
                     COALESCE(sbn.Lead_Relates_to_which_company, sbn.KAPPL_KTAHV, mb.WebSite_Name, '') AS Lead_Relates_to_which_company,
                     COALESCE(TRIM(mb.Verified_Source), '') AS Verified_Source,
                     mb.Data_Source
@@ -1594,6 +1745,21 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       const sameDayMap = new Map<string, any>();
       const sameDayGlobalMap = new Map<string, any>();
       for (const b of bufRows) {
+        // Issue 3: TAT = staging_buffer_new.Timestamp_2 − master_buffer.Date_Time (lead ID wise)
+        let leadTatSec: number | null = null;
+        const rawMbTime = b.mb_date_time || b.Date_Time;
+        if (rawMbTime && b.Timestamp_2) {
+          const dtParsed = parseDateRobust(rawMbTime);
+          const t2Parsed = parseDateRobust(b.Timestamp_2);
+          if (dtParsed && t2Parsed) {
+            const msDiff = t2Parsed.getTime() - dtParsed.getTime();
+            if (msDiff >= 0) {
+              leadTatSec = Math.floor(msDiff / 1000);
+            }
+          }
+        }
+        b.tatSec = leadTatSec;
+
         const bDate = rowDate(b.Date_Time);
         const m = normMobile(b.Mobile);
         if (bDate === dtStr) {
@@ -1717,6 +1883,8 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
           ? "dialer_sheet_sent_status"
           : null;
       const sentStatusSel = sentStatusCol ? `, \`${sentStatusCol}\` AS sent_status_raw` : ", NULL AS sent_status_raw";
+      const isIvrTable = srcCfg.table === "ivr_lead_api_knowrality";
+      const ivrColsSel = isIvrTable ? ", `website_name`, `data_source`" : ", NULL AS website_name, NULL AS data_source";
 
       try {
         const sqlFast = `
@@ -1724,7 +1892,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
                  \`${srcCfg.mobileCol}\` AS mobile,
                  ${nameCol} AS client_name,
                  ${emailCol} AS email,
-                 ${dateExpr} AS date_time${sentStatusSel}
+                 ${dateExpr} AS date_time${sentStatusSel}${ivrColsSel}
           FROM \`${srcCfg.table}\`
           WHERE ${dateExpr} >= ? AND ${dateExpr} < DATE_ADD(?, INTERVAL 1 DAY)
           ${where}
@@ -1735,6 +1903,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
           item._isEmailParser = srcCfg.table === "email_parser_info_mails";
           item._hasSentStatusDeleteCol = Boolean(srcCfg.sentStatusDeleteCol);
           item._blankSentStatusAsGap1 = Boolean(srcCfg.blankSentStatusAsGap1);
+          item._isIvrTable = isIvrTable;
         });
         directRows.push(...r);
       } catch {
@@ -1744,7 +1913,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
                    \`${srcCfg.mobileCol}\` AS mobile,
                    ${nameCol} AS client_name,
                    ${emailCol} AS email,
-                   ${dateExpr} AS date_time${sentStatusSel}
+                   ${dateExpr} AS date_time${sentStatusSel}${ivrColsSel}
             FROM \`${srcCfg.table}\`
             WHERE DATE(${dateExpr}) = ?
             ${where}
@@ -1755,6 +1924,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
             item._isEmailParser = srcCfg.table === "email_parser_info_mails";
             item._hasSentStatusDeleteCol = Boolean(srcCfg.sentStatusDeleteCol);
             item._blankSentStatusAsGap1 = Boolean(srcCfg.blankSentStatusAsGap1);
+            item._isIvrTable = isIvrTable;
           });
           directRows.push(...r);
         } catch (err) {
@@ -1851,6 +2021,63 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
         continue;
       }
 
+      // Issue 2: IVR leads transferred from KAPL to KTAHV
+      const isIvr = source.toLowerCase() === "ivr";
+      const isTransferredToKtahv = isIvr && (
+        (company.toLowerCase().includes("product") || company.toLowerCase().includes("kappl") || company.toLowerCase().includes("kapl")) &&
+        bufferList.some((b: any) => {
+          const isMatch = (leadId && b.lead_id && isSameLeadId(leadId, String(b.lead_id))) || (norm && normMobile(b.Mobile) === norm);
+          if (!isMatch) return false;
+          const bCo = String(b.Lead_Relates_to_which_company || "").toLowerCase();
+          return bCo.includes("healing village") || bCo.includes("ktahv");
+        })
+      );
+      if (isTransferredToKtahv) {
+        const matchingB = bufferList.find((b: any) => (leadId && b.lead_id && isSameLeadId(leadId, String(b.lead_id))) || (norm && normMobile(b.Mobile) === norm));
+        records.push({
+          id: leadId,
+          name: r.client_name ? String(r.client_name).trim() : "",
+          phone: rawMobile,
+          email: r.email ? String(r.email).trim() : "",
+          date,
+          company,
+          source,
+          generatedAt,
+          timestamp: formattedTime || date,
+          transferTimestamp: date,
+          bufferTimestamp: date,
+          currentStatus: "Transfer to KTAHV",
+          transferStatus: "Transferred to KTAHV",
+          bufferStatus: "In Buffer (KTAHV)",
+          crmStatus: "In CRM (KTAHV)",
+          assignee: "KTAHV",
+          tatMin: matchingB?.tatSec ? Math.round(matchingB.tatSec / 60) : 0,
+          tat: formatHHMMSS(matchingB?.tatSec),
+          isDuplicate: false,
+          validDuplicate: false,
+          expectedDuplicateGap: true,
+          lateTransfer: false,
+          inMedium: true,
+          toBuffer: true,
+          inBuffer: false,
+          inCrm: false,
+          assigned: false,
+          directMediumLost: false,
+          mediumBufferLost: false,
+          masterCrmLost: false,
+          stage: "buffer",
+          status: "Transferred",
+          reason: "Transfer to KTAHV",
+        });
+        continue;
+      }
+
+      // Issue 1: IVR exemption from 24h phone duplicate rule
+      const isIvrExempt = isIvr && Boolean(
+        r.website_name && String(r.website_name).trim() !== "" &&
+        String(r.data_source).trim() === "IVR API - Phone"
+      );
+
       const isSpecial14OctLead = date === "2026-10-14" && (
         leadId === "2da37719-4b29-41a4-b2ce-2d17115cb138" ||
         leadId === "ac0eac0d-319d-4d4e-804e-42e9332b7d07" ||
@@ -1901,11 +2128,11 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       const isLeadIdMatch = Boolean(bufMatch && bufMatch.lead_id && isSameLeadId(leadId, String(bufMatch.lead_id)));
       const isSourceMatch = Boolean(bufMatch && (date === "2026-10-14" || bufferMatchesSource(source, bufMatch.Verified_Source, bufMatch.Data_Source, company)));
       const isSameDayMatch = Boolean(bufMatch && rowDate(bufMatch.Date_Time) === date && isSourceMatch);
-      const isDifferentLead = Boolean(bufMatch && bufMatch.lead_id && !isLeadIdMatch && !isSameDayMatch);
-      const sameDayGlobalMatch = (!bufMatch && norm) ? sameDayGlobalMap.get(norm) : null;
+      const isDifferentLead = isIvrExempt ? false : Boolean(bufMatch && bufMatch.lead_id && !isLeadIdMatch && !isSameDayMatch);
+      const sameDayGlobalMatch = (!bufMatch && norm && !isIvrExempt) ? sameDayGlobalMap.get(norm) : null;
 
       // 24-hour lookback in master_buffer (across all buffer entries in 48-hour window)
-      const prior24Match = (!bufMatch && !sameDayGlobalMatch && norm) ? bufferList.find((b: any) => {
+      const prior24Match = (!bufMatch && !sameDayGlobalMatch && norm && !isIvrExempt) ? bufferList.find((b: any) => {
         const bnm = normMobile(b.Mobile);
         if (bnm !== norm) return false;
         const bObj = parseDateRobust(b.Date_Time) || (b.Date_Time ? new Date(b.Date_Time) : null);
@@ -1943,7 +2170,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       let assigned = false;
 
       if (bufMatch && !isDifferentLead) {
-        if (isDup) {
+        if (isDup && !isIvrExempt) {
           status = "Duplicate";
           currentStatus = "Filtered (Same-day Duplicate)";
           bufferStatus = "Filtered";
@@ -2007,7 +2234,7 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
         transferStatus = "Delayed";
         const lateFormatted = lateTransferMatch.Date_Time ? new Date(new Date(lateTransferMatch.Date_Time).getTime() + 5.5 * 3600 * 1000).toLocaleString("en-IN") : "";
         reason = `Late Transfer: Lead received in Direct API on ${date} but buffer entry arrived on ${lateFormatted} (transferred next day — not lost)`;
-      } else if (isDup || (norm && (directMobileCounts.get(norm) ?? 0) > 1 && !bufMatch)) {
+      } else if (!isIvrExempt && (isDup || (norm && (directMobileCounts.get(norm) ?? 0) > 1 && !bufMatch))) {
         status = "Duplicate";
         currentStatus = "Filtered (Same-day Duplicate)";
         bufferStatus = "Filtered";
@@ -2015,6 +2242,10 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
         transferStatus = "Filtered";
         reason = "Filtered intentionally: repeated mobile number in Direct API on same day";
       }
+
+      const recTatSec = (bufMatch ? bufMatch.tatSec : null) ?? null;
+      const recTatMin = recTatSec !== null && recTatSec !== undefined ? Math.round(recTatSec / 60) : 0;
+      const recTatStr = formatHHMMSS(recTatSec);
 
       records.push({
         id: leadId,
@@ -2033,8 +2264,8 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
         bufferStatus,
         crmStatus,
         assignee,
-        tatMin: 0,
-        tat: "—",
+        tatMin: recTatMin,
+        tat: recTatStr,
         isDuplicate: status === "Duplicate",
         validDuplicate: status === "Duplicate",
         expectedDuplicateGap: status === "Duplicate",
@@ -2099,8 +2330,8 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
           bufferStatus: "In Buffer",
           crmStatus: hasSbn ? "In CRM" : "Not in CRM",
           assignee: isKServe ? "KServe" : (assignee || "Unassigned"),
-          tatMin: 0,
-          tat: "—",
+          tatMin: b.tatSec ? Math.round(b.tatSec / 60) : 0,
+          tat: formatHHMMSS(b.tatSec),
           isDuplicate: false,
           validDuplicate: false,
           expectedDuplicateGap: false,
@@ -2118,6 +2349,68 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
           stage: hasSbn ? "crm" : "buffer",
           status: "Resolved",
           reason: "Buffer entry arrived on this date (CRR Reconciled)",
+        });
+      }
+    }
+
+    // For IVR, include leads transferred from KAPL to KTAHV
+    if (source.toLowerCase() === "ivr" && (company.toLowerCase().includes("healing village") || company.toLowerCase().includes("ktahv"))) {
+      const seenIds = new Set(records.map(r => r.id).filter(Boolean));
+      const seenMobiles = new Set(records.map(r => normMobile(r.phone)).filter(Boolean));
+      for (const b of bufferList) {
+        if (rowDate(b.Date_Time) !== date) continue;
+        if (!bufferMatchesSource(source, b.Verified_Source, b.Data_Source, company)) continue;
+        const bCo = String(b.Lead_Relates_to_which_company || "").toLowerCase();
+        if (!bCo.includes("healing village") && !bCo.includes("ktahv")) continue;
+        const bLid = String(b.lead_id || "").trim();
+        const bMob = normMobile(b.Mobile);
+        if ((bLid && seenIds.has(bLid)) || (bMob && seenMobiles.has(bMob))) {
+          continue;
+        }
+        if (bLid) seenIds.add(bLid);
+        if (bMob) seenMobiles.add(bMob);
+
+        const hasSbn = Boolean(b.Assign_To_MR_Main || b.Sent_status);
+        const assignee = String(b.Assign_To_MR_Main || "").trim();
+        const isKServe = assignee.toLowerCase().includes("kserve");
+        const isSales = Boolean(assignee && !isKServe);
+
+        records.push({
+          id: bLid,
+          name: "",
+          phone: b.Mobile || "—",
+          email: "",
+          date,
+          company,
+          source,
+          generatedAt: date,
+          timestamp: b.Date_Time ? new Date(new Date(b.Date_Time).getTime() + 5.5 * 3600 * 1000).toLocaleString("en-IN") : date,
+          transferTimestamp: date,
+          bufferTimestamp: date,
+          currentStatus: hasSbn ? (isKServe ? "Assigned: KServe" : isSales ? `Assigned: Sales (${assignee})` : "In CRM") : "In Buffer",
+          transferStatus: "Transferred from KAPL",
+          bufferStatus: "In Buffer",
+          crmStatus: hasSbn ? "In CRM" : "Not in CRM",
+          assignee: isKServe ? "KServe" : (assignee || "Unassigned"),
+          tatMin: b.tatSec ? Math.round(b.tatSec / 60) : 0,
+          tat: formatHHMMSS(b.tatSec),
+          isDuplicate: false,
+          validDuplicate: false,
+          expectedDuplicateGap: false,
+          lateTransfer: false,
+          inMedium: false,
+          inDirect: false,
+          toBuffer: true,
+          inBuffer: true,
+          inCrm: Boolean(hasSbn),
+          assigned: Boolean(isSales || isKServe),
+          mediumBufferLost: false,
+          masterCrmLost: !hasSbn,
+          mediumBufferState: "Reconciled",
+          masterCrmState: hasSbn ? "Reconciled" : undefined,
+          stage: hasSbn ? "crm" : "buffer",
+          status: "Resolved",
+          reason: "IVR lead transferred from KAPL to KTAHV",
         });
       }
     }
@@ -2185,6 +2478,10 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       ? lostBufferCount
       : Math.max(0, (directRows.length - gap1Count) - dupeCount - bufferCount);
 
+    const tatItems = records.map(r => r.tatMin ? r.tatMin * 60 : 0).filter(sec => sec > 0);
+    const rowAvgTatSec = tatItems.length > 0 ? Math.round(tatItems.reduce((a, b) => a + b, 0) / tatItems.length) : 0;
+    const rowAvgTatMin = Math.round(rowAvgTatSec / 60);
+
     return {
       id: rowId,
       date,
@@ -2202,6 +2499,8 @@ async function handleDetailsRequest(pool: any, requestUrl: URL) {
       sales: salesCount,
       kserve: kserveCount,
       assigned: salesCount + kserveCount,
+      avgTatSec: rowAvgTatSec,
+      avgTatMin: rowAvgTatMin,
       records,
       issues: records.filter(rec => rec.status === "Lost"),
       gapRecordsIncluded: true,
@@ -2238,7 +2537,7 @@ export async function GET(request: Request) {
       (co) => !companyFilter || co.company.toLowerCase().includes(companyFilter)
     );
 
-    const { companyData, companyBufferMaps, globalBufferMap } = await queryUnifiedBuffer(pool, activeConfigs, days);
+    const { companyData, companyBufferMaps, globalBufferMap, tatSecById, tatSecByMobile, ivrTransferredToKtahvIds, ivrTransferredLeads } = await queryUnifiedBuffer(pool, activeConfigs, days);
 
     for (const co of activeConfigs) {
       const cd = companyData.get(co.companyKey);
@@ -2255,7 +2554,7 @@ export async function GET(request: Request) {
           continue;
         }
 
-        for (const { date, leadIds, mobiles, timestamps, deletedLeadIds, deletedMobiles, deletedReasons, deletedStatuses } of directByDate) {
+        for (const { date, leadIds, mobiles, timestamps, deletedLeadIds, deletedMobiles, deletedReasons, deletedStatuses, ivrExemptLeadIds } of directByDate) {
           allDates.add(date);
           const key = `${co.company}__${srcCfg.source}__${date}`;
           const srcNorm = normSource(srcCfg.source);
@@ -2285,21 +2584,20 @@ export async function GET(request: Request) {
           let totalTatSec = 0;
           let tatCount = 0;
 
+          const isIvr = srcCfg.source.toLowerCase() === "ivr";
+
           for (let i = 0; i < mobiles.length; i++) {
             const raw = mobiles[i];
             const m = normMobile(raw);
             const leadId = String(leadIds[i] ?? "").trim();
             const t = timestamps?.[i] ?? new Date(date).getTime();
+            const cleanLid = leadId.replace(/^(fb_ahv-|fb_vr-|fb-|ktahv-|vr_|vr-|kappl-|kapl-|ahv-|kapl_|client-|re_visit-|ds-|kg-)/i, "");
 
-            // Calculate per-source, per-lead TAT:
-            // TAT = Assignment Timestamp − Direct Sheet Timestamp
-            const assignTMs = (leadId && cd.assignTimeById.get(leadId)) ?? (m ? cd.assignTimeByMobile.get(m) : null);
-            if (assignTMs !== null && assignTMs !== undefined && t) {
-              const diffSec = Math.floor((assignTMs - t) / 1000);
-              if (diffSec >= 0 && diffSec <= 86400) {
-                totalTatSec += diffSec;
-                tatCount++;
-              }
+            // Issue 3: TAT = staging_buffer_new.Timestamp_2 − master_buffer.Date_Time (lead ID wise)
+            const leadTatSec = (leadId ? tatSecById.get(leadId) : null) ?? (cleanLid ? tatSecById.get(cleanLid) : null) ?? (m ? tatSecByMobile.get(m) : null) ?? null;
+            if (leadTatSec !== null && leadTatSec !== undefined) {
+              totalTatSec += leadTatSec;
+              tatCount++;
             }
 
             // Gap 1 check: lead was "Transfer to Delete" or blank status in the AI source sheet → not forwarded to Medium
@@ -2310,6 +2608,20 @@ export async function GET(request: Request) {
               // Counted in direct but not in medium — do not attempt buffer matching
               continue;
             }
+
+            // Issue 2: IVR leads transferred from KAPL to KTAHV
+            const isTransferredToKtahv = isIvr && (
+              (leadId && ivrTransferredToKtahvIds.has(leadId)) ||
+              (cleanLid && ivrTransferredToKtahvIds.has(cleanLid)) ||
+              (m && ivrTransferredToKtahvIds.has(m))
+            );
+            if (isTransferredToKtahv && (co.company.includes("Product") || co.companyKey === "KAPL")) {
+              // Not lost in KAPL; transferred to KTAHV
+              continue;
+            }
+
+            // Issue 1: IVR exemption from 24h phone duplicate rule
+            const isIvrExempt = isIvr && Boolean(leadId && ivrExemptLeadIds?.has(leadId));
 
             if (!m) {
               // Incomplete lead (no phone): check if it can be matched to buffer by lead_id
@@ -2333,8 +2645,8 @@ export async function GET(request: Request) {
             const inBufById = Boolean(leadId && bufLeadIdSet.has(leadId));
             const inBufByMobile = Boolean(m && bufSet.has(m));
             const inBuf = inBufById || inBufByMobile;
-            const isDirectDupe = Boolean(m && seenDirectMobiles.has(m));
-            if (m) seenDirectMobiles.add(m);
+            const isDirectDupe = isIvrExempt ? false : Boolean(m && seenDirectMobiles.has(m));
+            if (m && !seenDirectMobiles.has(m) && !isIvrExempt) seenDirectMobiles.add(m);
 
             // Check company-scoped buffer first, then fall back to global buffer across all companies
             const bufs = (m ? (companyBufMap.get(m) || globalBufferMap.get(m)) : []) || [];
@@ -2347,16 +2659,16 @@ export async function GET(request: Request) {
             const isSourceMatch = Boolean(matchingBufRow && bufferMatchesSource(srcCfg.source, (matchingBufRow as any).verifiedSource, (matchingBufRow as any).dataSource, co.company));
             const isSameDay = Boolean(matchingBufRow && matchingBufRow.dateStr === date && isSourceMatch);
             const isLeadMatch = Boolean(matchingBufRow && matchingBufRow.leadId && isSameLeadId(leadId, matchingBufRow.leadId));
-            const isDifferentLead = Boolean(!inBufById && matchingBufRow && matchingBufRow.leadId && (!isSameDay || !isSourceMatch) && !isLeadMatch);
+            const isDifferentLead = isIvrExempt ? false : Boolean(!inBufById && matchingBufRow && matchingBufRow.leadId && (!isSameDay || !isSourceMatch) && !isLeadMatch);
 
-            const priorMatch = (!inBuf && m) ? bufs.find(b => {
+            const priorMatch = (!inBuf && m && !isIvrExempt) ? bufs.find((b: any) => {
               const diffHours = (t - b.time) / (3600 * 1000);
               // Buffer arrived 0-24h BEFORE this direct lead = intentional 24h duplicate filter
               return diffHours >= 0 && diffHours <= 24;
             }) : null;
 
             // Late transfer: buffer arrived AFTER direct API lead (next-day or within 168h forward)
-            const lateMatch = (!inBuf && !priorMatch && !isDirectDupe && (m || leadId)) ? bufs.find(b => {
+            const lateMatch = (!inBuf && !priorMatch && !isDirectDupe && (m || leadId)) ? bufs.find((b: any) => {
               const isMatch = (leadId && b.leadId && isSameLeadId(leadId, b.leadId)) || (m && b.mobile === m);
               if (!isMatch) return false;
               const diffHours = (b.time - t) / (3600 * 1000); // positive = buffer came after lead
@@ -2388,6 +2700,73 @@ export async function GET(request: Request) {
             }
           }
 
+          const lostRecords = buildLostRecords(
+            mobiles, leadIds, timestamps, bufSet, crmSet, globalBufferMap, srcCfg.source, date, co.company, bufLeadIdSet, crmLeadIdSet,
+            deletedIdSet, deletedReasons, deletedStatuses, ivrExemptLeadIds, ivrTransferredToKtahvIds, tatSecById, tatSecByMobile
+          );
+
+          // For KTAHV IVR, include transferred leads from KAPL
+          if (isIvr && (co.companyKey === "KTAHV" || co.company.includes("Healing Village"))) {
+            const transferredList = ivrTransferredLeads.get(date) || [];
+            for (const tLead of transferredList) {
+              const tLid = tLead.leadId;
+              const tMob = normMobile(tLead.mobile);
+              const alreadyInDirect = leadIds.some(lid => isSameLeadId(lid, tLid)) || (tMob && mobiles.some(mob => normMobile(mob) === tMob));
+              if (!alreadyInDirect) {
+                buffer++;
+                if (tLead.hasSbn) crm++;
+                const ass = tLead.assignee;
+                if (ass) {
+                  if (ass.toLowerCase().includes("kserve")) kserve++;
+                  else sales++;
+                }
+                if (tLead.tatSec !== null && tLead.tatSec !== undefined) {
+                  totalTatSec += tLead.tatSec;
+                  tatCount++;
+                }
+                const isKServe = ass.toLowerCase().includes("kserve");
+                const isSales = Boolean(ass && !isKServe);
+                lostRecords.push({
+                  id: tLead.leadId,
+                  name: "",
+                  phone: tLead.mobile || "—",
+                  email: "",
+                  date,
+                  company: co.company,
+                  source: srcCfg.source,
+                  generatedAt: date,
+                  timestamp: tLead.date_time ? new Date(new Date(tLead.date_time).getTime() + 5.5 * 3600 * 1000).toLocaleString("en-IN") : date,
+                  transferTimestamp: date,
+                  bufferTimestamp: date,
+                  currentStatus: tLead.hasSbn ? (isKServe ? "Assigned: KServe" : isSales ? `Assigned: Sales (${ass})` : "In CRM") : "In Buffer",
+                  transferStatus: "Transferred from KAPL",
+                  bufferStatus: "In Buffer",
+                  crmStatus: tLead.hasSbn ? "In CRM" : "Not in CRM",
+                  assignee: isKServe ? "KServe" : (ass || "Unassigned"),
+                  tatMin: tLead.tatSec ? Math.round(tLead.tatSec / 60) : 0,
+                  tat: formatHHMMSS(tLead.tatSec),
+                  isDuplicate: false,
+                  validDuplicate: false,
+                  expectedDuplicateGap: false,
+                  lateTransfer: false,
+                  inMedium: false,
+                  inDirect: false,
+                  toBuffer: true,
+                  inBuffer: true,
+                  inCrm: Boolean(tLead.hasSbn),
+                  assigned: Boolean(isSales || isKServe),
+                  mediumBufferLost: false,
+                  masterCrmLost: !tLead.hasSbn,
+                  mediumBufferState: "Reconciled",
+                  masterCrmState: tLead.hasSbn ? "Reconciled" : undefined,
+                  stage: tLead.hasSbn ? "crm" : "buffer",
+                  status: "Resolved",
+                  reason: "IVR lead transferred from KAPL to KTAHV",
+                });
+              }
+            }
+          }
+
           const avgTatSec = tatCount > 0 ? Math.round(totalTatSec / tatCount) : 0;
           const avgTatMin = Math.round(avgTatSec / 60);
 
@@ -2407,11 +2786,6 @@ export async function GET(request: Request) {
           const bufferCrmGap = masterCrmLost;
           const bufferToCrmGap = masterCrmLost;
           const assigned = kserve + sales;
-
-          const lostRecords = buildLostRecords(
-            mobiles, leadIds, timestamps, bufSet, crmSet, globalBufferMap, srcCfg.source, date, co.company, bufLeadIdSet, crmLeadIdSet,
-            deletedIdSet, deletedReasons, deletedStatuses
-          );
 
           const existing = rowMap[key];
           if (existing) {
